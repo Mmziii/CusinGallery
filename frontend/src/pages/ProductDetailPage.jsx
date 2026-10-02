@@ -53,7 +53,7 @@ function ReviewSection({ product }) {
     [product.id, page]
   );
   // The "my review" state comes from the authenticated user's own list.
-  const { data: myReviews } = useAsync(
+  const { data: myReviews, refetch: refetchMyReviews } = useAsync(
     () => (isAuthenticated ? reviewsApi.fetchMyReviews() : Promise.resolve(null)),
     [isAuthenticated, product.id]
   );
@@ -89,6 +89,9 @@ function ReviewSection({ product }) {
         await reviewsApi.createReview({ product_id: product.id, ...form });
         setFormOk("نظر شما ثبت شد و پس از تأیید نمایش داده می‌شود.");
       }
+      // Refresh "my review" so the form switches to edit mode instead of
+      // offering (and then 400ing) a duplicate submission.
+      refetchMyReviews();
     } catch (err) {
       setFormError(errorMessage(normalizeApiError(err)));
     } finally {

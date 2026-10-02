@@ -17,28 +17,20 @@ WORKDIR /app
 
 # VITE_API_BASE_URL must be supplied as a build arg (see docker-compose.yml)
 # because Vite inlines VITE_* variables at build time, not at container
-# start time.
-ARG VITE_API_BASE_URL=https://cusin.ir/api/v1
+# start time. Default: same-origin "/api/v1" -- nginx routes /api/ to the
+# backend, so no cross-origin configuration is needed.
+ARG VITE_API_BASE_URL=/api/v1
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 
 COPY frontend/package.json frontend/package-lock.json* ./
-# Reproducibility note: `npm ci` requires a committed package-lock.json and
-# is what production builds should use (exact resolved versions + integrity
-# hashes, not just semver ranges). No lockfile is committed in this Phase 1
-# handoff -- it could not be generated here (this sandbox has no npm
-# registry access to resolve real versions or compute real integrity
-# hashes), and a hand-written lockfile would be worse than none: it would
-# *look* reproducible while actually being fabricated.
-#
-# Run `npm install` once on a machine with network access, commit the
-# resulting frontend/package-lock.json, and this step automatically
-# switches to `npm ci` on the next build -- no Dockerfile change needed.
-# package.json now pins exact versions (no ^ ranges) in the meantime, which
-# is a real, if weaker, reproducibility guarantee until that lockfile exists.
+# Reproducibility: frontend/package-lock.json is committed, so this uses
+# `npm ci` (exact resolved versions + integrity hashes). If the lockfile
+# is ever missing (e.g. a partial checkout), it falls back to
+# `npm install`.
 RUN if [ -f package-lock.json ]; then \
         echo "package-lock.json found -- using npm ci" && npm ci --no-audit --no-fund; \
     else \
-        echo "No package-lock.json yet -- using npm install (see comment above)" && npm install --no-audit --no-fund; \
+        echo "No package-lock.json -- falling back to npm install" && npm install --no-audit --no-fund; \
     fi
 
 COPY frontend/ .

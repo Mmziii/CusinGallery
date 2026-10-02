@@ -215,3 +215,65 @@ class CallbackEndpointTests(CallbackBase):
         self.assertEqual(response.status_code, status.HTTP_302_FOUND)
         self.payment.refresh_from_db()
         self.assertEqual(self.payment.status, Payment.Status.SUCCESS)
+
+
+class SecondAttemptRaceTests(CallbackBase):
+    """
+    Two attempts initiated for the SAME order (both while it was still
+    unpaid), then their callbacks arrive. The order must be paid exactly
+    once, inventory decremented exactly once, and the losing attempt must
+    resolve cleanly -- no crash, no state clobbering. Covers the race the
+    payment-row lock alone cannot see: different attempts hold different
+    payment rows, so serialization happens on the order row (plus the
+    unique-success constraint as the final backstop).
+    """
+
+    def _initiate_second_attempt(self):
+        initiated = initiate_payment(self.user, self.order.pk, callback_url=CALLBACK)
+        return initiated["payment"]
+
+    def test_second_success_after_first_success_fails_cleanly(self):
+        second = self._initiate_second_attempt()
+        product = self.order.items.first().product
+        stock_before = product.stock_quantity
+        qty = self.order.items.first().quantity
+
+        first_result = handle_callback(signed_params(self.authority, "ok"))
+        loser_result = handle_callback(signed_params(second.gateway_transaction_id, "ok"))
+
+        self.assertEqual(first_result.status, Payment.Status.SUCCESS)
+        self.assertEqual(loser_result.status, Payment.Status.FAILED)
+        self.assertIn("already paid", loser_result.failure_reason)
+
+        self.assertEqual(
+            Payment.objects.filter(order=self.order, status=Payment.Status.SUCCESS).count(), 1
+        )
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.payment_status, Order.PaymentStatus.PAID)
+        # Stock decremented exactly once despite two "ok" callbacks.
+        product.refresh_from_db()
+        self.assertEqual(product.stock_quantity, stock_before - qty)
+
+    def test_late_cancel_does_not_revert_a_paid_order(self):
+        second = self._initiate_second_attempt()
+        handle_callback(signed_params(self.authority, "ok"))
+
+        result = handle_callback(signed_params(second.gateway_transaction_id, "cancelled"))
+
+        self.assertEqual(result.status, Payment.Status.CANCELLED)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.payment_status, Order.PaymentStatus.PAID)
+        self.assertEqual(self.order.status, Order.Status.CONFIRMED)
+
+    def test_loser_callback_over_http_redirects_failed_not_500(self):
+        second = self._initiate_second_attempt()
+        handle_callback(signed_params(self.authority, "ok"))
+
+        response = self.client.get(
+            reverse("payment-callback"),
+            signed_params(second.gateway_transaction_id, "ok"),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_302_FOUND)
+        self.assertIn("status=failed", response["Location"])
+        self.assertIn(f"/payment/result/{second.pk}/", response["Location"])

@@ -175,21 +175,67 @@ def handle_callback(callback_data: dict) -> Payment:
         if locked.status != Payment.Status.PENDING:
             return locked
 
+        # Lock the ORDER row too, for every outcome: two DIFFERENT
+        # attempts for the same order (both started while it was unpaid,
+        # both now verifying) hold different payment-row locks and would
+        # otherwise race -- toward the unique-success constraint on two
+        # successes, or toward clobbering each other's order-status
+        # writes on success-vs-cancel. Serializing on the order row makes
+        # the later callback see the earlier one's result and behave;
+        # the unique constraint remains only the final database-level
+        # backstop. Lock order is always payment -> order -> catalog
+        # rows (matching the stock decrement below), so no deadlock
+        # cycles.
+        order = Order.objects.select_for_update().get(pk=locked.order_id)
+        locked.order = order
+
         if verification.success:
-            return _complete_successful_payment(locked, verification.gateway_ref_id)
+            if order.payment_status == Order.PaymentStatus.PAID:
+                logger.info(
+                    "Rejecting late success callback for payment %s: order %s "
+                    "already paid by another attempt.",
+                    locked.pk, order.order_number,
+                )
+                locked.status = Payment.Status.FAILED
+                locked.failure_reason = "Order already paid via another payment attempt."
+                locked.save(update_fields=["status", "failure_reason", "updated_at"])
+                return locked
+            try:
+                # Savepoint: if the unique-success constraint fires
+                # anyway (exotic race), roll back only the completion,
+                # never crash the callback with a 500.
+                with transaction.atomic():
+                    return _complete_successful_payment(locked, verification.gateway_ref_id)
+            except IntegrityError:
+                logger.error(
+                    "unique_successful_payment_per_order fired for payment %s "
+                    "(order %s) -- another attempt won; marking this attempt "
+                    "FAILED without touching the already-paid order.",
+                    locked.pk, order.order_number,
+                )
+                locked.status = Payment.Status.FAILED
+                locked.failure_reason = "Order already paid via another payment attempt."
+                locked.save(update_fields=["status", "failure_reason", "updated_at"])
+                return locked
 
         if verification.cancelled:
             locked.status = Payment.Status.CANCELLED
             locked.failure_reason = verification.failure_reason[:255]
             locked.save(update_fields=["status", "failure_reason", "updated_at"])
             # The order simply goes back to payable -- nothing happened.
-            _set_order_payment_status(locked.order, Order.PaymentStatus.UNPAID)
+            # Only if THIS attempt still owns the in-flight state: a
+            # late-arriving cancel for an attempt whose order another
+            # attempt already paid (or already reset) must not overwrite
+            # that result.
+            if order.payment_status == Order.PaymentStatus.PENDING:
+                _set_order_payment_status(order, Order.PaymentStatus.UNPAID)
             return locked
 
         locked.status = Payment.Status.FAILED
         locked.failure_reason = verification.failure_reason[:255]
         locked.save(update_fields=["status", "failure_reason", "updated_at"])
-        _set_order_payment_status(locked.order, Order.PaymentStatus.FAILED)
+        if order.payment_status == Order.PaymentStatus.PENDING:
+            _set_order_payment_status(order, Order.PaymentStatus.FAILED)
         return locked
 
 

@@ -95,7 +95,11 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = HTTPS_ENABLED
 SECURE_HSTS_PRELOAD = HTTPS_ENABLED
 
 SECURE_CONTENT_TYPE_NOSNIFF = True
-SECURE_BROWSER_XSS_FILTER = True
+# NOTE: no X-XSS-Protection header here on purpose -- the header is
+# deprecated/ignored by modern browsers and the Django setting that
+# emitted it (SECURE_BROWSER_XSS_FILTER) was removed in Django 5.
+# XSS safety comes from Django's template/JSON escaping and
+# X-Content-Type-Options above.
 X_FRAME_OPTIONS = "DENY"
 
 # --- Fail loudly on missing secrets -----------------------------------------
