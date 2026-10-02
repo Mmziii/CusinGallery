@@ -1,0 +1,232 @@
+# Cusin Gallery — E-Commerce Platform
+
+Production-oriented e-commerce platform for **Cusin Gallery** (kitchenware,
+cookware, glassware, home goods) — Persian-language (RTL), targeting the
+domain `cusin.ir`.
+
+The project is complete end to end: a Django/DRF backend, a full React
+storefront, payment architecture with a pluggable gateway abstraction,
+coupons, moderated reviews, banners/daily deals, and Docker/Nginx
+deployment wiring. It was built phase by phase; this README describes the
+**current state of the repository**, not any single phase.
+
+---
+
+## What is implemented
+
+| Area | Status |
+|---|---|
+| Catalog (categories, brands, products, variants, images, specifications) | ✅ API + Django Admin |
+| Authentication (session + CSRF, phone/email login, password reset) | ✅ API + storefront pages |
+| Cart (authenticated, server-priced, server-validated stock) | ✅ API + storefront |
+| Wishlist | ✅ API + storefront |
+| Checkout (address snapshot, shipping-method choice, coupon, server totals) | ✅ API + storefront |
+| Shipping (standard/express, configurable costs + delivery windows, snapshotted on the order) | ✅ |
+| Coupons (active/window/limits/min-order, product+category targeting, server-side math) | ✅ API + storefront |
+| Orders (history, detail, ownership-scoped, immutable price snapshots) | ✅ API + storefront |
+| Payments (attempts, gateway abstraction, initiate/redirect/callback/verify, idempotent, exactly-once stock decrement) | ✅ Mock gateway included; real-PSP adapter slot ready |
+| Reviews (authenticated create, moderation, verified-purchase computed server-side) | ✅ API + storefront |
+| Banners & daily deals (active windows, ordering, server-provided timing) | ✅ API + storefront |
+| Storefront (home, shop w/ filters+search+pagination, product detail, cart, checkout, payment result, account area) | ✅ Persian/RTL, responsive |
+
+---
+
+## Core architectural decisions
+
+* **Auth:** Django session authentication + CSRF. Deliberately **no JWT**.
+* **Server-authoritative everything:** the client never sends prices,
+  totals, discount amounts, or stock. Checkout payloads carry only an
+  address selection, an optional coupon *code*, and an optional shipping
+  *method id* — every number is computed server-side.
+* **Money:** whole-Toman integers (`PositiveBigIntegerField`), no floats.
+* **Single-mechanism modules:** pricing (`apps/products/pricing.py`),
+  shipping (`apps/orders/shipping.py`), inventory decrement
+  (`apps/orders/inventory.py`), coupon math (`apps/discounts/services.py`)
+  each exist exactly once and are the only places their logic lives.
+* **Snapshot discipline:** orders copy price totals, address, shipping
+  method/cost, and delivery window at creation time. Later catalog,
+  address, or settings changes never rewrite history.
+* **Inventory:** decremented **only after successful payment
+  verification**, exactly once (row locks + partial unique constraint on
+  successful payments). Checkout never reserves stock.
+* **Payments:** gateway abstraction (`apps/payments/gateways/`). The
+  mock gateway exercises the real redirect/callback/verify protocol with
+  HMAC-signed callbacks; a real PSP (Zarinpal, IDPay, …) is one new
+  `PaymentGateway` subclass + one registry line + env config. No
+  credentials are hardcoded anywhere.
+
+---
+
+## Repository structure
+
+```
+cusin-gallery/
+├── backend/
+│   ├── manage.py
+│   ├── requirements.txt
+│   ├── .env.example
+│   ├── config/
+│   │   ├── settings/{base,development,production}.py
+│   │   ├── urls.py, api_urls.py, wsgi.py, asgi.py
+│   ├── apps/
+│   │   ├── core/          # abstract base models + shared test bases
+│   │   ├── accounts/      # User, Address, auth endpoints
+│   │   ├── categories/    # category tree
+│   │   ├── products/      # products, variants, attributes, images, pricing
+│   │   ├── cart/          # authenticated server-priced cart
+│   │   ├── wishlist/
+│   │   ├── discounts/     # coupons + validation engine
+│   │   ├── orders/        # checkout, shipping, inventory, orders API
+│   │   ├── payments/      # payment attempts + gateway abstraction
+│   │   ├── reviews/
+│   │   └── banners/       # banners + daily deals
+│   └── media/, staticfiles/
+├── frontend/              # React + Vite storefront (src/, tests: lint+build)
+├── docker/                # backend + frontend Dockerfiles
+├── nginx/                 # edge reverse-proxy config
+├── docker-compose.yml
+└── .env.example           # compose-level variables
+```
+
+---
+
+## Backend setup (development)
+
+```bash
+cd backend
+python -m venv .venv && . .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env          # then edit values (DATABASE_URL etc.)
+python manage.py migrate
+python manage.py createsuperuser
+python manage.py runserver
+```
+
+Requirements: **PostgreSQL** (the schema uses Postgres features —
+row locks, partial unique constraints; SQLite is not a supported target).
+`DATABASE_URL` accepts any format `django-environ` understands, e.g.
+`postgres://user:pass@/dbname?host=/var/run/postgresql`.
+
+Settings modules:
+
+* `config.settings.development` (default): DEBUG on, permissive CORS,
+  console email backend, LocMem cache, optional preview-tunnel support
+  (`CSRF_TRUSTED_ORIGINS`, `SECURE_PROXY_SSL_HEADER`).
+* `config.settings.production`: DEBUG off, refuses to start without a
+  real `SECRET_KEY` / non-empty `CORS_ALLOWED_ORIGINS`, secure cookies
+  and HSTS gated behind `HTTPS_ENABLED=True`, shared **Redis** cache
+  (`REDIS_URL`) so DRF throttling is global across gunicorn workers.
+
+## Frontend setup (development)
+
+```bash
+cd frontend
+npm install
+npm run dev        # Vite dev server on :5173, proxies /api and /media to :8000
+```
+
+The dev proxy (see `vite.config.js`) keeps the browser on a single
+origin, so session cookies and CSRF work with zero CORS configuration.
+Build for production with `npm run build`; lint with `npm run lint`
+(`eslint src --ext js,jsx`).
+
+The API base URL defaults to the same-origin `/api/v1`. Set
+`VITE_API_BASE_URL` only if the API genuinely lives on another origin
+(it is a build-time variable — see `frontend/.env.example`).
+
+---
+
+## Tests
+
+Backend (365 tests, all green on PostgreSQL at the time of writing):
+
+```bash
+cd backend
+python manage.py test
+```
+
+Coverage highlights: registration/login/logout/ownership, catalog
+filtering/search/pagination/permissions, cart ownership/stock/pricing,
+checkout + shipping-method snapshots, payment success/failure/cancel,
+invalid + forged + duplicate callbacks, wrong amount, repeated
+verification, already-paid orders, **exactly-once inventory under
+concurrent callbacks** (threaded, PostgreSQL-only — skipped on SQLite
+with a documented reason), coupon rules end to end, review moderation +
+verified-purchase, banners active-window filtering.
+
+Frontend: no unit-test framework is configured; verification is via
+`npm run lint` (0 problems) and `npm run build`, plus exercising the
+running app against the live API.
+
+System checks: `python manage.py check` and
+`python manage.py makemigrations --check --dry-run` are clean.
+
+---
+
+## Payments configuration
+
+Gateway selection and credentials are **environment-only**:
+
+| Variable | Purpose |
+|---|---|
+| `PAYMENT_GATEWAY` | Gateway name. Empty or `mock` → the built-in MockGateway. |
+| `PAYMENT_MERCHANT_ID` | Merchant identifier for a real PSP (unused by the mock). |
+| `PAYMENT_CALLBACK_URL` | Fallback callback URL when one can't be derived from the request. |
+
+The **MockGateway** is a full protocol implementation (not a stub): it
+mints an authority, hosts a "gateway page", signs callbacks with an
+HMAC, and verification re-checks that signature server-side. It exists
+so the entire payment lifecycle is exercisable **without any external
+credentials** — no credentials have been invented for a real PSP.
+
+Adding a real gateway: subclass `apps/payments/gateways/base.py:
+PaymentGateway` (`initiate`, `verify`), register it in
+`gateways/__init__.py:_REGISTRY`, set `PAYMENT_GATEWAY`/credentials via
+env. Nothing else in the codebase changes.
+
+---
+
+## Docker / deployment wiring
+
+`docker-compose.yml` defines: `postgres` (persistent volume +
+healthcheck), `redis` (shared cache for throttling), `backend`
+(gunicorn, runs `collectstatic` on start; migrations are run explicitly
+by the operator: `docker compose run backend python manage.py migrate`),
+`frontend` (Vite build served by an internal nginx), and `nginx` (the
+single edge proxy: `/api/` and `/admin/` → backend, `/static/` and
+`/media/` served directly from shared volumes, everything else →
+frontend).
+
+**Honest status of the infra:** these images and configs are written and
+reviewed, but this repository's development environment has no Docker
+daemon or real domain, so the compose stack has not been booted here and
+HTTPS has not been exercised. The nginx config ships HTTP-only with a
+documented path to HTTPS (`HTTPS_ENABLED=True` + certificates + the
+commented 443 server block).
+
+---
+
+## Remaining external requirements
+
+These cannot be provided by the code itself and must be supplied by the
+operator:
+
+* **Real payment-gateway credentials** (merchant id/secret) once a PSP
+  is chosen — until then the mock gateway runs the full flow.
+* **SMTP credentials** (`EMAIL_HOST`, …) for real password-reset
+  emails (development prints them to the console).
+* **A domain + TLS certificate** for production HTTPS.
+* **Catalog content** — products/categories/banners are managed in
+  Django Admin (`/admin/`); the application deliberately ships with no
+  fake data.
+* A **Redis instance** in production (compose provides one).
+
+---
+
+## Environment variables
+
+See the two documented templates — **root `.env.example`** (compose-level:
+Postgres credentials, `VITE_API_BASE_URL`) and **`backend/.env.example`**
+(every backend setting: database, security, shipping costs/delivery
+windows, email, payment gateway, `FRONTEND_URL`, `REDIS_URL`). Real
+`.env` files are git-ignored and must never be committed.
