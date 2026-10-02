@@ -1,0 +1,60 @@
+/**
+ * Design tokens for Cusin Gallery.
+ *
+ * Values here are a warm, premium neutral palette placeholder suited to a
+ * kitchenware/home brand -- swap once real brand guidelines/logo colors
+ * are supplied (see frontend/src/assets/brand). The point of this file is
+ * the *system* (tokens instead of scattered hex codes), not these exact
+ * values.
+ */
+:root {
+  /* --- Color --- */
+  --color-bg: #faf8f5;
+  --color-surface: #ffffff;
+  --color-text: #2a2521;
+  --color-text-muted: #6b625a;
+  --color-border: #e7e1d8;
+
+  --color-primary: #8a6d4b;
+  --color-primary-dark: #6b5238;
+  --color-accent: #b9532f;
+
+  --color-success: #2f7a4f;
+  --color-danger: #b3311c;
+  --color-warning: #b9832f;
+
+  /* --- Typography --- */
+  --font-family-base: "Vazirmatn", "Tahoma", sans-serif;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.25rem;
+  --font-size-xl: 1.75rem;
+  --font-size-2xl: 2.5rem;
+
+  /* --- Spacing scale --- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 16px;
+  --space-4: 24px;
+  --space-5: 32px;
+  --space-6: 48px;
+
+  /* --- Radius / shadow --- */
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --shadow-sm: 0 1px 3px rgba(42, 37, 33, 0.08);
+  --shadow-md: 0 4px 16px rgba(42, 37, 33, 0.10);
+
+  /* --- Layout --- */
+  --container-max-width: 1280px;
+
+  /* --- Breakpoints (referenced in comments; CSS custom properties can't
+     be used inside @media queries, so components/utilities should mirror
+     these px values directly in their @media rules) ---
+     --breakpoint-sm: 480px;
+     --breakpoint-md: 768px;
+     --breakpoint-lg: 1024px;
+     --breakpoint-xl: 1280px;
+  */
+}

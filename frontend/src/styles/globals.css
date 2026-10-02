@@ -1,0 +1,96 @@
+/**
+ * Global styles. Kept minimal and RTL-first for Phase 1 -- the premium
+ * visual language (product cards, animations, hover states, etc. per the
+ * master spec) is UI-phase work, not foundation work.
+ *
+ * Vazirmatn is referenced as the intended Persian typeface (see
+ * variables.css) but its font files are NOT bundled here -- add them
+ * under src/assets/fonts/ and @font-face them, or load via a CDN
+ * <link>, once brand/performance decisions are made for that phase.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  direction: rtl;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-base);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+.container {
+  max-width: var(--container-max-width);
+  margin-inline: auto;
+  padding-inline: var(--space-3);
+}
+
+/* --- App shell (placeholder header/main/footer, see MainLayout.jsx) --- */
+
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column;
+}
+
+.app-shell__header {
+  border-bottom: 1px solid var(--color-border);
+  background-color: var(--color-surface);
+  padding-block: var(--space-3);
+}
+
+.app-shell__brand {
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+  color: var(--color-primary-dark);
+}
+
+.app-shell__main {
+  flex: 1;
+  padding-block: var(--space-5);
+}
+
+.app-shell__footer {
+  border-top: 1px solid var(--color-border);
+  padding-block: var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+/* --- Responsive baseline ---
+   Mirrors the breakpoints documented in variables.css (custom properties
+   cannot be used inside @media conditions). */
+
+@media (max-width: 768px) {
+  .container {
+    padding-inline: var(--space-2);
+  }
+}
