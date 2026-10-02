@@ -30,45 +30,55 @@ from apps.products.models import Product
 
 class Coupon(TimeStampedModel, ActivableModel):
     class DiscountType(models.TextChoices):
-        PERCENTAGE = "percentage", "Percentage"
-        FIXED = "fixed", "Fixed amount"
+        PERCENTAGE = "percentage", "درصدی"
+        FIXED = "fixed", "مبلغ ثابت"
 
-    code = models.CharField(max_length=32, unique=True)
-    discount_type = models.CharField(max_length=10, choices=DiscountType.choices)
+    code = models.CharField(
+        "کد کوپن", max_length=32, unique=True, help_text="کدی که مشتری هنگام خرید وارد می‌کند."
+    )
+    discount_type = models.CharField("نوع تخفیف", max_length=10, choices=DiscountType.choices)
 
     percentage_value = models.PositiveSmallIntegerField(
-        null=True, blank=True, help_text="Required and 1-100 when discount_type is 'percentage'."
+        "درصد تخفیف", null=True, blank=True,
+        help_text="برای کوپن درصدی لازم است؛ عددی بین ۱ تا ۱۰۰.",
     )
     fixed_value = models.PositiveBigIntegerField(
-        null=True, blank=True, help_text="Required (Toman) when discount_type is 'fixed'."
+        "مبلغ تخفیف (تومان)", null=True, blank=True,
+        help_text="برای کوپن مبلغ ثابت لازم است.",
     )
     maximum_discount_amount = models.PositiveBigIntegerField(
-        null=True, blank=True, help_text="Caps a percentage discount's Toman value. Ignored for fixed coupons."
+        "سقف تخفیف (تومان)", null=True, blank=True,
+        help_text="بیشینهٔ تخفیف کوپن‌های درصدی. برای کوپن مبلغ ثابت نادیده گرفته می‌شود.",
     )
     minimum_order_amount = models.PositiveBigIntegerField(
-        null=True, blank=True, help_text="Order subtotal must reach this (Toman) for the coupon to apply."
+        "حداقل مبلغ سفارش (تومان)", null=True, blank=True,
+        help_text="جمع اقلام باید حداقل به این مبلغ برسد تا کوپن اعمال شود.",
     )
 
-    start_date = models.DateTimeField(null=True, blank=True)
-    expiration_date = models.DateTimeField(null=True, blank=True)
+    start_date = models.DateTimeField("تاریخ شروع", null=True, blank=True)
+    expiration_date = models.DateTimeField("تاریخ انقضا", null=True, blank=True)
 
     usage_limit = models.PositiveIntegerField(
-        null=True, blank=True, help_text="Total redemptions allowed across all users. Empty = unlimited."
+        "سقف استفادهٔ کل", null=True, blank=True,
+        help_text="حداکثر تعداد استفاده برای همهٔ کاربران. خالی = نامحدود.",
     )
     per_user_usage_limit = models.PositiveIntegerField(
-        null=True, blank=True, help_text="Redemptions allowed per user. Empty = unlimited."
+        "سقف استفادهٔ هر کاربر", null=True, blank=True,
+        help_text="حداکثر تعداد استفاده برای هر کاربر. خالی = نامحدود.",
     )
 
     applicable_products = models.ManyToManyField(
-        Product, related_name="coupons", blank=True, help_text="Empty = applies store-wide."
+        Product, related_name="coupons", blank=True, verbose_name="محصولات مشمول",
+        help_text="خالی = روی همهٔ فروشگاه اعمال می‌شود.",
     )
     applicable_categories = models.ManyToManyField(
-        Category, related_name="coupons", blank=True, help_text="Empty = applies store-wide."
+        Category, related_name="coupons", blank=True, verbose_name="دسته‌بندی‌های مشمول",
+        help_text="خالی = روی همهٔ فروشگاه اعمال می‌شود.",
     )
 
     class Meta:
-        verbose_name = "Coupon"
-        verbose_name_plural = "Coupons"
+        verbose_name = "کوپن تخفیف"
+        verbose_name_plural = "کوپن‌های تخفیف"
         ordering = ["-created_at"]
         indexes = [
             models.Index(fields=["is_active", "expiration_date"]),
@@ -81,15 +91,15 @@ class Coupon(TimeStampedModel, ActivableModel):
         errors = {}
         if self.discount_type == self.DiscountType.PERCENTAGE:
             if self.percentage_value is None:
-                errors["percentage_value"] = "Required for a percentage coupon."
+                errors["percentage_value"] = "برای کوپن درصدی لازم است."
             elif not (1 <= self.percentage_value <= 100):
-                errors["percentage_value"] = "Must be between 1 and 100."
+                errors["percentage_value"] = "باید عددی بین ۱ تا ۱۰۰ باشد."
         elif self.discount_type == self.DiscountType.FIXED:
             if not self.fixed_value:
-                errors["fixed_value"] = "Required (and > 0) for a fixed-amount coupon."
+                errors["fixed_value"] = "برای کوپن مبلغ ثابت لازم است (و باید بزرگ‌تر از صفر باشد)."
 
         if self.start_date and self.expiration_date and self.expiration_date <= self.start_date:
-            errors["expiration_date"] = "Must be after the start date."
+            errors["expiration_date"] = "باید بعد از تاریخ شروع باشد."
 
         if errors:
             raise ValidationError(errors)
@@ -104,9 +114,12 @@ class CouponUsage(models.Model):
     record is later removed.
     """
 
-    coupon = models.ForeignKey(Coupon, on_delete=models.CASCADE, related_name="usages")
+    coupon = models.ForeignKey(
+        Coupon, on_delete=models.CASCADE, related_name="usages", verbose_name="کوپن"
+    )
     user = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="coupon_usages"
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="coupon_usages",
+        verbose_name="کاربر",
     )
     order = models.ForeignKey(
         "orders.Order",
@@ -114,12 +127,13 @@ class CouponUsage(models.Model):
         related_name="coupon_usages",
         null=True,
         blank=True,
+        verbose_name="سفارش",
     )
-    used_at = models.DateTimeField(auto_now_add=True)
+    used_at = models.DateTimeField("زمان استفاده", auto_now_add=True)
 
     class Meta:
-        verbose_name = "Coupon Usage"
-        verbose_name_plural = "Coupon Usages"
+        verbose_name = "استفاده از کوپن"
+        verbose_name_plural = "استفاده‌های کوپن"
         ordering = ["-used_at"]
         indexes = [
             models.Index(fields=["coupon", "user"]),

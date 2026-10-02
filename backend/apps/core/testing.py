@@ -9,6 +9,16 @@ throttled endpoints (register, login, checkout, payment initiation...)
 start failing with HTTP 429 deep into the suite, depending on execution
 order. Clearing per test makes throttled-endpoint tests deterministic.
 
+Why the clear lives in _pre_setup() and NOT in setUp():
+Django calls SimpleTestCase._pre_setup() before setUp() on every test,
+and a subclass that defines its own setUp() without calling
+super().setUp() -- which several test classes in this repo legitimately
+do -- can silently skip an setUp()-based clear. _pre_setup() is only
+skipped if a subclass overrides _pre_setup() itself and forgets super,
+which is far rarer and auditable. This was a real bug: a full-suite run
+saw checkout throttle counters accumulate across classes and return
+HTTP 429 instead of the expected 400.
+
 This does NOT weaken the production throttles in any way: the rates in
 REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] are untouched -- tests simply
 each get their own fresh counter window, which is the same isolation
@@ -19,9 +29,14 @@ from rest_framework.test import APITestCase, APITransactionTestCase
 
 
 class CacheIsolationMixin:
-    def setUp(self):
-        super().setUp()
+    def _pre_setup(self):
+        super()._pre_setup()
         cache.clear()
+        # Belt and braces: also clear after the test body. Some flows
+        # (thread-based TransactionTestCase tests) populate the cache
+        # during a test in ways that must not leak into the next one
+        # even if the next test's own _pre_setup were ever bypassed.
+        self.addCleanup(cache.clear)
 
 
 class CacheIsolatedAPITestCase(CacheIsolationMixin, APITestCase):

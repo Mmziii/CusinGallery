@@ -28,35 +28,38 @@ from apps.products.models import Product, ProductVariant
 
 class Order(models.Model):
     class Status(models.TextChoices):
-        PENDING = "pending", "Pending"
-        CONFIRMED = "confirmed", "Confirmed"
-        PROCESSING = "processing", "Processing"
-        SHIPPED = "shipped", "Shipped"
-        DELIVERED = "delivered", "Delivered"
-        CANCELLED = "cancelled", "Cancelled"
-        RETURNED = "returned", "Returned"
+        PENDING = "pending", "در انتظار تأیید"
+        CONFIRMED = "confirmed", "تأیید شده"
+        PROCESSING = "processing", "در حال پردازش"
+        SHIPPED = "shipped", "ارسال شده"
+        DELIVERED = "delivered", "تحویل شده"
+        CANCELLED = "cancelled", "لغو شده"
+        RETURNED = "returned", "مرجوع شده"
 
     class PaymentStatus(models.TextChoices):
-        UNPAID = "unpaid", "Unpaid"
-        PENDING = "pending", "Pending"
-        PAID = "paid", "Paid"
-        FAILED = "failed", "Failed"
-        REFUNDED = "refunded", "Refunded"
+        UNPAID = "unpaid", "پرداخت نشده"
+        PENDING = "pending", "در انتظار پرداخت"
+        PAID = "paid", "پرداخت شده"
+        FAILED = "failed", "پرداخت ناموفق"
+        REFUNDED = "refunded", "مسترد شده"
 
-    order_number = models.CharField(max_length=32, unique=True, blank=True)
+    order_number = models.CharField("شمارهٔ سفارش", max_length=32, unique=True, blank=True)
     user = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="orders"
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="orders",
+        verbose_name="مشتری",
     )
 
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    status = models.CharField(
+        "وضعیت سفارش", max_length=20, choices=Status.choices, default=Status.PENDING
+    )
     payment_status = models.CharField(
-        max_length=20, choices=PaymentStatus.choices, default=PaymentStatus.UNPAID
+        "وضعیت پرداخت", max_length=20, choices=PaymentStatus.choices, default=PaymentStatus.UNPAID
     )
 
-    subtotal = models.PositiveBigIntegerField()
-    discount_amount = models.PositiveBigIntegerField(default=0)
-    shipping_cost = models.PositiveBigIntegerField(default=0)
-    total = models.PositiveBigIntegerField()
+    subtotal = models.PositiveBigIntegerField("جمع اقلام (تومان)")
+    discount_amount = models.PositiveBigIntegerField("مبلغ تخفیف (تومان)", default=0)
+    shipping_cost = models.PositiveBigIntegerField("هزینهٔ ارسال (تومان)", default=0)
+    total = models.PositiveBigIntegerField("مبلغ نهایی (تومان)")
 
     coupon = models.ForeignKey(
         "discounts.Coupon",
@@ -64,20 +67,21 @@ class Order(models.Model):
         related_name="orders",
         null=True,
         blank=True,
+        verbose_name="کوپن تخفیف",
     )
 
     # --- Shipping address snapshot ---------------------------------------
     # Deliberately flat fields, NOT a FK to accounts.Address. Per master
     # spec section 23, an order must remain historically correct even if
     # the customer later edits or deletes that saved address.
-    shipping_recipient_name = models.CharField(max_length=150)
-    shipping_phone = models.CharField(max_length=20)
-    shipping_province = models.CharField(max_length=100)
-    shipping_city = models.CharField(max_length=100)
-    shipping_address = models.TextField()
-    shipping_postal_code = models.CharField(max_length=20)
-    shipping_unit = models.CharField(max_length=20, blank=True)
-    shipping_building_number = models.CharField(max_length=20, blank=True)
+    shipping_recipient_name = models.CharField("نام گیرنده", max_length=150)
+    shipping_phone = models.CharField("تلفن گیرنده", max_length=20)
+    shipping_province = models.CharField("استان", max_length=100)
+    shipping_city = models.CharField("شهر", max_length=100)
+    shipping_address = models.TextField("آدرس کامل")
+    shipping_postal_code = models.CharField("کد پستی", max_length=20)
+    shipping_unit = models.CharField("واحد", max_length=20, blank=True)
+    shipping_building_number = models.CharField("پلاک", max_length=20, blank=True)
 
     # --- Shipping method + delivery-window snapshot -----------------------
     # Written ONCE at checkout from the settings that were in force at
@@ -86,16 +90,29 @@ class Order(models.Model):
     # the order, never re-derived from settings afterwards: if the shop
     # later changes shipping costs or delivery windows, existing orders
     # keep exactly what the customer was promised and charged.
-    shipping_method = models.CharField(max_length=20, default="standard")
-    estimated_delivery_min = models.DateField(null=True, blank=True)
-    estimated_delivery_max = models.DateField(null=True, blank=True)
+    shipping_method = models.CharField("روش ارسال", max_length=20, default="standard")
+    estimated_delivery_min = models.DateField("زودترین تاریخ تحویل", null=True, blank=True)
+    estimated_delivery_max = models.DateField("دیرترین تاریخ تحویل", null=True, blank=True)
 
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    # --- Fulfilment workflow (Phase B - Store management) -------------------
+    # Carrier tracking code, entered by the shop owner when the order is
+    # marked shipped (see apps/orders/workflow.py).
+    tracking_code = models.CharField(
+        "کد رهگیری پستی", max_length=100, blank=True,
+        help_text="پیش از تغییر وضعیت به «ارسال شده» وارد کنید.",
+    )
+    # Set exactly once when a cancelled PAID order's stock is handed back
+    # (workflow.set_status -> inventory.restore_stock_for_order). The
+    # timestamp is the idempotency guard: a second cancel attempt can
+    # never restore stock again.
+    stock_restored_at = models.DateTimeField("زمان بازگشت موجودی", null=True, blank=True)
+
+    created_at = models.DateTimeField("تاریخ ایجاد", auto_now_add=True)
+    updated_at = models.DateTimeField("تاریخ ویرایش", auto_now=True)
 
     class Meta:
-        verbose_name = "Order"
-        verbose_name_plural = "Orders"
+        verbose_name = "سفارش"
+        verbose_name_plural = "سفارش‌ها"
         ordering = ["-created_at"]
         indexes = [
             models.Index(fields=["user", "status"]),
@@ -131,22 +148,24 @@ class OrderItem(models.Model):
     # from the catalog later without invalidating historical orders -- the
     # snapshot fields below are what the order actually displays.
     product = models.ForeignKey(
-        Product, on_delete=models.SET_NULL, related_name="order_items", null=True
+        Product, on_delete=models.SET_NULL, related_name="order_items", null=True,
+        verbose_name="محصول",
     )
     variant = models.ForeignKey(
-        ProductVariant, on_delete=models.SET_NULL, related_name="order_items", null=True, blank=True
+        ProductVariant, on_delete=models.SET_NULL, related_name="order_items", null=True, blank=True,
+        verbose_name="تنوع",
     )
 
     # --- Snapshot fields, per master spec section 23 -----------------------
-    product_name = models.CharField(max_length=255)
-    sku = models.CharField("SKU", max_length=64)
-    unit_price = models.PositiveBigIntegerField()
-    quantity = models.PositiveIntegerField(validators=[MinValueValidator(1)])
-    total_price = models.PositiveBigIntegerField()
+    product_name = models.CharField("نام کالا", max_length=255)
+    sku = models.CharField("کد کالا (SKU)", max_length=64)
+    unit_price = models.PositiveBigIntegerField("قیمت واحد (تومان)")
+    quantity = models.PositiveIntegerField("تعداد", validators=[MinValueValidator(1)])
+    total_price = models.PositiveBigIntegerField("جمع ردیف (تومان)")
 
     class Meta:
-        verbose_name = "Order Item"
-        verbose_name_plural = "Order Items"
+        verbose_name = "قلم سفارش"
+        verbose_name_plural = "اقلام سفارش"
         indexes = [
             models.Index(fields=["order"]),
             models.Index(fields=["product"]),

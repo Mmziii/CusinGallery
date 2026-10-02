@@ -1,31 +1,74 @@
 """
-Orders admin registration.
+Orders admin registration (Phase B - Store management).
+
+The admin is the shop owner's day-to-day order desk:
+
+* Status changes go through apps/orders/workflow.set_status, which
+  enforces the transition DAG and restores stock exactly once when a
+  paid order is cancelled. Invalid transitions raise ValidationError
+  and NOTHING is saved.
+* Every snapshot field (address, shipping method/window, totals,
+  items, coupon) is read-only: orders must stay historically correct.
+* Admin cannot create orders (they only come from checkout), so there
+  is no "required snapshot field" problem on a create form.
+* A printable shipping-label/invoice page and a CSV export action are
+  provided for the owner.
 """
-from django.contrib import admin
+import csv
+
+from django.contrib import admin, messages
+from django.core.exceptions import ValidationError
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404
+from django.template.response import TemplateResponse
+from django.urls import path
+from django.utils import timezone
+from django.utils.html import format_html
 
 from .models import Order, OrderItem
+from .workflow import OrderWorkflowError, check_transition, set_status
 
 
 class OrderItemInline(admin.TabularInline):
+    """Read-only items snapshot -- never editable after checkout."""
+
     model = OrderItem
     extra = 0
+    max_num = 0
+    can_delete = False
     fields = ("product", "variant", "product_name", "sku", "unit_price", "quantity", "total_price")
-    readonly_fields = ("product_name", "sku", "unit_price", "total_price")
-    autocomplete_fields = ("product", "variant")
+    readonly_fields = ("product", "variant", "product_name", "sku", "unit_price", "quantity", "total_price")
+    autocomplete_fields = ()
 
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
     list_display = (
-        "order_number", "user", "status", "payment_status", "total", "created_at",
+        "order_number", "user", "status", "payment_status", "total",
+        "stock_restored_badge", "created_at",
     )
     list_filter = ("status", "payment_status", "created_at")
-    search_fields = ("order_number", "user__username", "user__email", "shipping_phone")
+    search_fields = ("order_number", "user__username", "user__email", "shipping_phone", "tracking_code")
     autocomplete_fields = ("user", "coupon")
-    readonly_fields = ("order_number", "created_at", "updated_at")
+    date_hierarchy = "created_at"
+    readonly_fields = (
+        "order_number", "created_at", "updated_at", "stock_restored_at",
+        # Totals snapshot
+        "subtotal", "discount_amount", "shipping_cost", "total",
+        # Shipping address snapshot
+        "shipping_recipient_name", "shipping_phone", "shipping_province",
+        "shipping_city", "shipping_address", "shipping_postal_code",
+        "shipping_unit", "shipping_building_number",
+        # Shipping method + delivery window snapshot
+        "shipping_method", "estimated_delivery_min", "estimated_delivery_max",
+    )
     inlines = [OrderItemInline]
+    actions = ["export_orders_csv"]
+    change_form_template = "admin/orders/order_change_form.html"
+
     fieldsets = (
         (None, {"fields": ("order_number", "user", "status", "payment_status", "coupon")}),
+        ("Fulfilment", {"fields": ("tracking_code", "stock_restored_at")}),
         ("Totals", {"fields": ("subtotal", "discount_amount", "shipping_cost", "total")}),
         ("Shipping address", {
             "fields": (
@@ -34,5 +77,109 @@ class OrderAdmin(admin.ModelAdmin):
                 "shipping_unit", "shipping_building_number",
             ),
         }),
+        ("Shipping method", {"fields": ("shipping_method", "estimated_delivery_min", "estimated_delivery_max")}),
         ("Timestamps", {"fields": ("created_at", "updated_at")}),
     )
+
+    def has_add_permission(self, request):
+        # Orders only come from the checkout flow; admin manages existing ones.
+        return False
+
+    def stock_restored_badge(self, obj):
+        if obj.stock_restored_at is None:
+            return ""
+        return format_html('<span title="{}">↩️</span>', "موجودی پس از لغو بازگردانده شده است")
+
+    stock_restored_badge.short_description = ""
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom = [
+            path(
+                "<int:pk>/print/",
+                self.admin_site.admin_view(self.print_view),
+                name="orders_order_print",
+            ),
+        ]
+        return custom + urls
+
+    def print_view(self, request, pk):
+        order = get_object_or_404(
+            Order.objects.prefetch_related("items", "items__product", "items__variant"),
+            pk=pk,
+        )
+        return TemplateResponse(
+            request,
+            "admin/orders/order_print.html",
+            {"order": order, "opts": self.model._meta, "title": f"Print {order.order_number}"},
+        )
+
+    def save_model(self, request, obj, form, change):
+        """
+        Route status changes through the workflow so the DAG is enforced
+        and stock restoration on cancel is exactly-once. Validate BEFORE
+        saving so an invalid transition persists nothing.
+        """
+        if not change:
+            return super().save_model(request, obj, form, change)
+
+        db_obj = Order.objects.get(pk=obj.pk)
+        requested_status = obj.status
+        if requested_status == db_obj.status:
+            return super().save_model(request, obj, form, change)
+
+        # Validate against the DB's current status but with the INCOMING
+        # field values (e.g. a tracking code typed in this very save).
+        try:
+            check_transition(db_obj.status, requested_status, obj.tracking_code)
+        except OrderWorkflowError as exc:
+            raise ValidationError(str(exc))
+
+        # Persist everything except the status; set_status applies the
+        # transition atomically (and restores stock if this is a paid
+        # order being cancelled).
+        obj.status = db_obj.status
+        super().save_model(request, obj, form, change)
+        try:
+            set_status(obj, requested_status)
+        except OrderWorkflowError as exc:  # pragma: no cover - validated above
+            raise ValidationError(str(exc))
+        obj.refresh_from_db()
+
+        if obj.status == Order.Status.CANCELLED and obj.stock_restored_at is not None:
+            self.message_user(
+                request,
+                "سفارش لغو شد و موجودی کسرشدهٔ آن به کاتالوگ بازگشت.",
+                messages.INFO,
+            )
+
+    @admin.action(description="خروجی CSV از سفارش‌های انتخاب‌شده")
+    def export_orders_csv(self, request, queryset):
+        response = HttpResponse(content_type="text/csv; charset=utf-8")
+        stamp = timezone.now().strftime("%Y%m%d-%H%M%S")
+        response["Content-Disposition"] = f'attachment; filename="orders-{stamp}.csv"'
+        # UTF-8 BOM so Excel opens Persian text correctly.
+        response.write("\ufeff")
+
+        writer = csv.writer(response)
+        writer.writerow([
+            "order_number", "created_at", "customer", "phone", "status",
+            "payment_status", "subtotal", "discount", "shipping_cost", "total",
+            "shipping_method", "tracking_code",
+        ])
+        for order in queryset.select_related("user"):
+            writer.writerow([
+                order.order_number,
+                order.created_at.isoformat(),
+                order.shipping_recipient_name,
+                order.shipping_phone,
+                order.status,
+                order.payment_status,
+                order.subtotal,
+                order.discount_amount,
+                order.shipping_cost,
+                order.total,
+                order.shipping_method,
+                order.tracking_code,
+            ])
+        return response

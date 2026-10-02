@@ -61,3 +61,30 @@ def decrement_stock_for_order(order) -> None:
             )
         row.stock_quantity = max(0, row.stock_quantity - item.quantity)
         row.save(update_fields=["stock_quantity", "updated_at"])
+
+
+def restore_stock_for_order(order) -> None:
+    """
+    The exact inverse of decrement_stock_for_order(): hand each
+    OrderItem's quantity back to its variant's (or product's)
+    stock_quantity. Used when a PAID order is cancelled (its stock was
+    decremented at payment verification, so cancelling must give it
+    back).
+
+    Like decrement, this must run inside an already-open
+    transaction.atomic() with the same row locks, and it deliberately
+    has NO "have I run before" bookkeeping of its own: the caller
+    (apps/orders/workflow.set_status) owns the exactly-once guarantee
+    via Order.stock_restored_at, checked under a lock on the order row.
+    """
+    for item in order.items.select_related("product", "variant"):
+        if item.variant_id is not None:
+            target_model, target_id = ProductVariant, item.variant_id
+        else:
+            target_model, target_id = Product, item.product_id
+
+        row = target_model.objects.select_for_update().get(pk=target_id)
+        row.stock_quantity = row.stock_quantity + item.quantity
+        row.save(update_fields=["stock_quantity", "updated_at"])
+
+    logger.info("Stock restored for cancelled order %s.", order.order_number)

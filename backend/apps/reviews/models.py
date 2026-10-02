@@ -17,30 +17,37 @@ from apps.products.models import Product
 
 class Review(models.Model):
     class Status(models.TextChoices):
-        PENDING = "pending", "Pending"
-        APPROVED = "approved", "Approved"
-        REJECTED = "rejected", "Rejected"
+        PENDING = "pending", "در انتظار تأیید"
+        APPROVED = "approved", "تأیید شده"
+        REJECTED = "rejected", "رد شده"
 
-    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="reviews")
+    product = models.ForeignKey(
+        Product, on_delete=models.CASCADE, related_name="reviews", verbose_name="محصول"
+    )
     user = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="reviews"
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="reviews",
+        verbose_name="کاربر",
     )
-    rating = models.PositiveSmallIntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])
-    title = models.CharField(max_length=200, blank=True)
-    body = models.TextField(blank=True)
+    rating = models.PositiveSmallIntegerField(
+        "امتیاز", validators=[MinValueValidator(1), MaxValueValidator(5)]
+    )
+    title = models.CharField("عنوان", max_length=200, blank=True)
+    body = models.TextField("متن نظر", blank=True)
     is_verified_purchase = models.BooleanField(
+        "خرید تأیید شده",
         default=False,
-        help_text="Whether this review is linked to a completed order for this product. "
-        "Set by Phase 6 order-completion logic, not editable data entry.",
+        help_text="به‌صورت خودکار از روی سفارش‌های پرداخت‌شدهٔ کاربر محاسبه می‌شود و قابل ویرایش دستی نیست.",
     )
-    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    status = models.CharField(
+        "وضعیت", max_length=10, choices=Status.choices, default=Status.PENDING
+    )
 
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField("تاریخ ایجاد", auto_now_add=True)
+    updated_at = models.DateTimeField("تاریخ ویرایش", auto_now=True)
 
     class Meta:
-        verbose_name = "Review"
-        verbose_name_plural = "Reviews"
+        verbose_name = "نظر"
+        verbose_name_plural = "نظرات"
         ordering = ["-created_at"]
         constraints = [
             # One review per user per product -- edit the existing review

@@ -11,22 +11,23 @@ this phase only establishes the schema those views will read from.
 from django.core.exceptions import ValidationError
 from django.db import models
 
+from apps.core.image_files import validate_image_file
 from apps.core.models import ActivableModel, OrderableModel, TimeStampedModel
 from apps.products.models import Product
 
 
 class Banner(TimeStampedModel, ActivableModel, OrderableModel):
-    title = models.CharField(max_length=200)
-    subtitle = models.CharField(max_length=300, blank=True)
-    image = models.ImageField(upload_to="banners/")
-    cta_text = models.CharField("CTA text", max_length=100, blank=True)
-    cta_url = models.CharField("CTA URL", max_length=300, blank=True)
-    start_date = models.DateTimeField(null=True, blank=True)
-    end_date = models.DateTimeField(null=True, blank=True)
+    title = models.CharField("عنوان", max_length=200)
+    subtitle = models.CharField("زیرعنوان", max_length=300, blank=True)
+    image = models.ImageField("تصویر", upload_to="banners/", validators=[validate_image_file])
+    cta_text = models.CharField("متن دکمهٔ اقدام", max_length=100, blank=True)
+    cta_url = models.CharField("لینک دکمهٔ اقدام", max_length=300, blank=True)
+    start_date = models.DateTimeField("تاریخ شروع نمایش", null=True, blank=True)
+    end_date = models.DateTimeField("تاریخ پایان نمایش", null=True, blank=True)
 
     class Meta:
-        verbose_name = "Banner"
-        verbose_name_plural = "Banners"
+        verbose_name = "بنر"
+        verbose_name_plural = "بنرها"
         ordering = ["ordering"]
         indexes = [
             models.Index(fields=["is_active", "ordering"]),
@@ -37,20 +38,22 @@ class Banner(TimeStampedModel, ActivableModel, OrderableModel):
 
     def clean(self):
         if self.start_date and self.end_date and self.end_date <= self.start_date:
-            raise ValidationError({"end_date": "Must be after the start date."})
+            raise ValidationError({"end_date": "باید بعد از تاریخ شروع باشد."})
 
 
 class DailyDeal(TimeStampedModel, ActivableModel):
     """A time-boxed discounted price for a product, per master spec section 14."""
 
-    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="daily_deals")
-    sale_price = models.PositiveBigIntegerField()
-    starts_at = models.DateTimeField()
-    ends_at = models.DateTimeField()
+    product = models.ForeignKey(
+        Product, on_delete=models.CASCADE, related_name="daily_deals", verbose_name="محصول"
+    )
+    sale_price = models.PositiveBigIntegerField("قیمت پیشنهاد روزانه (تومان)")
+    starts_at = models.DateTimeField("زمان شروع")
+    ends_at = models.DateTimeField("زمان پایان")
 
     class Meta:
-        verbose_name = "Daily Deal"
-        verbose_name_plural = "Daily Deals"
+        verbose_name = "پیشنهاد روزانه"
+        verbose_name_plural = "پیشنهادهای روزانه"
         ordering = ["-starts_at"]
         indexes = [
             models.Index(fields=["is_active", "starts_at", "ends_at"]),
@@ -65,8 +68,8 @@ class DailyDeal(TimeStampedModel, ActivableModel):
     def clean(self):
         errors = {}
         if self.ends_at and self.starts_at and self.ends_at <= self.starts_at:
-            errors["ends_at"] = "Must be after the start time."
+            errors["ends_at"] = "باید بعد از زمان شروع باشد."
         if self.sale_price is not None and self.product_id and self.sale_price >= self.product.price:
-            errors["sale_price"] = "Deal price should be lower than the product's regular price."
+            errors["sale_price"] = "قیمت پیشنهاد باید از قیمت عادی محصول کمتر باشد."
         if errors:
             raise ValidationError(errors)

@@ -100,8 +100,8 @@ class User(AbstractUser):
     )
 
     class Meta:
-        verbose_name = "User"
-        verbose_name_plural = "Users"
+        verbose_name = "کاربر"
+        verbose_name_plural = "کاربران"
         constraints = [
             models.UniqueConstraint(
                 fields=["email"], condition=Q(email__isnull=False), name="user_email_unique_when_set"
@@ -148,8 +148,8 @@ class Address(TimeStampedModel):
     is_default = models.BooleanField(default=False)
 
     class Meta:
-        verbose_name = "Address"
-        verbose_name_plural = "Addresses"
+        verbose_name = "آدرس"
+        verbose_name_plural = "آدرس‌ها"
         ordering = ["-is_default", "-created_at"]
         indexes = [
             models.Index(fields=["user"], name="addr_user_idx"),

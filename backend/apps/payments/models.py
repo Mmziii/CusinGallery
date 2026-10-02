@@ -25,10 +25,10 @@ from apps.orders.models import Order
 
 class Payment(TimeStampedModel):
     class Status(models.TextChoices):
-        PENDING = "pending", "Pending"
-        SUCCESS = "success", "Success"
-        FAILED = "failed", "Failed"
-        CANCELLED = "cancelled", "Cancelled"
+        PENDING = "pending", "در انتظار"
+        SUCCESS = "success", "موفق"
+        FAILED = "failed", "ناموفق"
+        CANCELLED = "cancelled", "لغو شده"
 
     # PROTECT (not CASCADE): a payment record is part of the financial
     # audit trail and must never disappear just because someone deletes
@@ -62,8 +62,8 @@ class Payment(TimeStampedModel):
     paid_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        verbose_name = "Payment"
-        verbose_name_plural = "Payments"
+        verbose_name = "پرداخت"
+        verbose_name_plural = "پرداخت‌ها"
         ordering = ["-created_at"]
         constraints = [
             # At most one successful payment per order. The service layer

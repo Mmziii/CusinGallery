@@ -1,0 +1,88 @@
+{% load i18n %}<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <title>سفارش {{ order.order_number }} — چاپ</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: Tahoma, "Segoe UI", sans-serif; color: #1c1c1c; margin: 0; padding: 24px; direction: rtl; }
+    h1 { font-size: 18px; margin: 0 0 4px; }
+    .muted { color: #666; font-size: 12px; }
+    .sheet { max-width: 720px; margin: 0 auto; }
+    .box { border: 1px solid #ccc; border-radius: 8px; padding: 14px 16px; margin-top: 14px; }
+    .box h2 { font-size: 14px; margin: 0 0 10px; border-bottom: 1px dashed #ddd; padding-bottom: 6px; }
+    .grid { display: flex; flex-wrap: wrap; gap: 8px 24px; font-size: 13px; }
+    .grid div b { color: #555; font-weight: normal; }
+    table.items { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 6px; }
+    table.items th, table.items td { border: 1px solid #ddd; padding: 6px 8px; text-align: right; }
+    table.items th { background: #f5f5f5; }
+    .totals { margin-top: 10px; font-size: 13px; width: 280px; margin-right: auto; }
+    .totals div { display: flex; justify-content: space-between; padding: 3px 0; }
+    .totals .grand { border-top: 2px solid #333; font-weight: bold; font-size: 15px; }
+    .label-addr { font-size: 15px; line-height: 2; }
+    .badge { display: inline-block; border: 1px solid #999; border-radius: 999px; padding: 1px 10px; font-size: 12px; }
+    .print-btn { position: fixed; top: 12px; left: 12px; }
+    @media print {
+      .print-btn { display: none; }
+      body { padding: 0; }
+      .box { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+<button class="print-btn" onclick="window.print()">چاپ</button>
+<div class="sheet">
+  <h1>کوزین گالری — سفارش {{ order.order_number }}</h1>
+  <div class="muted">تاریخ ثبت: {{ order.created_at|date:"Y/m/d H:i" }}</div>
+
+  <div class="box">
+    <h2>برچسب ارسال</h2>
+    <div class="label-addr">
+      <div><b>گیرنده:</b> {{ order.shipping_recipient_name }}</div>
+      <div><b>تلفن:</b> {{ order.shipping_phone }}</div>
+      <div><b>آدرس:</b> {{ order.shipping_province }}، {{ order.shipping_city }}، {{ order.shipping_address }}{% if order.shipping_unit %}، واحد {{ order.shipping_unit }}{% endif %}{% if order.shipping_building_number %}، پلاک {{ order.shipping_building_number }}{% endif %}</div>
+      {% if order.shipping_postal_code %}<div><b>کد پستی:</b> {{ order.shipping_postal_code }}</div>{% endif %}
+      <div><b>روش ارسال:</b>
+        {% if order.shipping_method == "express" %}ارسال اکسپرس{% else %}ارسال عادی{% endif %}
+        {% if order.estimated_delivery_min and order.estimated_delivery_max %}
+          (تحویل: {{ order.estimated_delivery_min|date:"Y/m/d" }} تا {{ order.estimated_delivery_max|date:"Y/m/d" }})
+        {% endif %}
+      </div>
+      {% if order.tracking_code %}<div><b>کد رهگیری:</b> {{ order.tracking_code }}</div>{% endif %}
+    </div>
+  </div>
+
+  <div class="box">
+    <h2>فاکتور سفارش</h2>
+    <div class="grid">
+      <div><span class="badge">وضعیت: {{ order.get_status_display }}</span></div>
+      <div><span class="badge">پرداخت: {{ order.get_payment_status_display }}</span></div>
+      {% if order.coupon %}<div><b>کوپن:</b> {{ order.coupon.code }}</div>{% endif %}
+    </div>
+    <table class="items">
+      <thead>
+        <tr><th>ردیف</th><th>کالا</th><th>شناسه</th><th>فی (تومان)</th><th>تعداد</th><th>جمع (تومان)</th></tr>
+      </thead>
+      <tbody>
+        {% for item in order.items.all %}
+        <tr>
+          <td>{{ forloop.counter }}</td>
+          <td>{{ item.product_name }}</td>
+          <td>{{ item.sku }}</td>
+          <td>{{ item.unit_price }}</td>
+          <td>{{ item.quantity }}</td>
+          <td>{{ item.total_price }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="totals">
+      <div><span>جمع کالاها</span><span>{{ order.subtotal }} تومان</span></div>
+      {% if order.discount_amount %}<div><span>تخفیف</span><span>-{{ order.discount_amount }} تومان</span></div>{% endif %}
+      <div><span>هزینه ارسال</span><span>{{ order.shipping_cost }} تومان</span></div>
+      <div class="grand"><span>مبلغ قابل پرداخت</span><span>{{ order.total }} تومان</span></div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

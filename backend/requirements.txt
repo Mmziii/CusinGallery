@@ -20,6 +20,12 @@ psycopg2-binary==2.9.9
 # python:3.12-slim base image in docker/backend/Dockerfile.
 Pillow==10.4.0
 
+# --- Bulk catalog import (Phase B) -------------------------------------------------
+# Reads .xlsx workbooks for the admin's "import products from file"
+# feature and `import_products` management command. CSV support is
+# stdlib-only; this adds the Excel half of "CSV/Excel import".
+openpyxl==3.1.5
+
 # --- Static & production server -----------------------------------------------
 gunicorn==22.0.0
 whitenoise==6.7.0

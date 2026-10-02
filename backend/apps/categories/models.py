@@ -13,28 +13,32 @@ layered on top of this same `parent` field without a schema rewrite.
 from django.core.exceptions import ValidationError
 from django.db import models
 
+from apps.core.image_files import validate_image_file
 from apps.core.models import ActivableModel, OrderableModel, TimeStampedModel
 
 
 class Category(TimeStampedModel, ActivableModel, OrderableModel):
     """A product category, optionally nested under a parent category."""
 
-    name = models.CharField(max_length=150)
-    slug = models.SlugField(max_length=170, unique=True)
+    name = models.CharField("نام دسته‌بندی", max_length=150)
+    slug = models.SlugField("شناسه (آدرس)", max_length=170, unique=True)
     parent = models.ForeignKey(
         "self",
         on_delete=models.PROTECT,
         related_name="children",
         null=True,
         blank=True,
-        help_text="Leave empty for a top-level category.",
+        verbose_name="دستهٔ والد",
+        help_text="برای دسته‌بندی سطحِ بالا خالی بگذارید.",
     )
-    image = models.ImageField(upload_to="categories/", blank=True, null=True)
-    description = models.TextField(blank=True)
+    image = models.ImageField(
+        "تصویر", upload_to="categories/", blank=True, null=True, validators=[validate_image_file]
+    )
+    description = models.TextField("توضیحات", blank=True)
 
     class Meta:
-        verbose_name = "Category"
-        verbose_name_plural = "Categories"
+        verbose_name = "دسته‌بندی"
+        verbose_name_plural = "دسته‌بندی‌ها"
         ordering = ["ordering", "name"]
         indexes = [
             models.Index(fields=["parent", "is_active"]),
@@ -54,14 +58,14 @@ class Category(TimeStampedModel, ActivableModel, OrderableModel):
         if not self.parent_id:
             return
         if self.pk and self.parent_id == self.pk:
-            raise ValidationError({"parent": "A category cannot be its own parent."})
+            raise ValidationError({"parent": "دسته‌بندی نمی‌تواند والدِ خودش باشد."})
 
         ancestor = self.parent
         seen_ids = set()
         while ancestor is not None:
             if self.pk and ancestor.pk == self.pk:
                 raise ValidationError(
-                    {"parent": "This would create a circular category hierarchy."}
+                    {"parent": "این تغییر باعث ایجاد چرخه در سلسله‌مراتب دسته‌بندی‌ها می‌شود."}
                 )
             if ancestor.pk in seen_ids:
                 # Pre-existing corrupt data upstream of this node -- don't
