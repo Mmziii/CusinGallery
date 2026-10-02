@@ -1,7 +1,9 @@
+import PropTypes from "prop-types";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import PriceTag from "../components/PriceTag";
+import { productDetailShape } from "../utils/shapes";
 import { Alert, EmptyState, Spinner, errorMessage } from "../components/ui";
 import { useAsync } from "../hooks/useAsync";
 import { getProduct } from "../services/catalogApi";
@@ -401,5 +403,9 @@ function ProductDetailPage() {
     </div>
   );
 }
+
+Stars.propTypes = { value: PropTypes.number, size: PropTypes.oneOf(["sm", "md", "lg"]) };
+RatingInput.propTypes = { value: PropTypes.number.isRequired, onChange: PropTypes.func.isRequired };
+ReviewSection.propTypes = { product: productDetailShape.isRequired };
 
 export default ProductDetailPage;

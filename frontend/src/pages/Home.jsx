@@ -1,7 +1,9 @@
+import PropTypes from "prop-types";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import ProductCard from "../components/ProductCard";
+import { bannerShape } from "../utils/shapes";
 import { Alert, Spinner } from "../components/ui";
 import { fetchBanners, fetchDailyDeals } from "../services/bannersApi";
 import { getCategoryTree, listProducts } from "../services/catalogApi";
@@ -189,5 +191,9 @@ function Home() {
     </div>
   );
 }
+
+BannerCarousel.propTypes = { banners: PropTypes.arrayOf(bannerShape).isRequired };
+Countdown.propTypes = { endsAt: PropTypes.string.isRequired, serverNow: PropTypes.string.isRequired };
+ProductRow.propTypes = { title: PropTypes.string.isRequired, params: PropTypes.object.isRequired };
 
 export default Home;

@@ -1,6 +1,6 @@
 from django.urls import reverse
 from rest_framework import status
-from rest_framework.test import APITestCase
+from apps.core.testing import CacheIsolatedAPITestCase
 
 from ..models import Address
 from .helpers import make_user
@@ -22,7 +22,7 @@ def address_payload(**overrides):
     return payload
 
 
-class AddressCrudTests(APITestCase):
+class AddressCrudTests(CacheIsolatedAPITestCase):
     def setUp(self):
         self.list_url = reverse("address-list")
         self.user = make_user(phone="+989131111111")
@@ -75,7 +75,7 @@ class AddressCrudTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
 
-class AddressIsolationTests(APITestCase):
+class AddressIsolationTests(CacheIsolatedAPITestCase):
     """User A must never be able to read, modify, or delete User B's
     address -- covers both the queryset-level scoping and the IsOwner
     permission independently exercising the same guarantee."""
@@ -114,7 +114,7 @@ class AddressIsolationTests(APITestCase):
         self.assertEqual(len(results), 0)
 
 
-class DefaultAddressBehaviorTests(APITestCase):
+class DefaultAddressBehaviorTests(CacheIsolatedAPITestCase):
     """Exercises the API-level swap logic against the real Phase 2
     database constraint (addr_one_default_per_user) -- these must agree,
     or a request would fail with a raw IntegrityError instead of a clean

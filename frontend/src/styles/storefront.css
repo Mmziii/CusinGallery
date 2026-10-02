@@ -665,3 +665,19 @@ input:focus, textarea:focus, select:focus {
   .field-row { flex-direction: column; gap: 0; }
   .address-form__grid { grid-template-columns: 1fr; }
 }
+
+/* ================================================== Shipping methods */
+
+.shipping-methods { display: flex; flex-direction: column; gap: var(--space-2); margin-bottom: var(--space-2); }
+.shipping-method {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  cursor: pointer;
+}
+.shipping-method--active { border-color: var(--color-accent); background: rgba(138, 109, 75, 0.05); }
+.shipping-method__body { display: flex; flex-direction: column; flex: 1; }
+.shipping-method__cost { font-weight: 800; white-space: nowrap; }

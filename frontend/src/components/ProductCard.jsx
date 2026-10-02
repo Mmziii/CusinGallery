@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 
 import useAuthStore from "../store/useAuthStore";
+import { productShape } from "../utils/shapes";
 import useCartStore from "../store/useCartStore";
 import * as wishlistApi from "../services/wishlistApi";
 import PriceTag from "./PriceTag";
@@ -85,5 +86,7 @@ function ProductCard({ product }) {
     </div>
   );
 }
+
+ProductCard.propTypes = { product: productShape.isRequired };
 
 export default ProductCard;

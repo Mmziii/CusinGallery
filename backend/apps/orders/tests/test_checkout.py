@@ -1,14 +1,15 @@
+from django.conf import settings
 from django.test import override_settings
 from django.urls import reverse
 from rest_framework import status
-from rest_framework.test import APITestCase
+from apps.core.testing import CacheIsolatedAPITestCase
 
 from ...cart.models import CartItem
 from ..models import Order, OrderItem
 from .helpers import add_to_cart, make_address, make_product, make_user, make_variant, valid_checkout_payload
 
 
-class CheckoutAuthenticationTests(APITestCase):
+class CheckoutAuthenticationTests(CacheIsolatedAPITestCase):
     def test_anonymous_cannot_checkout(self):
         response = self.client.post(reverse("checkout"), valid_checkout_payload(), format="json")
         # 403, not 401 -- SessionAuthentication is the only registered
@@ -17,7 +18,7 @@ class CheckoutAuthenticationTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
 
-class SuccessfulCheckoutTests(APITestCase):
+class SuccessfulCheckoutTests(CacheIsolatedAPITestCase):
     def setUp(self):
         self.user = make_user(phone="+989300000001")
         self.client.login(username="+989300000001", password="a-strong-passw0rd!")
@@ -88,7 +89,7 @@ class SuccessfulCheckoutTests(APITestCase):
         self.assertEqual(item["unit_price"], 130000)
 
 
-class EmptyCartCheckoutTests(APITestCase):
+class EmptyCartCheckoutTests(CacheIsolatedAPITestCase):
     def test_checkout_with_empty_cart_is_rejected(self):
         make_user(phone="+989300000002")
         self.client.login(username="+989300000002", password="a-strong-passw0rd!")
@@ -100,7 +101,7 @@ class EmptyCartCheckoutTests(APITestCase):
         self.assertEqual(Order.objects.count(), 0)
 
 
-class UnavailableItemCheckoutTests(APITestCase):
+class UnavailableItemCheckoutTests(CacheIsolatedAPITestCase):
     def setUp(self):
         self.user = make_user(phone="+989300000003")
         self.client.login(username="+989300000003", password="a-strong-passw0rd!")
@@ -160,7 +161,7 @@ class UnavailableItemCheckoutTests(APITestCase):
         self.assertEqual(CartItem.objects.filter(cart__user=self.user).count(), 2)
 
 
-class AddressValidationTests(APITestCase):
+class AddressValidationTests(CacheIsolatedAPITestCase):
     def setUp(self):
         self.user = make_user(phone="+989300000004")
         self.other_user = make_user(phone="+989300000005")
@@ -198,7 +199,7 @@ class AddressValidationTests(APITestCase):
 
 
 @override_settings(STANDARD_SHIPPING_COST=50000, FREE_SHIPPING_THRESHOLD=1000000)
-class ShippingAndPricingTests(APITestCase):
+class ShippingAndPricingTests(CacheIsolatedAPITestCase):
     def setUp(self):
         self.user = make_user(phone="+989300000006")
         self.client.login(username="+989300000006", password="a-strong-passw0rd!")
@@ -256,7 +257,7 @@ class ShippingAndPricingTests(APITestCase):
         self.assertEqual(response.data["subtotal"], 80000)
 
 
-class SnapshotTests(APITestCase):
+class SnapshotTests(CacheIsolatedAPITestCase):
     """Confirms Order/OrderItem are true snapshots -- later catalog
     changes must never retroactively alter a placed order, per master
     spec section 23."""
@@ -307,3 +308,56 @@ class SnapshotTests(APITestCase):
 
         detail = self.client.get(reverse("order-detail", args=[order_id]))
         self.assertEqual(detail.data["shipping_city"], "Tehran")
+
+
+class ShippingSnapshotRegressionTests(CacheIsolatedAPITestCase):
+    """
+    Phase A regression: an order stores the shipping method, cost and
+    delivery window that were in force WHEN IT WAS PLACED. Later changes
+    to the shipping settings must never alter existing orders -- the
+    values are snapshots, not live references.
+    """
+
+    def setUp(self):
+        self.user = make_user(phone="+989300000090")
+        self.client.login(username="+989300000090", password="a-strong-passw0rd!")
+        # Below the free-shipping threshold so standard costs money.
+        product = make_product(price=200000, stock_quantity=5)
+        add_to_cart(self.user, product, quantity=1)
+        response = self.client.post(
+            reverse("checkout"), valid_checkout_payload(shipping_method="standard"), format="json"
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        self.order = Order.objects.get(user=self.user)
+
+    def test_shipping_cost_snapshot_survives_settings_change(self):
+        from apps.orders import shipping as shipping_module
+
+        original_cost = self.order.shipping_cost
+        self.assertEqual(original_cost, settings.STANDARD_SHIPPING_COST)
+
+        # The shop raises shipping prices and drops the free threshold...
+        new_methods = {
+            "standard": {"cost": 999999, "free_threshold": None, "min_days": 9, "max_days": 12},
+        }
+        with override_settings(SHIPPING_METHODS=new_methods):
+            # ...the live calculation now reflects the new price...
+            self.assertEqual(shipping_module.calculate_shipping_cost(200000, "standard"), 999999)
+            # ...but the existing order keeps what the customer was charged.
+            self.order.refresh_from_db()
+            self.assertEqual(self.order.shipping_cost, original_cost)
+            self.assertEqual(self.order.total, self.order.subtotal - self.order.discount_amount + original_cost)
+
+    def test_estimated_delivery_snapshot_survives_settings_change(self):
+        original_min = self.order.estimated_delivery_min
+        original_max = self.order.estimated_delivery_max
+        self.assertIsNotNone(original_min)
+        self.assertIsNotNone(original_max)
+
+        new_methods = {
+            "standard": {"cost": 50000, "free_threshold": 1000000, "min_days": 30, "max_days": 40},
+        }
+        with override_settings(SHIPPING_METHODS=new_methods):
+            self.order.refresh_from_db()
+            self.assertEqual(self.order.estimated_delivery_min, original_min)
+            self.assertEqual(self.order.estimated_delivery_max, original_max)

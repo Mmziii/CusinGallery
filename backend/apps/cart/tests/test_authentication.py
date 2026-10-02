@@ -1,11 +1,11 @@
 from django.urls import reverse
 from rest_framework import status
-from rest_framework.test import APITestCase
+from apps.core.testing import CacheIsolatedAPITestCase
 
 from .helpers import make_user
 
 
-class CartAuthenticationTests(APITestCase):
+class CartAuthenticationTests(CacheIsolatedAPITestCase):
     def test_anonymous_cannot_view_cart(self):
         response = self.client.get(reverse("cart"))
         # 403, not 401: SessionAuthentication is the only registered

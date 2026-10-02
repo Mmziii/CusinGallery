@@ -12,15 +12,31 @@ import apiClient from "./apiClient";
  */
 
 /**
- * @param {Object} addressPayload - exactly one of two shapes:
+ * @param {Object} payload - exactly one of two address shapes:
  *   { address_id: number }  -- use one of the user's own saved addresses
  *   OR
  *   { recipient_name, phone, province, city, address, postal_code, unit?, building_number? }
  *     -- a one-off address, not saved to the account
+ *   Plus optionally:
+ *   { shipping_method?: string }  -- one of fetchShippingMethods()' ids
+ *     (omitted/blank = the default method); the COST and delivery window
+ *     for it are always computed server-side, never sent from here.
+ *   { coupon_code?: string }
  * @returns the created Order (see fetchOrder's return shape)
  */
-export function checkout(addressPayload) {
-  return apiClient.post("/orders/checkout/", addressPayload).then((res) => res.data);
+export function checkout(payload) {
+  return apiClient.post("/orders/checkout/", payload).then((res) => res.data);
+}
+
+/**
+ * The selectable shipping methods and their current cost/delivery-window
+ * configuration (GET /orders/shipping-methods/). The checkout page
+ * renders its delivery selector from this -- shipping numbers are never
+ * hardcoded in frontend code.
+ * @returns {Promise<{default: string, methods: Array<{id, cost, free_threshold, min_days, max_days}>}>}
+ */
+export function fetchShippingMethods() {
+  return apiClient.get("/orders/shipping-methods/").then((res) => res.data);
 }
 
 /**

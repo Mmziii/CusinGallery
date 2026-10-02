@@ -1,11 +1,11 @@
 from django.urls import reverse
 from rest_framework import status
-from rest_framework.test import APITestCase
+from apps.core.testing import CacheIsolatedAPITestCase
 
 from .helpers import make_user
 
 
-class ProfileTests(APITestCase):
+class ProfileTests(CacheIsolatedAPITestCase):
     def setUp(self):
         self.me_url = reverse("me")
         self.user = make_user(phone="+989122222222", email="profile@example.com")

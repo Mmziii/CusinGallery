@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import AddressForm from "../components/AddressForm";
 import { Alert, Spinner, errorMessage } from "../components/ui";
 import * as authApi from "../services/authApi";
-import { checkout } from "../services/orderApi";
+import { checkout, fetchShippingMethods } from "../services/orderApi";
 import { validateCoupon } from "../services/couponsApi";
 import { initiatePayment } from "../services/paymentsApi";
 import useCartStore from "../store/useCartStore";
@@ -18,6 +18,28 @@ import { formatPrice } from "../utils/formatPrice";
  * server returns. After order creation the user starts payment, which
  * redirects the browser to the gateway.
  */
+const METHOD_LABELS = {
+  standard: "ارسال استاندارد",
+  express: "ارسال اکسپرس",
+};
+
+/** Persian display name for a method id; unknown ids render as-is. */
+function methodLabel(id) {
+  return METHOD_LABELS[id] || id;
+}
+
+/** Server-configured cost of a method for a given subtotal -- the same
+ *  free-threshold rule the backend applies (see apps/orders/shipping.py);
+ *  used only for the on-page preview, never for the real charge. */
+function methodCostFor(method, subtotal) {
+  if (method.free_threshold != null && subtotal >= method.free_threshold) return 0;
+  return method.cost;
+}
+
+function formatDate(iso) {
+  return new Date(iso).toLocaleDateString("fa-IR");
+}
+
 function CheckoutPage() {
   const { cart, fetchCart } = useCartStore();
 
@@ -28,6 +50,12 @@ function CheckoutPage() {
   const [showAddressForm, setShowAddressForm] = useState(false);
 
   const [inlineAddress, setInlineAddress] = useState({});
+
+  // Shipping: the selectable methods and their costs/delivery windows all
+  // come from the server (GET /orders/shipping-methods/) -- the shopper
+  // only picks one; checkout recomputes everything server-side.
+  const [shippingData, setShippingData] = useState(null);
+  const [selectedMethod, setSelectedMethod] = useState(null);
 
   const [couponCode, setCouponCode] = useState("");
   const [couponPreview, setCouponPreview] = useState(null);
@@ -53,6 +81,12 @@ function CheckoutPage() {
       })
       .catch(() => {})
       .finally(() => setLoadingAddresses(false));
+    fetchShippingMethods()
+      .then((data) => {
+        setShippingData(data);
+        setSelectedMethod(data.default);
+      })
+      .catch(() => {});
   }, [fetchCart]);
 
   const applyCoupon = async () => {
@@ -77,6 +111,7 @@ function CheckoutPage() {
       const payload =
         addressMode === "saved" ? { address_id: selectedAddressId } : { ...inlineAddress };
       if (couponPreview?.code) payload.coupon_code = couponPreview.code;
+      if (selectedMethod) payload.shipping_method = selectedMethod;
       const order = await checkout(payload);
       setPlacedOrder(order);
       // Cart is now empty server-side; refresh the badge.
@@ -116,11 +151,18 @@ function CheckoutPage() {
             </div>
           ) : null}
           <div>
-            <dt>هزینه ارسال</dt>
+            <dt>هزینه ارسال ({methodLabel(placedOrder.shipping_method)})</dt>
             <dd>{placedOrder.shipping_cost === 0 ? "رایگان" : `${formatPrice(placedOrder.shipping_cost)} تومان`}</dd>
           </div>
           <div className="checkout-done__grand"><dt>مبلغ قابل پرداخت</dt><dd>{formatPrice(placedOrder.total)} تومان</dd></div>
         </dl>
+
+        {placedOrder.estimated_delivery_min && placedOrder.estimated_delivery_max ? (
+          <p className="checkout-done__later">
+            تحویل تخمینی: {formatDate(placedOrder.estimated_delivery_min)} تا{" "}
+            {formatDate(placedOrder.estimated_delivery_max)}
+          </p>
+        ) : null}
 
         <button type="button" className="btn btn--primary" onClick={startPayment} disabled={paying}>
           {paying ? "در حال اتصال به درگاه…" : "پرداخت آنلاین"}
@@ -145,9 +187,13 @@ function CheckoutPage() {
     );
   }
 
+  const methods = shippingData?.methods || [];
+  const currentMethod = methods.find((m) => m.id === selectedMethod) || null;
+  const previewedShippingCost = currentMethod ? methodCostFor(currentMethod, cart.subtotal) : (cart.shipping_cost_preview || 0);
+
   const estimatedTotal =
     cart.subtotal +
-    (cart.shipping_cost_preview || 0) -
+    previewedShippingCost -
     (couponPreview ? couponPreview.discount_amount : 0);
 
   return (
@@ -223,6 +269,48 @@ function CheckoutPage() {
             ) : null}
           </section>
 
+          {methods.length ? (
+            <section className="checkout__section">
+              <h2>روش ارسال</h2>
+              <div className="shipping-methods">
+                {methods.map((method) => {
+                  const cost = methodCostFor(method, cart.subtotal);
+                  return (
+                    <label
+                      key={method.id}
+                      className={
+                        selectedMethod === method.id
+                          ? "shipping-method shipping-method--active"
+                          : "shipping-method"
+                      }
+                    >
+                      <input
+                        type="radio"
+                        name="shipping_method"
+                        checked={selectedMethod === method.id}
+                        onChange={() => setSelectedMethod(method.id)}
+                      />
+                      <span className="shipping-method__body">
+                        <strong>{methodLabel(method.id)}</strong>
+                        <span className="muted">
+                          تحویل {method.min_days} تا {method.max_days} روز کاری
+                        </span>
+                      </span>
+                      <span className="shipping-method__cost">
+                        {cost === 0 ? "رایگان" : `${formatPrice(cost)} تومان`}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+              {currentMethod?.free_threshold && cart.subtotal < currentMethod.free_threshold ? (
+                <p className="muted">
+                  ارسال استاندارد برای خریدهای بالای {formatPrice(currentMethod.free_threshold)} تومان رایگان است.
+                </p>
+              ) : null}
+            </section>
+          ) : null}
+
           <section className="checkout__section">
             <h2>کد تخفیف</h2>
             <div className="coupon-row">
@@ -258,8 +346,8 @@ function CheckoutPage() {
           <dl>
             <div><dt>جمع کالاها</dt><dd>{formatPrice(cart.subtotal)} تومان</dd></div>
             <div>
-              <dt>هزینه ارسال</dt>
-              <dd>{cart.shipping_cost_preview === 0 ? "رایگان" : `${formatPrice(cart.shipping_cost_preview)} تومان`}</dd>
+              <dt>هزینه ارسال{currentMethod ? ` (${methodLabel(currentMethod.id)})` : ""}</dt>
+              <dd>{previewedShippingCost === 0 ? "رایگان" : `${formatPrice(previewedShippingCost)} تومان`}</dd>
             </div>
             {couponPreview ? (
               <div><dt>تخفیف</dt><dd>− {formatPrice(couponPreview.discount_amount)} تومان</dd></div>

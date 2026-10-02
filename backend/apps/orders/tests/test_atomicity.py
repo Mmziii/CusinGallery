@@ -22,7 +22,7 @@ from unittest.mock import patch
 
 from django.urls import reverse
 from rest_framework import status
-from rest_framework.test import APITestCase
+from apps.core.testing import CacheIsolatedAPITestCase
 
 from ...cart.models import Cart, CartItem
 from ..models import Order, OrderItem
@@ -30,7 +30,7 @@ from ..services import checkout
 from .helpers import add_to_cart, make_product, make_user, valid_checkout_payload
 
 
-class FailedCheckoutLeavesNoPartialStateTests(APITestCase):
+class FailedCheckoutLeavesNoPartialStateTests(CacheIsolatedAPITestCase):
     def setUp(self):
         self.user = make_user(phone="+989302000001")
         self.client.login(username="+989302000001", password="a-strong-passw0rd!")
@@ -65,7 +65,7 @@ class FailedCheckoutLeavesNoPartialStateTests(APITestCase):
         self.assertEqual(CartItem.objects.filter(cart__user=self.user).count(), 1)
 
 
-class SequentialCheckoutTests(APITestCase):
+class SequentialCheckoutTests(CacheIsolatedAPITestCase):
     """What the select_for_update() lock is meant to guarantee under
     real concurrency -- verified here in its simpler, deterministic
     sequential form: after checkout, the same cart is empty, so a

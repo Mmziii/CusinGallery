@@ -1,12 +1,12 @@
 from django.urls import reverse
 from rest_framework import status
-from rest_framework.test import APITestCase
+from apps.core.testing import CacheIsolatedAPITestCase
 
 from ..models import Cart, CartItem
 from .helpers import make_product, make_user
 
 
-class CartOwnershipTests(APITestCase):
+class CartOwnershipTests(CacheIsolatedAPITestCase):
     def setUp(self):
         self.owner = make_user(phone="+989100000010")
         self.intruder = make_user(phone="+989100000011")

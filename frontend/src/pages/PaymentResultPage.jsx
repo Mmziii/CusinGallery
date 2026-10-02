@@ -64,6 +64,16 @@ function PaymentResultPage() {
         {payment.paid_at ? (
           <div><dt>زمان پرداخت</dt><dd>{new Date(payment.paid_at).toLocaleString("fa-IR")}</dd></div>
         ) : null}
+        {payment.estimated_delivery_min && payment.estimated_delivery_max ? (
+          <div>
+            <dt>تحویل تخمینی</dt>
+            <dd>
+              {new Date(payment.estimated_delivery_min).toLocaleDateString("fa-IR")} تا{" "}
+              {new Date(payment.estimated_delivery_max).toLocaleDateString("fa-IR")}
+              {" "}({payment.shipping_method === "express" ? "ارسال اکسپرس" : "ارسال استاندارد"})
+            </dd>
+          </div>
+        ) : null}
         {payment.failure_reason && !isSuccess ? (
           <div><dt>دلیل</dt><dd>{failureLabel(payment.failure_reason)}</dd></div>
         ) : null}

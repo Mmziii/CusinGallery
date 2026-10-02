@@ -1,11 +1,11 @@
 from django.urls import reverse
 from rest_framework import status
-from rest_framework.test import APITestCase
+from apps.core.testing import CacheIsolatedAPITestCase
 
 from .helpers import make_user
 
 
-class LoginLogoutTests(APITestCase):
+class LoginLogoutTests(CacheIsolatedAPITestCase):
     def setUp(self):
         self.login_url = reverse("login")
         self.logout_url = reverse("logout")

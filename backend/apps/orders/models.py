@@ -79,6 +79,17 @@ class Order(models.Model):
     shipping_unit = models.CharField(max_length=20, blank=True)
     shipping_building_number = models.CharField(max_length=20, blank=True)
 
+    # --- Shipping method + delivery-window snapshot -----------------------
+    # Written ONCE at checkout from the settings that were in force at
+    # that moment (apps.orders.services.checkout -> apps.orders.shipping).
+    # Like the address snapshot above, these are historical facts about
+    # the order, never re-derived from settings afterwards: if the shop
+    # later changes shipping costs or delivery windows, existing orders
+    # keep exactly what the customer was promised and charged.
+    shipping_method = models.CharField(max_length=20, default="standard")
+    estimated_delivery_min = models.DateField(null=True, blank=True)
+    estimated_delivery_max = models.DateField(null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

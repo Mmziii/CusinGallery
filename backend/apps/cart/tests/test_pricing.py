@@ -1,13 +1,13 @@
 from django.urls import reverse
 from rest_framework import status
-from rest_framework.test import APITestCase
+from apps.core.testing import CacheIsolatedAPITestCase
 
 from ..models import CartItem
 from ..services import get_or_create_cart
 from .helpers import make_product, make_user, make_variant
 
 
-class CartPricingTests(APITestCase):
+class CartPricingTests(CacheIsolatedAPITestCase):
     def setUp(self):
         self.user = make_user(phone="+989100000050")
         self.client.login(username="+989100000050", password="a-strong-passw0rd!")

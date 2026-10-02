@@ -9,7 +9,7 @@ forged/tampered parameters to prove verification is actually enforced.
 """
 from django.urls import reverse
 from rest_framework import status
-from rest_framework.test import APITestCase
+from apps.core.testing import CacheIsolatedAPITestCase
 
 from apps.orders.models import Order
 
@@ -26,7 +26,7 @@ def signed_params(authority, outcome):
     return {"authority": authority, "status": outcome, "sig": _sign(authority, outcome)}
 
 
-class CallbackBase(APITestCase):
+class CallbackBase(CacheIsolatedAPITestCase):
     def setUp(self):
         self.user = make_user(phone="+989410000001")
         self.order = make_unpaid_order(self.user)

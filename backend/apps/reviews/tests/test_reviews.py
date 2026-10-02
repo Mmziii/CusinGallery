@@ -4,7 +4,7 @@ duplicate prevention, and server-computed verified-purchase.
 """
 from django.urls import reverse
 from rest_framework import status
-from rest_framework.test import APITestCase
+from apps.core.testing import CacheIsolatedAPITestCase
 
 from ..models import Review
 from .helpers import make_paid_order_for, make_product, make_unpaid_order_for, make_user
@@ -16,7 +16,7 @@ def _login(client, user):
     client.login(username=user.username, password="a-strong-passw0rd!")
 
 
-class CreateReviewTests(APITestCase):
+class CreateReviewTests(CacheIsolatedAPITestCase):
     def setUp(self):
         self.user = make_user(phone="+989600000001")
         self.product = make_product()
@@ -66,7 +66,7 @@ class CreateReviewTests(APITestCase):
         self.assertEqual(Review.objects.filter(user=self.user, product=self.product).count(), 1)
 
 
-class VerifiedPurchaseTests(APITestCase):
+class VerifiedPurchaseTests(CacheIsolatedAPITestCase):
     def setUp(self):
         self.user = make_user(phone="+989600000010")
         self.product = make_product()
@@ -98,7 +98,7 @@ class VerifiedPurchaseTests(APITestCase):
         self.assertFalse(Review.objects.get(user=self.user).is_verified_purchase)
 
 
-class ModerationVisibilityTests(APITestCase):
+class ModerationVisibilityTests(CacheIsolatedAPITestCase):
     def setUp(self):
         self.reviewer = make_user(phone="+989600000020")
         self.product = make_product()
@@ -136,7 +136,7 @@ class ModerationVisibilityTests(APITestCase):
         self.assertEqual(response.data["distribution"]["1"], 0)
 
 
-class OwnershipTests(APITestCase):
+class OwnershipTests(CacheIsolatedAPITestCase):
     def setUp(self):
         self.owner = make_user(phone="+989600000030")
         self.other = make_user(phone="+989600000031")

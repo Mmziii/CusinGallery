@@ -5,11 +5,16 @@ duplicate-callback race proving inventory is decremented exactly once
 even under concurrency.
 """
 import threading
+from unittest import skipIf
 
+from django.db import connection
 from django.urls import reverse
 from rest_framework import status
-from rest_framework.test import APITestCase, APITransactionTestCase
 
+from apps.core.testing import (
+    CacheIsolatedAPITestCase,
+    CacheIsolatedAPITransactionTestCase,
+)
 from apps.orders.models import Order
 
 from ..gateways.mock import _sign
@@ -20,7 +25,7 @@ from .helpers import make_unpaid_order, make_user
 CALLBACK = "http://testserver/api/v1/payments/callback/"
 
 
-class PaymentDetailOwnershipTests(APITestCase):
+class PaymentDetailOwnershipTests(CacheIsolatedAPITestCase):
     def setUp(self):
         self.owner = make_user(phone="+989420000001")
         self.order = make_unpaid_order(self.owner)
@@ -47,7 +52,7 @@ class PaymentDetailOwnershipTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
 
-class MockGatewayPageTests(APITestCase):
+class MockGatewayPageTests(CacheIsolatedAPITestCase):
     def setUp(self):
         self.user = make_user(phone="+989420000010")
         self.order = make_unpaid_order(self.user)
@@ -76,7 +81,7 @@ class MockGatewayPageTests(APITestCase):
         self.assertIn("تراکنش یافت نشد", response.content.decode())
 
 
-class EndToEndFlowTests(APITestCase):
+class EndToEndFlowTests(CacheIsolatedAPITestCase):
     """The complete customer journey, driven only through real endpoints:
     checkout -> initiate -> gateway page -> callback -> result page data."""
 
@@ -137,7 +142,15 @@ class EndToEndFlowTests(APITestCase):
         self.assertEqual(order.payment_status, Order.PaymentStatus.UNPAID)
 
 
-class ConcurrentCallbackTests(APITransactionTestCase):
+@skipIf(
+    connection.vendor == "sqlite",
+    "SQLite locks the entire database file while any write transaction "
+    "is open, so two threads racing through the callback flow hit "
+    "'database table is locked' errors that PostgreSQL's row-level "
+    "locking (which production uses, and which this test is meant to "
+    "exercise) never produces. Run against PostgreSQL instead.",
+)
+class ConcurrentCallbackTests(CacheIsolatedAPITransactionTestCase):
     """
     Two callbacks for the same attempt arriving at the same instant must
     still decrement inventory exactly once. TransactionTestCase (not the

@@ -8,7 +8,7 @@ equals some specific value.
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
-from rest_framework.test import APITestCase
+from apps.core.testing import CacheIsolatedAPITestCase
 
 from ..models import CartItem
 from ..services import get_or_create_cart
@@ -22,7 +22,7 @@ def _query_count_for(client, url):
     return len(ctx.captured_queries)
 
 
-class CartQueryCountTests(APITestCase):
+class CartQueryCountTests(CacheIsolatedAPITestCase):
     def test_get_cart_query_count_does_not_scale_with_item_count(self):
         user = make_user(phone="+989100000060")
         self.client.login(username="+989100000060", password="a-strong-passw0rd!")

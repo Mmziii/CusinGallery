@@ -4,12 +4,12 @@ from django.urls import reverse
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 from rest_framework import status
-from rest_framework.test import APITestCase
+from apps.core.testing import CacheIsolatedAPITestCase
 
 from .helpers import make_user
 
 
-class ChangePasswordTests(APITestCase):
+class ChangePasswordTests(CacheIsolatedAPITestCase):
     def setUp(self):
         self.url = reverse("change-password")
         self.user = make_user(phone="+989124444444")
@@ -90,7 +90,7 @@ class ChangePasswordTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
 
-class PasswordResetTests(APITestCase):
+class PasswordResetTests(CacheIsolatedAPITestCase):
     def setUp(self):
         self.request_url = reverse("password-reset-request")
         self.confirm_url = reverse("password-reset-confirm")

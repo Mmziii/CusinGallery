@@ -24,6 +24,12 @@ Pillow==10.4.0
 gunicorn==22.0.0
 whitenoise==6.7.0
 
+# --- Cache ------------------------------------------------------------------
+# Python client for the shared Redis cache production uses (see
+# config/settings/production.py's CACHES). Django's built-in RedisCache
+# backend drives it -- django-redis is deliberately NOT needed.
+redis==5.0.8
+
 # NOTE: kept intentionally minimal. The following are deliberately NOT
 # installed, and this is a settled decision, not a placeholder:
 #   - JWT (e.g. djangorestframework-simplejwt): NOT used. Phase 3 chose
@@ -33,4 +39,3 @@ whitenoise==6.7.0
 #     separate-origin API consumer), per that phase's own instructions.
 # The following remain genuinely deferred to a future phase that needs them:
 #   - drf-spectacular                 (Phase 10, OpenAPI/Swagger docs)
-#   - django-redis                    (only if/when caching is actually needed)

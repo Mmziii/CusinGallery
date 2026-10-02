@@ -55,6 +55,19 @@ function OrderDetailPage() {
             <dt>وضعیت پرداخت</dt>
             <dd>{PAYMENT_STATUS_LABELS[order.payment_status] || order.payment_status}</dd>
           </div>
+          <div>
+            <dt>روش ارسال</dt>
+            <dd>{order.shipping_method === "express" ? "ارسال اکسپرس" : "ارسال استاندارد"}</dd>
+          </div>
+          {order.estimated_delivery_min && order.estimated_delivery_max ? (
+            <div>
+              <dt>تحویل تخمینی</dt>
+              <dd>
+                {new Date(order.estimated_delivery_min).toLocaleDateString("fa-IR")} تا{" "}
+                {new Date(order.estimated_delivery_max).toLocaleDateString("fa-IR")}
+              </dd>
+            </div>
+          ) : null}
         </dl>
 
         {payable ? (

@@ -48,6 +48,7 @@ class OrderSerializer(serializers.ModelSerializer):
             "id", "order_number", "status", "payment_status",
             "subtotal", "discount_amount", "shipping_cost", "total",
             "coupon_code",
+            "shipping_method", "estimated_delivery_min", "estimated_delivery_max",
             "shipping_recipient_name", "shipping_phone", "shipping_province",
             "shipping_city", "shipping_address", "shipping_postal_code",
             "shipping_unit", "shipping_building_number",
@@ -73,6 +74,13 @@ class CheckoutSerializer(serializers.Serializer):
     """
 
     address_id = serializers.IntegerField(required=False)
+    # Optional shipping method. The client only PICKS from the configured
+    # methods (settings.SHIPPING_METHODS, see apps.orders.shipping) --
+    # the cost and delivery window for whichever method is chosen are
+    # computed entirely server-side at checkout; there is no field here
+    # for a client to supply either. Blank/missing means the default
+    # (standard) method.
+    shipping_method = serializers.CharField(max_length=20, required=False, allow_blank=True)
     # Optional coupon. The client sends ONLY the code -- validity, scope,
     # and the Toman amount are computed entirely server-side (see
     # apps.discounts.services). There is deliberately no field for a
@@ -88,6 +96,19 @@ class CheckoutSerializer(serializers.Serializer):
     building_number = serializers.CharField(max_length=20, required=False, allow_blank=True)
 
     _REQUIRED_INLINE_FIELDS = ["recipient_name", "phone", "province", "city", "address", "postal_code"]
+
+    def validate_shipping_method(self, value):
+        from . import shipping
+
+        value = (value or "").strip()
+        if not value:
+            return shipping.DEFAULT_METHOD
+        if not shipping.is_valid_shipping_method(value):
+            valid = ", ".join(shipping.get_shipping_methods())
+            raise serializers.ValidationError(
+                f"'{value}' is not an available shipping method. Choose one of: {valid}."
+            )
+        return value
 
     def validate_postal_code(self, value):
         # Only actually required when address_id isn't used (see

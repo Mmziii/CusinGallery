@@ -6,7 +6,7 @@ apps/cart/tests/test_performance.py and apps/products/tests/test_performance.py.
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
-from rest_framework.test import APITestCase
+from apps.core.testing import CacheIsolatedAPITestCase
 
 from ..models import WishlistItem
 from .helpers import make_product, make_user
@@ -19,7 +19,7 @@ def _query_count_for(client, url):
     return len(ctx.captured_queries)
 
 
-class WishlistQueryCountTests(APITestCase):
+class WishlistQueryCountTests(CacheIsolatedAPITestCase):
     def test_list_query_count_does_not_scale_with_item_count(self):
         user = make_user(phone="+989200000010")
         self.client.login(username="+989200000010", password="a-strong-passw0rd!")

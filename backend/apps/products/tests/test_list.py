@@ -1,11 +1,11 @@
 from django.urls import reverse
 from rest_framework import status
-from rest_framework.test import APITestCase
+from apps.core.testing import CacheIsolatedAPITestCase
 
 from .helpers import make_brand, make_category, make_product
 
 
-class ProductListVisibilityTests(APITestCase):
+class ProductListVisibilityTests(CacheIsolatedAPITestCase):
     def test_inactive_products_are_excluded(self):
         make_product(name="Visible", is_active=True)
         make_product(name="Hidden", is_active=False)
@@ -28,7 +28,7 @@ class ProductListVisibilityTests(APITestCase):
         self.assertIn("Still Listed", names)
 
 
-class ProductFilterTests(APITestCase):
+class ProductFilterTests(CacheIsolatedAPITestCase):
     def setUp(self):
         self.url = reverse("product-list")
         self.cookware = make_category(name="Cookware", slug="cookware")
@@ -105,7 +105,7 @@ class ProductFilterTests(APITestCase):
         self.assertEqual(names, ["Match"])
 
 
-class ProductSortingTests(APITestCase):
+class ProductSortingTests(CacheIsolatedAPITestCase):
     def setUp(self):
         self.url = reverse("product-list")
 
@@ -140,7 +140,7 @@ class ProductSortingTests(APITestCase):
         self.assertIn("ordering", response.data)
 
 
-class ProductSearchTests(APITestCase):
+class ProductSearchTests(CacheIsolatedAPITestCase):
     def setUp(self):
         self.url = reverse("product-list")
 
@@ -176,7 +176,7 @@ class ProductSearchTests(APITestCase):
         self.assertEqual(response.data["results"], [])
 
 
-class ProductPaginationTests(APITestCase):
+class ProductPaginationTests(CacheIsolatedAPITestCase):
     def test_pagination_metadata_shape(self):
         for i in range(3):
             make_product(name=f"Product {i}")

@@ -1,4 +1,7 @@
+import PropTypes from "prop-types";
+
 import { formatPrice } from "../utils/formatPrice";
+import { priceInfoShape } from "../utils/shapes";
 
 /**
  * Renders a price_info object ({price, compare_at_price, is_on_sale, ...})
@@ -20,5 +23,10 @@ function PriceTag({ priceInfo, size = "md" }) {
     </div>
   );
 }
+
+PriceTag.propTypes = {
+  priceInfo: priceInfoShape,
+  size: PropTypes.oneOf(["sm", "md", "lg"]),
+};
 
 export default PriceTag;

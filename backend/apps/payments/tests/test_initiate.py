@@ -9,7 +9,7 @@ from unittest import mock
 
 from django.urls import reverse
 from rest_framework import status
-from rest_framework.test import APITestCase
+from apps.core.testing import CacheIsolatedAPITestCase
 
 from apps.orders.models import Order
 
@@ -20,7 +20,7 @@ from .helpers import make_unpaid_order, make_user
 CALLBACK = "http://testserver/api/v1/payments/callback/"
 
 
-class InitiatePaymentTests(APITestCase):
+class InitiatePaymentTests(CacheIsolatedAPITestCase):
     def setUp(self):
         self.user = make_user(phone="+989400000001")
         self.order = make_unpaid_order(self.user)

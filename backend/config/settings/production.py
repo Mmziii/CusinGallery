@@ -29,6 +29,22 @@ if not CORS_ALLOWED_ORIGINS:
         "with no allowed frontend origins."
     )
 
+# --- Shared cache (Redis) ----------------------------------------------------
+# DRF throttling stores hit counters in the Django cache. Gunicorn workers
+# are separate processes, so base.py's per-process LocMem cache would
+# fragment every rate limit per worker (see the CACHES comment there).
+# Production must point all workers at ONE shared Redis instance -- the
+# default below matches the compose service name in docker-compose.yml.
+# Uses Django's built-in RedisCache backend (requires the `redis` client
+# package), not django-redis.
+REDIS_URL = env("REDIS_URL", default="redis://redis:6379/1")
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": REDIS_URL,
+    }
+}
+
 # --- HTTPS toggle -------------------------------------------------------------
 # Everything below that depends on HTTPS actually being live (secure-only
 # cookies, forcing a redirect to https://) is gated behind this ONE flag,

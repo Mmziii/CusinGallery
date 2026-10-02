@@ -1,6 +1,6 @@
 from django.urls import reverse
 from rest_framework import status
-from rest_framework.test import APITestCase
+from apps.core.testing import CacheIsolatedAPITestCase
 
 from .helpers import (
     make_attribute,
@@ -13,7 +13,7 @@ from .helpers import (
 )
 
 
-class ProductDetailBasicTests(APITestCase):
+class ProductDetailBasicTests(CacheIsolatedAPITestCase):
     def test_detail_lookup_by_slug(self):
         category = make_category(name="Cookware")
         brand = make_brand(name="Persia Steel")
@@ -56,7 +56,7 @@ class ProductDetailBasicTests(APITestCase):
             self.assertNotIn(field, row)
 
 
-class ProductPricingTests(APITestCase):
+class ProductPricingTests(CacheIsolatedAPITestCase):
     def test_price_info_without_sale(self):
         product = make_product(name="Plain", slug="plain", price=150000)
         response = self.client.get(reverse("product-detail", args=["plain"]))
@@ -113,7 +113,7 @@ class ProductPricingTests(APITestCase):
         self.assertTrue(variant_data["price_info"]["is_on_sale"])
 
 
-class ProductStockStatusTests(APITestCase):
+class ProductStockStatusTests(CacheIsolatedAPITestCase):
     def test_out_of_stock_status(self):
         make_product(name="None Left", slug="none-left", stock_quantity=0)
         response = self.client.get(reverse("product-detail", args=["none-left"]))
@@ -141,7 +141,7 @@ class ProductStockStatusTests(APITestCase):
         self.assertNotIn("low_stock_threshold", response.data)
 
 
-class ProductImageTests(APITestCase):
+class ProductImageTests(CacheIsolatedAPITestCase):
     def test_primary_image_is_returned_first_in_list_view(self):
         product = make_product(name="Multi Image", slug="multi-image")
         make_image(product, image="products/secondary.jpg", is_primary=False, ordering=1)
@@ -169,7 +169,7 @@ class ProductImageTests(APITestCase):
         self.assertEqual(orderings, sorted(orderings))
 
 
-class ProductAttributesAndSpecificationsTests(APITestCase):
+class ProductAttributesAndSpecificationsTests(CacheIsolatedAPITestCase):
     def test_specifications_are_grouped_by_attribute_with_deduped_values(self):
         product = make_product(name="Specced", slug="specced")
         material = make_attribute(name="Material")
@@ -201,7 +201,7 @@ class ProductAttributesAndSpecificationsTests(APITestCase):
         self.assertEqual(response.data["specifications"], [])
 
 
-class ProductVariantTests(APITestCase):
+class ProductVariantTests(CacheIsolatedAPITestCase):
     def test_inactive_variants_are_excluded_from_detail(self):
         product = make_product(name="Has Hidden Variant", slug="has-hidden-variant")
         active = make_variant(product, sku="ACTIVE-SKU", is_active=True)
@@ -237,7 +237,7 @@ class ProductVariantTests(APITestCase):
         self.assertEqual(variant_data["attribute_values"][0]["attribute"], "Color")
 
 
-class RelatedProductsTests(APITestCase):
+class RelatedProductsTests(CacheIsolatedAPITestCase):
     def test_related_products_are_same_category_excluding_self(self):
         category = make_category(name="Related Category")
         main = make_product(category=category, name="Main", slug="main-product")

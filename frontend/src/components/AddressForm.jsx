@@ -1,3 +1,4 @@
+import PropTypes from "prop-types";
 import { useState } from "react";
 
 import * as authApi from "../services/authApi";
@@ -102,5 +103,18 @@ function AddressForm({ value = {}, onChange, onSaved, compact = false, initial =
     </form>
   );
 }
+
+AddressForm.propTypes = {
+  /** Controlled-mode values (parent owns the data, e.g. inline checkout). */
+  value: PropTypes.object,
+  /** Controlled-mode change handler; presence switches to controlled mode. */
+  onChange: PropTypes.func,
+  /** Saving mode: submit to the backend and hand the saved address back. */
+  onSaved: PropTypes.func,
+  /** Checkout layout: hides the is_default checkbox. */
+  compact: PropTypes.bool,
+  /** Existing address to edit (implies saving mode). */
+  initial: PropTypes.object,
+};
 
 export default AddressForm;

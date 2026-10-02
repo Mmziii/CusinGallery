@@ -1,11 +1,11 @@
 from django.urls import reverse
 from rest_framework import status
-from rest_framework.test import APITestCase
+from apps.core.testing import CacheIsolatedAPITestCase
 
 from .helpers import make_brand
 
 
-class BrandListDetailTests(APITestCase):
+class BrandListDetailTests(CacheIsolatedAPITestCase):
     def test_list_returns_only_active_brands(self):
         make_brand("Zestware", is_active=True)
         make_brand("Discontinued Co", is_active=False)

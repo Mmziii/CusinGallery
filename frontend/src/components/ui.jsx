@@ -3,6 +3,7 @@
  * module on purpose: they're a few lines each and don't warrant separate
  * files, but DO need one consistent implementation everywhere.
  */
+import PropTypes from "prop-types";
 
 export function Spinner({ label = "در حال بارگذاری…" }) {
   return (
@@ -37,3 +38,7 @@ export function EmptyState({ title, children }) {
     </div>
   );
 }
+
+Spinner.propTypes = { label: PropTypes.string };
+Alert.propTypes = { kind: PropTypes.oneOf(["error", "success"]), children: PropTypes.node };
+EmptyState.propTypes = { title: PropTypes.string.isRequired, children: PropTypes.node };

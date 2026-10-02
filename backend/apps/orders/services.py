@@ -169,7 +169,15 @@ def checkout(user, validated_data) -> Order:
             )
 
         subtotal = cart_view["subtotal"]
-        shipping_cost = shipping.calculate_shipping_cost(subtotal)
+
+        # Shipping: the client only picks a configured method (validated
+        # by CheckoutSerializer.validate_shipping_method); its cost and
+        # delivery window are computed here, server-side, from the
+        # settings in force RIGHT NOW -- then snapshotted onto the Order
+        # so they never change afterwards.
+        shipping_method = validated_data.get("shipping_method") or shipping.DEFAULT_METHOD
+        shipping_cost = shipping.calculate_shipping_cost(subtotal, shipping_method)
+        delivery_min, delivery_max = shipping.calculate_estimated_delivery(shipping_method)
 
         coupon = None
         discount_amount = 0
@@ -186,6 +194,9 @@ def checkout(user, validated_data) -> Order:
             shipping_cost=shipping_cost,
             total=total,
             coupon=coupon,
+            shipping_method=shipping_method,
+            estimated_delivery_min=delivery_min,
+            estimated_delivery_max=delivery_max,
             **shipping_fields,
         )
 

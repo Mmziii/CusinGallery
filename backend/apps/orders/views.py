@@ -64,6 +64,32 @@ class OrderDetailView(generics.RetrieveAPIView):
         return _order_queryset(self.request.user)
 
 
+class ShippingMethodsView(APIView):
+    """
+    GET /orders/shipping-methods/ -- the selectable shipping methods and
+    their current cost/delivery-window configuration, so checkout UIs can
+    render the selector (including per-method cost for the shopper's
+    subtotal and the free-shipping threshold) without hardcoding any
+    shipping number in frontend code. Public, read-only, and cheap: it
+    only reads settings.
+    """
+
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        from . import shipping
+
+        methods = shipping.get_shipping_methods()
+        return Response(
+            {
+                "default": shipping.DEFAULT_METHOD,
+                "methods": [
+                    {"id": method_id, **config} for method_id, config in methods.items()
+                ],
+            }
+        )
+
+
 class CheckoutView(APIView):
     """
     POST /orders/checkout/ -- converts the current user's cart into a

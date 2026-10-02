@@ -1,13 +1,13 @@
 from django.urls import reverse
 from rest_framework import status
-from rest_framework.test import APITestCase
+from apps.core.testing import CacheIsolatedAPITestCase
 
 from ..models import CartItem
 from ..services import get_or_create_cart
 from .helpers import make_product, make_user
 
 
-class RemoveItemTests(APITestCase):
+class RemoveItemTests(CacheIsolatedAPITestCase):
     def setUp(self):
         self.user = make_user(phone="+989100000040")
         self.client.login(username="+989100000040", password="a-strong-passw0rd!")
@@ -30,7 +30,7 @@ class RemoveItemTests(APITestCase):
         self.assertTrue(CartItem.objects.filter(pk=other_item.pk).exists())
 
 
-class ClearCartTests(APITestCase):
+class ClearCartTests(CacheIsolatedAPITestCase):
     def setUp(self):
         self.user = make_user(phone="+989100000041")
         self.client.login(username="+989100000041", password="a-strong-passw0rd!")
@@ -64,7 +64,7 @@ class ClearCartTests(APITestCase):
         self.assertEqual(response.data["items"], [])
 
 
-class EmptyCartTests(APITestCase):
+class EmptyCartTests(CacheIsolatedAPITestCase):
     def test_get_cart_before_any_item_added_returns_empty_shape(self):
         make_user(phone="+989100000042")
         self.client.login(username="+989100000042", password="a-strong-passw0rd!")

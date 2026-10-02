@@ -1,12 +1,12 @@
 from django.urls import reverse
 from rest_framework import status
-from rest_framework.test import APITestCase
+from apps.core.testing import CacheIsolatedAPITestCase
 
 from ..models import WishlistItem
 from .helpers import make_product, make_user
 
 
-class WishlistAuthenticationTests(APITestCase):
+class WishlistAuthenticationTests(CacheIsolatedAPITestCase):
     def test_anonymous_cannot_list_wishlist(self):
         response = self.client.get(reverse("wishlist"))
         # 403, not 401 -- see apps/cart/tests/test_authentication.py's
@@ -27,7 +27,7 @@ class WishlistAuthenticationTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
 
-class WishlistListTests(APITestCase):
+class WishlistListTests(CacheIsolatedAPITestCase):
     def setUp(self):
         self.user = make_user(phone="+989200000001")
         self.client.login(username="+989200000001", password="a-strong-passw0rd!")
@@ -61,7 +61,7 @@ class WishlistListTests(APITestCase):
         self.assertEqual(catalog_fields, wishlist_product_fields)
 
 
-class AddWishlistItemTests(APITestCase):
+class AddWishlistItemTests(CacheIsolatedAPITestCase):
     def setUp(self):
         self.user = make_user(phone="+989200000002")
         self.client.login(username="+989200000002", password="a-strong-passw0rd!")
@@ -105,7 +105,7 @@ class AddWishlistItemTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 
-class RemoveWishlistItemTests(APITestCase):
+class RemoveWishlistItemTests(CacheIsolatedAPITestCase):
     def setUp(self):
         self.user = make_user(phone="+989200000003")
         self.client.login(username="+989200000003", password="a-strong-passw0rd!")
@@ -121,7 +121,7 @@ class RemoveWishlistItemTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
 
-class WishlistOwnershipTests(APITestCase):
+class WishlistOwnershipTests(CacheIsolatedAPITestCase):
     def setUp(self):
         self.owner = make_user(phone="+989200000004")
         self.intruder = make_user(phone="+989200000005")
@@ -144,7 +144,7 @@ class WishlistOwnershipTests(APITestCase):
         self.assertFalse(response.data["is_wishlisted"])
 
 
-class InactiveProductInWishlistTests(APITestCase):
+class InactiveProductInWishlistTests(CacheIsolatedAPITestCase):
     def setUp(self):
         self.user = make_user(phone="+989200000006")
         self.client.login(username="+989200000006", password="a-strong-passw0rd!")
@@ -166,7 +166,7 @@ class InactiveProductInWishlistTests(APITestCase):
         self.assertEqual(response.data[0]["product"]["id"], product.id)
 
 
-class WishlistCheckTests(APITestCase):
+class WishlistCheckTests(CacheIsolatedAPITestCase):
     def setUp(self):
         self.user = make_user(phone="+989200000007")
         self.client.login(username="+989200000007", password="a-strong-passw0rd!")

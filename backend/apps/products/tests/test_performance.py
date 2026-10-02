@@ -11,7 +11,7 @@ equals some specific value. That's the actual definition of "no N+1".
 from django.test.utils import CaptureQueriesContext
 from django.db import connection
 from django.urls import reverse
-from rest_framework.test import APITestCase
+from apps.core.testing import CacheIsolatedAPITestCase
 
 from .helpers import make_brand, make_category, make_image, make_product, make_variant
 
@@ -23,7 +23,7 @@ def _query_count_for(client, url, params=None):
     return len(ctx.captured_queries)
 
 
-class ProductListQueryCountTests(APITestCase):
+class ProductListQueryCountTests(CacheIsolatedAPITestCase):
     def test_list_query_count_does_not_scale_with_product_count(self):
         category = make_category()
         brand = make_brand()
@@ -66,7 +66,7 @@ class ProductListQueryCountTests(APITestCase):
         self.assertEqual(small_count, large_count)
 
 
-class ProductDetailQueryCountTests(APITestCase):
+class ProductDetailQueryCountTests(CacheIsolatedAPITestCase):
     def test_related_products_query_is_bounded_not_per_related_item(self):
         category = make_category()
         main = make_product(category=category, name="Main", slug="qc-main")

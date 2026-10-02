@@ -7,7 +7,7 @@ from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from rest_framework import status
-from rest_framework.test import APITestCase
+from apps.core.testing import CacheIsolatedAPITestCase
 
 from .helpers import add_to_cart, make_product, make_user, valid_checkout_payload
 
@@ -27,7 +27,7 @@ def _place_order(client, user, product_count=1):
     return response.data["id"]
 
 
-class OrderListQueryCountTests(APITestCase):
+class OrderListQueryCountTests(CacheIsolatedAPITestCase):
     def test_list_query_count_does_not_scale_with_order_count(self):
         user = make_user(phone="+989303000001")
         self.client.login(username="+989303000001", password="a-strong-passw0rd!")
@@ -62,7 +62,7 @@ class OrderListQueryCountTests(APITestCase):
         self.assertEqual(small_count, large_count)
 
 
-class OrderDetailQueryCountTests(APITestCase):
+class OrderDetailQueryCountTests(CacheIsolatedAPITestCase):
     def test_detail_query_count_does_not_scale_with_item_count(self):
         user = make_user(phone="+989303000003")
         self.client.login(username="+989303000003", password="a-strong-passw0rd!")
@@ -76,7 +76,7 @@ class OrderDetailQueryCountTests(APITestCase):
         self.assertEqual(small_count, large_count)
 
 
-class CheckoutQueryCountTests(APITestCase):
+class CheckoutQueryCountTests(CacheIsolatedAPITestCase):
     """The checkout endpoint itself processes every cart line -- the
     most important place to confirm query count doesn't scale with cart
     size, since a customer with a large cart shouldn't cost the server

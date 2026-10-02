@@ -235,6 +235,26 @@ CORS_ALLOWED_ORIGINS = [o for o in env.list("CORS_ALLOWED_ORIGINS", default=[]) 
 CORS_ALLOW_CREDENTIALS = True
 
 # ---------------------------------------------------------------------------
+# Cache
+# ---------------------------------------------------------------------------
+# Dev/test default: per-process LocMem. Fine for the single-process dev
+# server and for tests (which clear it per test -- see
+# apps/core/testing.py, and why that matters for DRF throttle counters).
+#
+# NOT fine for production: gunicorn runs several worker PROCESSES, each
+# with its own LocMem instance, so DRF throttle hits (and any other
+# cached state) would fragment per worker -- a rate limit of 20/hour
+# would effectively allow 20/hour per worker, non-deterministically.
+# Production therefore swaps in one shared Redis instance -- see
+# config/settings/production.py.
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "cusin-gallery",
+    }
+}
+
+# ---------------------------------------------------------------------------
 # Email
 # ---------------------------------------------------------------------------
 EMAIL_HOST = env("EMAIL_HOST", default="")
@@ -265,19 +285,49 @@ PAYMENT_CALLBACK_URL = env("PAYMENT_CALLBACK_URL", default="https://cusin.ir/pay
 FRONTEND_URL = env("FRONTEND_URL", default="https://cusin.ir")
 
 # ---------------------------------------------------------------------------
-# Shipping (Phase 6)
+# Shipping (Phase 6; selectable methods + delivery windows added in the
+# Phase A corrections round)
 # ---------------------------------------------------------------------------
-# A single configurable flat rate + free-shipping threshold -- the
-# "shipping system abstraction" master spec section 34 asks for, sized to
-# what's actually needed right now rather than a speculative multi-carrier
-# system nothing in the spec asks for. Both values live here (config),
-# not hardcoded in apps/orders/shipping.py or scattered across
-# views/serializers -- see that module for the actual calculation, which
-# reads only these two settings. Swapping this for a real multi-method
-# carrier system later only means changing shipping.py's internals; the
-# checkout/order code that calls it doesn't need to change.
+# All shipping numbers live here (config), never hardcoded in
+# apps/orders/shipping.py or scattered across views/serializers -- that
+# module reads only these settings. Orders SNAPSHOT the method, cost and
+# delivery window at checkout time (Order.shipping_method /
+# estimated_delivery_min / estimated_delivery_max), so later changes to
+# these values never rewrite history -- see apps/orders/models.py.
 STANDARD_SHIPPING_COST = env.int("STANDARD_SHIPPING_COST", default=50000)
 FREE_SHIPPING_THRESHOLD = env.int("FREE_SHIPPING_THRESHOLD", default=1000000)
+
+# Estimated delivery window (calendar days from the order date) for the
+# standard method.
+SHIPPING_MIN_DELIVERY_DAYS = env.int("SHIPPING_MIN_DELIVERY_DAYS", default=3)
+SHIPPING_MAX_DELIVERY_DAYS = env.int("SHIPPING_MAX_DELIVERY_DAYS", default=5)
+
+# Express method: fixed cost (never free -- the free-shipping threshold
+# is a standard-delivery promotion and deliberately does NOT apply here),
+# with its own faster window.
+EXPRESS_SHIPPING_COST = env.int("EXPRESS_SHIPPING_COST", default=90000)
+EXPRESS_MIN_DELIVERY_DAYS = env.int("EXPRESS_MIN_DELIVERY_DAYS", default=1)
+EXPRESS_MAX_DELIVERY_DAYS = env.int("EXPRESS_MAX_DELIVERY_DAYS", default=2)
+
+# The selectable shipping methods offered at checkout. Cost and delivery
+# window per method are all env-configurable above. `free_threshold` is
+# None when the method is never free. New methods = a new entry here (plus
+# its settings); apps/orders/shipping.py and the checkout flow need no
+# change -- they only ever read this dict.
+SHIPPING_METHODS = {
+    "standard": {
+        "cost": STANDARD_SHIPPING_COST,
+        "free_threshold": FREE_SHIPPING_THRESHOLD,
+        "min_days": SHIPPING_MIN_DELIVERY_DAYS,
+        "max_days": SHIPPING_MAX_DELIVERY_DAYS,
+    },
+    "express": {
+        "cost": EXPRESS_SHIPPING_COST,
+        "free_threshold": None,
+        "min_days": EXPRESS_MIN_DELIVERY_DAYS,
+        "max_days": EXPRESS_MAX_DELIVERY_DAYS,
+    },
+}
 
 # ---------------------------------------------------------------------------
 # Logging

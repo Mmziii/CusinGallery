@@ -8,14 +8,14 @@ exists (ReadOnlyModelViewSet everywhere in this app).
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework import status
-from rest_framework.test import APITestCase
+from apps.core.testing import CacheIsolatedAPITestCase
 
 from .helpers import make_brand, make_category, make_product
 
 User = get_user_model()
 
 
-class AnonymousCanBrowseTests(APITestCase):
+class AnonymousCanBrowseTests(CacheIsolatedAPITestCase):
     def test_anonymous_can_list_and_retrieve_products(self):
         make_product(name="Public Product", slug="public-product")
         self.assertEqual(self.client.get(reverse("product-list")).status_code, status.HTTP_200_OK)
@@ -41,7 +41,7 @@ class AnonymousCanBrowseTests(APITestCase):
         )
 
 
-class NoOneCanModifyCatalogViaApiTests(APITestCase):
+class NoOneCanModifyCatalogViaApiTests(CacheIsolatedAPITestCase):
     """Covers both an anonymous visitor AND a logged-in, non-staff
     customer -- being authenticated must make no difference here."""
 

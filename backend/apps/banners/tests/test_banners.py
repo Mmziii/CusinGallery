@@ -6,7 +6,7 @@ deal content.
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.test import APITestCase
+from apps.core.testing import CacheIsolatedAPITestCase
 
 from apps.products.tests.helpers import make_image, make_product
 
@@ -35,7 +35,7 @@ def make_deal(product=None, **overrides):
     return DailyDeal.objects.create(product=product, **defaults)
 
 
-class BannerListTests(APITestCase):
+class BannerListTests(CacheIsolatedAPITestCase):
     def test_list_returns_only_active_banners(self):
         make_banner("Live")
         make_banner("Disabled", is_active=False)
@@ -71,7 +71,7 @@ class BannerListTests(APITestCase):
         self.assertIn("image", banner)
 
 
-class DailyDealTests(APITestCase):
+class DailyDealTests(CacheIsolatedAPITestCase):
     def test_only_active_current_deals_for_active_products(self):
         now = timezone.now()
         live_product = make_product(name="Live Deal Product", slug="live-deal")

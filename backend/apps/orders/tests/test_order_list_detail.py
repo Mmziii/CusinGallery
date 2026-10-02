@@ -1,6 +1,6 @@
 from django.urls import reverse
 from rest_framework import status
-from rest_framework.test import APITestCase
+from apps.core.testing import CacheIsolatedAPITestCase
 
 from ..models import Order
 from .helpers import make_user, valid_checkout_payload
@@ -17,7 +17,7 @@ def _checkout(client, user, username, product=None):
     return response.data["id"]
 
 
-class OrderListOwnershipTests(APITestCase):
+class OrderListOwnershipTests(CacheIsolatedAPITestCase):
     def test_anonymous_cannot_list_orders(self):
         response = self.client.get(reverse("order-list"))
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
@@ -55,7 +55,7 @@ class OrderListOwnershipTests(APITestCase):
         self.assertEqual(ids, [second_id, first_id])
 
 
-class OrderDetailOwnershipTests(APITestCase):
+class OrderDetailOwnershipTests(CacheIsolatedAPITestCase):
     def test_anonymous_cannot_view_order_detail(self):
         owner = make_user(phone="+989301000005")
         order_id = _checkout(self.client, owner, "+989301000005")

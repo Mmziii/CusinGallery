@@ -26,11 +26,18 @@ class PaymentSerializer(serializers.ModelSerializer):
 
     order_id = serializers.IntegerField(source="order.id", read_only=True)
     order_number = serializers.CharField(source="order.order_number", read_only=True)
+    # The order's snapshotted shipping method + promised delivery window,
+    # so the payment-result page can show "how will this reach me and
+    # when" without a second fetch of the order.
+    shipping_method = serializers.CharField(source="order.shipping_method", read_only=True)
+    estimated_delivery_min = serializers.DateField(source="order.estimated_delivery_min", read_only=True)
+    estimated_delivery_max = serializers.DateField(source="order.estimated_delivery_max", read_only=True)
 
     class Meta:
         model = Payment
         fields = [
             "id", "order_id", "order_number", "amount", "status",
             "gateway", "gateway_ref_id", "failure_reason", "paid_at", "created_at",
+            "shipping_method", "estimated_delivery_min", "estimated_delivery_max",
         ]
         read_only_fields = fields

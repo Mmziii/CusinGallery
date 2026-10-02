@@ -6,7 +6,7 @@ only when the order is actually PAID.
 """
 from django.urls import reverse
 from rest_framework import status
-from rest_framework.test import APITestCase
+from apps.core.testing import CacheIsolatedAPITestCase
 
 from apps.orders.models import Order
 from apps.payments.services import handle_callback, initiate_payment
@@ -31,7 +31,7 @@ def address_payload(**overrides):
     return payload
 
 
-class CheckoutWithCouponTests(APITestCase):
+class CheckoutWithCouponTests(CacheIsolatedAPITestCase):
     def setUp(self):
         self.user = make_user(phone="+989510000001")
         self.product = make_product(price=100000, stock_quantity=50)
@@ -97,7 +97,7 @@ class CheckoutWithCouponTests(APITestCase):
         self.assertGreater(order.total, 190000)
 
 
-class CouponUsageRecordingTests(APITestCase):
+class CouponUsageRecordingTests(CacheIsolatedAPITestCase):
     """CouponUsage must be written at PAYMENT success -- never at
     checkout -- so unpaid abandoned orders don't burn coupon quota."""
 
@@ -157,7 +157,7 @@ class CouponUsageRecordingTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 
-class ValidateCouponEndpointTests(APITestCase):
+class ValidateCouponEndpointTests(CacheIsolatedAPITestCase):
     def setUp(self):
         self.user = make_user(phone="+989510000020")
         self.product = make_product(price=100000, stock_quantity=50)
