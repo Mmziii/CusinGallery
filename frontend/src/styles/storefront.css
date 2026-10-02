@@ -93,6 +93,7 @@ input:focus, textarea:focus, select:focus {
 }
 .alert--error { background: #fdecea; color: var(--color-danger); border: 1px solid #f5c6c0; }
 .alert--success { background: #e8f5ee; color: var(--color-success); border: 1px solid #bfe3cf; }
+.alert--info { background: #fdf3e2; color: var(--color-warning); border: 1px solid #f0dcb4; }
 
 /* =========================================================== Spin/empty */
 
@@ -556,6 +557,12 @@ input:focus, textarea:focus, select:focus {
 }
 .payment-result--success .payment-result__icon { background: var(--color-success); }
 .payment-result--failed .payment-result__icon { background: var(--color-danger); }
+/* Phase C: cancelled and pending are their own states, not shades of
+   "failed" -- cancelled is a normal customer action (neutral), pending
+   means the result is not final yet (warning). */
+.payment-result--cancelled .payment-result__icon { background: var(--color-text-muted); }
+.payment-result--pending .payment-result__icon { background: var(--color-warning); }
+.payment-result__lead { color: var(--color-text-muted); font-size: var(--font-size-sm); margin-bottom: var(--space-4); }
 .payment-result__details { text-align: start; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-4); margin-bottom: var(--space-4); }
 .payment-result__actions { display: flex; gap: var(--space-3); justify-content: center; flex-wrap: wrap; }
 
