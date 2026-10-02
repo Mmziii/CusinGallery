@@ -1,0 +1,54 @@
+# --- Environment files (never commit real secrets) ---------------------------
+.env
+backend/.env
+frontend/.env
+*.env.local
+
+# --- Python / Django -----------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.sqlite3
+backend/staticfiles/
+# Ignore uploaded media content but keep the folder structure tracked in
+# git (via .gitkeep) so a fresh clone has the right directories before any
+# uploads exist. The per-directory pairs below un-ignore each directory
+# (so git descends into it) while keeping its CONTENTS ignored -- except
+# the directory's own .gitkeep.
+backend/media/*
+!backend/media/products/
+backend/media/products/*
+!backend/media/products/.gitkeep
+!backend/media/banners/
+backend/media/banners/*
+!backend/media/banners/.gitkeep
+!backend/media/categories/
+backend/media/categories/*
+!backend/media/categories/.gitkeep
+!backend/media/users/
+backend/media/users/*
+!backend/media/users/.gitkeep
+!backend/media/brands/
+backend/media/brands/*
+!backend/media/brands/.gitkeep
+.venv/
+venv/
+*.egg-info/
+
+# --- Node / frontend --------------------------------------------------------------
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+npm-debug.log*
+
+# --- Docker / infra ------------------------------------------------------------------
+docker-compose.override.yml
+
+# --- Editors / OS -------------------------------------------------------------------
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# --- Logs ---------------------------------------------------------------------------
+*.log

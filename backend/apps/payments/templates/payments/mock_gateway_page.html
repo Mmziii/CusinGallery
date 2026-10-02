@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>درگاه پرداخت آزمایشی | کوزین گالری</title>
+  <style>
+    body {
+      font-family: Tahoma, "Segoe UI", sans-serif;
+      background: #f4f5f7;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+    }
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, .08);
+      padding: 32px;
+      max-width: 420px;
+      width: 100%;
+      text-align: center;
+    }
+    .badge {
+      display: inline-block;
+      background: #fff7e6;
+      color: #b45309;
+      border: 1px solid #f5d491;
+      border-radius: 999px;
+      padding: 4px 14px;
+      font-size: 12px;
+      margin-bottom: 16px;
+    }
+    h1 { font-size: 18px; margin: 0 0 8px; color: #1f2937; }
+    .amount { font-size: 28px; font-weight: 700; color: #111827; margin: 18px 0 4px; }
+    .toman { font-size: 14px; color: #6b7280; }
+    .order { color: #6b7280; font-size: 13px; margin-bottom: 24px; }
+    .actions { display: flex; gap: 12px; }
+    a.btn {
+      flex: 1;
+      padding: 12px 0;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 15px;
+    }
+    a.pay { background: #0f766e; color: #fff; }
+    a.pay:hover { background: #0d5f58; }
+    a.cancel { background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; }
+    a.cancel:hover { background: #e5e7eb; }
+    .missing { color: #b91c1c; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <span class="badge">درگاه آزمایشی (Mock) — هیچ تراکنش واقعی انجام نمی‌شود</span>
+    {% if payment %}
+      <h1>پرداخت سفارش</h1>
+      <div class="amount">{{ payment.amount|floatformat:0 }}</div>
+      <div class="toman">تومان</div>
+      <div class="order">شماره سفارش: {{ payment.order.order_number }}</div>
+      <div class="actions">
+        <a class="btn pay" href="{{ pay_url }}">پرداخت</a>
+        <a class="btn cancel" href="{{ cancel_url }}">انصراف</a>
+      </div>
+    {% else %}
+      <h1 class="missing">تراکنش یافت نشد</h1>
+      <p>این پیوند پرداخت معتبر نیست یا منقضی شده است.</p>
+    {% endif %}
+  </div>
+</body>
+</html>

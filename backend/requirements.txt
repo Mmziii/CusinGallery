@@ -1,0 +1,36 @@
+# --- Core framework ---------------------------------------------------------
+Django==5.0.9
+djangorestframework==3.15.2
+django-cors-headers==4.4.0
+django-filter==24.3
+django-environ==0.11.2
+
+# --- Database ----------------------------------------------------------------
+psycopg2-binary==2.9.9
+
+# --- Images --------------------------------------------------------------------
+# Required by Django's ImageField at model/system-check time, not just at
+# actual upload time -- `python manage.py check` (and therefore `migrate`)
+# fails immediately without it. Needed as of Phase 2, which introduced:
+#   - apps.categories.Category.image
+#   - apps.products.Brand.logo
+#   - apps.products.ProductImage.image
+#   - apps.banners.Banner.image
+# Pinned to a version with published Python 3.12 wheels, matching the
+# python:3.12-slim base image in docker/backend/Dockerfile.
+Pillow==10.4.0
+
+# --- Static & production server -----------------------------------------------
+gunicorn==22.0.0
+whitenoise==6.7.0
+
+# NOTE: kept intentionally minimal. The following are deliberately NOT
+# installed, and this is a settled decision, not a placeholder:
+#   - JWT (e.g. djangorestframework-simplejwt): NOT used. Phase 3 chose
+#     session + CSRF authentication instead, and explains why in
+#     config/settings/base.py's REST_FRAMEWORK comment. Not adding this
+#     unless a real architectural reason appears (e.g. a genuinely
+#     separate-origin API consumer), per that phase's own instructions.
+# The following remain genuinely deferred to a future phase that needs them:
+#   - drf-spectacular                 (Phase 10, OpenAPI/Swagger docs)
+#   - django-redis                    (only if/when caching is actually needed)

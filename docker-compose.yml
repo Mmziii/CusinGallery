@@ -1,0 +1,83 @@
+# Docker Compose orchestration for Cusin Gallery.
+#
+# Service topology (matches nginx/conf.d/cusin.conf routing):
+#   nginx    - public edge proxy, binds host ports 80/443
+#   frontend - built React app, served by its own internal nginx (not exposed to host)
+#   backend  - Django/Gunicorn API (not exposed to host directly)
+#   db       - PostgreSQL (not exposed to host by default)
+#
+# Usage:
+#   1. cp .env.example .env   (repo root) and fill in real values
+#   2. docker compose build
+#   3. docker compose up -d
+#   4. docker compose exec backend python manage.py migrate
+#   5. docker compose exec backend python manage.py createsuperuser
+#
+# Migrations are run explicitly as a one-off command (step 4), never
+# automatically on container start -- see docker/backend/Dockerfile.
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: ../docker/backend/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # Explicit discrete DB vars as a fallback path (see
+      # config/settings/base.py) -- POSTGRES_HOST here is the Compose
+      # service name "db", which only resolves inside the Compose network.
+      POSTGRES_HOST: db
+    volumes:
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend/Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL}
+    restart: unless-stopped
+    depends_on:
+      - backend
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      # - "443:443"   # uncomment once HTTPS is configured, see nginx/conf.d/cusin.conf
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - static_volume:/app/staticfiles:ro
+      - media_volume:/app/media:ro
+      # - certbot_certs:/etc/letsencrypt:ro   # uncomment once HTTPS is configured
+    depends_on:
+      - backend
+      - frontend
+
+volumes:
+  postgres_data:
+  static_volume:
+  media_volume:
