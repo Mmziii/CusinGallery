@@ -65,7 +65,7 @@ and no secret ever reaches the browser.
 | `PAYMENT_GATEWAY` | `mock` \| `zarinpal` | Selects the adapter via the registry. Empty ⇒ `mock`. **Production settings refuse to boot with `mock`/empty.** |
 | `PAYMENT_MERCHANT_ID` | `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` | ZarinPal 36-char merchant id (from the merchant panel). Required for `zarinpal` in production (boot guard). The mock gateway uses this slot as its HMAC signing secret (falls back to `SECRET_KEY`). |
 | `PAYMENT_ZARINPAL_SANDBOX` | `True` / `False` | `True` → all ZarinPal calls go to `sandbox.zarinpal.com` (test mode, any 36-char merchant id, no real money). `False` → `api.zarinpal.com` + `www.zarinpal.com`. |
-| `PAYMENT_CALLBACK_URL` | `https://cusin.ir/payment/callback/` | Fallback callback base URL. When payments are initiated through the API view, the URL is built from the incoming request instead (correct on any origin); this value is what you register in the ZarinPal panel. |
+| `PAYMENT_CALLBACK_URL` | `https://cusin.ir/payment/callback/` | Fallback callback base URL. When payments are initiated through the API view, the URL is built from the incoming request instead (correct on any origin); this value is what you register in the ZarinPal panel. The shipped nginx config proxies `/payment/callback/` to Django (exact prefix — the SPA's `/payment/result/` pages keep going to the frontend). |
 | `PAYMENT_GATEWAY_TIMEOUT` | `15` (seconds) | Per-call HTTP timeout for request/verify. Exceeding it is treated as “gateway unreachable” (`GatewayError`). |
 | `ORDER_EXPIRY_HOURS` | `24` | Default age threshold for `expire_unpaid_orders`. |
 
