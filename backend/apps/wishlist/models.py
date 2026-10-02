@@ -21,8 +21,8 @@ class WishlistItem(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        verbose_name = "Wishlist Item"
-        verbose_name_plural = "Wishlist Items"
+        verbose_name = "علاقه‌مندی"
+        verbose_name_plural = "علاقه‌مندی‌ها"
         ordering = ["-created_at"]
         constraints = [
             models.UniqueConstraint(fields=["user", "product"], name="unique_wishlist_user_product"),

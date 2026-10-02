@@ -17,8 +17,8 @@ from django.db import models
 class TimeStampedModel(models.Model):
     """Adds created_at / updated_at, auto-managed on save."""
 
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField("تاریخ ایجاد", auto_now_add=True)
+    updated_at = models.DateTimeField("تاریخ ویرایش", auto_now=True)
 
     class Meta:
         abstract = True
@@ -27,7 +27,9 @@ class TimeStampedModel(models.Model):
 class ActivableModel(models.Model):
     """Adds an is_active flag, for soft enable/disable instead of deletion."""
 
-    is_active = models.BooleanField(default=True)
+    is_active = models.BooleanField(
+        "فعال", default=True, help_text="به‌جای حذف، برای غیرفعال‌کردن موقت استفاده می‌شود."
+    )
 
     class Meta:
         abstract = True
@@ -36,7 +38,9 @@ class ActivableModel(models.Model):
 class OrderableModel(models.Model):
     """Adds an integer ordering field for admin-controlled display order."""
 
-    ordering = models.PositiveIntegerField(default=0)
+    ordering = models.PositiveIntegerField(
+        "ترتیب نمایش", default=0, help_text="عدد کوچک‌تر زودتر نمایش داده می‌شود."
+    )
 
     class Meta:
         abstract = True

@@ -1,0 +1,50 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<h1>واردکردن محصولات از فایل</h1>
+<p>
+  یک فایل <strong>CSV</strong> (با کدگذاری UTF-8) یا <strong>Excel (.xlsx)</strong> بارگذاری کنید.
+  ردیف‌ها بر اساس <strong>کد کالا (SKU)</strong> تطبیق داده می‌شوند: کالای موجود به‌روزرسانی و
+  کالای جدید ساخته می‌شود. واردکرد «همه یا هیچ» است؛ یعنی اگر حتی یک ردیف خطا داشته
+  باشد، چیزی ذخیره نمی‌شود و همهٔ خطاها با شمارهٔ ردیف نمایش داده می‌شوند.
+</p>
+<p>
+  <a href="{% url 'admin:products_product_import_template' %}">دانلود قالب نمونه</a>
+  (آن را باز کنید، محصولات خود را وارد کنید و همین‌جا بارگذاری کنید).
+</p>
+
+{% if errors %}
+<div style="border:1px solid #b30000;background:#fff2f2;border-radius:6px;padding:10px 14px;margin:12px 0">
+  <strong style="color:#b30000">واردکرد انجام نشد — چیزی ذخیره نشد:</strong>
+  <ul style="margin:8px 0 0;padding-inline-start:20px">
+    {% for error in errors %}
+      <li style="color:#8a1f1f">{{ error }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<form method="post" enctype="multipart/form-data">
+  {% csrf_token %}
+  <div style="margin:14px 0">
+    <input type="file" name="file" accept=".csv,.xlsx">
+  </div>
+  <input type="submit" class="default" value="واردکردن">
+  <a href="{% url 'admin:products_product_changelist' %}" style="margin-inline-start:12px">انصراف</a>
+</form>
+
+<h2 style="margin-top:24px">ستون‌های فایل</h2>
+<table style="border-collapse:collapse;font-size:13px">
+  <thead><tr><th style="padding:4px 10px;border:1px solid #ddd">ستون</th><th style="padding:4px 10px;border:1px solid #ddd">الزامی</th><th style="padding:4px 10px;border:1px solid #ddd">توضیح</th></tr></thead>
+  <tbody>
+    <tr><td style="padding:4px 10px;border:1px solid #ddd">name, slug, sku, category_slug, price</td><td style="padding:4px 10px;border:1px solid #ddd">بله</td><td style="padding:4px 10px;border:1px solid #ddd">price مبلغ صحیح به تومان است</td></tr>
+    <tr><td style="padding:4px 10px;border:1px solid #ddd">category_slug</td><td style="padding:4px 10px;border:1px solid #ddd">بله</td><td style="padding:4px 10px;border:1px solid #ddd">باید از قبل وجود داشته باشد (ساخت در بخش دسته‌بندی‌ها)</td></tr>
+    <tr><td style="padding:4px 10px;border:1px solid #ddd">brand_name</td><td style="padding:4px 10px;border:1px solid #ddd">خیر</td><td style="padding:4px 10px;border:1px solid #ddd">در صورت درج، باید از قبل وجود داشته باشد</td></tr>
+    <tr><td style="padding:4px 10px;border:1px solid #ddd">compare_at_price, discount_percentage, stock_quantity, low_stock_threshold</td><td style="padding:4px 10px;border:1px solid #ddd">خیر</td><td style="padding:4px 10px;border:1px solid #ddd">اعداد صحیح؛ ارقام فارسی هم پذیرفته می‌شود</td></tr>
+    <tr><td style="padding:4px 10px;border:1px solid #ddd">short_description, description</td><td style="padding:4px 10px;border:1px solid #ddd">خیر</td><td style="padding:4px 10px;border:1px solid #ddd"></td></tr>
+    <tr><td style="padding:4px 10px;border:1px solid #ddd">is_active, is_featured</td><td style="padding:4px 10px;border:1px solid #ddd">خیر</td><td style="padding:4px 10px;border:1px solid #ddd">true/false؛ پیش‌فرض: فعال، غیروژه</td></tr>
+  </tbody>
+</table>
+<p style="color:#666;font-size:12px">تصاویر بخشی از فایل نیستند؛ پس از واردکردن، در صفحهٔ هر محصول آن‌ها را اضافه کنید.</p>
+{% endblock %}

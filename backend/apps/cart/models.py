@@ -31,8 +31,8 @@ class Cart(TimeStampedModel):
     )
 
     class Meta:
-        verbose_name = "Cart"
-        verbose_name_plural = "Carts"
+        verbose_name = "سبد خرید"
+        verbose_name_plural = "سبدهای خرید"
 
     def __str__(self):
         return f"Cart({self.user})"
@@ -52,8 +52,8 @@ class CartItem(TimeStampedModel):
     quantity = models.PositiveIntegerField(default=1, validators=[MinValueValidator(1)])
 
     class Meta:
-        verbose_name = "Cart Item"
-        verbose_name_plural = "Cart Items"
+        verbose_name = "قلم سبد خرید"
+        verbose_name_plural = "اقلام سبد خرید"
         constraints = [
             # A plain UniqueConstraint(fields=["cart", "product", "variant"])
             # would NOT actually enforce "one row per product in this cart"

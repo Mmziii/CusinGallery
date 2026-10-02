@@ -28,6 +28,7 @@ deployment wiring. It was built phase by phase; this README describes the
 | Reviews (authenticated create, moderation, verified-purchase computed server-side) | ✅ API + storefront |
 | Banners & daily deals (active windows, ordering, server-provided timing) | ✅ API + storefront |
 | Storefront (home, shop w/ filters+search+pagination, product detail, cart, checkout, payment result, account area) | ✅ Persian/RTL, responsive |
+| Owner admin — Persian Django admin: catalog w/ images+variants, order fulfilment workflow + stock restore, print label, CSV export, bulk import (CSV/Excel), coupons/banners management, `seed_demo` | ✅ |
 
 ---
 
