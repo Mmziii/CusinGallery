@@ -26,6 +26,7 @@ from django.utils import timezone
 from django.utils.html import format_html
 
 from .models import Order, OrderItem
+from .refunds import RefundError, finalize_refunded, validate_admin_refund_change
 from .workflow import OrderWorkflowError, check_transition, set_status
 
 
@@ -45,14 +46,18 @@ class OrderItemInline(admin.TabularInline):
 class OrderAdmin(admin.ModelAdmin):
     list_display = (
         "order_number", "user", "status", "payment_status", "total",
-        "stock_restored_badge", "created_at",
+        "stock_restored_badge", "refund_badge", "created_at",
     )
-    list_filter = ("status", "payment_status", "created_at")
+    # refund_status in the filter list is the owner's daily "which orders
+    # still owe a refund?" view: «نیازمند بازپرداخت» (Phase C).
+    list_filter = ("status", "payment_status", "refund_status", "created_at")
     search_fields = ("order_number", "user__username", "user__email", "shipping_phone", "tracking_code")
     autocomplete_fields = ("user", "coupon")
     date_hierarchy = "created_at"
     readonly_fields = (
         "order_number", "created_at", "updated_at", "stock_restored_at",
+        # Stamped by the system when a refund is recorded, never typed.
+        "refunded_at",
         # Totals snapshot
         "subtotal", "discount_amount", "shipping_cost", "total",
         # Shipping address snapshot
@@ -70,6 +75,15 @@ class OrderAdmin(admin.ModelAdmin):
         (None, {"fields": ("order_number", "user", "status", "payment_status", "coupon")}),
         ("Fulfilment", {"fields": ("tracking_code", "stock_restored_at")}),
         ("Totals", {"fields": ("subtotal", "discount_amount", "shipping_cost", "total")}),
+        ("Refund", {
+            "fields": ("refund_status", "refund_amount", "refund_reference", "refunded_at"),
+            "description": (
+                "بازپرداخت وجه دستی است (از پنل درگاه انجام می‌شود). لغو یا مرجوع کردن "
+                "سفارش پرداخت‌شده، آن را به‌صورت خودکار «نیازمند بازپرداخت» می‌کند. پس از "
+                "انجام بازپرداخت در پنل درگاه، وضعیت را به «بازپرداخت شده» تغییر دهید و "
+                "مرجع/یادداشت آن را در فیلد یادداشت اضافه کنید (بدون یادداشت ثبت نمی‌شود)."
+            ),
+        }),
         ("Shipping address", {
             "fields": (
                 "shipping_recipient_name", "shipping_phone", "shipping_province",
@@ -91,6 +105,15 @@ class OrderAdmin(admin.ModelAdmin):
         return format_html('<span title="{}">↩️</span>', "موجودی پس از لغو بازگردانده شده است")
 
     stock_restored_badge.short_description = ""
+
+    def refund_badge(self, obj):
+        if obj.refund_status == Order.RefundStatus.REQUIRED:
+            return format_html('<span title="{}">💸</span>', "نیازمند بازپرداخت وجه")
+        if obj.refund_status == Order.RefundStatus.REFUNDED:
+            return format_html('<span title="{}">✅</span>', "بازپرداخت وجه انجام شده است")
+        return ""
+
+    refund_badge.short_description = "بازپرداخت"
 
     def get_urls(self):
         urls = super().get_urls()
@@ -117,16 +140,43 @@ class OrderAdmin(admin.ModelAdmin):
     def save_model(self, request, obj, form, change):
         """
         Route status changes through the workflow so the DAG is enforced
-        and stock restoration on cancel is exactly-once. Validate BEFORE
-        saving so an invalid transition persists nothing.
+        and stock restoration on cancel is exactly-once, and route refund
+        bookkeeping changes (Phase C) through apps/orders/refunds.py.
+        Validate BEFORE saving so an invalid transition persists nothing.
         """
         if not change:
             return super().save_model(request, obj, form, change)
 
         db_obj = Order.objects.get(pk=obj.pk)
+
+        # --- Refund bookkeeping (validated pre-save, same fail-closed rule) ---
+        refund_message = None
+        if obj.refund_status != db_obj.refund_status:
+            try:
+                if obj.refund_status == Order.RefundStatus.REFUNDED:
+                    # The owner typed their note into the journal textarea;
+                    # finalize validates it was actually added, stamps
+                    # refunded_at and moves payment_status PAID -> REFUNDED.
+                    finalize_refunded(obj, db_obj)
+                    refund_message = (
+                        f"بازپرداخت وجه به مبلغ {obj.refund_amount:,} تومان ثبت شد."
+                    )
+                else:
+                    validate_admin_refund_change(db_obj, obj.refund_status)
+                    if obj.refund_status == Order.RefundStatus.REQUIRED and not obj.refund_amount:
+                        # Manual flag with no amount: the sensible default is
+                        # the full order total (what the customer paid).
+                        obj.refund_amount = db_obj.total
+            except RefundError as exc:
+                raise ValidationError(str(exc))
+
+        # --- Order status transition (existing workflow routing) --------------
         requested_status = obj.status
         if requested_status == db_obj.status:
-            return super().save_model(request, obj, form, change)
+            super().save_model(request, obj, form, change)
+            if refund_message:
+                self.message_user(request, refund_message, messages.INFO)
+            return
 
         # Validate against the DB's current status but with the INCOMING
         # field values (e.g. a tracking code typed in this very save).
@@ -136,8 +186,8 @@ class OrderAdmin(admin.ModelAdmin):
             raise ValidationError(str(exc))
 
         # Persist everything except the status; set_status applies the
-        # transition atomically (and restores stock if this is a paid
-        # order being cancelled).
+        # transition atomically (restores stock AND flags the refund as
+        # required if this is a paid order being cancelled/returned).
         obj.status = db_obj.status
         super().save_model(request, obj, form, change)
         try:
@@ -152,6 +202,15 @@ class OrderAdmin(admin.ModelAdmin):
                 "سفارش لغو شد و موجودی کسرشدهٔ آن به کاتالوگ بازگشت.",
                 messages.INFO,
             )
+        if obj.refund_status == Order.RefundStatus.REQUIRED and db_obj.refund_status != Order.RefundStatus.REQUIRED:
+            self.message_user(
+                request,
+                f"این سفارش نیازمند بازپرداخت وجه به مبلغ {obj.refund_amount:,} تومان است — "
+                "بازپرداخت را از پنل درگاه انجام دهید و سپس اینجا ثبت کنید.",
+                messages.WARNING,
+            )
+        if refund_message:
+            self.message_user(request, refund_message, messages.INFO)
 
     @admin.action(description="خروجی CSV از سفارش‌های انتخاب‌شده")
     def export_orders_csv(self, request, queryset):
@@ -166,6 +225,7 @@ class OrderAdmin(admin.ModelAdmin):
             "order_number", "created_at", "customer", "phone", "status",
             "payment_status", "subtotal", "discount", "shipping_cost", "total",
             "shipping_method", "tracking_code",
+            "refund_status", "refund_amount", "refunded_at",
         ])
         for order in queryset.select_related("user"):
             writer.writerow([
@@ -181,5 +241,8 @@ class OrderAdmin(admin.ModelAdmin):
                 order.total,
                 order.shipping_method,
                 order.tracking_code,
+                order.refund_status,
+                order.refund_amount,
+                order.refunded_at.isoformat() if order.refunded_at else "",
             ])
         return response

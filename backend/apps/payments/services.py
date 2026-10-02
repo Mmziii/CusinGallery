@@ -238,7 +238,28 @@ def handle_callback(callback_data: dict) -> Payment:
         locked.order = order
 
         if verification.success:
-            if order.payment_status == Order.PaymentStatus.PAID:
+            # The gateway has confirmed REAL money was captured for this
+            # attempt. What happens next depends on whether the order can
+            # still receive it. `prior_success` is checked explicitly (not
+            # only via order.payment_status) because a terminal order may
+            # already carry its one allowed SUCCESS payment -- see the
+            # unique_successful_payment_per_order constraint.
+            prior_success = (
+                Payment.objects.filter(order=order, status=Payment.Status.SUCCESS)
+                .exclude(pk=locked.pk)
+                .exists()
+            )
+
+            if not prior_success and order.status in (
+                Order.Status.CANCELLED, Order.Status.RETURNED
+            ):
+                # Verified capture for an order that will NOT be fulfilled
+                # (typically: the customer finished paying at the exact
+                # moment `expire_unpaid_orders` auto-cancelled the stale
+                # order). The money is real and must stay visible.
+                return _record_capture_on_unfulfillable_order(locked, order, verification)
+
+            if prior_success or order.payment_status == Order.PaymentStatus.PAID:
                 logger.info(
                     "Rejecting late success callback for payment %s: order %s "
                     "already paid by another attempt.",
@@ -247,6 +268,9 @@ def handle_callback(callback_data: dict) -> Payment:
                 locked.status = Payment.Status.FAILED
                 locked.failure_reason = "Order already paid via another payment attempt."
                 locked.save(update_fields=["status", "failure_reason", "updated_at"])
+                # The customer was charged TWICE (both attempts verified)
+                # -- the duplicate is real money owed back; flag it.
+                _flag_duplicate_capture(order, locked)
                 return locked
             try:
                 # Savepoint: if the unique-success constraint fires
@@ -264,6 +288,8 @@ def handle_callback(callback_data: dict) -> Payment:
                 locked.status = Payment.Status.FAILED
                 locked.failure_reason = "Order already paid via another payment attempt."
                 locked.save(update_fields=["status", "failure_reason", "updated_at"])
+                # Same duplicate-capture money story as the branch above.
+                _flag_duplicate_capture(order, locked)
                 return locked
 
         if verification.cancelled:
@@ -357,6 +383,76 @@ def _complete_successful_payment(payment: Payment, verification) -> Payment:
         payment.pk, order.order_number, payment.amount,
     )
     return payment
+
+
+def _record_capture_on_unfulfillable_order(payment: Payment, order, verification) -> Payment:
+    """
+    The gateway VERIFIED a real capture, but the order is already in a
+    terminal status (cancelled/returned) and will not be fulfilled --
+    typically the customer completed payment at the exact moment the
+    `expire_unpaid_orders` cron cancelled the stale order.
+
+    The money moved, so the payment record tells the truth: SUCCESS with
+    the full receipt data (ref id, masked PAN, fingerprint). The ORDER is
+    not fulfilled: no status change (it can't leave a terminal status),
+    NO stock decrement (nothing ships) and no coupon usage. It shows
+    payment_status=PAID -- the customer genuinely paid -- and is flagged
+    REFUND REQUIRED so the captured amount appears in the owner's refund
+    queue instead of vanishing. See apps/orders/workflow.py's docstring
+    for why this is the one documented exception to the
+    "PAID == stock decremented" equivalence (restore can never fire:
+    the order is already terminal).
+
+    Runs inside handle_callback's locked transaction (payment and order
+    rows are already select_for_update-locked by the caller).
+    """
+    payment.status = Payment.Status.SUCCESS
+    payment.paid_at = timezone.now()
+    payment.gateway_ref_id = verification.gateway_ref_id[:128]
+    payment.card_pan = verification.card_pan[:32]
+    payment.card_pan_hash = verification.card_fingerprint[:64]
+    payment.save(update_fields=[
+        "status", "paid_at", "gateway_ref_id", "card_pan", "card_pan_hash", "updated_at",
+    ])
+
+    order.payment_status = Order.PaymentStatus.PAID
+    order.save(update_fields=["payment_status", "updated_at"])
+
+    from apps.orders.refunds import flag_refund_required
+
+    flag_refund_required(
+        order,
+        amount=payment.amount,
+        note="پرداخت پس از لغو/مرجوعی سفارش توسط درگاه تأیید شد — مبلغ دریافتی باید به مشتری بازگردانده شود.",
+    )
+    logger.error(
+        "Payment %s verified (%s Toman) but order %s is already '%s' -- capture "
+        "recorded, order flagged REFUND REQUIRED, nothing fulfilled.",
+        payment.pk, payment.amount, order.order_number, order.status,
+    )
+    return payment
+
+
+def _flag_duplicate_capture(order, payment: Payment) -> None:
+    """
+    A second gateway-verified capture on one order (the customer paid two
+    attempts -- e.g. two open browser tabs). The first capture paid the
+    order; this one is real money the shop owes back. The payment row is
+    FAILED (the unique-success constraint allows exactly one SUCCESS per
+    order), but the money is never invisible: the order's refund ledger
+    accumulates the amount and the journal records which transaction to
+    refund, surfacing it in the owner's "needs refund" admin filter.
+    """
+    from apps.orders.refunds import flag_refund_required
+
+    flag_refund_required(
+        order,
+        amount=payment.amount,
+        note=(
+            f"پرداخت تکراری تأییدشده (تراکنش #{payment.pk}) برای سفارشی که پیش‌تر "
+            f"پرداخت شده بود — این مبلغ باید به مشتری بازگردانده شود."
+        ),
+    )
 
 
 def _record_coupon_usage(order) -> None:
