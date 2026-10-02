@@ -301,6 +301,13 @@ PAYMENT_CALLBACK_URL = env("PAYMENT_CALLBACK_URL", default="https://cusin.ir/pay
 # before treating the gateway as unreachable (GatewayError).
 PAYMENT_GATEWAY_TIMEOUT = env.int("PAYMENT_GATEWAY_TIMEOUT", default=15)
 
+# Abandoned-payment cleanup: `manage.py expire_unpaid_orders` (run from
+# cron) cancels unpaid orders older than this many hours. No stock ever
+# moves for unpaid orders -- stock is only taken at payment verification
+# -- so this is purely hygiene: an order nobody paid for should not sit
+# "pending" forever. Safe to run as often as the cron schedule likes.
+ORDER_EXPIRY_HOURS = env.int("ORDER_EXPIRY_HOURS", default=24)
+
 # ---------------------------------------------------------------------------
 # Frontend URL (Phase 3)
 # ---------------------------------------------------------------------------
