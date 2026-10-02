@@ -114,5 +114,26 @@ if not SECRET_KEY or SECRET_KEY == "unsafe-development-secret-key-do-not-use-in-
         "SECRET_KEY in the environment (see .env.example)."
     )
 
+# --- The mock payment gateway must be impossible in production ---------------
+# apps.payments ships a MockGateway for development and tests. An empty
+# PAYMENT_GATEWAY means the same thing (the registry's default), so both
+# are refused here: a production deployment must explicitly name a real
+# PSP. See docs/PAYMENTS.md for the sandbox -> production runbook.
+_payment_gateway = (PAYMENT_GATEWAY or "mock").strip().lower()
+if _payment_gateway == "mock":
+    raise RuntimeError(
+        "PAYMENT_GATEWAY is unset or 'mock'. The mock payment gateway is "
+        "for development/tests only and cannot be enabled in production. "
+        "Set PAYMENT_GATEWAY=zarinpal (plus PAYMENT_MERCHANT_ID) in the "
+        "environment -- see .env.example and docs/PAYMENTS.md."
+    )
+if _payment_gateway == "zarinpal" and not PAYMENT_MERCHANT_ID.strip():
+    raise RuntimeError(
+        "PAYMENT_GATEWAY=zarinpal but PAYMENT_MERCHANT_ID is empty. Set "
+        "the 36-character merchant id from the ZarinPal merchant panel "
+        "(for sandbox testing any 36-character value is accepted -- see "
+        "docs/PAYMENTS.md)."
+    )
+
 # Production always sends real email via SMTP.
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"

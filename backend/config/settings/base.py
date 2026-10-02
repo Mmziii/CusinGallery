@@ -265,14 +265,41 @@ EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=True)
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="no-reply@cusin.ir")
 
 # ---------------------------------------------------------------------------
-# Payment gateway (architecture placeholders only -- see apps/payments)
+# Payment gateway (Phase C - real payments; see apps/payments + docs/PAYMENTS.md)
 # ---------------------------------------------------------------------------
-# No gateway integration exists yet (that's Phase 7). These are read here,
-# ahead of time, purely so the environment-variable contract is fixed from
-# the start and later phases don't need to touch settings again.
+# Gateway selection. "mock" (or empty) = the self-contained MockGateway
+# for development/tests -- config/settings/production.py REFUSES to start
+# with it, so it is impossible to enable in production. "zarinpal" = the
+# real ZarinPal PSP adapter. Unknown values fail loudly (ImproperlyConfigured)
+# the moment any payment flow runs. Adding another PSP = one new adapter
+# class + one registry line (docs/PAYMENTS.md explains how).
 PAYMENT_GATEWAY = env("PAYMENT_GATEWAY", default="")
+
+# ZarinPal: the 36-character merchant id from the ZarinPal merchant panel.
+# Required whenever PAYMENT_GATEWAY=zarinpal (production.py enforces).
+# The mock gateway reuses this slot as its HMAC callback-signing secret
+# (falling back to SECRET_KEY when empty) -- in both cases server-side
+# only, never sent to the browser.
 PAYMENT_MERCHANT_ID = env("PAYMENT_MERCHANT_ID", default="")
+
+# ZarinPal mode switch. True = sandbox.zarinpal.com (full test mode: any
+# 36-character merchant id is accepted, no real money moves). False =
+# production (api.zarinpal.com + www.zarinpal.com). Sandbox/production
+# differ ONLY by the hosts the adapter talks to.
+PAYMENT_ZARINPAL_SANDBOX = env.bool("PAYMENT_ZARINPAL_SANDBOX", default=False)
+
+# Absolute URL of this backend's callback endpoint -- where the gateway
+# sends the customer's browser back after payment. Served at BOTH
+# /payment/callback/ and /api/v1/payments/callback/ (same view). When
+# payments are initiated through the API view, the callback URL is built
+# from the incoming request instead (correct on any origin); this env
+# value is the fallback for programmatic initiation and the documented
+# value to register in the PSP's merchant panel.
 PAYMENT_CALLBACK_URL = env("PAYMENT_CALLBACK_URL", default="https://cusin.ir/payment/callback/")
+
+# Seconds to wait for a gateway HTTP call (payment request + verify)
+# before treating the gateway as unreachable (GatewayError).
+PAYMENT_GATEWAY_TIMEOUT = env.int("PAYMENT_GATEWAY_TIMEOUT", default=15)
 
 # ---------------------------------------------------------------------------
 # Frontend URL (Phase 3)

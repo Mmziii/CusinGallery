@@ -8,6 +8,13 @@ django-environ==0.11.2
 # --- Database ----------------------------------------------------------------
 psycopg2-binary==2.9.9
 
+# --- Payment gateway HTTP client (Phase C) ------------------------------------
+# Used ONLY by apps/payments/gateways/zarinpal.py to talk to the ZarinPal
+# v4 REST API (payment request + server-side verify). The mock gateway
+# needs no HTTP at all; tests never hit the network (they patch this
+# layer -- see apps/payments/tests/test_zarinpal.py).
+requests==2.32.3
+
 # --- Images --------------------------------------------------------------------
 # Required by Django's ImageField at model/system-check time, not just at
 # actual upload time -- `python manage.py check` (and therefore `migrate`)

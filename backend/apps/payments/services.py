@@ -24,6 +24,16 @@ The two entry points:
             PENDING -> FAILED     gateway declined / verification failed
             PENDING -> CANCELLED  customer cancelled at the gateway page
 
+There is deliberately NO transition when the gateway cannot be REACHED
+during verification (GatewayError from gateway.verify): the money state
+is genuinely unknown -- the customer may well have paid -- so the attempt
+stays PENDING and the customer lands on the result page's "در حال
+بررسی" state. A replayed callback later (ZarinPal answers a repeat
+verify of a captured payment with its documented code 101) can still
+complete it; nothing is ever marked FAILED just because OUR network
+call failed, and nothing is marked SUCCESS without the gateway's own
+verified answer.
+
 Idempotency: a callback for an attempt that already reached SUCCESS
 returns that payment unchanged -- no second inventory decrement, no
 duplicate usage records. The row lock (select_for_update) serializes
@@ -43,6 +53,30 @@ from .gateways import GatewayError, get_gateway
 from .models import Payment
 
 logger = logging.getLogger("payments")
+
+#: Query-string keys that may carry the gateway's own transaction
+#: reference, in priority order. ZarinPal sends "Authority" (PascalCase,
+#: per its docs), the mock gateway sends "authority"; "token"/"Token"
+#: are pre-registered for gateways like NextPay/IDPay so adding one
+#: never requires touching this security-critical function's callers.
+#: Whatever the key, the value is used ONLY to look the attempt up --
+#: every decision still comes from gateway.verify().
+GATEWAY_REFERENCE_KEYS = ("authority", "Authority", "token", "Token")
+
+
+def _extract_gateway_reference(callback_data: dict) -> str:
+    """First non-empty gateway transaction reference in the raw callback
+    parameters (see GATEWAY_REFERENCE_KEYS), flattened and stripped."""
+    for key in GATEWAY_REFERENCE_KEYS:
+        raw = callback_data.get(key)
+        if isinstance(raw, (list, tuple)):  # tolerate ?authority=a&authority=b
+            raw = raw[0] if raw else ""
+        if raw is None:
+            continue
+        value = str(raw).strip()
+        if value:
+            return value
+    return ""
 
 
 class PaymentError(Exception):
@@ -137,10 +171,7 @@ def handle_callback(callback_data: dict) -> Payment:
     # First, resolve which attempt this callback is for, WITHOUT holding
     # any lock -- verification may involve work we don't want to do under
     # a row lock, and an unknown callback must not block anything.
-    raw_authority = callback_data.get("authority") or ""
-    if isinstance(raw_authority, (list, tuple)):  # tolerate ?authority=a&authority=b
-        raw_authority = raw_authority[0] if raw_authority else ""
-    gateway_transaction_id = str(raw_authority).strip()
+    gateway_transaction_id = _extract_gateway_reference(callback_data)
     if not gateway_transaction_id:
         raise PaymentError({"callback": ["Missing gateway transaction reference."]}, http_status=400)
 
@@ -166,7 +197,24 @@ def handle_callback(callback_data: dict) -> Payment:
 
     # Ask the gateway itself whether this callback is genuine and what it
     # means -- never trust the raw parameters alone.
-    verification = gateway.verify(payment, callback_data)
+    try:
+        verification = gateway.verify(payment, callback_data)
+    except GatewayError as exc:
+        # The gateway could not be REACHED (timeout, DNS, HTTP 5xx,
+        # malformed answer) while verifying. The money state is genuinely
+        # unknown -- the customer may have paid at the gateway page --
+        # so the attempt deliberately stays PENDING: marking it FAILED
+        # could hide a real capture, and marking it SUCCESS would trust
+        # nothing. The customer sees the result page's "pending" state;
+        # a replayed callback (the customer refreshing, the gateway
+        # re-notifying, or a retry) can still complete verification,
+        # which ZarinPal explicitly supports via its code-101 answer.
+        logger.error(
+            "Gateway verification could not complete for payment %s: %s -- "
+            "leaving the attempt PENDING.",
+            payment.pk, exc,
+        )
+        return payment
 
     with transaction.atomic():
         # Re-read under the lock: another callback may have completed the
@@ -205,7 +253,7 @@ def handle_callback(callback_data: dict) -> Payment:
                 # anyway (exotic race), roll back only the completion,
                 # never crash the callback with a 500.
                 with transaction.atomic():
-                    return _complete_successful_payment(locked, verification.gateway_ref_id)
+                    return _complete_successful_payment(locked, verification)
             except IntegrityError:
                 logger.error(
                     "unique_successful_payment_per_order fired for payment %s "
@@ -239,16 +287,21 @@ def handle_callback(callback_data: dict) -> Payment:
         return locked
 
 
-def _complete_successful_payment(payment: Payment, gateway_ref_id: str = "") -> Payment:
+def _complete_successful_payment(payment: Payment, verification) -> Payment:
     """
     The single code path in which an order becomes paid. Everything that
     must happen exactly once per paid order lives inside the caller's
     atomic block, under the caller's row lock:
 
-        payment  PENDING -> SUCCESS (+ ref id, paid_at)
+        payment  PENDING -> SUCCESS (+ ref id, card receipt data, paid_at)
         order    payment_status -> PAID, status -> CONFIRMED
         stock    decremented via apps.orders.inventory
         coupon   usage recorded (if the order used one)
+
+    `verification` is the gateway's VerificationResult; beyond the
+    boolean outcome it carries the PSP's receipt data (reference id,
+    masked card PAN, card fingerprint), all of which come FROM THE
+    GATEWAY'S OWN VERIFY ANSWER -- never from the callback query string.
 
     The partial unique constraint on successful payments is the final
     guard: if some exotic race ever got two attempts here for one order,
@@ -260,6 +313,10 @@ def _complete_successful_payment(payment: Payment, gateway_ref_id: str = "") -> 
     # Amount integrity: the payment was initiated for order.total; if the
     # order row no longer matches that snapshot, something is very wrong
     # (the order was edited post-checkout) -- refuse to mark it paid.
+    # This is the SECOND amount check: the gateway's verify call itself
+    # also sent payment.amount (the amount the customer was actually
+    # charged), so the PSP has already confirmed the money matches the
+    # snapshot; this compares the snapshot against the order.
     if payment.amount != order.total:
         payment.status = Payment.Status.FAILED
         payment.failure_reason = "Amount mismatch between payment and order."
@@ -273,8 +330,15 @@ def _complete_successful_payment(payment: Payment, gateway_ref_id: str = "") -> 
 
     payment.status = Payment.Status.SUCCESS
     payment.paid_at = timezone.now()
-    payment.gateway_ref_id = gateway_ref_id
-    payment.save(update_fields=["status", "paid_at", "gateway_ref_id", "updated_at"])
+    payment.gateway_ref_id = verification.gateway_ref_id[:128]
+    payment.card_pan = verification.card_pan[:32]
+    payment.card_pan_hash = verification.card_fingerprint[:64]
+    payment.save(
+        update_fields=[
+            "status", "paid_at", "gateway_ref_id",
+            "card_pan", "card_pan_hash", "updated_at",
+        ]
+    )
 
     order.payment_status = Order.PaymentStatus.PAID
     order.status = Order.Status.CONFIRMED

@@ -27,12 +27,23 @@ class PaymentAdmin(admin.ModelAdmin):
     date_hierarchy = "created_at"
     readonly_fields = (
         "order", "amount", "gateway", "gateway_transaction_id",
-        "gateway_ref_id", "failure_reason", "status", "paid_at",
+        "gateway_ref_id", "card_pan", "card_pan_hash",
+        "failure_reason", "status", "paid_at",
         "created_at", "updated_at",
     )
     fieldsets = (
         (None, {"fields": ("order", "amount", "status")}),
-        ("Gateway", {"fields": ("gateway", "gateway_transaction_id", "gateway_ref_id", "failure_reason")}),
+        ("Gateway", {
+            "fields": (
+                "gateway", "gateway_transaction_id", "gateway_ref_id",
+                # Receipt data captured from the gateway's verify answer
+                # (Phase C): masked card number + its fingerprint, for
+                # support ("which card paid for this?") and reconciliation
+                # against the PSP panel. Never full card data.
+                "card_pan", "card_pan_hash",
+                "failure_reason",
+            ),
+        }),
         ("Timestamps", {"fields": ("paid_at", "created_at", "updated_at")}),
     )
 
