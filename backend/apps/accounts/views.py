@@ -15,7 +15,6 @@ import logging
 
 from django.contrib.auth import get_user_model, login, logout, update_session_auth_hash
 from django.contrib.auth.tokens import default_token_generator
-from django.core.mail import send_mail
 from django.conf import settings
 from django.db import transaction
 from django.db.models import Q
@@ -132,17 +131,22 @@ class ChangePasswordView(APIView):
 
 class PasswordResetRequestView(APIView):
     """
-    Sends a real email (via whatever EMAIL_BACKEND is configured --
-    console output in development, real SMTP once EMAIL_HOST/etc are set
-    in production; see .env.example) when the account has an email on
-    file. This is genuinely functional, not a placeholder.
+    Complete end-to-end for BOTH account shapes (Phase D):
 
-    SMS delivery for phone-only accounts is explicitly NOT implemented:
-    no SMS provider is configured anywhere in this project, and the
-    master spec says not to hardcode one. A phone-only account still gets
-    the same generic success response as everyone else (see below for
-    why), but no message is actually sent in that case -- wiring a real
-    SMS provider is future-phase work, not something to fake here.
+      * account WITH an email -> Django's uid+token reset LINK, emailed
+        through apps/notifications (real SMTP in production, console in
+        development; delivery is logged in NotificationLog).
+      * PHONE-ONLY account -> a one-time 6-digit code (hashed at rest,
+        expiring, single-use -- see models.PhoneResetCode) sent by SMS
+        through the configured provider (apps/notifications).
+
+    Delivery never raises into this view: provider/SMTP failures are
+    contained and logged by the notifications layer, and the response is
+    ALWAYS the same generic 200 -- this endpoint deliberately never
+    confirms/denies that a given phone/email is registered (account
+    enumeration), and never reveals which channel was used. Abuse is
+    bounded by the password_reset throttle (5/hour) and, for codes, by
+    PhoneResetCode.issue() deleting previous open codes.
     """
 
     permission_classes = [permissions.AllowAny]
@@ -166,25 +170,25 @@ class PasswordResetRequestView(APIView):
         if user is None or not user.is_active:
             return generic_response
 
+        from apps.notifications.services import (
+            send_password_reset_code,
+            send_password_reset_email,
+        )
+
         if user.email:
             uid = urlsafe_base64_encode(force_bytes(user.pk))
             token = default_token_generator.make_token(user)
             reset_url = f"{settings.FRONTEND_URL}/reset-password/confirm/?uid={uid}&token={token}"
-            send_mail(
-                subject="Cusin Gallery - Password reset",
-                message=(
-                    f"Use this link to reset your password: {reset_url}\n\n"
-                    "If you didn't request this, you can safely ignore this email."
-                ),
-                from_email=None,  # uses settings.DEFAULT_FROM_EMAIL
-                recipient_list=[user.email],
-                fail_silently=True,
-            )
-        else:
+            send_password_reset_email(user, reset_url)
+        elif user.phone:
+            from .models import PhoneResetCode
+
+            _reset_code, plain_code = PhoneResetCode.issue(user)
+            send_password_reset_code(user, plain_code)
+        else:  # pragma: no cover - registration requires phone; defensive
             logger.info(
-                "Password reset requested for a phone-only account (id=%s); no SMS "
-                "provider is configured, so no message was sent.",
-                user.pk,
+                "Password reset requested for account id=%s with neither email nor "
+                "phone; nothing could be sent.", user.pk,
             )
 
         return generic_response

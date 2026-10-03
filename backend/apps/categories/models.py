@@ -21,7 +21,7 @@ class Category(TimeStampedModel, ActivableModel, OrderableModel):
     """A product category, optionally nested under a parent category."""
 
     name = models.CharField("نام دسته‌بندی", max_length=150)
-    slug = models.SlugField("شناسه (آدرس)", max_length=170, unique=True)
+    slug = models.SlugField("شناسه (آدرس)", max_length=170, unique=True, allow_unicode=True)
     parent = models.ForeignKey(
         "self",
         on_delete=models.PROTECT,

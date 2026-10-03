@@ -37,6 +37,8 @@ export function requestPasswordReset(identifier) {
 }
 
 export function confirmPasswordReset(payload) {
+  // Link mode (emailed link):        { uid, token, new_password, new_password_confirm }
+  // Code mode (phone-only accounts): { phone, code, new_password, new_password_confirm }
   return apiClient.post("/accounts/password-reset/confirm/", payload).then((res) => res.data);
 }
 

@@ -97,7 +97,12 @@ class PasswordResetTests(CacheIsolatedAPITestCase):
 
     def test_reset_request_for_account_with_email_sends_a_real_email(self):
         make_user(phone="+989125555555", email="reset@example.com")
-        response = self.client.post(self.request_url, {"identifier": "reset@example.com"}, format="json")
+        # Since Phase D the send is routed through apps/notifications and
+        # registered with transaction.on_commit (nothing may be sent for
+        # a transaction that rolls back) -- captureOnCommitCallbacks runs
+        # those deferred deliveries inside the test.
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(self.request_url, {"identifier": "reset@example.com"}, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         # Uses Django's configured EMAIL_BACKEND -- the test runner's
@@ -114,9 +119,14 @@ class PasswordResetTests(CacheIsolatedAPITestCase):
 
     def test_reset_request_for_phone_only_account_sends_no_email_but_still_succeeds(self):
         make_user(phone="+989126666666")  # no email
-        response = self.client.post(self.request_url, {"identifier": "+989126666666"}, format="json")
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(self.request_url, {"identifier": "+989126666666"}, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(mail.outbox), 0)  # honestly reflects that no SMS provider exists
+        # No EMAIL: since Phase D a phone-only account is reset via an SMS
+        # one-time code instead (delivery + log asserted in
+        # apps/notifications/tests and test_password_reset_phone flows) --
+        # the mailbox must stay empty either way.
+        self.assertEqual(len(mail.outbox), 0)
 
     def test_confirm_with_valid_token_actually_changes_the_password(self):
         user = make_user(phone="+989127777777", password="old-passw0rd!")

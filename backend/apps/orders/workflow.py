@@ -36,12 +36,30 @@ Exactly-once is guaranteed two ways, layered:
    cancel (cancelled -> cancelled) short-circuits as an idempotent
    no-op before any stock logic runs, and cancelled is terminal for
    every OTHER target status.
+
+One documented exception to the PAID-equals-decremented equivalence
+(Phase C): if a gateway-verified capture arrives for an order that was
+ALREADY cancelled (customer finished paying at the exact moment the
+expiry job cancelled the order), apps/payments/services.py records the
+real money -- payment SUCCESS, order payment_status=PAID -- WITHOUT
+decrementing stock (the order is not being fulfilled) and flags the
+order refund-required. No restore can ever fire for it either: the
+order is already in a terminal status, which set_status can neither
+re-enter nor leave, so exactly-once remains true in both directions.
+
+Refund tracking (Phase C)
+-------------------------
+Cancelling or returning a PAID order also flags it "refund required"
+(apps/orders/refunds.py) -- the money side of the same event the stock
+restore handles the goods side. Refunds themselves are manual (PSP
+merchant panel) and recorded by the owner in the admin.
 """
 from django.db import transaction
 from django.utils import timezone
 
 from .inventory import restore_stock_for_order
 from .models import Order
+from .refunds import flag_refund_required
 
 
 class OrderWorkflowError(Exception):
@@ -129,6 +147,41 @@ def set_status(order, new_status):
             restore_stock_for_order(locked)
             locked.stock_restored_at = timezone.now()
 
+        # Refund tracking (Phase C): cancelling or returning a PAID order
+        # means the shop is holding the customer's money for an order it
+        # will not deliver -- flag it "refund required" so it appears in
+        # the owner's refund filter until the manual PSP refund is done
+        # and recorded (apps/orders/refunds.py). Fires at most once per
+        # order: cancelled and returned are terminal, and the no-op
+        # short-circuit above stops repeat transitions. Stock and refund
+        # are independent effects: stock moves only on CANCEL (a returned
+        # order's goods come back through the physical return flow), the
+        # refund flag moves on both.
+        returned_a_paid_order = (
+            new_status == Order.Status.RETURNED
+            and locked.payment_status == Order.PaymentStatus.PAID
+        )
+        if cancelled_a_paid_order or returned_a_paid_order:
+            action = "لغو" if cancelled_a_paid_order else "مرجوع"
+            flag_refund_required(
+                locked,
+                amount=locked.total,
+                note=f"{action} سفارش پرداخت‌شده — کل مبلغ باید به مشتری بازگردانده شود.",
+            )
+
         locked.status = new_status
         locked.save(update_fields=["status", "stock_restored_at", "updated_at"])
+
+        if new_status == Order.Status.SHIPPED:
+            # Customer "shipped" notification with the tracking code
+            # (Phase D). Queued via transaction.on_commit inside
+            # apps/notifications: nothing is sent if this transition
+            # rolls back, provider/SMTP failures are contained there and
+            # can never break the admin status change, and repeat
+            # SHIPPED saves are idempotent (the no-op short-circuit above
+            # plus the NotificationLog unique constraint).
+            from apps.notifications.services import Events, notify_order_event
+
+            notify_order_event(locked, Events.ORDER_SHIPPED)
+
         return locked

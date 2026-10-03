@@ -28,6 +28,14 @@ if not CORS_ALLOWED_ORIGINS:
         "(e.g. https://cusin.ir,https://www.cusin.ir) -- refusing to start "
         "with no allowed frontend origins."
     )
+if "*" in CORS_ALLOWED_ORIGINS:
+    # A bare "*" would let ANY origin make credentialed requests against
+    # the session-authenticated API. The same-origin deployment needs no
+    # wildcard at all (see the REST_FRAMEWORK auth comment in base.py).
+    raise RuntimeError(
+        "CORS_ALLOWED_ORIGINS contains a bare '*' wildcard. Production "
+        "requires an explicit origin allow-list -- refusing to start."
+    )
 
 # --- Shared cache (Redis) ----------------------------------------------------
 # DRF throttling stores hit counters in the Django cache. Gunicorn workers
@@ -113,6 +121,51 @@ if not SECRET_KEY or SECRET_KEY == "unsafe-development-secret-key-do-not-use-in-
         "unsafe/missing key in a production settings module. Set a real "
         "SECRET_KEY in the environment (see .env.example)."
     )
+
+# --- The mock payment gateway must be impossible in production ---------------
+# apps.payments ships a MockGateway for development and tests. An empty
+# PAYMENT_GATEWAY means the same thing (the registry's default), so both
+# are refused here: a production deployment must explicitly name a real
+# PSP. See docs/PAYMENTS.md for the sandbox -> production runbook.
+_payment_gateway = (PAYMENT_GATEWAY or "mock").strip().lower()
+if _payment_gateway == "mock":
+    raise RuntimeError(
+        "PAYMENT_GATEWAY is unset or 'mock'. The mock payment gateway is "
+        "for development/tests only and cannot be enabled in production. "
+        "Set PAYMENT_GATEWAY=zarinpal (plus PAYMENT_MERCHANT_ID) in the "
+        "environment -- see .env.example and docs/PAYMENTS.md."
+    )
+if _payment_gateway == "zarinpal" and not PAYMENT_MERCHANT_ID.strip():
+    raise RuntimeError(
+        "PAYMENT_GATEWAY=zarinpal but PAYMENT_MERCHANT_ID is empty. Set "
+        "the 36-character merchant id from the ZarinPal merchant panel "
+        "(for sandbox testing any 36-character value is accepted -- see "
+        "docs/PAYMENTS.md)."
+    )
+
+# --- The console SMS provider must be impossible in production --------------
+# Same rule as the mock payment gateway: apps/notifications ships a
+# log-only console provider for development/tests. With SMS features
+# enabled (the default), production must name a real provider and its
+# credentials; the only way to run production without SMS is the
+# explicit, honest opt-out SMS_ENABLED=False (phone-only password resets
+# then record a SKIPPED notification instead of pretending to send).
+_sms_provider = (SMS_PROVIDER or "console").strip().lower()
+if SMS_ENABLED:
+    if _sms_provider == "console":
+        raise RuntimeError(
+            "SMS_PROVIDER is unset or 'console'. The console SMS provider only "
+            "logs; it is for development/tests and cannot be enabled in "
+            "production while SMS_ENABLED=True. Set SMS_PROVIDER=kavenegar "
+            "(plus KAVENEGAR_API_KEY), or set SMS_ENABLED=False explicitly "
+            "to run without SMS -- see .env.example."
+        )
+    if _sms_provider == "kavenegar" and not KAVENEGAR_API_KEY.strip():
+        raise RuntimeError(
+            "SMS_PROVIDER=kavenegar but KAVENEGAR_API_KEY is empty. Set the "
+            "API key from the Kavenegar panel, or set SMS_ENABLED=False to "
+            "run without SMS."
+        )
 
 # Production always sends real email via SMTP.
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"

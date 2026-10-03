@@ -57,6 +57,24 @@ class Payment(TimeStampedModel):
         help_text="The gateway's final verification reference (receipt id), set only "
         "after a successful verify call.",
     )
+    # Receipt data captured from the gateway's verify answer (Phase C).
+    # Both are OPTIONAL -- gateways that don't return them (the mock)
+    # simply leave them empty. card_pan is the MASKED number exactly as
+    # the PSP returns it (e.g. 603770******4281); the full PAN never
+    # reaches this project at any point, so there is no PCI-DTS-scope
+    # card data stored here. card_pan_hash is the PSP's own SHA-256
+    # fingerprint of the paying card (ZarinPal's `card_hash`), useful
+    # for support ("which card paid?") and reconciliation only.
+    card_pan = models.CharField(
+        "شماره کارت (ماسک‌شده)", max_length=32, blank=True, default="",
+        help_text="Masked paying-card number as returned by the gateway on verification. "
+        "Never a full PAN.",
+    )
+    card_pan_hash = models.CharField(
+        "اثر انگشت کارت", max_length=64, blank=True, default="",
+        help_text="Gateway-provided hash (fingerprint) of the paying card, e.g. ZarinPal's "
+        "card_hash. Not card data -- a one-way digest for support/reconciliation.",
+    )
     failure_reason = models.CharField(max_length=255, blank=True, default="")
 
     paid_at = models.DateTimeField(null=True, blank=True)

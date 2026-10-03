@@ -43,6 +43,16 @@ class Order(models.Model):
         FAILED = "failed", "پرداخت ناموفق"
         REFUNDED = "refunded", "مسترد شده"
 
+    class RefundStatus(models.TextChoices):
+        """Manual-refund bookkeeping (Phase C). NONE = no money owed back;
+        REQUIRED = the shop is holding the customer's money and must pay
+        it back through the PSP panel; REFUNDED = the owner did so and
+        recorded the note/reference."""
+
+        NONE = "none", "بدون بازپرداخت"
+        REQUIRED = "required", "نیازمند بازپرداخت"
+        REFUNDED = "refunded", "بازپرداخت شده"
+
     order_number = models.CharField("شمارهٔ سفارش", max_length=32, unique=True, blank=True)
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="orders",
@@ -107,6 +117,35 @@ class Order(models.Model):
     # never restore stock again.
     stock_restored_at = models.DateTimeField("زمان بازگشت موجودی", null=True, blank=True)
 
+    # --- Refund tracking (Phase C - Real payments) ---------------------------
+    # There is NO automatic refund integration: Iranian PSP refunds are
+    # executed manually by the owner in the PSP's merchant panel. What the
+    # system guarantees instead is that real money the shop owes back to a
+    # customer is NEVER lost from view: whenever a PAID order is cancelled
+    # or returned (apps/orders/workflow.py), or a gateway-verified capture
+    # cannot be applied to an order (late success after auto-cancellation,
+    # a duplicate second capture -- apps/payments/services.py), the order
+    # is flagged "refund required" with an amount and an append-only note
+    # journal, and stays in the admin's refund filter until the owner marks
+    # it refunded WITH a note. All writes to these fields go through
+    # apps/orders/refunds.py -- the single mechanism, same discipline as
+    # inventory.py for stock.
+    refund_status = models.CharField(
+        "وضعیت بازپرداخت وجه", max_length=10,
+        choices=RefundStatus.choices, default=RefundStatus.NONE,
+    )
+    refund_amount = models.PositiveBigIntegerField(
+        "مبلغ بازپرداخت (تومان)", default=0,
+        help_text="مجموع مبالغی که باید به مشتری بازگردانده شود (تومان).",
+    )
+    refund_reference = models.TextField(
+        "یادداشت بازپرداخت", blank=True, default="",
+        help_text="شرح رویدادهای بازپرداخت (به‌صورت تجمعی) و در نهایت مرجع/یادداشت "
+        "بازپرداخت دستی در پنل درگاه. بدون افزودن یادداشت نمی‌توان سفارش را "
+        "«بازپرداخت شده» کرد.",
+    )
+    refunded_at = models.DateTimeField("زمان بازپرداخت", null=True, blank=True)
+
     created_at = models.DateTimeField("تاریخ ایجاد", auto_now_add=True)
     updated_at = models.DateTimeField("تاریخ ویرایش", auto_now=True)
 
@@ -118,6 +157,10 @@ class Order(models.Model):
             models.Index(fields=["user", "status"]),
             models.Index(fields=["status", "payment_status"]),
             models.Index(fields=["created_at"]),
+            # The owner's daily "which orders still owe a refund?" admin
+            # filter (list_filter + the expire/refund workflows) reads
+            # this column across the whole orders table.
+            models.Index(fields=["refund_status"]),
         ]
 
     def __str__(self):

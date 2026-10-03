@@ -1,9 +1,13 @@
+import { usePageMeta } from "../../hooks/usePageMeta";
 import { NavLink, Outlet } from "react-router-dom";
 
 /**
  * Account area shell: side navigation + nested route outlet.
  */
 function AccountLayout() {
+  // One noindex rule for the whole private account area (orders,
+  // addresses, profile, reviews all render inside this layout).
+  usePageMeta({ title: "حساب کاربری", path: "/account/", noindex: true });
   return (
     <div className="account">
       <aside className="account__nav">

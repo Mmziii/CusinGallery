@@ -133,12 +133,35 @@ class ProductStockStatusTests(CacheIsolatedAPITestCase):
 
     def test_exact_stock_quantity_is_never_exposed(self):
         """Coarse status only -- see pricing.stock_status_for's docstring."""
-        make_product(name="Secretive", slug="secretive", stock_quantity=42, low_stock_threshold=5)
+        category = make_category(name="Secret Category", slug="secret-category")
+        make_product(
+            category=category, name="Secretive", slug="secretive", sku="SKU-SECRETIVE",
+            stock_quantity=42, low_stock_threshold=5,
+        )
         response = self.client.get(reverse("product-detail", args=["secretive"]))
-        body = str(response.data)
-        self.assertNotIn("42", body)
         self.assertNotIn("stock_quantity", response.data)
         self.assertNotIn("low_stock_threshold", response.data)
+
+        # Substring-scan the serialized body for the exact stock count,
+        # with auto-incremented identifier values stripped first. (The
+        # previous raw scan of the whole body was flaky: it also matched
+        # generated ids that happened to contain the same digits, e.g.
+        # category id 424, making the test depend on where other test
+        # modules had left the database sequences. With deterministic
+        # fixture values and ids excluded, "42" can now only appear if
+        # the stock itself leaked.)
+        def without_ids(node):
+            if isinstance(node, dict):
+                return {
+                    key: without_ids(value)
+                    for key, value in node.items()
+                    if key != "id" and not key.endswith("_id")
+                }
+            if isinstance(node, list):
+                return [without_ids(value) for value in node]
+            return node
+
+        self.assertNotIn("42", str(without_ids(response.data)))
 
 
 class ProductImageTests(CacheIsolatedAPITestCase):

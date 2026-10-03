@@ -1,3 +1,4 @@
+import { usePageMeta } from "../hooks/usePageMeta";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -41,6 +42,7 @@ function formatDate(iso) {
 }
 
 function CheckoutPage() {
+  usePageMeta({ title: "تکمیل خرید", path: "/checkout/", noindex: true });
   const { cart, fetchCart } = useCartStore();
 
   const [addresses, setAddresses] = useState([]);

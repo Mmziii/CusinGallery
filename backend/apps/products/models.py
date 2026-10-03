@@ -24,7 +24,7 @@ from apps.core.models import ActivableModel, OrderableModel, TimeStampedModel
 
 class Brand(TimeStampedModel, ActivableModel):
     name = models.CharField("نام", max_length=120, unique=True)
-    slug = models.SlugField("شناسه (آدرس)", max_length=140, unique=True)
+    slug = models.SlugField("شناسه (آدرس)", max_length=140, unique=True, allow_unicode=True)
     logo = models.ImageField("لوگو", upload_to="brands/", blank=True, null=True, validators=[validate_image_file])
 
     class Meta:
@@ -38,7 +38,7 @@ class Brand(TimeStampedModel, ActivableModel):
 
 class Product(TimeStampedModel, ActivableModel):
     name = models.CharField("نام محصول", max_length=255)
-    slug = models.SlugField("شناسه (آدرس)", max_length=280, unique=True)
+    slug = models.SlugField("شناسه (آدرس)", max_length=280, unique=True, allow_unicode=True)
     sku = models.CharField("کد کالا (SKU)", max_length=64, unique=True)
 
     category = models.ForeignKey(
@@ -154,7 +154,7 @@ class ProductAttribute(models.Model):
     """e.g. 'Color', 'Size', 'Capacity' -- see master spec section 12."""
 
     name = models.CharField("نام ویژگی", max_length=100, unique=True)
-    slug = models.SlugField("شناسه (آدرس)", max_length=120, unique=True)
+    slug = models.SlugField("شناسه (آدرس)", max_length=120, unique=True, allow_unicode=True)
 
     class Meta:
         verbose_name = "ویژگی محصول"
