@@ -65,6 +65,7 @@ LOCAL_APPS = [
     "apps.discounts",
     "apps.orders",
     "apps.payments",
+    "apps.notifications",
     "apps.reviews",
     "apps.banners",
 ]
@@ -309,6 +310,44 @@ PAYMENT_GATEWAY_TIMEOUT = env.int("PAYMENT_GATEWAY_TIMEOUT", default=15)
 ORDER_EXPIRY_HOURS = env.int("ORDER_EXPIRY_HOURS", default=24)
 
 # ---------------------------------------------------------------------------
+# Notifications / SMS (Phase D; see apps/notifications and both
+# .env.example files for the full variable documentation)
+# ---------------------------------------------------------------------------
+# Master switch for SMS sending. False = the system never sends SMS and
+# records why in the notification log; production may then legitimately
+# run without an SMS provider. True (default) with the console provider
+# is refused by config/settings/production.py (dev/test tool, exactly
+# like the mock payment gateway).
+SMS_ENABLED = env.bool("SMS_ENABLED", default=True)
+
+# Provider selection: "console" (or empty) = log-only, development/tests
+# ONLY; "kavenegar" = the real Kavenegar adapter. Another provider later
+# is one new class + one registry line (apps/notifications/providers/).
+SMS_PROVIDER = env("SMS_PROVIDER", default="")
+
+# Kavenegar credentials & sender line (env-only, never hardcoded). The
+# API key is SECRET: it travels in request URLs, so the adapter never
+# logs or quotes them.
+KAVENEGAR_API_KEY = env("KAVENEGAR_API_KEY", default="")
+SMS_SENDER = env("SMS_SENDER", default="")
+
+# Pre-approved Kavenegar panel template names per event (verify-lookup).
+# Empty = fall back to a direct send with locally-composed Persian text
+# (which then requires SMS_SENDER).
+SMS_TEMPLATE_PASSWORD_RESET = env("SMS_TEMPLATE_PASSWORD_RESET", default="")
+SMS_TEMPLATE_ORDER_CONFIRMED = env("SMS_TEMPLATE_ORDER_CONFIRMED", default="")
+SMS_TEMPLATE_ORDER_SHIPPED = env("SMS_TEMPLATE_ORDER_SHIPPED", default="")
+
+# Seconds to wait for an SMS provider HTTP call before treating it as
+# unreachable. Delivery failures never break the triggering flow.
+SMS_TIMEOUT = env.int("SMS_TIMEOUT", default=10)
+
+# One-time password-reset codes for phone-only accounts: validity window
+# in minutes (codes are single-use, hashed at rest, and the confirm
+# endpoint is throttled -- see apps/accounts/models.py PhoneResetCode).
+PASSWORD_RESET_CODE_TTL_MINUTES = env.int("PASSWORD_RESET_CODE_TTL_MINUTES", default=15)
+
+# ---------------------------------------------------------------------------
 # Frontend URL (Phase 3)
 # ---------------------------------------------------------------------------
 # Used only to build absolute links that point at the React app from
@@ -397,6 +436,14 @@ LOGGING = {
         # card data, or full gateway payloads through this logger -- see
         # apps/payments (Phase 7) for the logging policy.
         "payments": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        # Notification delivery events (Phase D). Same secret policy:
+        # provider adapters must never put credentials into messages,
+        # and NotificationLog stores masked recipients only.
+        "notifications": {
             "handlers": ["console"],
             "level": "INFO",
             "propagate": False,

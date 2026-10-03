@@ -171,4 +171,17 @@ def set_status(order, new_status):
 
         locked.status = new_status
         locked.save(update_fields=["status", "stock_restored_at", "updated_at"])
+
+        if new_status == Order.Status.SHIPPED:
+            # Customer "shipped" notification with the tracking code
+            # (Phase D). Queued via transaction.on_commit inside
+            # apps/notifications: nothing is sent if this transition
+            # rolls back, provider/SMTP failures are contained there and
+            # can never break the admin status change, and repeat
+            # SHIPPED saves are idempotent (the no-op short-circuit above
+            # plus the NotificationLog unique constraint).
+            from apps.notifications.services import Events, notify_order_event
+
+            notify_order_event(locked, Events.ORDER_SHIPPED)
+
         return locked

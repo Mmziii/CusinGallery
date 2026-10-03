@@ -581,6 +581,10 @@ input:focus, textarea:focus, select:focus {
 .auth-card h1 { font-size: var(--font-size-lg); margin-top: 0; }
 .auth-card__links { display: flex; justify-content: space-between; margin-top: var(--space-3); font-size: var(--font-size-sm); }
 .auth-card__links a { color: var(--color-primary); }
+/* Phase D: helper copy + stacked secondary actions on the reset pages. */
+.reset-help { display: block; font-size: var(--font-size-sm); color: var(--color-text-muted); margin: var(--space-3) 0; line-height: 1.8; }
+.auth-card .btn--block + .btn--block { margin-top: var(--space-2); }
+.auth-card .reset-help.link { text-align: center; }
 
 /* ============================================================== Account */
 

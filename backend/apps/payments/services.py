@@ -378,6 +378,16 @@ def _complete_successful_payment(payment: Payment, verification) -> Payment:
 
     _record_coupon_usage(order)
 
+    # Customer notification (Phase D): order confirmation over SMS and/or
+    # email. Registered via transaction.on_commit inside apps/notifications
+    # -- nothing is sent unless this whole transition actually commits,
+    # the delivery never holds this transaction open, provider failures
+    # can never break the payment, and the NotificationLog unique
+    # constraint keeps replayed callbacks from notifying twice.
+    from apps.notifications.services import Events, notify_order_event
+
+    notify_order_event(order, Events.ORDER_CONFIRMED)
+
     logger.info(
         "Payment %s verified: order %s paid (%s Toman).",
         payment.pk, order.order_number, payment.amount,

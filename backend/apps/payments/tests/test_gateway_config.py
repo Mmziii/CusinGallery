@@ -19,7 +19,10 @@ import sys
 from unittest import TestCase, mock
 
 # A production environment that is valid in every other respect, so the
-# ONLY thing under test is the payment-gateway guard.
+# ONLY thing under test is the payment-gateway guard. (Kept in sync with
+# the full production boot contract: since Phase D that also includes a
+# valid SMS configuration -- see apps/notifications/tests/
+# test_settings_guards.py, which tests those guards specifically.)
 VALID_PRODUCTION_ENV = {
     "SECRET_KEY": "production-guard-test-key-not-the-dev-default",
     "CORS_ALLOWED_ORIGINS": "https://cusin.ir",
@@ -27,6 +30,8 @@ VALID_PRODUCTION_ENV = {
     "PAYMENT_GATEWAY": "zarinpal",
     "PAYMENT_MERCHANT_ID": "c64a6c77-0000-4000-8000-000000000000",
     "PAYMENT_CALLBACK_URL": "https://cusin.ir/payment/callback/",
+    "SMS_PROVIDER": "kavenegar",
+    "KAVENEGAR_API_KEY": "production-guard-test-kavenegar-key",
 }
 
 

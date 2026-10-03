@@ -27,6 +27,8 @@ deployment wiring. It was built phase by phase; this README describes the
 | Payments (attempts, gateway abstraction, initiate/redirect/callback/verify, idempotent, exactly-once stock decrement) | ✅ Real **ZarinPal** adapter (sandbox + production) + mock for dev/test |
 | Refund tracking (required/refunded ledger, admin workflow, manual PSP refunds) | ✅ Phase C |
 | Abandoned unpaid orders (`expire_unpaid_orders` cron command) | ✅ Phase C |
+| Customer notifications (order confirmation, shipped + tracking code, SMS password-reset codes; provider abstraction: Kavenegar + dev console; masked audit log) | ✅ Phase D |
+| Password reset end-to-end for phone-only accounts (hashed, expiring, single-use SMS codes, no enumeration) | ✅ Phase D |
 | Reviews (authenticated create, moderation, verified-purchase computed server-side) | ✅ API + storefront |
 | Banners & daily deals (active windows, ordering, server-provided timing) | ✅ API + storefront |
 | Storefront (home, shop w/ filters+search+pagination, product detail, cart, checkout, payment result, account area) | ✅ Persian/RTL, responsive |
@@ -67,6 +69,15 @@ deployment wiring. It was built phase by phase; this README describes the
   longer be applied, flags the order *refund required* with an
   accumulating amount and note journal (`apps/orders/refunds.py`); the
   owner completes it in admin with a mandatory reference note.
+* **Notifications:** one service (`apps/notifications/services.py`)
+  composes and delivers order-confirmed / order-shipped / password-reset
+  messages over SMS (provider abstraction: Kavenegar adapter + dev-only
+  console, env-selected exactly like payment gateways) and optional
+  SMTP email. Delivery is registered with `transaction.on_commit`,
+  failures can never break checkout/payment/admin flows, every attempt
+  is recorded in a read-only `NotificationLog` with MASKED recipients,
+  and a database unique constraint makes double-sends of one order
+  event impossible.
 
 ---
 
@@ -91,6 +102,7 @@ cusin-gallery/
 │   │   ├── discounts/     # coupons + validation engine
 │   │   ├── orders/        # checkout, shipping, inventory, orders API
 │   │   ├── payments/      # payment attempts + gateway abstraction
+│   │   ├── notifications/ # SMS/email providers (Kavenegar) + audit log
 │   │   ├── reviews/
 │   │   └── banners/       # banners + daily deals
 │   └── media/, staticfiles/
@@ -155,7 +167,7 @@ The API base URL defaults to the same-origin `/api/v1`. Set
 
 ## Tests
 
-Backend (502 tests, all green on PostgreSQL at the time of writing):
+Backend (552 tests, all green on PostgreSQL at the time of writing):
 
 ```bash
 cd backend
@@ -177,7 +189,17 @@ stays PENDING then completes on replay), the **refund ledger** (all
 automatic triggers, admin mark-refunded paths, late-capture and
 duplicate-capture money races), **`expire_unpaid_orders`** (boundaries,
 idempotency, dry-run, pay-after-expiry), and the **production boot
-guards** (mock gateway impossible in production).
+guards** (mock gateway impossible in production). Phase D adds the
+**notification layer** (Kavenegar adapter behind a fake HTTP layer,
+including API-key-leak checks; registry selection; order-confirmed and
+shipped delivery driven through the REAL payment/workflow flows with
+`on_commit` semantics — a rolled-back transaction sends nothing,
+provider/SMTP failures never break the money path, replays never
+double-send, audit rows store masked recipients only) and the
+**phone-only password reset** end-to-end (hashed, expiring, single-use
+codes; re-issue invalidation; identical generic answers for unknown
+phone / wrong / expired / consumed code; request throttling; production
+SMS boot guards).
 
 Frontend: no unit-test framework is configured; verification is via
 `npm run lint` (0 problems) and `npm run build`, plus exercising the
@@ -254,8 +276,14 @@ operator:
   development uses the mock gateway. Production settings refuse to
   start with the mock gateway or without a merchant id, so this cannot
   be forgotten silently.
+* **Kavenegar credentials** for real SMS (`KAVENEGAR_API_KEY`, a sender
+  line `SMS_SENDER` for direct sends, and optionally pre-approved panel
+  templates `SMS_TEMPLATE_*`) — until then development uses the
+  log-only console provider, and production must either configure
+  Kavenegar or explicitly set `SMS_ENABLED=False`.
 * **SMTP credentials** (`EMAIL_HOST`, …) for real password-reset
-  emails (development prints them to the console).
+  emails and order notification emails (development prints them to the
+  console).
 * **A domain + TLS certificate** for production HTTPS.
 * **Catalog content** — products/categories/banners are managed in
   Django Admin (`/admin/`); the application deliberately ships with no

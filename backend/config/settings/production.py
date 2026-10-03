@@ -135,5 +135,29 @@ if _payment_gateway == "zarinpal" and not PAYMENT_MERCHANT_ID.strip():
         "docs/PAYMENTS.md)."
     )
 
+# --- The console SMS provider must be impossible in production --------------
+# Same rule as the mock payment gateway: apps/notifications ships a
+# log-only console provider for development/tests. With SMS features
+# enabled (the default), production must name a real provider and its
+# credentials; the only way to run production without SMS is the
+# explicit, honest opt-out SMS_ENABLED=False (phone-only password resets
+# then record a SKIPPED notification instead of pretending to send).
+_sms_provider = (SMS_PROVIDER or "console").strip().lower()
+if SMS_ENABLED:
+    if _sms_provider == "console":
+        raise RuntimeError(
+            "SMS_PROVIDER is unset or 'console'. The console SMS provider only "
+            "logs; it is for development/tests and cannot be enabled in "
+            "production while SMS_ENABLED=True. Set SMS_PROVIDER=kavenegar "
+            "(plus KAVENEGAR_API_KEY), or set SMS_ENABLED=False explicitly "
+            "to run without SMS -- see .env.example."
+        )
+    if _sms_provider == "kavenegar" and not KAVENEGAR_API_KEY.strip():
+        raise RuntimeError(
+            "SMS_PROVIDER=kavenegar but KAVENEGAR_API_KEY is empty. Set the "
+            "API key from the Kavenegar panel, or set SMS_ENABLED=False to "
+            "run without SMS."
+        )
+
 # Production always sends real email via SMTP.
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"

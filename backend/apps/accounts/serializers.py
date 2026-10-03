@@ -120,11 +120,13 @@ class UserSerializer(serializers.ModelSerializer):
 class ProfileUpdateSerializer(serializers.ModelSerializer):
     """
     Used for PATCH /me/. Deliberately excludes `phone` -- changing the
-    phone number a real e-commerce account logs in with should require
-    re-verification (an SMS OTP flow), and no SMS provider is configured
-    anywhere in this project (see PasswordResetRequestView's docstring
-    for the same constraint). Phone changes are future-phase work once
-    that infrastructure exists.
+    phone number a real e-commerce account logs in with must require
+    re-verification (an OTP flow proving ownership of the NEW number).
+    SMS delivery infrastructure exists as of Phase D
+    (apps/notifications, used for password-reset codes), but the
+    new-number ownership flow itself is deliberately not part of that
+    phase; until it is built, phone changes stay out of the customer-
+    editable profile.
     """
 
     class Meta:
@@ -173,21 +175,67 @@ class PasswordResetRequestSerializer(serializers.Serializer):
 
 
 class PasswordResetConfirmSerializer(serializers.Serializer):
-    uid = serializers.CharField()
-    token = serializers.CharField()
+    """
+    Two accepted shapes, one outcome (a new password for one user):
+
+      * {uid, token, new_password, new_password_confirm} -- the emailed
+        reset LINK (Django's signed token; single-use because changing
+        the password invalidates it, time-limited by
+        PASSWORD_RESET_TIMEOUT).
+      * {phone, code, new_password, new_password_confirm} -- the SMS
+        one-time CODE for phone-only accounts (Phase D; see
+        models.PhoneResetCode for expiry/single-use/hashing).
+
+    Every rejection -- unknown uid, bad token, unknown phone, wrong /
+    expired / consumed code -- answers with the SAME generic error, so
+    the endpoint enumerates nothing. Brute-force headroom is bounded by
+    the view's password_reset_confirm throttle.
+    """
+
+    uid = serializers.CharField(required=False, allow_blank=True)
+    token = serializers.CharField(required=False, allow_blank=True)
+    phone = serializers.CharField(required=False, allow_blank=True)
+    code = serializers.CharField(required=False, allow_blank=True)
     new_password = serializers.CharField(write_only=True)
     new_password_confirm = serializers.CharField(write_only=True)
 
     def validate(self, attrs):
-        generic_error = "Invalid or expired reset link."
-        try:
-            user_pk = force_str(urlsafe_base64_decode(attrs["uid"]))
-            user = User.objects.get(pk=user_pk)
-        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
-            raise serializers.ValidationError(generic_error)
+        generic_link_error = "Invalid or expired reset link."
+        generic_code_error = "Invalid or expired reset code."
+        uid = (attrs.get("uid") or "").strip()
+        token = (attrs.get("token") or "").strip()
+        phone = (attrs.get("phone") or "").strip()
+        code = (attrs.get("code") or "").strip()
 
-        if not default_token_generator.check_token(user, attrs["token"]):
-            raise serializers.ValidationError(generic_error)
+        user = None
+        reset_code = None
+
+        if uid and token:
+            try:
+                user_pk = force_str(urlsafe_base64_decode(uid))
+                user = User.objects.get(pk=user_pk)
+            except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+                raise serializers.ValidationError(generic_link_error)
+            if not default_token_generator.check_token(user, token):
+                raise serializers.ValidationError(generic_link_error)
+        elif phone and code:
+            from .models import PhoneResetCode
+
+            candidate_user = User.objects.filter(Q(phone=phone), is_active=True).first()
+            if candidate_user is not None:
+                for open_code in candidate_user.phone_reset_codes.filter(consumed_at__isnull=True):
+                    if open_code.is_valid() and open_code.matches(code):
+                        user = candidate_user
+                        reset_code = open_code
+                        break
+            if user is None:
+                # Same message for unknown phone, wrong code, expired
+                # code and consumed code -- no enumeration, no oracle.
+                raise serializers.ValidationError(generic_code_error)
+        else:
+            raise serializers.ValidationError(
+                "Provide either uid+token (reset link) or phone+code (SMS code)."
+            )
 
         if attrs["new_password"] != attrs["new_password_confirm"]:
             raise serializers.ValidationError({"new_password_confirm": "Passwords do not match."})
@@ -198,12 +246,18 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
             raise serializers.ValidationError({"new_password": list(exc.messages)})
 
         attrs["user"] = user
+        attrs["reset_code"] = reset_code
         return attrs
 
     def save(self):
         user = self.validated_data["user"]
         user.set_password(self.validated_data["new_password"])
         user.save(update_fields=["password"])
+        reset_code = self.validated_data.get("reset_code")
+        if reset_code is not None:
+            # Single-use: consume AFTER the password actually changed, so
+            # a failed save never burns a code.
+            reset_code.consume()
         return user
 
 
