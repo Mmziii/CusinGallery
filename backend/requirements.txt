@@ -43,6 +43,12 @@ whitenoise==6.7.0
 # backend drives it -- django-redis is deliberately NOT needed.
 redis==5.0.8
 
+# --- Error monitoring (Phase E) -------------------------------------------------
+# Optional at RUNTIME (only initialized when SENTRY_DSN is set -- see
+# config/settings/base.py), but always installed so enabling monitoring is
+# an env change, not an image rebuild.
+sentry-sdk==2.19.2
+
 # NOTE: kept intentionally minimal. The following are deliberately NOT
 # installed, and this is a settled decision, not a placeholder:
 #   - JWT (e.g. djangorestframework-simplejwt): NOT used. Phase 3 chose

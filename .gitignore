@@ -52,3 +52,11 @@ Thumbs.db
 
 # --- Logs ---------------------------------------------------------------------------
 *.log
+
+# --- Backups (Phase E) -----------------------------------------------------------
+# Backups must NEVER live inside the repository (database dumps contain
+# customer data). scripts/backup.sh defaults to /var/backups/cusin; these
+# patterns are a safety net if it is ever pointed inside the checkout.
+backups/
+*.dump
+*.sql.gz

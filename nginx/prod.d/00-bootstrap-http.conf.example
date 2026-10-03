@@ -1,0 +1,89 @@
+# ONE-TIME TLS bootstrap configuration (Phase E) -- see docs/DEPLOY.md.
+#
+# The production nginx config (cusin.conf) needs Let's Encrypt
+# certificates that do not exist on a fresh server yet, and issuing them
+# needs a working HTTP server. This file is that temporary HTTP-only
+# server: it serves the ACME challenge AND proxies the whole site over
+# plain HTTP so the shop is even usable while the certificate is being
+# obtained.
+#
+# Usage (exact steps in docs/DEPLOY.md, section «فعال‌سازی SSL»):
+#   1. cp nginx/prod.d/00-bootstrap-http.conf.example \
+#         nginx/prod.d/00-bootstrap.conf
+#      mv nginx/prod.d/cusin.conf nginx/prod.d/cusin.conf.pending
+#      (only ONE :80 server for this server_name may exist at a time)
+#   2. docker compose -f docker-compose.prod.yml up -d --no-deps nginx
+#   3. docker compose -f docker-compose.prod.yml run --rm certbot \
+#        certonly --webroot -w /var/www/certbot \
+#        -d cusin.ir -d www.cusin.ir \
+#        --email you@example.com --agree-tos --no-eff-email
+#   4. rm nginx/prod.d/00-bootstrap.conf
+#      mv nginx/prod.d/cusin.conf.pending nginx/prod.d/cusin.conf
+#      docker compose -f docker-compose.prod.yml restart nginx
+#   5. Set HTTPS_ENABLED=True in .env and restart the backend.
+
+upstream backend_upstream {
+    server backend:8000;
+}
+
+upstream frontend_upstream {
+    server frontend:80;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name cusin.ir www.cusin.ir;
+
+    client_max_body_size 10m;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location /static/ {
+        alias /app/staticfiles/;
+    }
+
+    location /media/ {
+        alias /app/media/;
+    }
+
+    location /api/ {
+        proxy_pass http://backend_upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /admin/ {
+        proxy_pass http://backend_upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /payment/callback/ {
+        proxy_pass http://backend_upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location = /healthz {
+        proxy_pass http://backend_upstream;
+        proxy_set_header Host $host;
+        access_log off;
+    }
+
+    location / {
+        proxy_pass http://frontend_upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}

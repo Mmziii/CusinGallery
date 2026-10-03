@@ -28,6 +28,14 @@ if not CORS_ALLOWED_ORIGINS:
         "(e.g. https://cusin.ir,https://www.cusin.ir) -- refusing to start "
         "with no allowed frontend origins."
     )
+if "*" in CORS_ALLOWED_ORIGINS:
+    # A bare "*" would let ANY origin make credentialed requests against
+    # the session-authenticated API. The same-origin deployment needs no
+    # wildcard at all (see the REST_FRAMEWORK auth comment in base.py).
+    raise RuntimeError(
+        "CORS_ALLOWED_ORIGINS contains a bare '*' wildcard. Production "
+        "requires an explicit origin allow-list -- refusing to start."
+    )
 
 # --- Shared cache (Redis) ----------------------------------------------------
 # DRF throttling stores hit counters in the Django cache. Gunicorn workers

@@ -1,3 +1,4 @@
+import { usePageMeta } from "../hooks/usePageMeta";
 import { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -13,6 +14,7 @@ const UNAVAILABLE_REASONS = {
 };
 
 function CartPage() {
+  usePageMeta({ title: "سبد خرید", path: "/cart/", noindex: true });
   const navigate = useNavigate();
   const { isAuthenticated, isLoading: authLoading } = useAuthStore();
   const { cart, isLoading, error, fetchCart, updateItem, removeItem } = useCartStore();

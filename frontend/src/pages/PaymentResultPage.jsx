@@ -1,3 +1,4 @@
+import { usePageMeta } from "../hooks/usePageMeta";
 import { useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 
@@ -27,6 +28,7 @@ import { formatPrice } from "../utils/formatPrice";
  *                one's money state is still unknown.
  */
 function PaymentResultPage() {
+  usePageMeta({ title: "نتیجهٔ پرداخت", path: "/payment/result/", noindex: true });
   const { paymentId } = useParams();
   const [searchParams] = useSearchParams();
   const { isAuthenticated } = useAuthStore();

@@ -1,3 +1,4 @@
+import { usePageMeta } from "../hooks/usePageMeta";
 import { useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 
@@ -22,6 +23,11 @@ const SORT_OPTIONS = [
  * contract (apps/products/filters.py).
  */
 function ShopPage() {
+  usePageMeta({
+    title: "فروشگاه",
+    path: "/shop/",
+    description: "خرید آنلاین ظروف آشپزخانه، پخت‌وپز، بلور و کریستال و لوازم خانه با ارسال به سراسر ایران.",
+  });
   const [searchParams, setSearchParams] = useSearchParams();
 
   const params = useMemo(() => {

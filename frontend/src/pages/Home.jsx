@@ -1,3 +1,4 @@
+import { usePageMeta } from "../hooks/usePageMeta";
 import PropTypes from "prop-types";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
@@ -156,6 +157,7 @@ function ProductRow({ title, params }) {
 }
 
 function Home() {
+  usePageMeta({ path: "/" });
   const bannersState = useAsync(() => fetchBanners(), []);
   const categoriesState = useAsync(() => getCategoryTree(), []);
 

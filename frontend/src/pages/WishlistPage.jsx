@@ -1,3 +1,4 @@
+import { usePageMeta } from "../hooks/usePageMeta";
 import { Link } from "react-router-dom";
 
 import PriceTag from "../components/PriceTag";
@@ -6,6 +7,7 @@ import { useWishlist } from "../hooks/useWishlist";
 import useCartStore from "../store/useCartStore";
 
 function WishlistPage() {
+  usePageMeta({ title: "علاقه‌مندی‌ها", path: "/wishlist/", noindex: true });
   const { items, isLoading, error, removeItem } = useWishlist();
   const addToCart = useCartStore((s) => s.addItem);
 

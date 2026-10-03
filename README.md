@@ -29,6 +29,8 @@ deployment wiring. It was built phase by phase; this README describes the
 | Abandoned unpaid orders (`expire_unpaid_orders` cron command) | ✅ Phase C |
 | Customer notifications (order confirmation, shipped + tracking code, SMS password-reset codes; provider abstraction: Kavenegar + dev console; masked audit log) | ✅ Phase D |
 | Password reset end-to-end for phone-only accounts (hashed, expiring, single-use SMS codes, no enumeration) | ✅ Phase D |
+| Production readiness (`check_production` env audit, prod compose with TLS/certbot/scheduler/auto-migrate, backup+restore scripts, `/healthz`, JSON logs, optional Sentry) | ✅ Phase E |
+| SEO (dynamic `sitemap.xml` with percent-encoded Persian slugs, `robots.txt`, per-page titles/canonical/OG, `allow_unicode` slugs) + trust pages (about/contact/shipping-returns/terms/privacy, footer e-namad slot) | ✅ Phase E |
 | Reviews (authenticated create, moderation, verified-purchase computed server-side) | ✅ API + storefront |
 | Banners & daily deals (active windows, ordering, server-provided timing) | ✅ API + storefront |
 | Storefront (home, shop w/ filters+search+pagination, product detail, cart, checkout, payment result, account area) | ✅ Persian/RTL, responsive |
@@ -108,10 +110,13 @@ cusin-gallery/
 │   └── media/, staticfiles/
 ├── frontend/              # React + Vite storefront (src/, tests: lint+build)
 ├── docs/                  # OWNER_GUIDE.fa.md (Persian owner manual),
-│                          # PAYMENTS.md (developer payment guide)
-├── docker/                # backend + frontend Dockerfiles
-├── nginx/                 # edge reverse-proxy config
-├── docker-compose.yml
+│                          # PAYMENTS.md (developer payment guide),
+│                          # DEPLOY.md (Persian VPS deployment guide)
+├── docker/                # backend + frontend Dockerfiles (+ prod entrypoint)
+├── nginx/                 # edge configs: conf.d (dev) + prod.d (TLS/HTTPS)
+├── scripts/               # backup.sh / restore.sh (never store output in git)
+├── docker-compose.yml     # development stack
+├── docker-compose.prod.yml# production stack (TLS, scheduler, auto-migrate)
 └── .env.example           # compose-level variables
 ```
 
@@ -247,7 +252,7 @@ never moves stock — stock is only taken at payment).
 
 ## Docker / deployment wiring
 
-`docker-compose.yml` defines: `postgres` (persistent volume +
+`docker-compose.yml` (development) defines: `postgres` (persistent volume +
 healthcheck), `redis` (shared cache for throttling), `backend`
 (gunicorn, runs `collectstatic` on start; migrations are run explicitly
 by the operator: `docker compose run backend python manage.py migrate`),
@@ -256,12 +261,30 @@ single edge proxy: `/api/` and `/admin/` → backend, `/static/` and
 `/media/` served directly from shared volumes, everything else →
 frontend).
 
+**`docker-compose.prod.yml` (production, Phase E)** adds everything a
+real deployment needs on top: nginx terminates **TLS via a Let's
+Encrypt certbot companion** (`nginx/prod.d/`: HTTP→HTTPS redirect, ACME
+webroot, no redirect loops — Django trusts `X-Forwarded-Proto`), the
+backend runs **migrate + collectstatic automatically on deploy**
+(`docker/backend/entrypoint.sh`, single-replica assumption documented
+there), a **scheduler** service runs `expire_unpaid_orders` hourly,
+`db`/`redis` publish **no host ports**, and `LOG_FORMAT=json` structured
+logs plus optional **Sentry** (`SENTRY_DSN`) come from env. Backups:
+`scripts/backup.sh` (pg_dump + media tar + rotation, stored OUTSIDE the
+repo) and `scripts/restore.sh` (confirmation-gated restore). The
+`check_production` management command audits the whole env contract and
+prints a bilingual PASS/WARN/FAIL report (exit code 1 on any FAIL).
+`docs/DEPLOY.md` is the step-by-step Persian guide for a non-developer
+owner (fresh Ubuntu VPS → SSL → first order → daily ops → rollback),
+ending in a pre-launch checklist.
+
 **Honest status of the infra:** these images and configs are written and
-reviewed, but this repository's development environment has no Docker
-daemon or real domain, so the compose stack has not been booted here and
-HTTPS has not been exercised. The nginx config ships HTTP-only with a
-documented path to HTTPS (`HTTPS_ENABLED=True` + certificates + the
-commented 443 server block).
+reviewed, and the compose files parse and pass structural checks, but
+this repository's development environment has no Docker daemon or real
+domain, so the production stack has not been booted here, TLS has not
+been exercised against Let's Encrypt, and the backup/restore scripts are
+syntax-checked but unrehearsed. `docs/DEPLOY.md`'s checklist requires a
+full rehearsal (including one restore) on the real server before launch.
 
 ---
 

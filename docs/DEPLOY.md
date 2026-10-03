@@ -1,0 +1,453 @@
+# راهنمای راه‌اندازی و نگهداری سرور کوزین گالری
+
+این راهنما برای **صاحب فروشگاه (بدون دانش برنامه‌نویسی)** نوشته شده است و قدم‌به‌قدم
+از خرید سرور تا فروشگاهِ در حال کار را توضیح می‌دهد. هر جا دستور ترمینالی لازم است،
+عیناً نوشته شده — کافی است کپی/پیست کنید. اگر جایی گیر کردید، بخش «خرابی‌های رایج»
+و در نهایت `docs/PAYMENTS.md` (بخش فنی پرداخت) را ببینید.
+
+فهرست:
+
+1. [چه چیزهایی لازم دارید](#۱-چه-چیزهایی-لازم-دارید)
+2. [انتخاب سرور و دامنه](#۲-انتخاب-سرور-و-دامنه)
+3. [تنظیم DNS](#۳-تنظیم-dns)
+4. [فایروال و اتصال امن SSH](#۴-فایروال)
+5. [نصب Docker](#۵-نصب-docker)
+6. [دریافت پروژه](#۶-دریافت-پروژه)
+7. [ساخت فایل .env (توضیح هر متغیر)](#۷-ساخت-فایل-env)
+8. [اولین استقرار](#۸-اولین-استقرار)
+9. [فعال‌سازی SSL (قفل https)](#۹-فعال‌سازی-ssl)
+10. [گواهی سلامت استقرار](#۱۰-گواهی-سلامت-استقرار)
+11. [اضافه‌کردن محصولات](#۱۱-اضافه‌کردن-محصولات)
+12. [زرین‌پال: از آزمایشی به واقعی](#۱۲-زرین‌پال-از-آزمایشی-به-واقعی)
+13. [تنظیم پیامک (کاوه‌نگار)](#۱۳-تنظیم-پیامک-کاوه‌نگار)
+14. [عملیات روزمره](#۱۴-عملیات-روزمره)
+15. [پشتیبان‌گیری (بکاپ)](#۱۵-پشتیبان‌گیری)
+16. [به‌روزرسانی سایت](#۱۶-به‌روزرسانی-سایت)
+17. [بازگشت به نسخهٔ قبل (Rollback)](#۱۷-بازگشت-به-نسخهٔ-قبل)
+18. [بازیابی از بکاپ (Restore)](#۱۸-بازیابی-از-بکاپ)
+19. [چک‌لیست پیش از افتتاح](#۱۹-چک‌لیست-پیش-از-افتتاح)
+20. [خرابی‌های رایج](#۲۰-خرابی‌های-رایج)
+
+---
+
+## ۱. چه چیزهایی لازم دارید
+
+| مورد | توضیح |
+|---|---|
+| یک سرور مجازی (VPS) | Ubuntu 22.04/24.04 — حداقل ۲ گیگ رم، ۲۰ گیگ دیسک، ۱ هستهٔ CPU برای شروع کافی است |
+| دامنهٔ `cusin.ir` | ثبت‌شده به نام خودتان (برای دامنهٔ .ir از طریق nic.ir یا ثبت‌کننده‌های ایرانی) |
+| حساب زرین‌پال | برای دریافت «کد پذیرنده» (merchant id) — بخش ۱۲ |
+| حساب کاوه‌نگار (اختیاری) | برای پیامک‌ها — بخش ۱۳ |
+| ایمیل فعال | برای خطاهای Sentry (اختیاری) و دریافت گواهی SSL |
+
+> **توجه:** اینماد و درگاه‌های پرداخت ایرانی ممکن است برای پذیرشِ دامنه/سرور
+> شرایط خاصی داشته باشند (مثلاً لزوم میزبانی داخل ایران). پیش از خرید سرور،
+> محل میزبانی موردنیاز را از پشتیبانی زرین‌پال و مرکز توسعهٔ تجارت الکترونیکی
+> (اینماد) بپرسید.
+
+---
+
+## ۲. انتخاب سرور و دامنه
+
+1. از یک ارائه‌دهندهٔ VPS ایرانی یک سرور با **Ubuntu 24.04** سفارش دهید.
+2. در پنل ارائه‌دهنده، «رمز root» یا بهتر از آن **کلید SSH** دریافت کنید.
+3. دامنهٔ `cusin.ir` (و در صورت امکان `www.cusin.ir`) باید به نام شما ثبت و
+   **قابل ویرایش رکوردهای DNS** باشد.
+
+---
+
+## ۳. تنظیم DNS
+
+در پنل مدیریت دامنه، دو رکورد بسازید (`YOUR_SERVER_IP` = آی‌پی سرورتان):
+
+| نوع | نام | مقدار |
+|---|---|---|
+| A | `@` (یعنی خود cusin.ir) | `YOUR_SERVER_IP` |
+| A | `www` | `YOUR_SERVER_IP` |
+
+صبر کنید تا DNS منتشر شود (معمولاً ۱۵ دقیقه تا چند ساعت برای .ir). تست:
+
+```bash
+ping -c 2 cusin.ir
+```
+
+باید آی‌پی سرور شما برگردد. **تا وقتی DNS درست نشده، سراغ مرحلهٔ SSL نروید.**
+
+---
+
+## ۴. فایروال
+
+با کاربر root (یا sudo) روی سرور:
+
+```bash
+apt update && apt -y upgrade
+apt -y install ufw
+ufw allow 22/tcp     # SSH
+ufw allow 80/tcp     # HTTP
+ufw allow 443/tcp    # HTTPS
+ufw enable
+ufw status
+```
+
+> هیچ پورت دیگری (مخصوصاً 5432 پایگاه داده و 6379 ردیس) را باز نکنید —
+> در فایل `docker-compose.prod.yml` هم این سرویس‌ها عمداً هیچ پورتی روی سرور
+> باز نمی‌کنند.
+
+**توصیهٔ اکید SSH:** ورود با رمز را ببندید و فقط با کلید وارد شوید
+(`/etc/ssh/sshd_config` → `PasswordAuthentication no` و سپس `systemctl restart ssh`).
+
+---
+
+## ۵. نصب Docker
+
+```bash
+curl -fsSL https://get.docker.com | sh
+docker --version
+docker compose version
+```
+
+---
+
+## ۶. دریافت پروژه
+
+پروژه را در مسیر `/opt/cusin` قرار می‌دهیم:
+
+```bash
+mkdir -p /opt/cusin && cd /opt/cusin
+git clone https://github.com/Mmziii/CusinGallery.git
+cd CusinGallery
+```
+
+اگر روی سرور `git` نیست: `apt -y install git`. اگر دسترسی به GitHub از سرور
+ممکن نیست، می‌توانید ZIP مخزن را روی کامپیوتر خود دانلود و با `scp` به سرور
+منتقل و در `/opt/cusin/CusinGallery` باز کنید.
+
+---
+
+## ۷. ساخت فایل .env
+
+همهٔ تنظیمات در **یک فایل** به نام `.env` در ریشهٔ پروژه است. این فایل هرگز
+در گیت ذخیره نمی‌شود (در `.gitignore` است) — پس **از آن نسخهٔ پشتیبان جداگانه
+نگه دارید**.
+
+```bash
+cd /opt/cusin/CusinGallery
+cp .env.example .env
+nano .env
+```
+
+توضیح متغیرها (همان ترتیب فایل):
+
+| متغیر | چه بگذارید |
+|---|---|
+| `DJANGO_SETTINGS_MODULE` | همان `config.settings.production` بماند |
+| `SECRET_KEY` | یک عبارت تصادفی بلند. تولید: `docker run --rm python:3.12-slim python -c "import secrets;print(secrets.token_urlsafe(64))"` — اگر `#` داشت داخل `"..."` بگذارید |
+| `ALLOWED_HOSTS` | `cusin.ir,www.cusin.ir` |
+| `CSRF_TRUSTED_ORIGINS` | `https://cusin.ir,https://www.cusin.ir` |
+| `CORS_ALLOWED_ORIGINS` | `https://cusin.ir,https://www.cusin.ir` |
+| `FRONTEND_URL` | `https://cusin.ir` |
+| `POSTGRES_DB` / `POSTGRES_USER` | همان مقادیر نمونه قابل نگهداری است |
+| `POSTGRES_PASSWORD` | **حتماً عوض شود** — یک رمز قوی تصادفی (دستور تولید بالا) |
+| `EMAIL_HOST` و بقیهٔ EMAIL_* | مشخصات SMTP سرویس ایمیل‌تان (اختیاری ولی توصیه‌شده؛ بدون آن ایمیل‌های بازیابی رمز و اعلان سفارش ارسال نمی‌شوند) |
+| `PAYMENT_GATEWAY` | `zarinpal` (گذاشتن `mock` در production ممکن نیست — برنامه بالا نمی‌آید) |
+| `PAYMENT_MERCHANT_ID` | کد پذیرندهٔ زرین‌پال (بخش ۱۲). برای شروعِ آزمایشی: هر متن ۳۶ کاراکتری |
+| `PAYMENT_ZARINPAL_SANDBOX` | برای تست اولیه `True`؛ **روز افتتاح حتماً `False`** |
+| `PAYMENT_CALLBACK_URL` | `https://cusin.ir/payment/callback/` |
+| `SMS_ENABLED` | `True` (یا `False` اگر فعلاً پیامک نمی‌خواهید) |
+| `SMS_PROVIDER` | `kavenegar` (مقدار `console` در production مجاز نیست) |
+| `KAVENEGAR_API_KEY` | کلید API پنل کاوه‌نگار (بخش ۱۳) |
+| `SMS_SENDER` | شمارهٔ خط ارسال کاوه‌نگار (برای پیامک مستقیم) |
+| `SMS_TEMPLATE_*` | نام قالب‌های تأییدشدهٔ پنل کاوه‌نگار؛ خالی = متن آمادهٔ خود سیستم |
+| `HTTPS_ENABLED` | تا وقتی SSL نگرفته‌اید `False`؛ بعد از بخش ۹ → `True` |
+| `SENTRY_DSN` | اختیاری — DSN پروژهٔ رایگان sentry.io برای دریافت خطاها |
+| `LOG_FORMAT` | `json` بماند (لاگ ساختاریافته برای `docker compose logs`) |
+| `VITE_SITE_ORIGIN` | `https://cusin.ir` (برای لینک‌های سئو) |
+| بقیه (هزینهٔ ارسال، `ORDER_EXPIRY_HOURS` و…) | پیش‌فرض‌ها منطقی‌اند؛ هر وقت خواستید عوض کنید |
+
+---
+
+## ۸. اولین استقرار
+
+```bash
+cd /opt/cusin/CusinGallery
+
+# چون هنوز گواهی SSL نداریم، nginx را با پیکربندی موقت HTTP بالا می‌آوریم
+# (توضیح کامل در بخش ۹). ابتدا فقط اجزای غیر-nginx:
+docker compose -f docker-compose.prod.yml up -d --build db redis backend scheduler frontend
+
+# صبر کنید تا backend سالم بالا بیاید (migrate و collectstatic خودکار است):
+docker compose -f docker-compose.prod.yml logs -f backend
+# اولین خط‌ها باید بگویند: applying database migrations ... starting gunicorn
+
+# ساخت حساب مدیر پنل:
+docker compose -f docker-compose.prod.yml exec backend python manage.py createsuperuser
+```
+
+حالا با `http://YOUR_SERVER_IP/admin/` (موقتاً بدون دامنه/SSL) یا پس از بالا
+آوردن nginx موقت (بخش ۹) با `http://cusin.ir/admin/` وارد پنل مدیریت شوید.
+
+---
+
+## ۹. فعال‌سازی SSL
+
+گواهی رایگان Let's Encrypt با سرویس `certbot` که در compose تعریف شده گرفته و
+**هر ۱۲ ساعت خودکار تمدید** می‌شود. مراحل دقیق (فقط اولین بار):
+
+```bash
+cd /opt/cusin/CusinGallery
+
+# ۱) پیکربندی موقت HTTP را فعال و پیکربندی اصلی را موقتاً کنار بگذارید
+cp nginx/prod.d/00-bootstrap-http.conf.example nginx/prod.d/00-bootstrap.conf
+mv nginx/prod.d/cusin.conf nginx/prod.d/cusin.conf.pending
+
+# ۲) nginx و certbot را بالا بیاورید
+docker compose -f docker-compose.prod.yml up -d nginx certbot
+
+# ۳) گواهی را صادر کنید (ایمیل واقعی خودتان را بگذارید)
+docker compose -f docker-compose.prod.yml run --rm certbot \
+  certonly --webroot -w /var/www/certbot \
+  -d cusin.ir -d www.cusin.ir \
+  --email you@example.com --agree-tos --no-eff-email
+
+# ۴) به پیکربندی اصلی (HTTPS) برگردید
+rm nginx/prod.d/00-bootstrap.conf
+mv nginx/prod.d/cusin.conf.pending nginx/prod.d/cusin.conf
+docker compose -f docker-compose.prod.yml restart nginx
+
+# ۵) به Django بگویید HTTPS فعال است
+#    در فایل .env مقدار HTTPS_ENABLED=True شود، سپس:
+docker compose -f docker-compose.prod.yml restart backend
+```
+
+تست: `https://cusin.ir` باید با قفل سبز باز شود و `http://cusin.ir` خودکار به
+https برود — **بدون حلقهٔ ریدایرکت** (Django هدر `X-Forwarded-Proto` را از
+nginx می‌گیرد و ریدایرکت تکراری نمی‌کند). آدرس بازگشت پرداخت
+`https://cusin.ir/payment/callback/` هم همین‌جا توسط nginx به بک‌اند می‌رسد.
+
+> **تمدید گواهی:** خودکار انجام می‌شود. برای اینکه nginx گواهیِ تمدیدشده را
+> بدون قطعی بارگذاری کند، این cron هفتگی را اضافه کنید (`nginx -s reload`
+> هیچ قطعی ایجاد نمی‌کند):
+>
+> ```bash
+> crontab -e
+> # این خط را اضافه کنید (دوشنبه‌ها ساعت ۴ بامداد):
+> 0 4 * * 1 cd /opt/cusin/CusinGallery && docker compose -f docker-compose.prod.yml exec -T nginx nginx -s reload
+> ```
+
+---
+
+## ۱۰. گواهی سلامت استقرار
+
+یک ابزار داخلی همهٔ تنظیمات حیاتی را چک می‌کند و فهرست PASS/WARN/FAIL
+(فارسی و انگلیسی) می‌دهد:
+
+```bash
+docker compose -f docker-compose.prod.yml exec backend python manage.py check_production
+```
+
+هر `[FAIL]` یعنی سایت آماده نیست — همان متنِ راهنما را دنبال کنید. هر `[WARN]`
+را جدی بگیرید (مخصوصاً هشدار روشن‌بودن سندباکس زرین‌پال). همچنین:
+
+```bash
+curl https://cusin.ir/healthz        # باید {"status": "ok", ...} بدهد
+curl https://cusin.ir/robots.txt
+curl https://cusin.ir/sitemap.xml | head
+```
+
+---
+
+## ۱۱. اضافه‌کردن محصولات
+
+همهٔ کارها از پنل مدیریت (`https://cusin.ir/admin/`):
+
+- **یکی‌یکی:** منوی «محصولات» ← «افزودن» (تصویر، قیمت به تومان، موجودی،
+  دسته‌بندی و برند را از قبل بسازید).
+- **دسته‌جمعی:** منوی «محصولات» ← «واردکردن از فایل» (CSV/Excel) — راهنمای
+  ستون‌ها در `docs/OWNER_GUIDE.fa.md` بخش ۵.
+- **دادهٔ نمایشی:** فقط برای دیدن ظاهر سایت:
+  `docker compose -f docker-compose.prod.yml exec backend python manage.py seed_demo`
+  (بعداً از پنل پاکشان کنید).
+
+صفحات «دربارهٔ ما / تماس / ارسال و مرجوعی / قوانین / حریم خصوصی» در frontend
+متن **نمونه** دارند: فایل‌های `frontend/src/pages/info/*.jsx` را با متن واقعی
+خودتان عوض کنید (یا از پشتیبان فنی بخواهید) و سپس image را دوباره بسازید
+(بخش ۱۶). نشانهٔ e-namad هم در `frontend/src/components/Footer.jsx` جای
+مشخص دارد.
+
+---
+
+## ۱۲. زرین‌پال: از آزمایشی به واقعی
+
+**مرحلهٔ آزمایشی (قبل از افتتاح — توصیه می‌شود):**
+`PAYMENT_ZARINPAL_SANDBOX=True` و `PAYMENT_MERCHANT_ID` با هر مقدار
+۳۶ کاراکتری. یک سفارش کامل بزنید و صفحهٔ سندباکس زرین‌پال را ببینید.
+
+**مرحلهٔ واقعی:**
+
+1. در [زرین‌پال](https://www.zarinpal.com/) حساب پذیرنده بسازید و درگاه را
+   فعال کنید (احراز هویت صنفی/اینماد لازم دارد).
+2. «کد پذیرنده» (Merchant ID) را از پنل بردارید → در `.env` داخل
+   `PAYMENT_MERCHANT_ID`.
+3. در تنظیمات درگاهِ پنل زرین‌پال، **آدرس بازگشت** را دقیقاً
+   `https://cusin.ir/payment/callback/` ثبت کنید.
+4. در `.env`: `PAYMENT_ZARINPAL_SANDBOX=False`.
+5. `docker compose -f docker-compose.prod.yml restart backend`
+6. یک خرید **واقعی** کوچک انجام دهید و در پنل زرین‌پال ببینید؛ سپس همان
+   سفارش را در پنل مدیریت لغو کنید تا جریان «بازپرداخت وجه» (بخش ۸
+   OWNER_GUIDE) را هم تمرین کرده باشید.
+
+---
+
+## ۱۳. تنظیم پیامک (کاوه‌نگار)
+
+1. در [کاوه‌نگار](https://panel.kavenegar.com/) حساب بسازید و اعتبار شارژ کنید.
+2. از «تنظیمات ← API Key» کلید را بردارید → `KAVENEGAR_API_KEY` در `.env`.
+3. یک **خط ارسال** (sender) بگیرید → `SMS_SENDER` (برای پیامک مستقیم لازم است).
+4. (اختیاری) سه قالب آماده در پنل بسازید (بازیابی رمز / تأیید سفارش / ارسال
+   سفارش) و نام‌شان را در `SMS_TEMPLATE_*` بگذارید؛ خالی بگذارید همان متن‌های
+   آمادهٔ فارسی سیستم ارسال می‌شود.
+5. `docker compose -f docker-compose.prod.yml restart backend` و یک بار
+   «بازیابی رمز» با حساب فقط-موبایلی تست کنید. نتیجه در پنل مدیریت ←
+   «گزارش اعلان‌ها» دیده می‌شود.
+
+---
+
+## ۱۴. عملیات روزمره
+
+- **سفارش‌ها:** پنل مدیریت ← «سفارش‌ها» (راهنمای کامل: `docs/OWNER_GUIDE.fa.md`).
+- **بازپرداخت‌ها:** فیلتر «وضعیت بازپرداخت وجه = نیازمند بازپرداخت» هر روز
+  چک شود.
+- **لاگ‌ها:**
+  ```bash
+  docker compose -f docker-compose.prod.yml logs -f backend     # API
+  docker compose -f docker-compose.prod.yml logs scheduler      # لغو خودکار سفارش‌های رهاشده
+  docker compose -f docker-compose.prod.yml logs nginx
+  ```
+- **مانیتورینگ:** یک سرویس uptime (هر نمونهٔ رایگان) روی
+  `https://cusin.ir/healthz` تنظیم کنید؛ خطاهای برنامه هم با `SENTRY_DSN`
+  به ایمیل‌تان می‌آید.
+- **سفارش‌های رهاشده:** خودکار توسط سرویس `scheduler` هر ساعت لغو می‌شوند
+  (بدون دخالت شما).
+
+---
+
+## ۱۵. پشتیبان‌گیری
+
+اسکریپت آماده: `scripts/backup.sh` — از پایگاه داده (فرمت فشردهٔ pg_dump) و
+عکس‌ها/فایل‌های آپلودشده (media) نسخه می‌گیرد و خودکار نسخه‌های قدیمی‌تر از
+۱۴ روز را پاک می‌کند. بکاپ‌ها در `/var/backups/cusin` ذخیره می‌شوند —
+**هرگز داخل پوشهٔ پروژه/گیت ذخیره نکنید.**
+
+cron روزانه:
+
+```bash
+sudo mkdir -p /var/backups/cusin && sudo chown "$USER" /var/backups/cusin
+crontab -e
+# این خط را اضافه کنید:
+15 3 * * * cd /opt/cusin/CusinGallery && ./scripts/backup.sh >> /var/log/cusin-backup.log 2>&1
+```
+
+**قانون طلایی:** هفته‌ای یک‌بار پوشش بکاپ را به جای دیگری هم کپی کنید
+(سرور دیگر، فضای ابری، یا حتی `scp` به کامپیوتر خودتان):
+
+```bash
+scp -r user@YOUR_SERVER_IP:/var/backups/cusin ~/cusin-backups/
+```
+
+---
+
+## ۱۶. به‌روزرسانی سایت
+
+```bash
+cd /opt/cusin/CusinGallery
+git fetch --tags
+git checkout <tag-or-commit-جدید>          # یا git pull برای آخرین main
+docker compose -f docker-compose.prod.yml build backend frontend
+docker compose -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.prod.yml logs -f backend   # migrate خودکار اجرا می‌شود
+docker compose -f docker-compose.prod.yml exec backend python manage.py check_production
+```
+
+قطع سرویس معمولاً چند ثانیه است. متن صفحات اعلان‌دار (بخش ۱۱) را قبل از build
+ویرایش کرده باشید.
+
+---
+
+## ۱۷. بازگشت به نسخهٔ قبل
+
+اگر به‌روزرسانی خراب شد:
+
+```bash
+cd /opt/cusin/CusinGallery
+git checkout <commit-قبلی>
+docker compose -f docker-compose.prod.yml build backend frontend
+docker compose -f docker-compose.prod.yml up -d
+```
+
+> **مهم:** اگر نسخهٔ جدید migration اجرا کرده باشد، کدِ قدیمی ممکن است با
+> دیتابیسِ جدید سازگار نباشد. در آن حالت یا رو به جلو اصلاح کنید (به
+> پشتیبان فنی اطلاع دهید) یا از بکاپِ قبل از به‌روزرسانی restore کنید
+> (بخش ۱۸). به همین دلیل **قبل از هر به‌روزرسانی** یک بکاپ دستی بگیرید:
+> `./scripts/backup.sh`
+
+---
+
+## ۱۸. بازیابی از بکاپ
+
+```bash
+cd /opt/cusin/CusinGallery
+
+# ۱) بکاپ دستی از وضعیت فعلی (احتیاط)
+./scripts/backup.sh
+
+# ۲) بازیابی پایگاه داده (+ فایل‌ها در صورت نیاز)
+./scripts/restore.sh /var/backups/cusin/db/db-YYYYMMDD-HHMMSS.dump \
+                     /var/backups/cusin/media/media-YYYYMMDD-HHMMSS.tar.gz
+
+# ۳) ری‌استارت بک‌اند (migrationهای لازم دوباره اعمال می‌شوند)
+docker compose -f docker-compose.prod.yml restart backend
+
+# ۴) بررسی
+curl https://cusin.ir/healthz
+```
+
+---
+
+## ۱۹. چک‌لیست پیش از افتتاح
+
+- [ ] `check_production` بدون هیچ `[FAIL]` اجرا شد (و WARNهای سندباکس/HTTPS جدی گرفته شدند).
+- [ ] `https://cusin.ir` با قفل TLS باز می‌شود و `http://` به آن ریدایرکت می‌شود (بدون حلقه).
+- [ ] `HTTPS_ENABLED=True` شده.
+- [ ] **یک سفارش آزمایشی کامل با سندباکس زرین‌پال**: ثبت‌نام ← سبد ← کوپن ←
+      پرداخت ← صفحهٔ نتیجهٔ فارسی ← «پرداخت شده» در پنل ← پیامک/ایمیل تأیید
+      در «گزارش اعلان‌ها».
+- [ ] **جریان بازپرداخت تمرین شد**: همان سفارش آزمایشی لغو شد ← 💸 ظاهر شد ←
+      «بازپرداخت شده» با یادداشت ثبت شد.
+- [ ] `PAYMENT_ZARINPAL_SANDBOX=False` شد و یک خرید واقعی کوچک انجام و در پنل
+      زرین‌پال رؤیت شد (سپس لغو/بازپرداخت شد).
+- [ ] پیامک واقعی تست شد (بازیابی رمز با حساب فقط-موبایلی).
+- [ ] cron بکاپ فعال است و **یک restore کامل با موفقیت تمرین شد** (بخش ۱۸).
+- [ ] بکاپ به خارج از سرور کپی شد.
+- [ ] صفحه‌های درباره/تماس/قوانین/حریم خصوصی با متن واقعی جایگزین و نشان
+      e-namad در فوتر اضافه شد.
+- [ ] `/sitemap.xml` در Google Search Console ثبت شد.
+- [ ] یک سرویس uptime روی `/healthz` فعال شد.
+
+---
+
+## ۲۰. خرابی‌های رایج
+
+| علامت | علت احتمالی و راه‌حل |
+|---|---|
+| `backend` بالا نمی‌آید | `docker compose -f docker-compose.prod.yml logs backend` — معمولاً یک `RuntimeError` گویا است (SECRET_KEY خالی، PAYMENT_GATEWAY=mock، KAVENEGAR_API_KEY خالی…). همان را در `.env` درست کنید و `up -d` again. |
+| سایت 502 می‌دهد | بک‌اند خوابیده است؛ لاگ بالا را ببینید. اگر DB نرسد: `docker compose ps` و `logs db`. |
+| ریدایرکت بی‌پایان (ERR_TOO_MANY_REDIRECTS) | `HTTPS_ENABLED=True` است ولی nginx هدر `X-Forwarded-Proto` نمی‌فرستد — باید با همین فایل‌های `nginx/prod.d` بالا آمده باشید، نه پیکربندی دست‌ساز. |
+| گواهی SSL کار نمی‌کند | فایل `nginx/prod.d/cusin.conf` باید active باشد (نه bootstrap) و volumeهای certbot در compose mounted باشند؛ `docker compose logs certbot`. |
+| پیامک نمی‌رود | پنل مدیریت ← «گزارش اعلان‌ها» ← ردیف «ناموفق» و متن خطا (معمولاً اتمام اعتبار کاوه‌نگار). |
+| پرداخت به سایت برنمی‌گردد | در پنل زرین‌پال آدرس بازگشت دقیقاً `https://cusin.ir/payment/callback/` ثبت شده؟ nginx همان مسیر را به backend می‌دهد (در `nginx/prod.d/cusin.conf` هست). |
+| سفارش‌های پرداخت‌نشده تلنبار شده | سرویس `scheduler` باید هر ساعت اجرا شود: `docker compose logs scheduler`. |
+
+---
+
+*این راهنما همراه مخزن به‌روز می‌شود. تغییرات بزرگ هر فاز در `README.md` و
+`docs/PAYMENTS.md` هم مستند شده‌اند.*

@@ -11,9 +11,17 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 
+from apps.core.views import healthz, robots_txt, sitemap_xml
+
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/v1/", include("config.api_urls")),
+    # Site-level infrastructure (Phase E): monitoring probe + SEO files.
+    # Served at the public root; the nginx configs proxy /healthz,
+    # /robots.txt and /sitemap.xml here.
+    path("healthz", healthz, name="healthz"),
+    path("robots.txt", robots_txt, name="robots-txt"),
+    path("sitemap.xml", sitemap_xml, name="sitemap-xml"),
     # Alias of apps.payments' callback endpoint at the site root, matching
     # the PAYMENT_CALLBACK_URL shape documented in .env.example
     # (https://cusin.ir/payment/callback/). Same view either way -- see

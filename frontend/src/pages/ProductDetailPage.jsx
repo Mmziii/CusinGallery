@@ -1,3 +1,4 @@
+import { SITE_ORIGIN, usePageMeta } from "../hooks/usePageMeta";
 import PropTypes from "prop-types";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
@@ -187,6 +188,16 @@ function ProductDetailPage() {
   const [wishlisted, setWishlisted] = useState(false);
 
   const images = product?.images || [];
+
+  // Per-product SEO/social metadata (Phase E). Values start undefined
+  // and settle once the product loads; the canonical always points at
+  // the slug URL (query strings like ?review=1 must not fork it).
+  usePageMeta({
+    title: product?.name,
+    description: product?.short_description || undefined,
+    path: `/products/${slug}/`,
+    image: product?.primary_image ? `${SITE_ORIGIN}${product.primary_image}` : undefined,
+  });
 
   // Group variants by attribute for the option buttons.
   const attributeOptions = useMemo(() => {

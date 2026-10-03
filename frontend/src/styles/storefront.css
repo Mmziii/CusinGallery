@@ -692,3 +692,40 @@ input:focus, textarea:focus, select:focus {
 .shipping-method--active { border-color: var(--color-accent); background: rgba(138, 109, 75, 0.05); }
 .shipping-method__body { display: flex; flex-direction: column; flex: 1; }
 .shipping-method__cost { font-weight: 800; white-space: nowrap; }
+
+/* ============================================ Trust/info pages (Phase E) */
+
+.info-page { max-width: 760px; padding-block: var(--space-6); }
+.info-page h1 { font-size: var(--font-size-xl); margin-bottom: var(--space-4); }
+.info-page__body { padding: var(--space-5); line-height: 2; }
+.info-page__body h2 { font-size: var(--font-size-lg); margin: var(--space-4) 0 var(--space-2); }
+.info-page__body ul { padding-inline-start: var(--space-4); margin-bottom: var(--space-3); }
+.info-page__body li { margin-bottom: var(--space-2); }
+.info-page__facts { margin: var(--space-3) 0; }
+.info-page__facts > div { display: flex; gap: var(--space-3); padding: var(--space-2) 0; border-bottom: 1px dashed var(--color-border); }
+.info-page__facts dt { min-width: 140px; color: var(--color-text-muted); }
+
+/* Visible "owner must edit this" marker on placeholder trust pages. */
+.owner-edit-notice {
+  background: #fdf3e2;
+  border: 1px solid #f0dcb4;
+  color: var(--color-warning);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
+  font-size: var(--font-size-sm);
+  line-height: 1.9;
+}
+
+/* Footer: business info + e-namad badge slot. */
+.site-footer__contact { font-size: var(--font-size-sm); color: inherit; opacity: 0.85; }
+.site-footer__enamad {
+  min-height: 96px;
+  border: 2px dashed currentColor;
+  border-radius: var(--radius-md);
+  opacity: 0.55;
+  display: flex; align-items: center; justify-content: center;
+  font-size: var(--font-size-sm);
+  padding: var(--space-2);
+  text-align: center;
+}

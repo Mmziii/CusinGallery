@@ -407,6 +407,14 @@ SHIPPING_METHODS = {
 # ---------------------------------------------------------------------------
 LOG_LEVEL = env("DJANGO_LOG_LEVEL", default="INFO")
 
+# Output shape: "plain" (human-readable, development default) or "json"
+# (one JSON object per line on stdout -- structured logging for container
+# log collectors in production; see config/json_logging.py). The root
+# .env.example sets LOG_FORMAT=json for deployments.
+LOG_FORMAT = env("LOG_FORMAT", default="plain").strip().lower()
+if LOG_FORMAT not in {"plain", "json"}:
+    raise RuntimeError(f"LOG_FORMAT must be 'plain' or 'json', got '{LOG_FORMAT}'.")
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
@@ -415,11 +423,14 @@ LOGGING = {
             "format": "[{asctime}] {levelname} {name}: {message}",
             "style": "{",
         },
+        "json": {
+            "()": "config.json_logging.JsonLogFormatter",
+        },
     },
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
-            "formatter": "verbose",
+            "formatter": "json" if LOG_FORMAT == "json" else "verbose",
         },
     },
     "root": {
@@ -450,3 +461,36 @@ LOGGING = {
         },
     },
 }
+
+# ---------------------------------------------------------------------------
+# Error monitoring (Phase E) -- optional, env-driven Sentry
+# ---------------------------------------------------------------------------
+# Leave SENTRY_DSN empty and nothing is initialized (zero overhead). Set
+# it (plus optionally SENTRY_ENVIRONMENT / SENTRY_TRACES_SAMPLE_RATE) and
+# every unhandled exception and optionally performance traces are reported
+# to Sentry. Initialization happens here, at settings import time, so it
+# covers gunicorn workers, management commands and the scheduler alike.
+SENTRY_DSN = env("SENTRY_DSN", default="")
+SENTRY_ENVIRONMENT = env("SENTRY_ENVIRONMENT", default="production")
+SENTRY_TRACES_SAMPLE_RATE = env.float("SENTRY_TRACES_SAMPLE_RATE", default=0.1)
+
+if SENTRY_DSN:
+    try:
+        import sentry_sdk
+
+        sentry_sdk.init(
+            dsn=SENTRY_DSN,
+            environment=SENTRY_ENVIRONMENT,
+            traces_sample_rate=SENTRY_TRACES_SAMPLE_RATE,
+        )
+    except ImportError:
+        # Loud in the logs, but never a boot failure: monitoring is an
+        # optional add-on, and refusing to serve the shop because the
+        # error reporter is missing would be exactly backwards.
+        import logging as _logging
+
+        _logging.getLogger(__name__).error(
+            "SENTRY_DSN is set but the sentry-sdk package is not installed; "
+            "error monitoring stays OFF. (It is in requirements.txt -- rebuild "
+            "the backend image.)"
+        )

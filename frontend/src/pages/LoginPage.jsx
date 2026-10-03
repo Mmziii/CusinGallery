@@ -1,3 +1,4 @@
+import { usePageMeta } from "../hooks/usePageMeta";
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
@@ -5,6 +6,7 @@ import { Alert, errorMessage } from "../components/ui";
 import useAuthStore from "../store/useAuthStore";
 
 function LoginPage() {
+  usePageMeta({ title: "ورود به حساب کاربری", path: "/login/" });
   const navigate = useNavigate();
   const location = useLocation();
   const { login, isLoading } = useAuthStore();

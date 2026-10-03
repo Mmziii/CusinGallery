@@ -1,3 +1,4 @@
+import { usePageMeta } from "../hooks/usePageMeta";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -5,6 +6,7 @@ import { Alert, errorMessage } from "../components/ui";
 import useAuthStore from "../store/useAuthStore";
 
 function RegisterPage() {
+  usePageMeta({ title: "ثبت‌نام", path: "/register/" });
   const navigate = useNavigate();
   const { register, isLoading } = useAuthStore();
 
