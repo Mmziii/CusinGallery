@@ -10,6 +10,7 @@ all -- order management for staff happens through Django Admin
 same separation pattern established for every other app since Phase 3.
 """
 from django.db.models import Prefetch
+from django.conf import settings
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -83,6 +84,8 @@ class ShippingMethodsView(APIView):
         return Response(
             {
                 "default": shipping.DEFAULT_METHOD,
+                # Part 2: 0 means the gift-wrap option is hidden entirely.
+                "gift_wrap_fee": settings.GIFT_WRAP_FEE,
                 "methods": [
                     {"id": method_id, **config} for method_id, config in methods.items()
                 ],
@@ -116,3 +119,42 @@ class CheckoutView(APIView):
         # responsible for "how an Order is fully loaded for a response".
         order = _order_queryset(request.user).get(pk=order.pk)
         return Response(OrderSerializer(order, context={"request": request}).data, status=status.HTTP_201_CREATED)
+
+
+class InvoiceView(APIView):
+    """GET /orders/<pk>/invoice/ (Part 2): a print-optimized invoice for
+    the CALLING customer's own PAID order. Everything else -- someone
+    else's order, or an unpaid/cancelled one -- is a plain 404, so the
+    endpoint enumerates nothing.
+
+    Shipped as print-optimized HTML with a print/save-as-PDF button on
+    purpose: generating a real PDF server-side would require a font
+    stack with verified Persian RTL shaping (Arabic joining, digit
+    forms), which this project cannot verify renders correctly -- a
+    broken-shaping PDF would be worse than the browser's own print
+    pipeline, which handles Persian natively."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        from django.http import Http404
+        from django.template.loader import render_to_string
+        from django.http import HttpResponse
+
+        from apps.core.models import SiteSettings
+
+        from . import shipping
+
+        order = Order.objects.filter(pk=pk, user=request.user).prefetch_related("items").first()
+        if order is None or order.payment_status != Order.PaymentStatus.PAID:
+            raise Http404
+        html = render_to_string(
+            "orders/invoice.html",
+            {
+                "order": order,
+                "site": SiteSettings.load(),
+                "shipping_method_label": shipping.method_label(order.shipping_method),
+            },
+            request=request,
+        )
+        return HttpResponse(html)

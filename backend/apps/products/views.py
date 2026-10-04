@@ -8,8 +8,11 @@ here).
 """
 from django.db.models import Prefetch
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import permissions, viewsets
+from django.core.exceptions import ValidationError as DjangoValidationError
+from rest_framework import permissions, status, viewsets
 from rest_framework.exceptions import ValidationError
+from rest_framework.response import Response
+from rest_framework.views import APIView
 from rest_framework.filters import SearchFilter
 
 from .filters import ProductFilter
@@ -85,3 +88,59 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
                 }
             )
         return ORDERING_OPTIONS[raw]
+
+
+class BackInStockView(APIView):
+    """POST /products/back-in-stock/ (Part 2): public, throttled.
+    Accepts {product_id, variant_id?, phone(09xxxxxxxxx)} for an
+    OUT-OF-STOCK item; duplicate active subscriptions answer 200 with a
+    generic "already registered" note (no enumeration of anything
+    sensitive here, but no need to double-create either)."""
+
+    permission_classes = [permissions.AllowAny]
+    throttle_scope = "back_in_stock"
+
+    def post(self, request):
+        from rest_framework import exceptions as drf_exceptions
+
+        from .models import BackInStockSubscription, Product, ProductVariant, iranian_mobile_validator
+
+        try:
+            product_id = int(request.data.get("product_id"))
+        except (TypeError, ValueError):
+            raise drf_exceptions.ValidationError({"product_id": ["product_id is required."]})
+        variant_id = request.data.get("variant_id")
+        phone = (request.data.get("phone") or "").strip()
+
+        try:
+            iranian_mobile_validator(phone)
+        except DjangoValidationError as exc:
+            raise drf_exceptions.ValidationError({"phone": exc.messages})
+
+        try:
+            product = Product.objects.get(pk=product_id, is_active=True)
+        except Product.DoesNotExist:
+            raise drf_exceptions.ValidationError({"product_id": ["محصول پیدا نشد."]})
+
+        variant = None
+        if variant_id not in (None, ""):
+            try:
+                variant = ProductVariant.objects.get(pk=int(variant_id), product=product, is_active=True)
+            except (ProductVariant.DoesNotExist, TypeError, ValueError):
+                raise drf_exceptions.ValidationError({"variant_id": ["این تنوع متعلق به این محصول نیست."]})
+
+        in_stock = (variant.stock_quantity if variant else product.stock_quantity) > 0
+        if in_stock:
+            return Response(
+                {"detail": "این کالا هم‌اکنون موجود است و نیازی به اطلاع‌رسانی نیست."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        _sub, created = BackInStockSubscription.objects.get_or_create(
+            phone=phone, product=product, variant=variant,
+            defaults={"notified_at": None},
+        )
+        return Response(
+            {"detail": "ثبت شد؛ به محض موجودشدن، پیامک اطلاع‌رسانی دریافت می‌کنید."},
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )

@@ -270,3 +270,25 @@ class ProductVariantAdmin(admin.ModelAdmin):
     search_fields = ("sku", "product__name")
     filter_horizontal = ("attribute_values",)
     autocomplete_fields = ("product",)
+
+
+from .models import BackInStockSubscription
+
+
+@admin.register(BackInStockSubscription)
+class BackInStockSubscriptionAdmin(admin.ModelAdmin):
+    """Strictly read-only audit of "notify me" signups (Part 2)."""
+
+    list_display = ("phone", "product", "variant", "created_at", "notified_at")
+    list_filter = ("notified_at", "created_at")
+    search_fields = ("phone", "product__name")
+    readonly_fields = tuple(f.name for f in BackInStockSubscription._meta.concrete_fields)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

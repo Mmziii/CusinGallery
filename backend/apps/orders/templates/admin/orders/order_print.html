@@ -69,6 +69,9 @@
       <div><span class="badge">وضعیت: {{ order.get_status_display }}</span></div>
       <div><span class="badge">پرداخت: {{ order.get_payment_status_display }}</span></div>
       {% if order.coupon %}<div><b>کوپن:</b> {{ order.coupon.code }}</div>{% endif %}
+      {% if order.gift_wrap %}
+      <div><b>بسته‌بندی هدیه:</b> بله ({{ order.gift_wrap_fee }} تومان){% if order.gift_message %} — پیام: {{ order.gift_message }}{% endif %}</div>
+      {% endif %}
     </div>
     <table class="items">
       <thead>

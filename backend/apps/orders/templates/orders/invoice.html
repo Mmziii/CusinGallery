@@ -1,0 +1,97 @@
+{% load order_extras %}<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>فاکتور سفارش {{ order.order_number }}</title>
+<style>
+  /* Print-optimized invoice (Part 2). Deliberately self-contained CSS so
+     the customer-facing document does not depend on the admin theme. */
+  * { box-sizing: border-box; }
+  body { font-family: Tahoma, "Vazirmatn", sans-serif; color: #1E2412; margin: 0; padding: 24px; font-size: 13px; line-height: 1.9; }
+  .head { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #8A6D1F; padding-bottom: 12px; }
+  .brand { font-size: 20px; font-weight: 800; color: #2F3A18; }
+  .brand small { display: block; font-size: 11px; font-weight: 400; color: #8A6D1F; }
+  .meta { text-align: left; font-size: 12px; }
+  h1 { font-size: 16px; margin: 18px 0 6px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+  th, td { border: 1px solid #cfd6c2; padding: 6px 8px; text-align: right; }
+  th { background: #EAEFDD; }
+  .totals { margin-top: 12px; margin-right: auto; width: 320px; }
+  .totals div { display: flex; justify-content: space-between; padding: 3px 0; }
+  .totals .grand { font-weight: 800; border-top: 2px solid #8A6D1F; margin-top: 4px; padding-top: 6px; }
+  .info { margin-top: 16px; font-size: 12px; color: #444; }
+  .gift { background: #FAF7F0; border: 1px dashed #8A6D1F; padding: 8px 10px; margin-top: 12px; }
+  .toolbar { margin: 12px 0; }
+  button { background: #637037; color: #fff; border: none; padding: 8px 18px; border-radius: 6px; font: inherit; cursor: pointer; }
+  @media print {
+    .toolbar { display: none; }
+    body { padding: 0; }
+  }
+</style>
+</head>
+<body>
+  <div class="toolbar">
+    <button type="button" onclick="window.print()">چاپ / ذخیره به PDF</button>
+  </div>
+
+  <div class="head">
+    <div class="brand">کازین گالری<small>Cusin Gallery — cusin.ir</small></div>
+    <div class="meta">
+      <div>فاکتور سفارش: <b>{{ order.order_number|fa_digits }}</b></div>
+      <div>تاریخ ثبت: {{ order.created_at|date:"Y/m/d H:i"|fa_digits }}</div>
+      <div>وضعیت پرداخت: {{ order.get_payment_status_display }}</div>
+    </div>
+  </div>
+
+  <h1>مشتری</h1>
+  <div>{{ order.shipping_recipient_name }} — <span dir="ltr">{{ order.shipping_phone|fa_digits }}</span></div>
+
+  <h1>اقلام سفارش</h1>
+  <table>
+    <thead>
+      <tr><th>کالا</th><th>شناسه</th><th>فی (تومان)</th><th>تعداد</th><th>جمع (تومان)</th></tr>
+    </thead>
+    <tbody>
+      {% for item in order.items.all %}
+      <tr>
+        <td>{{ item.product_name }}</td>
+        <td>{{ item.sku|fa_digits }}</td>
+        <td>{{ item.unit_price|fa_toman }}</td>
+        <td>{{ item.quantity|fa_digits }}</td>
+        <td>{{ item.total_price|fa_toman }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if order.gift_wrap %}
+  <div class="gift">
+    <b>بسته‌بندی هدیه:</b> بله ({{ order.gift_wrap_fee|fa_toman }} تومان)
+    {% if order.gift_message %}<br><b>پیام هدیه:</b> {{ order.gift_message }}{% endif %}
+  </div>
+  {% endif %}
+
+  <div class="totals">
+    <div><span>جمع اقلام</span><span>{{ order.subtotal|fa_toman }} تومان</span></div>
+    {% if order.discount_amount %}<div><span>تخفیف{% if order.coupon %} (کوپن {{ order.coupon.code }}){% endif %}</span><span>- {{ order.discount_amount|fa_toman }} تومان</span></div>{% endif %}
+    <div><span>هزینهٔ ارسال ({{ shipping_method_label }})</span><span>{% if order.shipping_cost == 0 %}رایگان{% else %}{{ order.shipping_cost|fa_toman }} تومان{% endif %}</span></div>
+    {% if order.gift_wrap %}<div><span>بسته‌بندی هدیه</span><span>{{ order.gift_wrap_fee|fa_toman }} تومان</span></div>{% endif %}
+    <div class="grand"><span>مبلغ نهایی</span><span>{{ order.total|fa_toman }} تومان</span></div>
+  </div>
+
+  <div class="info">
+    {% if order.shipping_method == "pickup" %}
+      <b>دریافت حضوری.</b>
+      {% if site.pickup_address %} نشانی دریافت: {{ site.pickup_address }}.{% endif %}
+      {% if site.pickup_hours %} ساعات دریافت: {{ site.pickup_hours }}.{% endif %}
+    {% else %}
+      <b>ارسال به:</b>
+      {{ order.shipping_province }}، {{ order.shipping_city }}، {{ order.shipping_address }}
+      {% if order.tracking_code %}<br><b>کد رهگیری:</b> {{ order.tracking_code|fa_digits }}{% endif %}
+    {% endif %}
+    <br>
+    {% if site.phone %}تلفن پشتیبانی: {{ site.phone|fa_digits }} — {% endif %}
+    {% if site.address %}{{ site.address }}{% endif %}
+  </div>
+</body>
+</html>

@@ -1,10 +1,11 @@
 """
 Brand spelling guard (Part 1).
 
-The Persian brand name is «کازین گالری». The old spelling «کوزین گالری»
-must never reappear in tracked sources (UI, templates, SMS/email copy,
-docs). The forbidden literal is assembled at runtime so this file itself
-never contains it.
+The Persian brand name is «کازین گالری». The previous misspelling (the
+same word with the wrong first letter after «کـ») must never reappear
+in tracked sources (UI, templates, SMS/email copy, docs). BOTH literals
+are assembled at runtime so this file itself never contains either one
+(a guard that greps for itself would always fail).
 """
 import subprocess
 from pathlib import Path

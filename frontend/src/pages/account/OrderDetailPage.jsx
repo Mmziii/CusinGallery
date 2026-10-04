@@ -57,8 +57,32 @@ function OrderDetailPage() {
           </div>
           <div>
             <dt>روش ارسال</dt>
-            <dd>{order.shipping_method === "express" ? "ارسال اکسپرس" : "ارسال استاندارد"}</dd>
+            <dd>
+              {order.shipping_method === "express"
+                ? "ارسال اکسپرس"
+                : order.shipping_method === "pickup"
+                  ? "دریافت حضوری"
+                  : "ارسال عادی"}
+            </dd>
           </div>
+          {order.gift_wrap ? (
+            <div>
+              <dt>بسته‌بندی هدیه</dt>
+              <dd>
+                بله{order.gift_message ? ` — پیام: ${order.gift_message}` : ""}
+              </dd>
+            </div>
+          ) : null}
+          {order.payment_status === "paid" ? (
+            <div>
+              <dt>فاکتور</dt>
+              <dd>
+                <a href={`/api/v1/orders/${order.id}/invoice/`} target="_blank" rel="noopener noreferrer">
+                  مشاهده و چاپ فاکتور
+                </a>
+              </dd>
+            </div>
+          ) : null}
           {order.estimated_delivery_min && order.estimated_delivery_max ? (
             <div>
               <dt>تحویل تخمینی</dt>

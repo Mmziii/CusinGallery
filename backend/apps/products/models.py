@@ -14,7 +14,7 @@ formatPrice() utility (Phase 1, src/utils/formatPrice.js), which already
 assumes and formats plain integer amounts.
 """
 from django.core.exceptions import ValidationError
-from django.core.validators import MaxValueValidator, MinValueValidator
+from django.core.validators import MaxValueValidator, MinValueValidator, RegexValidator
 from django.db import models
 
 from apps.categories.models import Category
@@ -37,6 +37,9 @@ class Brand(TimeStampedModel, ActivableModel):
 
 
 class Product(TimeStampedModel, ActivableModel):
+    # NOTE: save() below fires back-in-stock notifications when stock
+    # goes 0 -> N (Part 2) -- admin edits, CSV import and order-cancel
+    # restores all funnel through it.
     name = models.CharField("نام محصول", max_length=255)
     slug = models.SlugField("شناسه (آدرس)", max_length=280, unique=True, allow_unicode=True)
     sku = models.CharField("کد کالا (SKU)", max_length=64, unique=True)
@@ -105,6 +108,41 @@ class Product(TimeStampedModel, ActivableModel):
     @property
     def is_in_stock(self):
         return self.stock_quantity > 0
+
+
+    def save(self, *args, **kwargs):
+        old_stock = None
+        if self.pk:
+            old_stock = (
+                type(self)
+                .objects.filter(pk=self.pk)
+                .values_list("stock_quantity", flat=True)
+                .first()
+            )
+        super().save(*args, **kwargs)
+        if old_stock is not None:
+            # 0 -> N transitions queue back-in-stock SMS (Part 2); the
+            # delivery itself runs on commit and can never break this
+            # save (admin edit, CSV import, cancel-restore).
+            from .back_in_stock import queue_restock_notifications
+
+            queue_restock_notifications(self, old_stock)
+
+
+    def save(self, *args, **kwargs):
+        old_stock = None
+        if self.pk:
+            old_stock = (
+                type(self)
+                .objects.filter(pk=self.pk)
+                .values_list("stock_quantity", flat=True)
+                .first()
+            )
+        super().save(*args, **kwargs)
+        if old_stock is not None:
+            from .back_in_stock import queue_restock_notifications
+
+            queue_restock_notifications(self, old_stock)
 
 
 class ProductImage(TimeStampedModel, OrderableModel):
@@ -224,3 +262,53 @@ class ProductVariant(TimeStampedModel, ActivableModel):
     @property
     def effective_price(self):
         return self.price if self.price is not None else self.product.price
+
+
+iranian_mobile_validator = RegexValidator(
+    regex=r"^09\d{9}$",
+    message="شمارهٔ موبایل باید به شکل 09xxxxxxxxx (۱۱ رقم) باشد.",
+)
+
+
+class BackInStockSubscription(TimeStampedModel):
+    """
+    "Tell me when it's back" (Part 2): a shopper (logged in or not)
+    leaves an Iranian mobile number on an OUT-OF-STOCK product/variant.
+    When stock goes 0 -> N (admin edit, import, order-cancel restore),
+    ONE SMS is sent through the existing provider abstraction and
+    notified_at is stamped. A provider failure leaves the subscription
+    ACTIVE (notified_at NULL) so a later restock still reaches the
+    shopper; the failure is recorded in NotificationLog either way.
+    """
+
+    product = models.ForeignKey(
+        Product, on_delete=models.CASCADE, related_name="back_in_stock_subscriptions",
+        verbose_name="محصول",
+    )
+    variant = models.ForeignKey(
+        ProductVariant, on_delete=models.CASCADE, null=True, blank=True,
+        related_name="back_in_stock_subscriptions", verbose_name="تنوع",
+    )
+    phone = models.CharField(
+        "شمارهٔ موبایل", max_length=11, validators=[iranian_mobile_validator],
+    )
+    notified_at = models.DateTimeField("زمان اطلاع‌رسانی", null=True, blank=True)
+
+    class Meta:
+        verbose_name = "اطلاع‌رسانی موجودی"
+        verbose_name_plural = "اطلاع‌رسانی‌های موجودی"
+        ordering = ["-created_at"]
+        constraints = [
+            # One ACTIVE subscription per (phone, product, variant);
+            # once notified, the row is historical and a fresh
+            # subscription is allowed again.
+            models.UniqueConstraint(
+                fields=["phone", "product", "variant"],
+                condition=models.Q(notified_at__isnull=True),
+                name="one_active_back_in_stock_per_phone_and_item",
+            ),
+        ]
+
+    def __str__(self):
+        target = f"{self.product_id}/{self.variant_id or '-'}"
+        return f"{self.phone} -> {target} ({'notified' if self.notified_at else 'waiting'})"

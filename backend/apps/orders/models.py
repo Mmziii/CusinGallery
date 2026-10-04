@@ -71,6 +71,17 @@ class Order(models.Model):
     shipping_cost = models.PositiveBigIntegerField("هزینهٔ ارسال (تومان)", default=0)
     total = models.PositiveBigIntegerField("مبلغ نهایی (تومان)")
 
+    # Gift wrapping snapshot (Part 2): the fee is part of `total` (the
+    # payment cross-check therefore covers it), and like every other
+    # monetary field it is snapshotted at checkout -- changing
+    # GIFT_WRAP_FEE later never rewrites existing orders.
+    gift_wrap = models.BooleanField("بسته‌بندی هدیه", default=False)
+    gift_message = models.TextField(
+        "پیام هدیه", blank=True, default="",
+        help_text="حداکثر ۲۰۰ کاراکتر؛ متن ساده -- در همهٔ نمایش‌ها escape می‌شود.",
+    )
+    gift_wrap_fee = models.PositiveBigIntegerField("هزینهٔ بسته‌بندی هدیه (تومان)", default=0)
+
     coupon = models.ForeignKey(
         "discounts.Coupon",
         on_delete=models.SET_NULL,

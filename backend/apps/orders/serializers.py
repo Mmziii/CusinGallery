@@ -52,6 +52,7 @@ class OrderSerializer(serializers.ModelSerializer):
             "shipping_recipient_name", "shipping_phone", "shipping_province",
             "shipping_city", "shipping_address", "shipping_postal_code",
             "shipping_unit", "shipping_building_number",
+            "gift_wrap", "gift_message", "gift_wrap_fee",
             "items", "created_at", "updated_at",
         ]
         read_only_fields = fields
@@ -81,6 +82,14 @@ class CheckoutSerializer(serializers.Serializer):
     # for a client to supply either. Blank/missing means the default
     # (standard) method.
     shipping_method = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    # Gift wrapping (Part 2): opt-in flag + optional short message. The
+    # FEE is never accepted from the client -- the server applies
+    # settings.GIFT_WRAP_FEE (0 hides the feature entirely).
+    gift_wrap = serializers.BooleanField(required=False, default=False)
+    gift_message = serializers.CharField(
+        required=False, allow_blank=True, max_length=200,
+        trim_whitespace=True,
+    )
     # Optional coupon. The client sends ONLY the code -- validity, scope,
     # and the Toman amount are computed entirely server-side (see
     # apps.discounts.services). There is deliberately no field for a

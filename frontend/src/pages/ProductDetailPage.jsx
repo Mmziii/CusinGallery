@@ -8,6 +8,7 @@ import { productDetailShape } from "../utils/shapes";
 import { Alert, EmptyState, Spinner, errorMessage } from "../components/ui";
 import { useAsync } from "../hooks/useAsync";
 import { getProduct } from "../services/catalogApi";
+import { subscribeBackInStock } from "../services/productsApi";
 import * as reviewsApi from "../services/reviewsApi";
 import * as wishlistApi from "../services/wishlistApi";
 import useAuthStore from "../store/useAuthStore";
@@ -186,6 +187,8 @@ function ProductDetailPage() {
   const [selected, setSelected] = useState({}); // attribute name -> value
   const [added, setAdded] = useState(null);
   const [wishlisted, setWishlisted] = useState(false);
+  const [bisPhone, setBisPhone] = useState("");
+  const [bisState, setBisState] = useState(null); // null | busy | done | error
 
   const images = product?.images || [];
 
@@ -355,6 +358,44 @@ function ProductDetailPage() {
           >
             {outOfStock ? "ناموجود" : hasVariants && !activeVariant ? "انتخاب گزینه‌ها" : "افزودن به سبد خرید"}
           </button>
+        {outOfStock ? (
+          <div className="back-in-stock">
+            <p className="muted">کیف را جا نگذارید: شمارهٔ موبایل بگذارید تا به محض موجودشدن پیامک بزنیم.</p>
+            <div className="back-in-stock__row">
+              <input
+                type="text"
+                dir="ltr"
+                inputMode="numeric"
+                placeholder="09xxxxxxxxx"
+                maxLength={11}
+                value={bisPhone}
+                onChange={(e) => setBisPhone(e.target.value)}
+                aria-label="شماره موبایل برای اطلاع‌رسانی موجودی"
+              />
+              <button
+                type="button"
+                className="btn btn--outline"
+                disabled={bisState === "busy"}
+                onClick={async () => {
+                  setBisState("busy");
+                  try {
+                    await subscribeBackInStock(product.id, activeVariant?.id ?? null, bisPhone.trim());
+                    setBisState("done");
+                  } catch (err) {
+                    setBisState(errorMessage(normalizeApiError(err)));
+                  }
+                }}
+              >
+                اطلاع به من
+              </button>
+            </div>
+            {bisState === "done" ? (
+              <p className="field-help">ثبت شد؛ به محض موجودشدن اطلاع‌رسانی می‌شود.</p>
+            ) : bisState && bisState !== "busy" ? (
+              <p className="field-help field-help--error">{bisState}</p>
+            ) : null}
+          </div>
+        ) : null}
 
           <button
             type="button"

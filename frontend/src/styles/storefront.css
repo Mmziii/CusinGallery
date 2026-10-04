@@ -755,3 +755,8 @@ input:focus, textarea:focus, select:focus {
 }
 .merge-notice__close { background: none; border: none; font-size: 1.1rem; cursor: pointer; color: inherit; }
 .checkout__pickup-info { background: var(--brand-green-tint, #eaf0e2); border-radius: var(--radius-md); padding: var(--space-3); line-height: 2; }
+
+/* ============================== Back-in-stock + gift wrap (Part 2) */
+.back-in-stock { margin-top: var(--space-3); }
+.back-in-stock__row { display: flex; gap: var(--space-2); }
+.back-in-stock__row input { max-width: 180px; text-align: center; }

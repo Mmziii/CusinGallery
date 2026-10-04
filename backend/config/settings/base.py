@@ -219,6 +219,9 @@ REST_FRAMEWORK = {
         # PasswordResetConfirmView for why they must not share a quota.
         "password_reset_confirm": "10/hour",
         "checkout": "20/hour",
+        # Back-in-stock signups (Part 2): cheap endpoint, but it writes
+        # rows and can trigger SMS -- keep it bounded.
+        "back_in_stock": "5/hour",
         # Payment initiation creates a gateway attempt per call -- same
         # abuse shape as checkout (both turn intent into persisted rows).
         "payment_initiate": "20/hour",
@@ -378,6 +381,13 @@ SHIPPING_MAX_DELIVERY_DAYS = env.int("SHIPPING_MAX_DELIVERY_DAYS", default=5)
 # Express method: fixed cost (never free -- the free-shipping threshold
 # is a standard-delivery promotion and deliberately does NOT apply here).
 EXPRESS_SHIPPING_COST = env.int("EXPRESS_SHIPPING_COST", default=90000)
+
+# Gift wrapping (Part 2): whole-Toman fee added to the order total when
+# the shopper opts in at checkout. 0 (default) HIDES the option
+# entirely. Documented decision: the free-shipping threshold and coupon
+# discounts are computed on the PRODUCT subtotal only -- the gift-wrap
+# fee neither helps reach free shipping nor is reduced by coupons.
+GIFT_WRAP_FEE = env.int("GIFT_WRAP_FEE", default=0)
 
 # The selectable shipping methods offered at checkout. Cost and delivery
 # window per method are all env-configurable above. `free_threshold` is

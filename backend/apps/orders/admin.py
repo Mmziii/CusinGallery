@@ -60,6 +60,9 @@ class OrderAdmin(admin.ModelAdmin):
     autocomplete_fields = ("user", "coupon")
     date_hierarchy = "created_at"
     readonly_fields = (
+        # Gift-wrap values are checkout SNAPSHOTs (Part 2): visible in
+        # admin but never editable after the fact.
+        "gift_wrap", "gift_wrap_fee", "gift_message",
         "order_number", "created_at", "updated_at", "stock_restored_at",
         # Stamped by the system when a refund is recorded, never typed.
         "refunded_at",
@@ -97,6 +100,7 @@ class OrderAdmin(admin.ModelAdmin):
             ),
         }),
         ("Shipping method", {"fields": ("shipping_method", "estimated_delivery_min", "estimated_delivery_max")}),
+        ("Gift wrapping (Part 2)", {"fields": ("gift_wrap", "gift_wrap_fee", "gift_message")}),
         ("Timestamps", {"fields": ("created_at", "updated_at")}),
     )
 
@@ -241,7 +245,7 @@ class OrderAdmin(admin.ModelAdmin):
         writer.writerow([
             "order_number", "created_at", "customer", "phone", "status",
             "payment_status", "subtotal", "discount", "shipping_cost", "total",
-            "shipping_method", "tracking_code",
+            "shipping_method", "tracking_code", "gift_wrap",
             "refund_status", "refund_amount", "refunded_at",
         ])
         for order in queryset.select_related("user"):
@@ -258,6 +262,7 @@ class OrderAdmin(admin.ModelAdmin):
                 order.total,
                 shipping_method_label(order.shipping_method),
                 order.tracking_code,
+                "بله" if order.gift_wrap else "خیر",
                 order.refund_status,
                 order.refund_amount,
                 order.refunded_at.isoformat() if order.refunded_at else "",

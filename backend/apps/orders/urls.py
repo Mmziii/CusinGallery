@@ -12,5 +12,6 @@ urlpatterns = [
     path("checkout/", views.CheckoutView.as_view(), name="checkout"),
     # Concrete paths MUST stay above the <int:pk>/ catch-all below.
     path("shipping-methods/", views.ShippingMethodsView.as_view(), name="shipping-methods"),
+    path("<int:pk>/invoice/", views.InvoiceView.as_view(), name="order-invoice"),
     path("<int:pk>/", views.OrderDetailView.as_view(), name="order-detail"),
 ]
