@@ -1,7 +1,7 @@
 import InfoPageLayout from "./InfoPageLayout";
 
 /**
- * ⚠ OWNER-EDITABLE PLACEHOLDER CONTENT — replace with the store's real
+ * NOTE: OWNER-EDITABLE PLACEHOLDER CONTENT — replace with the store's real
  * story before launch (see docs/DEPLOY.md checklist), then set
  * `placeholder={false}`.
  */

@@ -1,7 +1,7 @@
 import InfoPageLayout from "./InfoPageLayout";
 
 /**
- * ⚠ OWNER-EDITABLE PLACEHOLDER CONTENT — the privacy statement must
+ * NOTE: OWNER-EDITABLE PLACEHOLDER CONTENT — the privacy statement must
  * describe what THIS store actually collects and how it is used. Review
  * and adapt before launch, then set `placeholder={false}`. It already
  * reflects the technical reality of this codebase (session auth, no card

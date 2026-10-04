@@ -2,6 +2,7 @@ import { usePageMeta } from "../hooks/usePageMeta";
 import { useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 
+import Icon from "../components/Icon";
 import ProductCard from "../components/ProductCard";
 import { Alert, EmptyState, Spinner } from "../components/ui";
 import { useAsync } from "../hooks/useAsync";
@@ -152,6 +153,35 @@ function ShopPage() {
             نتایج جستجو برای «{searchParams.get("search")}»
           </p>
         ) : null}
+
+        {/* Part R2: visible active filters (e.g. arriving from a brand tile) */}
+        {(() => {
+          const brandSlug = searchParams.get("brand");
+          const categorySlug = searchParams.get("category");
+          const brand = (brandsState.data?.results || []).find((b) => b.slug === brandSlug);
+          const category = (categoriesState.data?.results || []).find((c) => c.slug === categorySlug);
+          if (!brand && !category) return null;
+          return (
+            <div className="shop__chips">
+              {brand ? (
+                <span className="shop__chip">
+                  برند: {brand.name}
+                  <button type="button" aria-label="حذف فیلتر برند" onClick={() => setParam("brand", "")}>
+                    <Icon name="close" size={14} />
+                  </button>
+                </span>
+              ) : null}
+              {category ? (
+                <span className="shop__chip">
+                  دسته: {category.name}
+                  <button type="button" aria-label="حذف فیلتر دسته" onClick={() => setParam("category", "")}>
+                    <Icon name="close" size={14} />
+                  </button>
+                </span>
+              ) : null}
+            </div>
+          );
+        })()}
 
         {productsState.isLoading ? <Spinner label="در حال دریافت محصولات…" /> : null}
         {productsState.error ? <Alert>{errorMessage(normalizeApiError(productsState.error))}</Alert> : null}

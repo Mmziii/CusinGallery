@@ -6,12 +6,10 @@ import Analytics from "./components/Analytics.jsx";
 import App from "./App.jsx";
 import { ensureCsrfCookie } from "./services/apiClient.js";
 
-// SELF-HOSTED FONTS (Part 3): Vazirmatn variable for body/UI and Lalezar
-// for display headings/brand -- both SIL Open Font License, bundled via
-// fontsource (no Google Fonts/CDN: slow or blocked in Iran). The
-// @font-face rules set font-display: swap and unicode-range subsets.
-import "@fontsource-variable/vazirmatn";
-import "@fontsource/lalezar";
+// SELF-HOSTED FONTS (Part R2): one family -- Vazirmatn Variable (SIL OFL
+// 1.1) -- for UI, headings and prices; weight contrast 400/500/700/800
+// instead of a decorative display face. No CDN (slow/blocked in Iran).
+import "./styles/fonts.css";
 
 // Design tokens + global base from Phase 1, then the storefront layer.
 import "./styles/variables.css";

@@ -68,10 +68,22 @@ class ProductVariantInline(admin.TabularInline):
 
 @admin.register(Brand)
 class BrandAdmin(admin.ModelAdmin):
-    list_display = ("name", "is_active")
-    list_filter = ("is_active",)
+    # Part R2: featured tiles are managed right from the changelist --
+    # tick is_featured and set display_order inline, or use bulk actions.
+    list_display = ("name", "slug", "is_featured", "display_order", "is_active")
+    list_editable = ("is_featured", "display_order")
+    list_filter = ("is_active", "is_featured")
     search_fields = ("name", "slug")
     prepopulated_fields = {"slug": ("name",)}
+    actions = ("make_featured", "make_not_featured")
+
+    @admin.action(description="برند ویژه: بله")
+    def make_featured(self, request, queryset):
+        queryset.update(is_featured=True)
+
+    @admin.action(description="برند ویژه: خیر")
+    def make_not_featured(self, request, queryset):
+        queryset.update(is_featured=False)
 
 
 @admin.register(Product)
@@ -186,7 +198,7 @@ class ProductAdmin(admin.ModelAdmin):
             return format_html('<span style="color:#b30000;font-weight:bold">۰ — ناموجود</span>')
         if obj.is_low_stock:
             return format_html(
-                '<span style="color:#a05a00;font-weight:bold">{} ⚠ موجودی کم</span>',
+                '<span style="color:#a05a00;font-weight:bold">{} موجودی کم</span>',
                 obj.stock_quantity,
             )
         return str(obj.stock_quantity)

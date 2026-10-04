@@ -347,10 +347,10 @@ class OrderAdminRefundTests(RefundTestBase):
         self.assertEqual(self.model_admin.refund_badge(order), "")
         set_status(order, Order.Status.CANCELLED)
         order.refresh_from_db()
-        self.assertIn("💸", self.model_admin.refund_badge(order))
+        self.assertIn("نیازمند بازپرداخت", self.model_admin.refund_badge(order))
         mark_refunded(order, "کد ۱")
         order.refresh_from_db()
-        self.assertIn("✅", self.model_admin.refund_badge(order))
+        self.assertIn("بازپرداخت شده", self.model_admin.refund_badge(order))
 
     @override_settings(**PLAIN_STATIC)
     def test_changelist_filters_orders_needing_a_refund(self):

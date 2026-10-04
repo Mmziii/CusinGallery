@@ -44,7 +44,13 @@ class BrandViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         # Same reasoning as CategoryViewSet: inactive brands are excluded
         # entirely from the public API, not merely hidden from anon users.
-        return Brand.objects.filter(is_active=True)
+        queryset = Brand.objects.filter(is_active=True)
+        # Part R2: /brands/?is_featured=true powers the home page brand
+        # tiles, ordered by display_order then name.
+        is_featured = self.request.query_params.get("is_featured")
+        if is_featured in ("true", "1"):
+            queryset = queryset.filter(is_featured=True).order_by("display_order", "name")
+        return queryset
 
 
 class ProductViewSet(viewsets.ReadOnlyModelViewSet):

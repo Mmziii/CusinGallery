@@ -1,7 +1,7 @@
 import InfoPageLayout from "./InfoPageLayout";
 
 /**
- * ⚠ OWNER-EDITABLE PLACEHOLDER CONTENT — this page states the store's
+ * NOTE: OWNER-EDITABLE PLACEHOLDER CONTENT — this page states the store's
  * legal shipping/return promises. Make it match reality (costs, windows,
  * conditions) before launch, then set `placeholder={false}`. The numbers
  * below mirror the DEFAULT env settings (shipping costs/delivery windows

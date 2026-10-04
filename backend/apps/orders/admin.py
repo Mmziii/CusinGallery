@@ -111,15 +111,15 @@ class OrderAdmin(admin.ModelAdmin):
     def stock_restored_badge(self, obj):
         if obj.stock_restored_at is None:
             return ""
-        return format_html('<span title="{}">↩️</span>', "موجودی پس از لغو بازگردانده شده است")
+        return format_html('<span title="{}">بازگشت موجودی</span>', "موجودی پس از لغو بازگردانده شده است")
 
     stock_restored_badge.short_description = ""
 
     def refund_badge(self, obj):
         if obj.refund_status == Order.RefundStatus.REQUIRED:
-            return format_html('<span title="{}">💸</span>', "نیازمند بازپرداخت وجه")
+            return format_html('<span title="{}">نیازمند بازپرداخت</span>', "نیازمند بازپرداخت وجه")
         if obj.refund_status == Order.RefundStatus.REFUNDED:
-            return format_html('<span title="{}">✅</span>', "بازپرداخت وجه انجام شده است")
+            return format_html('<span title="{}">بازپرداخت شده</span>', "بازپرداخت وجه انجام شده است")
         return ""
 
     refund_badge.short_description = "بازپرداخت"

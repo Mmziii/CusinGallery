@@ -8,9 +8,25 @@ from .models import Brand, Product, ProductAttributeValue, ProductImage, Product
 
 
 class BrandSerializer(serializers.ModelSerializer):
+    # Part R2: tile_image is exposed like product images (original + WebP
+    # variants) so the home page brand tiles can use responsive sources.
+    tile_image = serializers.SerializerMethodField()
+
     class Meta:
         model = Brand
-        fields = ["id", "name", "slug", "logo"]
+        fields = ["id", "name", "slug", "logo", "is_featured", "display_order", "tile_image"]
+
+    def get_tile_image(self, obj):
+        from apps.core.image_files import media_url
+
+        if not obj.tile_image:
+            return None
+        return {
+            "image": obj.tile_image.url,
+            "webp_400": media_url(obj.webp_400),
+            "webp_800": media_url(obj.webp_800),
+            "webp_1200": media_url(obj.webp_1200),
+        }
 
 
 class CategoryMiniSerializer(serializers.Serializer):

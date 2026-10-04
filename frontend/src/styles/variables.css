@@ -36,19 +36,21 @@
   --color-danger: #b3311c;
   --color-warning: #b9832f;
 
-  /* --- Typography: self-hosted (Part 3). Vazirmatn Variable for
-         body/UI; Lalezar for display moments (brand name, section
-         titles, hero). Persian line-heights are taller than Latin. --- */
+  /* --- Typography (Part R2): ONE self-hosted family -- Vazirmatn
+         Variable (SIL OFL 1.1) -- for UI, headings and prices, with
+         weight contrast (400/500/700/800) instead of a decorative
+         display face. Persian line-heights are taller than Latin. --- */
   --font-family-base: "Vazirmatn Variable", "Vazirmatn", "Tahoma", sans-serif;
-  --font-family-display: "Lalezar", "Vazirmatn Variable", "Tahoma", sans-serif;
+  --font-family-display: var(--font-family-base);
 
+  /* refined scale with Persian-friendly heights */
   --font-size-xs: 0.78rem;
   --font-size-sm: 0.875rem;
   --font-size-base: 1rem;
   --font-size-md: 1.125rem;
-  --font-size-lg: 1.3rem;
-  --font-size-xl: 1.8rem;
-  --font-size-2xl: 2.6rem;
+  --font-size-lg: 1.3125rem;
+  --font-size-xl: 1.75rem;
+  --font-size-2xl: 2.5rem;
 
   --line-height-base: 1.9;
   --line-height-tight: 1.5;

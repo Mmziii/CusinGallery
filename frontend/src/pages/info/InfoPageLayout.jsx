@@ -6,7 +6,7 @@ import { usePageMeta } from "../../hooks/usePageMeta";
  * Shared layout for the trust/policy pages (Phase E): about, contact,
  * shipping & returns, terms, privacy.
  *
- * ⚠ OWNER: the texts passed to this layout are PLACEHOLDERS. Replace the
+ * توجه: OWNER: the texts passed to this layout are PLACEHOLDERS. Replace the
  * content in each page file (frontend/src/pages/info/*.jsx) with the
  * store's real information BEFORE launch — see the pre-launch checklist
  * in docs/DEPLOY.md. The yellow notice below renders on purpose until
@@ -15,7 +15,7 @@ import { usePageMeta } from "../../hooks/usePageMeta";
 function OwnerEditNotice() {
   return (
     <div className="owner-edit-notice" role="note">
-      ⚠ متن این صفحه <strong>نمونه (placeholder)</strong> است. مدیر فروشگاه باید آن را با
+      توجه: متن این صفحه <strong>نمونه (placeholder)</strong> است. مدیر فروشگاه باید آن را با
       اطلاعات واقعی جایگزین کند و سپس این اعلان را حذف نماید
       (پراپ <code dir="ltr">placeholder</code> در فایل همین صفحه).
     </div>

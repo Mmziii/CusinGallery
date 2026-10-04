@@ -2,7 +2,7 @@ import useSiteSettings from "../../hooks/useSiteSettings";
 import InfoPageLayout from "./InfoPageLayout";
 
 /**
- * ⚠ OWNER: contact details now come from «تنظیمات فروشگاه» in the admin
+ * NOTE: OWNER: contact details now come from «تنظیمات فروشگاه» in the admin
  * panel (SiteSettings) -- edit them THERE, not in this file. Anything
  * still marked [متن نمونه] below is placeholder copy to replace (then
  * set `placeholder={false}`).
@@ -63,7 +63,7 @@ function ContactPage() {
         ایمیل پشتیبانی: <span dir="ltr">support@cusin.ir</span> {/* [متن نمونه: ایمیل واقعی] */}
       </p>
       <p>
-        برای پیگیری سفارش، از بخش <strong>حساب کاربری ← سفارش‌ها</strong> وضعیت و کد رهگیری
+        برای پیگیری سفارش، از بخش <strong>حساب کاربری، بخش سفارش‌ها</strong> وضعیت و کد رهگیری
         مرسوله را مشاهده کنید؛ در صورت نیاز به پشتیبانی، شمارهٔ سفارش را همراه داشته باشید.
       </p>
     </InfoPageLayout>

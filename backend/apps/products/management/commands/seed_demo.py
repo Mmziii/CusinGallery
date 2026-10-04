@@ -62,11 +62,15 @@ CATEGORIES = [
     ("ست‌های آشپزخانه", "kitchen-sets", "cookware", "ست‌های کامل آشپزخانه"),
 ]
 
+# Part R2: a few brands double as the home page featured tiles
+# (is_featured + display_order), e.g. Unique per the owner's example.
 BRANDS = [
     ("کازین", "kuzin"),
     ("کریستال پارس", "crystal-pars"),
     ("زرین هوم", "zarrin-home"),
+    ("یونیک", "unique"),
 ]
+FEATURED_BRANDS = ["یونیک", "کریستال پارس", "زرین هوم"]
 
 PRODUCTS = [
     # dict: name, slug, sku, category, brand, price, compare_at_price,
@@ -141,6 +145,13 @@ class Command(BaseCommand):
             brand, _ = Brand.objects.get_or_create(
                 slug=slug, defaults={"name": name, "is_active": True}
             )
+            # Part R2 featured tiles: keep the seed idempotent by syncing the
+            # flags on every run.
+            featured = name in FEATURED_BRANDS
+            if brand.is_featured != featured or (featured and brand.display_order != FEATURED_BRANDS.index(name)):
+                brand.is_featured = featured
+                brand.display_order = FEATURED_BRANDS.index(name) if featured else 0
+                brand.save(update_fields=["is_featured", "display_order", "updated_at"])
             brands[name] = brand
         self.stdout.write(f"Brands: {Brand.objects.count()}")
 

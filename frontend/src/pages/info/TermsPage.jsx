@@ -1,7 +1,7 @@
 import InfoPageLayout from "./InfoPageLayout";
 
 /**
- * ⚠ OWNER-EDITABLE PLACEHOLDER CONTENT — terms of sale are a LEGAL
+ * NOTE: OWNER-EDITABLE PLACEHOLDER CONTENT — terms of sale are a LEGAL
  * text. Replace this placeholder with terms reviewed for your business
  * (ideally by a lawyer) before launch, then set `placeholder={false}`.
  */

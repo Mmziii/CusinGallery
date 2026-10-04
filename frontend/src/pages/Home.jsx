@@ -2,7 +2,10 @@ import PropTypes from "prop-types";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
+import BrandTiles from "../components/BrandTiles";
+import Icon from "../components/Icon";
 import ProductCard from "../components/ProductCard";
+import StarRating from "../components/StarRating";
 import SmartImage from "../components/SmartImage";
 import { CardRowSkeleton, HeroSkeleton } from "../components/Skeletons";
 import { Alert } from "../components/ui";
@@ -87,10 +90,10 @@ function HeroSlider({ banners, isLoading }) {
       {banners.length > 1 ? (
         <>
           <button type="button" className="hero__arrow hero__arrow--prev" aria-label="اسلاید قبلی" onClick={() => go(-1)}>
-            ‹
+            <Icon name="chevron-right" size={20} />
           </button>
           <button type="button" className="hero__arrow hero__arrow--next" aria-label="اسلاید بعدی" onClick={() => go(1)}>
-            ›
+            <Icon name="chevron-left" size={20} />
           </button>
           <div className="hero__dots" role="tablist" aria-label="اسلایدها">
             {banners.map((banner, i) => (
@@ -114,18 +117,18 @@ function HeroSlider({ banners, isLoading }) {
 function TrustStrip() {
   const ref = useReveal();
   const items = [
-    ["✓", "کالای اصل و تضمین سلامت"],
-    ["📦", "بسته‌بندی ضدضربه برای ظروف شکستنی"],
-    ["🚚", "ارسال سریع به سراسر ایران"],
-    ["🔒", "پرداخت امن اینترنتی"],
-    ["↩", "مرجوعی آسان تا ۷ روز"],
+    ["check", "کالای اصل و تضمین سلامت"],
+    ["box", "بسته‌بندی ضدضربه برای ظروف شکستنی"],
+    ["truck", "ارسال سریع به سراسر ایران"],
+    ["lock", "پرداخت امن اینترنتی"],
+    ["undo", "مرجوعی آسان تا ۷ روز"],
   ];
   return (
     <div className="trust-strip reveal" ref={ref}>
       <div className="container trust-strip__inner">
         {items.map(([icon, label]) => (
           <div key={label} className="trust-strip__item">
-            <span aria-hidden="true">{icon}</span>
+            <Icon name={icon} size={18} />
             <span>{label}</span>
           </div>
         ))}
@@ -247,7 +250,7 @@ function ReviewHighlights({ products }) {
           <blockquote key={product.id} className="review-highlight">
             <p>«{review.body || review.title}»</p>
             <footer>
-              {review.rating ? <span className="review-highlight__stars" aria-label={`${review.rating} ستاره`}>{"★".repeat(review.rating)}</span> : null}
+              {review.rating ? <StarRating rating={review.rating} /> : null}
               <cite>خریدارِ {product.name}</cite>
             </footer>
           </blockquote>
@@ -312,6 +315,8 @@ function Home() {
       ) : null}
 
       <DailyDealsSection />
+
+      <BrandTiles />
 
       <ProductRow title="محصولات منتخب" params={{ is_featured: true }} />
       <ProductRow title="جدیدترین محصولات" params={{ is_new: true }} />

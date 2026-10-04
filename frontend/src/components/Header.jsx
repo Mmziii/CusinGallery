@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 
+import Icon from "./Icon";
 import SmartImage from "./SmartImage";
 import useAuthStore from "../store/useAuthStore";
 import useCartStore from "../store/useCartStore";
@@ -188,7 +189,7 @@ function Header() {
               aria-label="جستجوی محصول"
             />
             <button type="submit" className="btn btn--gold" aria-label="جستجو">
-              ⌕
+              <Icon name="search" size={18} />
             </button>
           </form>
           {suggestions.length > 0 ? (
@@ -228,7 +229,8 @@ function Header() {
               aria-expanded={megaOpen}
               onClick={() => (megaOpen ? closeMega() : openMega())}
             >
-              دسته‌بندی کالاها ▾
+              دسته‌بندی کالاها
+              <Icon name="chevron-down" size={16} />
             </button>
             {megaOpen && megaCategory ? (
               <div className="mega-menu">
@@ -315,7 +317,7 @@ function Header() {
           <div className="site-header__drawer-head">
             <span className="site-header__brand-name">کازین گالری</span>
             <button type="button" aria-label="بستن منو" onClick={() => setMenuOpen(false)}>
-              ×
+              <Icon name="close" size={22} />
             </button>
           </div>
           <NavLink to="/" onClick={() => setMenuOpen(false)}>خانه</NavLink>
@@ -344,7 +346,7 @@ function Header() {
             <div className="minicart__head">
               <strong>سبد خرید</strong>
               <button type="button" aria-label="بستن سبد" onClick={() => setCartOpen(false)}>
-                ×
+                <Icon name="close" size={20} />
               </button>
             </div>
             {cartLines.length === 0 ? (
@@ -356,7 +358,7 @@ function Header() {
                     <li key={line.key}>
                       <SmartImage image={{ image: line.image }} alt="" />
                       <span className="minicart__name">{line.name}</span>
-                      <span className="minicart__qty">×{formatPrice(line.quantity)}</span>
+                      <span className="minicart__qty">{formatPrice(line.quantity)} عدد</span>
                       <span className="minicart__price">
                         {formatPrice(line.price * line.quantity)} تومان
                       </span>

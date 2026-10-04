@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 
 import FloatingContact from "../components/FloatingContact";
+import Icon from "../components/Icon";
 import Footer from "../components/Footer";
 import Header from "../components/Header";
 import Toaster from "../components/Toaster";
@@ -34,7 +35,7 @@ function MergeNotice() {
         {skipped.length > 0 ? " و برخی اقلام ناموجود/نامعتبر حذف شدند" : ""}.
       </span>
       <button type="button" className="merge-notice__close" onClick={clear} aria-label="بستن پیام">
-        ×
+        <Icon name="close" size={16} />
       </button>
     </div>
   );

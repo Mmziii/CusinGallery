@@ -26,6 +26,19 @@ class Brand(TimeStampedModel, ActivableModel):
     name = models.CharField("نام", max_length=120, unique=True)
     slug = models.SlugField("شناسه (آدرس)", max_length=140, unique=True, allow_unicode=True)
     logo = models.ImageField("لوگو", upload_to="brands/", blank=True, null=True, validators=[validate_image_file])
+    # Featured brand tiles on the homepage (Part R2). is_featured brands are
+    # shown ordered by display_order; tile_image optionally overrides the
+    # logo inside the tile.
+    is_featured = models.BooleanField("برند ویژه (کاشی صفحه اصلی)", default=False)
+    display_order = models.PositiveIntegerField("ترتیب نمایش", default=0)
+    tile_image = models.ImageField(
+        "تصویر کاشی", upload_to="brands/tiles/", blank=True, null=True, validators=[validate_image_file]
+    )
+    # Responsive WebP re-encodes for tile_image (Part R2) -- same pattern as
+    # Banner/ProductImage; empty means "serve the original".
+    webp_400 = models.CharField(max_length=255, blank=True, default="")
+    webp_800 = models.CharField(max_length=255, blank=True, default="")
+    webp_1200 = models.CharField(max_length=255, blank=True, default="")
 
     class Meta:
         verbose_name = "برند"
@@ -34,6 +47,18 @@ class Brand(TimeStampedModel, ActivableModel):
 
     def __str__(self):
         return self.name
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.tile_image and not self.webp_400:
+            from apps.core.image_files import make_responsive_variants
+
+            variants = make_responsive_variants(self.tile_image)
+            if variants:
+                self.webp_400 = variants.get(400, "")
+                self.webp_800 = variants.get(800, "")
+                self.webp_1200 = variants.get(1200, "")
+                super().save(update_fields=["webp_400", "webp_800", "webp_1200", "updated_at"])
 
 
 class Product(TimeStampedModel, ActivableModel):

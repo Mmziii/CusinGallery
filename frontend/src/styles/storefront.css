@@ -768,12 +768,14 @@ input:focus, textarea:focus, select:focus {
 
 body { line-height: var(--line-height-base); background: var(--brand-ivory); }
 
+/* Part R2 typography: one family; headings get weight 800 instead of a
+   decorative display face. */
 h1, h2, h3, .section__head h2 {
   font-family: var(--font-family-display);
-  font-weight: 400;
+  font-weight: 800;
   line-height: var(--line-height-tight);
   color: var(--brand-green-dark);
-  letter-spacing: 0.2px;
+  letter-spacing: 0;
 }
 
 ::selection { background: var(--brand-gold); color: var(--brand-green-dark); }
@@ -810,13 +812,26 @@ h1, h2, h3, .section__head h2 {
   transition: min-height .25s ease;
 }
 .site-header--compact .site-header__inner { min-height: var(--header-height-compact); }
+/* Part R2: scrolled state -- translucent dark green + blur (solid fallback
+   when backdrop-filter is unsupported), soft shadow, reduced height.
+   Ivory text and the gold-on-dark cart badge stay readable in both states. */
+.site-header--compact {
+  background: rgba(47, 58, 24, 0.85);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 6px 24px rgba(20,26,10,.4);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .site-header--compact { background: var(--brand-green-dark); }
+}
 
 .site-header__brand { display: flex; align-items: center; gap: var(--space-2); }
 .site-header__logo { height: 44px; width: 44px; transition: height .25s ease; }
 .site-header--compact .site-header__logo { height: 34px; width: 34px; }
 .site-header__brand-name {
   font-family: var(--font-family-display);
-  font-size: var(--font-size-lg); color: var(--brand-gold); white-space: nowrap;
+  font-weight: 800;
+  font-size: var(--font-size-md); color: var(--brand-gold); white-space: nowrap;
 }
 
 .site-header__search { position: relative; flex: 1; max-width: 460px; margin-inline: auto; }
@@ -980,7 +995,7 @@ h1, h2, h3, .section__head h2 {
   position: absolute; inset-inline: 0; bottom: 0; text-align: center;
   background: linear-gradient(to top, rgba(24,30,12,.85), transparent);
   color: var(--brand-ivory); padding: var(--space-4) 0 var(--space-2);
-  font-family: var(--font-family-display); font-size: var(--font-size-md);
+  font-weight: 700; font-size: var(--font-size-md);
 }
 
 /* --- Product cards --- */
@@ -1050,7 +1065,7 @@ h1, h2, h3, .section__head h2 {
 
 /* --- Footer redesign --- */
 .site-footer { background: var(--brand-green-dark); color: var(--brand-ivory); margin-top: var(--space-7); border-top: 3px solid var(--brand-gold); }
-.site-footer h3, .site-footer h4 { color: var(--brand-gold); font-family: var(--font-family-display); }
+.site-footer h3, .site-footer h4 { color: var(--brand-gold); font-weight: 800; }
 .site-footer a:hover { color: var(--brand-gold); }
 .site-footer__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--space-5); padding-block: var(--space-6); }
 .site-footer__bottom { border-top: 1px solid rgba(206,180,100,.25); padding-block: var(--space-3); font-size: var(--font-size-sm); color: rgba(250,247,240,.75); }
@@ -1160,3 +1175,64 @@ html.js-reveal .reveal.is-revealed, .reveal.is-revealed { opacity: 1; transform:
 .order-detail__itemline { display: flex; gap: 10px; align-items: flex-start; }
 .order-detail__itemline .img-placeholder { width: 44px; height: 44px; border-radius: 8px; flex: none; }
 .order-detail__itemline picture img { width: 44px; height: 44px; object-fit: cover; border-radius: 8px; flex: none; }
+
+/* ============================ PART R2 ============================
+   Minimal elements: inline SVG icon set, SVG star ratings, one-typeface
+   typography, translucent scrolled header (defined above) and featured
+   brand tiles. Hairlines and whitespace carry the decoration -- no emoji. */
+
+/* icons sit centered inside their buttons/links */
+.btn .icon, .icon-btn .icon, .qty-picker button .icon, .hero__arrow .icon,
+.site-header__mega-btn .icon, .merge-notice__close .icon,
+.minicart__head button .icon, .site-header__drawer-head button .icon,
+.floating-contact a .icon, .trust-strip__item .icon, .rating-input button .icon {
+  display: block;
+}
+.site-header__mega-btn { display: inline-flex; align-items: center; gap: 6px; }
+.qty-picker button, .hero__arrow, .icon-btn, .merge-notice__close,
+.minicart__head button, .site-header__drawer-head button { display: inline-grid; place-items: center; }
+.floating-contact a { font-size: 0; } /* size comes from the SVG icon */
+.trust-strip__item .icon { color: var(--brand-gold-deep); }
+
+/* SVG star ratings (stars are icons, never text glyphs) */
+.stars { display: inline-flex; gap: 2px; }
+.stars__star { position: relative; display: inline-grid; }
+.stars__base { color: #cfc9bd; }
+.stars__fill { position: absolute; top: 0; inset-inline-start: 0; width: var(--fill, 0%); height: 100%; overflow: hidden; color: var(--brand-gold-deep); }
+.stars__fill svg { position: absolute; top: 0; inset-inline-start: 0; }
+.rating-input button { color: #cfc9bd; }
+
+/* bold tabular Persian digits for prices & quantities */
+.price__current, .deal-card__sale, .cart-link__badge, .minicart__qty,
+.minicart__price, .countdown, .order-detail__totals dd, .cart-item__unit,
+.qty-picker span { font-variant-numeric: tabular-nums; }
+
+/* featured brand tiles (home) */
+.brand-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--space-4); }
+.brand-tile {
+  border-radius: var(--radius-lg); overflow: hidden;
+  border: 1px solid var(--color-border); background: #fff;
+  box-shadow: var(--shadow-sm);
+  transition: transform .2s ease, box-shadow .2s ease;
+  display: flex; flex-direction: column;
+}
+.brand-tile:hover { transform: translateY(-4px); box-shadow: var(--shadow-md); }
+.brand-tile__media { position: relative; aspect-ratio: 16/10; background: var(--brand-green-tint); overflow: hidden; display: block; }
+.brand-tile__media picture, .brand-tile__media picture img { width: 100%; height: 100%; object-fit: cover; transition: transform .45s ease; }
+.brand-tile:hover .brand-tile__media picture img { transform: scale(1.06); }
+.brand-tile__media .img-placeholder { position: absolute; inset: 0; }
+.brand-tile__name {
+  padding: var(--space-3); text-align: center; font-weight: 700;
+  color: var(--brand-green-dark); border-top: var(--hairline);
+  background: #fff;
+}
+
+/* active filter chips on /shop/ */
+.shop__chips { display: flex; gap: var(--space-2); flex-wrap: wrap; margin-bottom: var(--space-3); }
+.shop__chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--brand-green-tint); color: var(--brand-green-dark);
+  border: var(--hairline); border-radius: 999px; padding: 3px 12px;
+  font-size: var(--font-size-sm); font-weight: 600;
+}
+.shop__chip button { background: none; border: none; cursor: pointer; color: var(--brand-gold-deep); display: inline-grid; place-items: center; }

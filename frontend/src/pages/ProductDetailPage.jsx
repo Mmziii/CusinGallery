@@ -3,6 +3,8 @@ import PropTypes from "prop-types";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
+import Icon from "../components/Icon";
+import StarRating from "../components/StarRating";
 import PriceTag from "../components/PriceTag";
 import SmartImage from "../components/SmartImage";
 import { productDetailShape } from "../utils/shapes";
@@ -18,14 +20,8 @@ import { normalizeApiError } from "../utils/apiError";
 import { formatPrice } from "../utils/formatPrice";
 
 function Stars({ value, size = "md" }) {
-  const rounded = Math.round(value || 0);
-  return (
-    <span className={`stars stars--${size}`} aria-label={`امتیاز ${value || 0} از 5`}>
-      {[1, 2, 3, 4, 5].map((n) => (
-        <span key={n} className={n <= rounded ? "star star--on" : "star"}>★</span>
-      ))}
-    </span>
-  );
+  // Part R2: SVG stars (no text glyphs).
+  return <StarRating rating={Math.round(value || 0)} size={size === "lg" ? 20 : 16} />;
 }
 
 function RatingInput({ value, onChange }) {
@@ -40,7 +36,7 @@ function RatingInput({ value, onChange }) {
           className={n <= value ? "star star--on" : "star"}
           onClick={() => onChange(n)}
         >
-          ★
+          <Icon name="star" size={22} filled={n <= value} />
         </button>
       ))}
     </div>
@@ -350,9 +346,9 @@ function ProductDetailPage() {
 
         <div className="product-detail__buy">
           <div className="qty-picker">
-            <button type="button" onClick={() => setQuantity((q) => Math.max(1, q - 1))} aria-label="کاهش">−</button>
+            <button type="button" onClick={() => setQuantity((q) => Math.max(1, q - 1))} aria-label="کاهش"><Icon name="minus" size={16} /></button>
             <span>{quantity}</span>
-            <button type="button" onClick={() => setQuantity((q) => q + 1)} aria-label="افزایش">+</button>
+            <button type="button" onClick={() => setQuantity((q) => q + 1)} aria-label="افزایش"><Icon name="plus" size={16} /></button>
           </div>
 
           <button
@@ -409,7 +405,7 @@ function ProductDetailPage() {
             disabled={!isAuthenticated || wishlisted}
             title="علاقه‌مندی"
           >
-            {wishlisted ? "♥" : "♡"}
+            <Icon name="heart" filled={wishlisted} size={20} />
           </button>
         </div>
 

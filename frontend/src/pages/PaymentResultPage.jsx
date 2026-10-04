@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 
 import { Alert, Spinner, errorMessage } from "../components/ui";
+import Icon from "../components/Icon";
 import { useAsync } from "../hooks/useAsync";
 import { fetchPayment, initiatePayment } from "../services/paymentsApi";
 import useAuthStore from "../store/useAuthStore";
@@ -64,7 +65,7 @@ function PaymentResultPage() {
     const cancelledHint = (hintedStatus || "failed") === "cancelled";
     return (
       <div className={`payment-result payment-result--${cancelledHint ? "cancelled" : "failed"}`}>
-        <div className="payment-result__icon" aria-hidden="true">{cancelledHint ? "↩" : "✕"}</div>
+        <div className="payment-result__icon" aria-hidden="true"><Icon name={cancelledHint ? "undo" : "close"} size={40} /></div>
         <h1>{cancelledHint ? "پرداخت لغو شد" : "پرداخت ناموفق"}</h1>
         <p>
           {cancelledHint
@@ -93,7 +94,7 @@ function PaymentResultPage() {
   return (
     <div className={`payment-result payment-result--${variant}`}>
       <div className="payment-result__icon" aria-hidden="true">
-        {isSuccess ? "✓" : isCancelled ? "↩" : isPending ? "…" : "✕"}
+        <Icon name={isSuccess ? "check" : isCancelled ? "undo" : isPending ? "alert" : "close"} size={18} />
       </div>
       <h1>
         {isSuccess

@@ -1,3 +1,4 @@
+import Icon from "./Icon";
 import useSiteSettings from "../hooks/useSiteSettings";
 
 /**
@@ -9,17 +10,17 @@ function FloatingContact() {
   const links = [];
 
   if (settings.whatsapp) {
-    links.push([`https://wa.me/${settings.whatsapp.replace(/\D/g, "")}`, "✆", "گفتگو در واتس‌اپ"]);
+    links.push([`https://wa.me/${settings.whatsapp.replace(/\D/g, "")}`, "chat", "گفتگو در واتس‌اپ"]);
   }
   if (settings.telegram) {
     links.push([
       settings.telegram.startsWith("http") ? settings.telegram : `https://t.me/${settings.telegram.replace("@", "")}`,
-      "✈",
+      "send",
       "پیام در تلگرام",
     ]);
   }
   if (settings.phone) {
-    links.push([`tel:${settings.phone.replace(/\s/g, "")}`, "☎", "تماس تلفنی"]);
+    links.push([`tel:${settings.phone.replace(/\s/g, "")}`, "phone", "تماس تلفنی"]);
   }
 
   if (links.length === 0) return null;
@@ -27,7 +28,7 @@ function FloatingContact() {
     <div className="floating-contact">
       {links.map(([href, icon, label]) => (
         <a key={label} href={href} target={href.startsWith("tel:") ? undefined : "_blank"} rel="noopener noreferrer" aria-label={label} title={label}>
-          <span aria-hidden="true">{icon}</span>
+          <Icon name={icon} size={22} />
         </a>
       ))}
     </div>

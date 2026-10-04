@@ -6,6 +6,7 @@ import { productShape } from "../utils/shapes";
 import useCartStore from "../store/useCartStore";
 import * as wishlistApi from "../services/wishlistApi";
 import { toast } from "../utils/toast";
+import Icon from "./Icon";
 import PriceTag from "./PriceTag";
 import SmartImage from "./SmartImage";
 
@@ -85,7 +86,7 @@ function ProductCard({ product }) {
               handleAdd();
             }}
           >
-            +
+            <Icon name="plus" size={18} />
           </button>
         ) : null}
       </Link>
@@ -107,7 +108,7 @@ function ProductCard({ product }) {
             onClick={handleWishlist}
             disabled={!isAuthenticated || addedToWishlist}
           >
-            {addedToWishlist ? "♥" : "♡"}
+            <Icon name="heart" filled={addedToWishlist} size={18} />
           </button>
           <button
             type="button"
