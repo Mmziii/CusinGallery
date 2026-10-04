@@ -112,6 +112,10 @@ services:
       args:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api/v1}
         VITE_SITE_ORIGIN: ${VITE_SITE_ORIGIN:-https://cusin.ir}
+        # Optional analytics (Part 4): empty = nothing loads. See
+        # docs/DEPLOY.md «آنالیتیکس».
+        VITE_ANALYTICS_SCRIPT_URL: ${ANALYTICS_SCRIPT_URL:-}
+        VITE_ANALYTICS_SITE_ID: ${ANALYTICS_SITE_ID:-}
     restart: unless-stopped
     depends_on:
       - backend

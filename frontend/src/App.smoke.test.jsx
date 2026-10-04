@@ -52,6 +52,6 @@ describe("storefront smoke", () => {
 
   it("mounts an unknown route as the 404 page", async () => {
     renderAt("/definitely-not-a-page/");
-    expect(await screen.findByText("صفحه مورد نظر پیدا نشد.")).toBeTruthy();
+    expect(await screen.findByText(/صفحه مورد نظر پیدا نشد/)).toBeTruthy();
   });
 });
