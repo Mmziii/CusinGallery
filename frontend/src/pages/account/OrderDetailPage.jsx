@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
+import SmartImage from "../../components/SmartImage";
 import { Alert, Spinner, errorMessage } from "../../components/ui";
 import { useAsync } from "../../hooks/useAsync";
 import { fetchOrder } from "../../services/orderApi";
@@ -114,12 +115,17 @@ function OrderDetailPage() {
             {order.items.map((item) => (
               <tr key={item.id}>
                 <td>
-                  {item.product_slug ? (
-                    <Link to={`/products/${item.product_slug}/`}>{item.product_name}</Link>
-                  ) : (
-                    item.product_name
-                  )}
-                  <div className="muted" dir="ltr">{item.sku}</div>
+                  <span className="order-detail__itemline">
+                    <SmartImage image={item.product_image || null} alt="" />
+                    <span>
+                      {item.product_slug ? (
+                        <Link to={`/products/${item.product_slug}/`}>{item.product_name}</Link>
+                      ) : (
+                        item.product_name
+                      )}
+                      <div className="muted" dir="ltr">{item.sku}</div>
+                    </span>
+                  </span>
                 </td>
                 <td>{formatPrice(item.unit_price)}</td>
                 <td>{item.quantity}</td>

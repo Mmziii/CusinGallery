@@ -72,3 +72,36 @@ class ResponsiveVariantTests(TestCase):
         fake.name = "evil.jpg"
         with self.assertRaises(ValidationError):
             validate_image_file(fake)
+
+
+class ResponsiveVariantApiSerializationTests(TestCase):
+    """Part R1 fix: webp_* columns must reach API clients as servable
+    /media/ URLs, not storage-relative paths (which 404 in the browser)."""
+
+    def test_product_api_serves_webp_variants_as_media_urls(self):
+        from django.urls import reverse
+
+        product = make_product()
+        row = ProductImage(product=product, is_primary=True)
+        row.image.save("api-photo.jpg", ContentFile(jpeg_bytes()), save=False)
+        row.save()
+
+        response = self.client.get(reverse("product-detail", args=[product.slug]))
+        self.assertEqual(response.status_code, 200)
+        image = response.data["images"][0]
+        self.assertTrue(image["webp_400"].startswith("/media/"), image["webp_400"])
+        self.assertTrue(image["webp_400"].endswith("_400.webp"))
+
+    def test_banner_api_serves_webp_variants_as_media_urls(self):
+        from django.urls import reverse
+
+        from apps.banners.models import Banner
+
+        banner = Banner(title="B")
+        banner.image.save("api-banner.jpg", ContentFile(jpeg_bytes()), save=False)
+        banner.save()
+
+        response = self.client.get(reverse("banner-list"))
+        self.assertEqual(response.status_code, 200)
+        payload = response.data["results"][0] if isinstance(response.data, dict) else response.data[0]
+        self.assertTrue(payload["webp_400"].startswith("/media/"), payload["webp_400"])

@@ -33,6 +33,16 @@ class ProductImageSerializer(serializers.ModelSerializer):
         model = ProductImage
         fields = ["id", "image", "alt_text", "is_primary", "ordering", "webp_400", "webp_800", "webp_1200"]
 
+    def to_representation(self, instance):
+        # webp_* columns hold storage-relative paths; clients need URLs
+        # (Part R1 media_url fix).
+        from apps.core.image_files import media_url
+
+        data = super().to_representation(instance)
+        for key in ("webp_400", "webp_800", "webp_1200"):
+            data[key] = media_url(data.get(key))
+        return data
+
 
 class ProductAttributeValueSerializer(serializers.ModelSerializer):
     attribute = serializers.CharField(source="attribute.name", read_only=True)

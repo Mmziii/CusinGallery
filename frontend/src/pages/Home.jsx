@@ -172,9 +172,7 @@ function DailyDealsSection() {
         <div className="deals-grid">
           {data.results.map((deal) => (
             <Link key={deal.id} to={`/products/${deal.product.slug}/`} className="deal-card">
-              {deal.product.primary_image?.image ? (
-                <img src={deal.product.primary_image.image} alt={deal.product.name} loading="lazy" />
-              ) : null}
+              <SmartImage image={deal.product.primary_image || null} alt={deal.product.name} />
               <div className="deal-card__body">
                 <div className="deal-card__name">{deal.product.name}</div>
                 <div className="deal-card__prices">

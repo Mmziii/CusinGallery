@@ -48,28 +48,22 @@ function ProductCard({ product }) {
   return (
     <div className={`product-card ${outOfStock ? "product-card--oos" : ""}`}>
       <Link to={`/products/${product.slug}/`} className="product-card__media">
-        {primary ? (
-          <>
-            <SmartImage
-              image={product.primary_image}
-              alt={product.primary_image?.alt_text || product.name}
-              className="product-card__img product-card__img--main"
-            />
-            {secondary ? (
-              <img
-                src={secondary}
-                alt=""
-                aria-hidden="true"
-                loading="lazy"
-                className="product-card__img product-card__img--alt"
-              />
-            ) : null}
-          </>
-        ) : (
-          <div className="product-card__placeholder" aria-label="تصویر ندارد">
-            <img src="/brand/logo-dark.svg" alt="" className="product-card__placeholder-logo" />
-          </div>
-        )}
+        {/* SmartImage (Part R1) renders the shared brand placeholder when the
+            product has no image or the file 404s (onError). */}
+        <SmartImage
+          image={product.primary_image || { image: primary }}
+          alt={product.primary_image?.alt_text || product.name}
+          className="product-card__img product-card__img--main"
+        />
+        {secondary ? (
+          <img
+            src={secondary}
+            alt=""
+            aria-hidden="true"
+            loading="lazy"
+            className="product-card__img product-card__img--alt"
+          />
+        ) : null}
 
         <span className="product-card__badges">
           {product.is_new ? <span className="badge badge--new">جدید</span> : null}

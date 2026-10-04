@@ -101,6 +101,21 @@ RESPONSIVE_WIDTHS = (400, 800, 1200)
 RESPONSIVE_DIRECTORY = "products/variants/"
 
 
+def media_url(path):
+    """
+    Part R1 fix: responsive-variant columns store STORAGE-RELATIVE paths
+    (the value default_storage.save returns), but API clients need a
+    servable URL. Serialize every webp_* column through this helper so
+    <picture> srcsets actually resolve (previously the raw relative path
+    reached the browser and 404'd, silently disabling the variants).
+    """
+    if not path:
+        return None
+    if path.startswith(("http://", "https://", "/")):
+        return path
+    return default_storage.url(path)
+
+
 def make_responsive_variants(source_field):
     """
     Part 3 image optimization: next to the validated ORIGINAL (which is

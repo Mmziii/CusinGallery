@@ -2,6 +2,7 @@ import { usePageMeta } from "../hooks/usePageMeta";
 import { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
+import SmartImage from "../components/SmartImage";
 import { Alert, EmptyState, Spinner, errorMessage } from "../components/ui";
 import useAuthStore from "../store/useAuthStore";
 import useCartStore from "../store/useCartStore";
@@ -50,11 +51,7 @@ function GuestCartView() {
       <div className="cart-page__items">
         {rows.map(({ line, product }) => (
           <div className="cart-item" key={`${line.product_id}-${line.variant_id ?? 0}`}>
-            {product?.primary_image?.image ? (
-              <img src={product.primary_image.image} alt={product.name} />
-            ) : (
-              <div className="cart-item__noimage" />
-            )}
+            <SmartImage image={product?.primary_image || null} alt={product?.name || ""} />
             <div className="cart-item__body">
               <div className="cart-item__name">{product ? product.name : "در حال بارگذاری…"}</div>
               <div className="cart-item__unit">
@@ -134,11 +131,7 @@ function CartPage() {
         <div className="cart-page__items">
           {cart.items.map((item) => (
             <div key={item.id} className={`cart-item ${item.is_available ? "" : "cart-item--unavailable"}`}>
-              {item.product?.primary_image?.image ? (
-                <img src={item.product.primary_image.image} alt={item.product.name} />
-              ) : (
-                <div className="cart-item__noimage" />
-              )}
+              <SmartImage image={item.product?.primary_image || null} alt={item.product?.name || ""} />
 
               <div className="cart-item__info">
                 <Link to={`/products/${item.product.slug}/`} className="cart-item__name">

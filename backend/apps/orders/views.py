@@ -32,7 +32,14 @@ def _order_queryset(user):
         # without this each order row lazy-loads its coupon (N+1).
         .select_related("coupon")
         .prefetch_related(
-            Prefetch("items", queryset=OrderItem.objects.select_related("product", "variant"))
+            # product__images feeds OrderItemSerializer.product_image
+            # (Part R1) from the prefetch cache -- no per-item query.
+            Prefetch(
+                "items",
+                queryset=OrderItem.objects.select_related("product", "variant").prefetch_related(
+                    "product__images"
+                ),
+            )
         )
     )
 

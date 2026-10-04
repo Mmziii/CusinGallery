@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import PriceTag from "../components/PriceTag";
+import SmartImage from "../components/SmartImage";
 import { productDetailShape } from "../utils/shapes";
 import { Alert, EmptyState, Spinner, errorMessage } from "../components/ui";
 import { useAsync } from "../hooks/useAsync";
@@ -273,17 +274,16 @@ function ProductDetailPage() {
   return (
     <div className="product-detail">
       <div className="product-detail__gallery">
-        <div className="product-detail__main-image">
-          {images[activeImage] ? (
-            <img
-              src={images[activeImage].image}
-              alt={images[activeImage].alt_text || product.name}
-              className="product-detail__main-img"
-              onClick={(e) => e.currentTarget.classList.toggle("is-zoomed")}
-            />
-          ) : (
-            <div className="product-card__placeholder">تصویر ندارد</div>
-          )}
+        <div
+          className="product-detail__main-image"
+          onClick={(e) => e.currentTarget.querySelector("img")?.classList.toggle("is-zoomed")}
+        >
+          {/* SmartImage (Part R1): missing/broken gallery image -> shared placeholder */}
+          <SmartImage
+            image={images[activeImage] || null}
+            alt={images[activeImage]?.alt_text || product.name}
+            className="product-detail__main-img"
+          />
         </div>
         {images.length > 1 ? (
           <div className="product-detail__thumbs">
@@ -294,7 +294,7 @@ function ProductDetailPage() {
                 className={index === activeImage ? "thumb thumb--active" : "thumb"}
                 onClick={() => setActiveImage(index)}
               >
-                <img src={image.image} alt={image.alt_text || `${product.name} ${index + 1}`} />
+                <SmartImage image={image} alt={image.alt_text || `${product.name} ${index + 1}`} />
               </button>
             ))}
           </div>
@@ -452,9 +452,7 @@ function ProductDetailPage() {
             <div className="related-grid">
               {product.related_products.map((related) => (
                 <Link key={related.id} to={`/products/${related.slug}/`} className="related-card">
-                  {related.primary_image?.image ? (
-                    <img src={related.primary_image.image} alt={related.name} loading="lazy" />
-                  ) : null}
+                  <SmartImage image={related.primary_image || null} alt={related.name} />
                   <span>{related.name}</span>
                   <span className="related-card__price">{formatPrice(related.price_info.price)} تومان</span>
                 </Link>

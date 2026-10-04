@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 
+import SmartImage from "./SmartImage";
 import useAuthStore from "../store/useAuthStore";
 import useCartStore from "../store/useCartStore";
 import { getCategoryTree, listProducts } from "../services/catalogApi";
@@ -26,6 +27,7 @@ function Header() {
   const [suggestions, setSuggestions] = useState([]);
   const [menuOpen, setMenuOpen] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
+  const [megaOpen, setMegaOpen] = useState(false);
   const [megaCategory, setMegaCategory] = useState(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [compact, setCompact] = useState(false);
@@ -33,6 +35,8 @@ function Header() {
   const userMenuRef = useRef(null);
   const searchRef = useRef(null);
   const searchTimer = useRef(null);
+  const megaRef = useRef(null);
+  const megaCloseTimer = useRef(null);
 
   useEffect(() => {
     fetchMe().then(({ success }) => {
@@ -64,10 +68,49 @@ function Header() {
       if (searchRef.current && !searchRef.current.contains(event.target)) {
         setSuggestions([]);
       }
+      if (megaRef.current && !megaRef.current.contains(event.target)) {
+        setMegaOpen(false);
+      }
     }
     document.addEventListener("mousedown", onClick);
     return () => document.removeEventListener("mousedown", onClick);
   }, []);
+
+  // Mega menu (Part R1): hover-intent open/close. The panel is a DOM child of
+  // the trigger wrapper and its CSS adds an invisible padding bridge, so the
+  // pointer never "leaves" while crossing the visual gap; closing is further
+  // delayed ~200 ms and cancelled when the pointer re-enters trigger OR panel.
+  // Click/keyboard (Enter/Space on the button) toggles it for touch devices;
+  // Escape closes.
+  const cancelMegaClose = () => {
+    if (megaCloseTimer.current) {
+      clearTimeout(megaCloseTimer.current);
+      megaCloseTimer.current = null;
+    }
+  };
+  const openMega = () => {
+    cancelMegaClose();
+    setMegaOpen(true);
+    setMegaCategory((current) => current || categories[0] || null);
+  };
+  const closeMega = () => {
+    cancelMegaClose();
+    setMegaOpen(false);
+  };
+  const scheduleMegaClose = () => {
+    cancelMegaClose();
+    megaCloseTimer.current = setTimeout(() => setMegaOpen(false), 200);
+  };
+  useEffect(() => () => cancelMegaClose(), []);
+
+  useEffect(() => {
+    if (!megaOpen) return undefined;
+    function onKey(event) {
+      if (event.key === "Escape") setMegaOpen(false);
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [megaOpen]);
 
   // Debounced live suggestions.
   useEffect(() => {
@@ -159,11 +202,7 @@ function Header() {
                       setSearchTerm("");
                     }}
                   >
-                    {product.primary_image?.image ? (
-                      <img src={product.primary_image.image} alt="" />
-                    ) : (
-                      <span className="search-suggest__noimg" />
-                    )}
+                    <SmartImage image={product.primary_image} alt="" />
                     <span className="search-suggest__name">{product.name}</span>
                     <span className="search-suggest__price">
                       {formatPrice(product.price)} تومان
@@ -178,36 +217,45 @@ function Header() {
         <nav className="site-header__nav" aria-label="ناوبری اصلی">
           <div
             className="site-header__mega-trigger"
-            onMouseEnter={() => setMegaCategory(categories[0] || null)}
-            onMouseLeave={() => setMegaCategory(null)}
+            ref={megaRef}
+            onMouseEnter={openMega}
+            onMouseLeave={scheduleMegaClose}
           >
-            <button type="button" className="site-header__mega-btn">
+            <button
+              type="button"
+              className="site-header__mega-btn"
+              aria-haspopup="true"
+              aria-expanded={megaOpen}
+              onClick={() => (megaOpen ? closeMega() : openMega())}
+            >
               دسته‌بندی کالاها ▾
             </button>
-            {megaCategory ? (
-              <div className="mega-menu" onMouseLeave={() => setMegaCategory(null)}>
-                <ul className="mega-menu__roots">
-                  {categories.map((category) => (
-                    <li key={category.id}>
-                      <button
-                        type="button"
-                        className={megaCategory?.id === category.id ? "is-active" : ""}
-                        onMouseEnter={() => setMegaCategory(category)}
-                      >
-                        {category.name}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-                <div className="mega-menu__panel">
-                  <Link to={`/shop/?category=${encodeURIComponent(megaCategory.slug)}`}>
-                    همهٔ {megaCategory.name}
-                  </Link>
-                  {(megaCategory.children || []).map((child) => (
-                    <Link key={child.id} to={`/shop/?category=${encodeURIComponent(child.slug)}`}>
-                      {child.name}
+            {megaOpen && megaCategory ? (
+              <div className="mega-menu">
+                <div className="mega-menu__inner">
+                  <ul className="mega-menu__roots">
+                    {categories.map((category) => (
+                      <li key={category.id}>
+                        <button
+                          type="button"
+                          className={megaCategory?.id === category.id ? "is-active" : ""}
+                          onMouseEnter={() => setMegaCategory(category)}
+                        >
+                          {category.name}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="mega-menu__panel">
+                    <Link to={`/shop/?category=${encodeURIComponent(megaCategory.slug)}`} onClick={closeMega}>
+                      همهٔ {megaCategory.name}
                     </Link>
-                  ))}
+                    {(megaCategory.children || []).map((child) => (
+                      <Link key={child.id} to={`/shop/?category=${encodeURIComponent(child.slug)}`} onClick={closeMega}>
+                        {child.name}
+                      </Link>
+                    ))}
+                  </div>
                 </div>
               </div>
             ) : null}
@@ -306,11 +354,7 @@ function Header() {
                 <ul className="minicart__items">
                   {cartLines.map((line) => (
                     <li key={line.key}>
-                      {line.image ? (
-                        <img src={line.image} alt="" />
-                      ) : (
-                        <span className="minicart__noimg" />
-                      )}
+                      <SmartImage image={{ image: line.image }} alt="" />
                       <span className="minicart__name">{line.name}</span>
                       <span className="minicart__qty">×{formatPrice(line.quantity)}</span>
                       <span className="minicart__price">

@@ -23,13 +23,36 @@ class OrderItemSerializer(serializers.ModelSerializer):
     product_id = serializers.IntegerField(read_only=True)
     variant_id = serializers.IntegerField(read_only=True)
     product_slug = serializers.SerializerMethodField()
+    # Part R1: lets the storefront show the shared brand placeholder in the
+    # image area of order lines when the product has no (more) image.
+    product_image = serializers.SerializerMethodField()
 
     class Meta:
         model = OrderItem
         fields = [
             "id", "product_id", "variant_id", "product_slug",
             "product_name", "sku", "unit_price", "quantity", "total_price",
+            "product_image",
         ]
+
+    def get_product_image(self, obj):
+        from apps.core.image_files import media_url
+
+        product = obj.product
+        if not product:
+            return None
+        # Read from the prefetch cache (see _order_queryset) -- a .filter()
+        # here would issue one query per item (N+1).
+        images = list(product.images.all())
+        image = next((img for img in images if img.is_primary), None) or (images[0] if images else None)
+        if not image or not image.image:
+            return None
+        return {
+            "image": image.image.url,
+            "webp_400": media_url(image.webp_400),
+            "webp_800": media_url(image.webp_800),
+            "webp_1200": media_url(image.webp_1200),
+        }
         read_only_fields = fields
 
     def get_product_slug(self, obj):

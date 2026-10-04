@@ -21,6 +21,12 @@
   .totals .grand { font-weight: 800; border-top: 2px solid #8A6D1F; margin-top: 4px; padding-top: 6px; }
   .info { margin-top: 16px; font-size: 12px; color: #444; }
   .gift { background: #FAF7F0; border: 1px dashed #8A6D1F; padding: 8px 10px; margin-top: 12px; }
+  /* Part R1: consistent brand placeholder in the image area when a line has
+     no (loadable) product image -- same look as the storefront. */
+  .inv-thumb { width: 40px; height: 40px; object-fit: cover; border-radius: 6px; display: block; }
+  .inv-ph { width: 40px; height: 40px; border-radius: 6px; background: #efece4; position: relative; display: inline-block; }
+  .inv-ph::after { content: ""; position: absolute; inset: 26%; background: #637037; opacity: .35;
+    -webkit-mask: url("/brand/mark.svg") no-repeat center / contain; mask: url("/brand/mark.svg") no-repeat center / contain; }
   .toolbar { margin: 12px 0; }
   button { background: #637037; color: #fff; border: none; padding: 8px 18px; border-radius: 6px; font: inherit; cursor: pointer; }
   @media print {
@@ -49,11 +55,22 @@
   <h1>اقلام سفارش</h1>
   <table>
     <thead>
-      <tr><th>کالا</th><th>شناسه</th><th>فی (تومان)</th><th>تعداد</th><th>جمع (تومان)</th></tr>
+      <tr><th>تصویر</th><th>کالا</th><th>شناسه</th><th>فی (تومان)</th><th>تعداد</th><th>جمع (تومان)</th></tr>
     </thead>
     <tbody>
       {% for item in order.items.all %}
       <tr>
+        <td>
+          {% with img=item.product.images.first %}
+            {% if img.image %}
+              <img class="inv-thumb" src="{{ img.image.url }}" alt=""
+                   onerror="this.style.display='none';this.nextElementSibling.style.display='inline-block';">
+              <span class="inv-ph" style="display:none"></span>
+            {% else %}
+              <span class="inv-ph" role="img" aria-label="بدون تصویر"></span>
+            {% endif %}
+          {% endwith %}
+        </td>
         <td>{{ item.product_name }}</td>
         <td>{{ item.sku|fa_digits }}</td>
         <td>{{ item.unit_price|fa_toman }}</td>

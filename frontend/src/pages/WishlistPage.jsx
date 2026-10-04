@@ -2,6 +2,7 @@ import { usePageMeta } from "../hooks/usePageMeta";
 import { Link } from "react-router-dom";
 
 import PriceTag from "../components/PriceTag";
+import SmartImage from "../components/SmartImage";
 import { Alert, EmptyState, Spinner, errorMessage } from "../components/ui";
 import { useWishlist } from "../hooks/useWishlist";
 import useCartStore from "../store/useCartStore";
@@ -34,11 +35,7 @@ function WishlistPage() {
           return (
             <div key={item.id} className="product-card">
               <Link to={`/products/${product.slug}/`} className="product-card__media">
-                {product.primary_image?.image ? (
-                  <img src={product.primary_image.image} alt={product.name} loading="lazy" />
-                ) : (
-                  <div className="product-card__placeholder">تصویر ندارد</div>
-                )}
+                <SmartImage image={product.primary_image || null} alt={product.name} />
               </Link>
               <div className="product-card__body">
                 <Link to={`/products/${product.slug}/`} className="product-card__name">{product.name}</Link>
