@@ -21,6 +21,7 @@ class BannerSerializer(serializers.ModelSerializer):
         fields = [
             "id", "title", "subtitle", "image", "cta_text", "cta_url",
             "ordering", "start_date", "end_date",
+            "webp_400", "webp_800", "webp_1200",
         ]
 
 

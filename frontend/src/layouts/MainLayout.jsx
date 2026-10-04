@@ -1,8 +1,10 @@
-import { useEffect } from "react";
-import { Outlet } from "react-router-dom";
+import { useEffect, useRef } from "react";
+import { Outlet, useLocation } from "react-router-dom";
 
+import FloatingContact from "../components/FloatingContact";
 import Footer from "../components/Footer";
 import Header from "../components/Header";
+import Toaster from "../components/Toaster";
 import useCartStore from "../store/useCartStore";
 
 /**
@@ -39,23 +41,38 @@ function MergeNotice() {
 }
 
 /**
- * Shared page shell: real header (search, nav, account, cart), content
- * outlet, and footer. Every route renders inside this unless a future
- * flow (e.g. a distraction-free checkout) needs its own layout.
+ * Shared page shell (Part 3): sticky header, route-transition fade on
+ * the content, footer, toasts and the floating contact cluster.
  */
 function MainLayout() {
+  const location = useLocation();
+  const mainRef = useRef(null);
+
+  // Smooth route-transition fade: retrigger a CSS animation per path.
+  useEffect(() => {
+    const node = mainRef.current;
+    if (!node) return;
+    node.classList.remove("route-fade");
+    // force reflow so the animation restarts
+    void node.offsetWidth;
+    node.classList.add("route-fade");
+    window.scrollTo({ top: 0 });
+  }, [location.pathname]);
+
   return (
     <div className="app-shell">
       <Header />
       <MergeNotice />
 
-      <main className="app-shell__main">
+      <main className="app-shell__main" ref={mainRef}>
         <div className="container">
           <Outlet />
         </div>
       </main>
 
       <Footer />
+      <FloatingContact />
+      <Toaster />
     </div>
   );
 }

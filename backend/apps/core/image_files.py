@@ -95,3 +95,56 @@ def make_thumbnail(source_field, max_size=THUMBNAIL_MAX_SIZE):
     relative = f"{THUMBNAIL_DIRECTORY}{get_valid_filename(stem)}_thumb.jpg"
     saved_name = default_storage.save(relative, ContentFile(buffer.getvalue()))
     return saved_name
+
+
+RESPONSIVE_WIDTHS = (400, 800, 1200)
+RESPONSIVE_DIRECTORY = "products/variants/"
+
+
+def make_responsive_variants(source_field):
+    """
+    Part 3 image optimization: next to the validated ORIGINAL (which is
+    never touched), store WebP re-encodes at 400/800/1200px widths so
+    cards/galleries/banners can serve <picture>/srcset.
+
+    Returns {width: storage-relative path} for every width that could be
+    produced; an empty dict (never raises) when the source file is
+    missing or undecodable -- responsive variants are a progressive
+    enhancement and must not break uploads or imports.
+    """
+    from PIL import Image, UnidentifiedImageError
+
+    if not source_field:
+        return {}
+    try:
+        source_field.seek(0)
+        with Image.open(source_field) as img:
+            img.load()
+            base = img.convert("RGB") if img.mode in ("RGBA", "P", "LA") else img
+    except (UnidentifiedImageError, OSError, ValueError, SyntaxError):
+        return {}
+    finally:
+        try:
+            source_field.seek(0)
+        except (OSError, ValueError):
+            pass
+
+    try:
+        name = os.path.splitext(os.path.basename(source_field.name))[0]
+    except (AttributeError, ValueError):
+        return {}
+
+    produced = {}
+    for width in RESPONSIVE_WIDTHS:
+        try:
+            ratio = width / float(base.width or width)
+            size = (width, max(1, int(base.height * min(ratio, 1.0)))) if ratio < 1 else (base.width, base.height)
+            resized = base.resize(size, Image.LANCZOS) if ratio < 1 else base
+            buffer = io.BytesIO()
+            resized.save(buffer, format="WEBP", quality=80, method=4)
+            path = f"{RESPONSIVE_DIRECTORY}{get_valid_filename(name)}_{width}.webp"
+            saved = default_storage.save(path, ContentFile(buffer.getvalue()))
+            produced[width] = saved
+        except (OSError, ValueError):
+            continue  # one bad width must not kill the others
+    return produced

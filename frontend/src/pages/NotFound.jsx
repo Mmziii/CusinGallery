@@ -7,9 +7,10 @@ import { usePageMeta } from "../hooks/usePageMeta";
 function NotFound() {
   usePageMeta({ title: "صفحه یافت نشد", path: "/404/", noindex: true });
   return (
-    <section>
+    <section className="notfound">
       <h1>۴۰۴</h1>
-      <p>صفحه مورد نظر پیدا نشد.</p>
+      <p>صفحه مورد نظر پیدا نشد؛ شاید نشانی عوض شده است.</p>
+      <a className="btn btn--primary" href="/">بازگشت به فروشگاه</a>
     </section>
   );
 }

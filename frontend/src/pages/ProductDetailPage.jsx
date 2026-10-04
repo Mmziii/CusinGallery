@@ -275,7 +275,12 @@ function ProductDetailPage() {
       <div className="product-detail__gallery">
         <div className="product-detail__main-image">
           {images[activeImage] ? (
-            <img src={images[activeImage].image} alt={images[activeImage].alt_text || product.name} />
+            <img
+              src={images[activeImage].image}
+              alt={images[activeImage].alt_text || product.name}
+              className="product-detail__main-img"
+              onClick={(e) => e.currentTarget.classList.toggle("is-zoomed")}
+            />
           ) : (
             <div className="product-card__placeholder">تصویر ندارد</div>
           )}
@@ -413,6 +418,11 @@ function ProductDetailPage() {
       </div>
 
       <div className="product-detail__extra">
+        <div className="product-detail__assurances">
+          <div><strong>ارسال:</strong> عادی ۳ تا ۵ روز / اکسپرس ۱ روزه / دریافت حضوری</div>
+          <div><strong>بسته‌بندی:</strong> ضدضربه برای ظروف شکستنی و بلور</div>
+          <div><strong>مرجوعی:</strong> تا ۷ روز با شرایط درج‌شده در «ارسال و مرجوعی»</div>
+        </div>
         <section>
           <h2>توضیحات</h2>
           <p className="product-detail__description">
@@ -455,6 +465,18 @@ function ProductDetailPage() {
       </div>
 
       <ReviewSection product={product} />
+
+      <div className="product-detail__stickybar">
+        <PriceTag priceInfo={displayPrice} size="md" />
+        <button
+          type="button"
+          className="btn btn--primary"
+          onClick={handleAdd}
+          disabled={outOfStock || (hasVariants && !activeVariant)}
+        >
+          {outOfStock ? "ناموجود" : "افزودن به سبد خرید"}
+        </button>
+      </div>
     </div>
   );
 }

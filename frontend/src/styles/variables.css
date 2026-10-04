@@ -1,35 +1,57 @@
 /**
- * Design tokens for Cusin Gallery.
+ * Design tokens for Cusin Gallery — brand edition (Part 3).
  *
- * Values here are a warm, premium neutral palette placeholder suited to a
- * kitchenware/home brand -- swap once real brand guidelines/logo colors
- * are supplied (see frontend/src/assets/brand). The point of this file is
- * the *system* (tokens instead of scattered hex codes), not these exact
- * values.
+ * The owner supplied the brand: OLIVE GREEN base, GOLD line-art logo.
+ * Contrast pairs were measured by the owner and are honored here:
+ *   gold on --brand-green-dark  5.9:1  -> logo/accents on dark headers
+ *   white on --brand-green      5.4:1  -> primary buttons
+ *   --brand-ink on --brand-ivory       -> body text
+ *   gold on light backgrounds   1.9:1  -> NEVER for text; use
+ *                                         --brand-gold-deep instead
+ *   gold on --brand-green-mid   2.6:1  -> large DECORATIVE elements only
  */
 :root {
-  /* --- Color --- */
-  --color-bg: #faf8f5;
-  --color-surface: #ffffff;
-  --color-text: #2a2521;
-  --color-text-muted: #6b625a;
-  --color-border: #e7e1d8;
+  /* --- Brand (owner palette, WCAG-measured) --- */
+  --brand-green: #637037;
+  --brand-green-dark: #2F3A18;
+  --brand-green-mid: #4A5A27;
+  --brand-green-tint: #EAEFDD;
+  --brand-gold: #CEB464;
+  --brand-gold-deep: #8A6D1F;
+  --brand-ivory: #FAF7F0;
+  --brand-ink: #1E2412;
 
-  --color-primary: #8a6d4b;
-  --color-primary-dark: #6b5238;
-  --color-accent: #b9532f;
+  /* --- Color (semantic aliases over the brand) --- */
+  --color-bg: var(--brand-ivory);
+  --color-surface: #ffffff;
+  --color-text: var(--brand-ink);
+  --color-text-muted: #5f6552;
+  --color-border: #e4e0d0;
+
+  --color-primary: var(--brand-green);
+  --color-primary-dark: var(--brand-green-mid);
+  --color-accent: var(--brand-gold-deep);
 
   --color-success: #2f7a4f;
   --color-danger: #b3311c;
   --color-warning: #b9832f;
 
-  /* --- Typography --- */
-  --font-family-base: "Vazirmatn", "Tahoma", sans-serif;
+  /* --- Typography: self-hosted (Part 3). Vazirmatn Variable for
+         body/UI; Lalezar for display moments (brand name, section
+         titles, hero). Persian line-heights are taller than Latin. --- */
+  --font-family-base: "Vazirmatn Variable", "Vazirmatn", "Tahoma", sans-serif;
+  --font-family-display: "Lalezar", "Vazirmatn Variable", "Tahoma", sans-serif;
+
+  --font-size-xs: 0.78rem;
   --font-size-sm: 0.875rem;
   --font-size-base: 1rem;
-  --font-size-lg: 1.25rem;
-  --font-size-xl: 1.75rem;
-  --font-size-2xl: 2.5rem;
+  --font-size-md: 1.125rem;
+  --font-size-lg: 1.3rem;
+  --font-size-xl: 1.8rem;
+  --font-size-2xl: 2.6rem;
+
+  --line-height-base: 1.9;
+  --line-height-tight: 1.5;
 
   /* --- Spacing scale --- */
   --space-1: 4px;
@@ -38,23 +60,21 @@
   --space-4: 24px;
   --space-5: 32px;
   --space-6: 48px;
+  --space-7: 72px;
 
-  /* --- Radius / shadow --- */
+  /* --- Radius / shadow: soft, boutique --- */
   --radius-sm: 6px;
   --radius-md: 12px;
-  --radius-lg: 20px;
-  --shadow-sm: 0 1px 3px rgba(42, 37, 33, 0.08);
-  --shadow-md: 0 4px 16px rgba(42, 37, 33, 0.10);
+  --radius-lg: 22px;
+  --shadow-sm: 0 1px 3px rgba(30, 36, 18, 0.07);
+  --shadow-md: 0 6px 24px rgba(30, 36, 18, 0.10);
+  --shadow-lg: 0 14px 44px rgba(30, 36, 18, 0.16);
+
+  /* gold hairline used for restrained accents */
+  --hairline: 1px solid rgba(206, 180, 100, 0.55);
 
   /* --- Layout --- */
   --container-max-width: 1280px;
-
-  /* --- Breakpoints (referenced in comments; CSS custom properties can't
-     be used inside @media queries, so components/utilities should mirror
-     these px values directly in their @media rules) ---
-     --breakpoint-sm: 480px;
-     --breakpoint-md: 768px;
-     --breakpoint-lg: 1024px;
-     --breakpoint-xl: 1280px;
-  */
+  --header-height: 76px;
+  --header-height-compact: 60px;
 }

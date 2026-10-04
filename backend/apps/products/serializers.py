@@ -31,7 +31,7 @@ class CategoryMiniSerializer(serializers.Serializer):
 class ProductImageSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductImage
-        fields = ["id", "image", "alt_text", "is_primary", "ordering"]
+        fields = ["id", "image", "alt_text", "is_primary", "ordering", "webp_400", "webp_800", "webp_1200"]
 
 
 class ProductAttributeValueSerializer(serializers.ModelSerializer):

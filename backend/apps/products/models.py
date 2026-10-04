@@ -157,6 +157,12 @@ class ProductImage(TimeStampedModel, OrderableModel):
     # Downscaled JPEG generated once at upload time (save() below) and
     # used by admin list views; never re-encoded at render time.
     thumbnail = models.ImageField("پیش‌نمایش", upload_to="products/thumbnails/", blank=True)
+    # Responsive WebP re-encodes of the ORIGINAL (Part 3). Paths only --
+    # empty string means "variant unavailable, fall back to the
+    # original"; they are a progressive enhancement, never required.
+    webp_400 = models.CharField(max_length=255, blank=True, default="")
+    webp_800 = models.CharField(max_length=255, blank=True, default="")
+    webp_1200 = models.CharField(max_length=255, blank=True, default="")
 
     class Meta:
         verbose_name = "تصویر محصول"
@@ -183,6 +189,18 @@ class ProductImage(TimeStampedModel, OrderableModel):
             if saved:
                 self.thumbnail = saved
                 super().save(update_fields=["thumbnail", "updated_at"])
+        # Responsive WebP variants (Part 3), generated once; the
+        # backfill_variants command covers rows created before/without
+        # this hook. Missing/undecodable files degrade to "no variants".
+        if self.image and not self.webp_400:
+            from apps.core.image_files import make_responsive_variants
+
+            variants = make_responsive_variants(self.image)
+            if variants:
+                self.webp_400 = variants.get(400, "")
+                self.webp_800 = variants.get(800, "")
+                self.webp_1200 = variants.get(1200, "")
+                super().save(update_fields=["webp_400", "webp_800", "webp_1200", "updated_at"])
 
     def __str__(self):
         return f"{self.product.name} image #{self.pk or '?'}"

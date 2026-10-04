@@ -20,6 +20,23 @@ class Banner(TimeStampedModel, ActivableModel, OrderableModel):
     title = models.CharField("عنوان", max_length=200)
     subtitle = models.CharField("زیرعنوان", max_length=300, blank=True)
     image = models.ImageField("تصویر", upload_to="banners/", validators=[validate_image_file])
+    # Responsive WebP re-encodes (Part 3) -- progressive enhancement;
+    # empty means "serve the original".
+    webp_400 = models.CharField(max_length=255, blank=True, default="")
+    webp_800 = models.CharField(max_length=255, blank=True, default="")
+    webp_1200 = models.CharField(max_length=255, blank=True, default="")
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.image and not self.webp_400:
+            from apps.core.image_files import make_responsive_variants
+
+            variants = make_responsive_variants(self.image)
+            if variants:
+                self.webp_400 = variants.get(400, "")
+                self.webp_800 = variants.get(800, "")
+                self.webp_1200 = variants.get(1200, "")
+                super().save(update_fields=["webp_400", "webp_800", "webp_1200", "updated_at"])
     cta_text = models.CharField("متن دکمهٔ اقدام", max_length=100, blank=True)
     cta_url = models.CharField("لینک دکمهٔ اقدام", max_length=300, blank=True)
     start_date = models.DateTimeField("تاریخ شروع نمایش", null=True, blank=True)
