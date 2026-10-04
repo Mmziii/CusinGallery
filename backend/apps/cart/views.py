@@ -105,3 +105,23 @@ class CartItemDetailView(APIView):
         cart = services.get_or_create_cart(request.user)
         view = services.build_cart_view(cart)
         return Response(CartSerializer(view, context={"request": request}).data)
+
+
+class CartMergeView(APIView):
+    """POST /cart/merge/ (Part 1): merge the browser's guest cart into
+    the authenticated user's server cart. Idempotent per merge_token --
+    see services.merge_guest_lines. The guest cart is cleared by the
+    frontend ONLY after this answers successfully."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        lines = request.data.get("lines")
+        merge_token = str(request.data.get("merge_token") or "")[:64]
+        view, report = services.merge_guest_lines(
+            request.user, lines, merge_token
+        )
+        return Response({
+            "cart": CartSerializer(view, context={"request": request}).data,
+            "report": report,
+        }, status=status.HTTP_200_OK)

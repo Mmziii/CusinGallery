@@ -7,7 +7,8 @@ authentication architecture decisions these implement (session + CSRF,
 `username = phone` under the hood, phone-or-email login).
 """
 from django.contrib.auth import get_user_model
-from django.contrib.auth.password_validation import validate_password
+
+from .passwords import validate_customer_password
 from django.contrib.auth.tokens import default_token_generator
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
@@ -50,10 +51,10 @@ class RegisterSerializer(serializers.Serializer):
     def validate(self, attrs):
         if attrs["password"] != attrs["password_confirm"]:
             raise serializers.ValidationError({"password_confirm": "Passwords do not match."})
-        # Reuses Django's configured AUTH_PASSWORD_VALIDATORS (see
-        # config/settings/base.py) instead of duplicating strength rules here.
+        # CUSTOMER policy only: min 8 chars + ASCII (see passwords.py).
+        # Staff/superuser passwords keep Django's strict validators.
         try:
-            validate_password(attrs["password"])
+            validate_customer_password(attrs["password"])
         except DjangoValidationError as exc:
             raise serializers.ValidationError({"password": list(exc.messages)})
         return attrs
@@ -158,7 +159,7 @@ class ChangePasswordSerializer(serializers.Serializer):
             raise serializers.ValidationError({"new_password_confirm": "Passwords do not match."})
         user = self.context["request"].user
         try:
-            validate_password(attrs["new_password"], user=user)
+            validate_customer_password(attrs["new_password"], user=user)
         except DjangoValidationError as exc:
             raise serializers.ValidationError({"new_password": list(exc.messages)})
         return attrs
@@ -241,7 +242,7 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
             raise serializers.ValidationError({"new_password_confirm": "Passwords do not match."})
 
         try:
-            validate_password(attrs["new_password"], user=user)
+            validate_customer_password(attrs["new_password"], user=user)
         except DjangoValidationError as exc:
             raise serializers.ValidationError({"new_password": list(exc.messages)})
 

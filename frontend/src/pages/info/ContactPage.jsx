@@ -1,24 +1,67 @@
+import useSiteSettings from "../../hooks/useSiteSettings";
 import InfoPageLayout from "./InfoPageLayout";
 
 /**
- * ⚠ OWNER-EDITABLE PLACEHOLDER CONTENT — put the store's REAL contact
- * details here before launch (phone, email, address, hours), then set
- * `placeholder={false}`.
+ * ⚠ OWNER: contact details now come from «تنظیمات فروشگاه» in the admin
+ * panel (SiteSettings) -- edit them THERE, not in this file. Anything
+ * still marked [متن نمونه] below is placeholder copy to replace (then
+ * set `placeholder={false}`).
  */
 function ContactPage() {
+  const settings = useSiteSettings();
+
   return (
     <InfoPageLayout
       title="تماس با ما"
       path="/contact/"
-      description="راه‌های ارتباطی با کوزین گالری: تلفن، ایمیل، آدرس و ساعات پاسخگویی."
+      description="راه‌های ارتباطی با کازین گالری: تلفن، واتس‌اپ، تلگرام، اینستاگرام، نشانی و ساعات پاسخگویی."
     >
-      <p><strong>[شمارهٔ تماس واقعی فروشگاه را وارد کنید]</strong></p>
       <dl className="info-page__facts">
-        <div><dt>تلفن پشتیبانی</dt><dd dir="ltr">+98 21 0000 0000</dd></div>
-        <div><dt>ایمیل</dt><dd dir="ltr">support@cusin.ir</dd></div>
-        <div><dt>آدرس</dt><dd>[آدرس واقعی فروشگاه/انبار را وارد کنید]</dd></div>
-        <div><dt>ساعات پاسخگویی</dt><dd>[مثلاً: شنبه تا چهارشنبه ۹ تا ۱۷]</dd></div>
+        {settings.phone ? (
+          <div><dt>تلفن پشتیبانی</dt><dd dir="ltr">{settings.phone}</dd></div>
+        ) : null}
+        {settings.whatsapp ? (
+          <div>
+            <dt>واتس‌اپ</dt>
+            <dd><a dir="ltr" href={`https://wa.me/${settings.whatsapp.replace(/\D/g, "")}`}>{settings.whatsapp}</a></dd>
+          </div>
+        ) : null}
+        {settings.telegram ? (
+          <div>
+            <dt>تلگرام</dt>
+            <dd>
+              <a
+                dir="ltr"
+                href={settings.telegram.startsWith("http") ? settings.telegram : `https://t.me/${settings.telegram.replace("@", "")}`}
+              >
+                {settings.telegram}
+              </a>
+            </dd>
+          </div>
+        ) : null}
+        {settings.instagram ? (
+          <div>
+            <dt>اینستاگرام</dt>
+            <dd>
+              <a
+                dir="ltr"
+                href={settings.instagram.startsWith("http") ? settings.instagram : `https://instagram.com/${settings.instagram.replace("@", "")}`}
+              >
+                {settings.instagram}
+              </a>
+            </dd>
+          </div>
+        ) : null}
+        {settings.address ? (
+          <div><dt>نشانی</dt><dd>{settings.address}</dd></div>
+        ) : null}
+        {settings.working_hours ? (
+          <div><dt>ساعات پاسخگویی</dt><dd>{settings.working_hours}</dd></div>
+        ) : null}
       </dl>
+      <p>
+        ایمیل پشتیبانی: <span dir="ltr">support@cusin.ir</span> {/* [متن نمونه: ایمیل واقعی] */}
+      </p>
       <p>
         برای پیگیری سفارش، از بخش <strong>حساب کاربری ← سفارش‌ها</strong> وضعیت و کد رهگیری
         مرسوله را مشاهده کنید؛ در صورت نیاز به پشتیبانی، شمارهٔ سفارش را همراه داشته باشید.

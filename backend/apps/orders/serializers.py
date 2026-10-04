@@ -122,6 +122,24 @@ class CheckoutSerializer(serializers.Serializer):
         if attrs.get("address_id") is not None:
             return attrs
 
+        from . import shipping
+
+        method = attrs.get("shipping_method") or shipping.DEFAULT_METHOD
+        if not shipping.get_shipping_methods()[method].get("requires_address", True):
+            # Pickup (Part 1): no delivery address exists -- but the store
+            # still needs to know WHO picks the order up.
+            missing = [f for f in ("recipient_name", "phone") if not attrs.get(f)]
+            if missing:
+                raise serializers.ValidationError(
+                    {
+                        "recipient_name": [
+                            "Pickup orders need at least recipient_name and phone. "
+                            f"Missing: {', '.join(missing)}."
+                        ]
+                    }
+                )
+            return attrs
+
         missing = [f for f in self._REQUIRED_INLINE_FIELDS if not attrs.get(f)]
         if missing:
             raise serializers.ValidationError(

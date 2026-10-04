@@ -62,7 +62,7 @@ function Header() {
     <header className="site-header">
       <div className="container site-header__inner">
         <Link to="/" className="site-header__brand">
-          کوزین <span>گالری</span>
+          کازین <span>گالری</span>
         </Link>
 
         <form className="site-header__search" onSubmit={submitSearch} role="search">

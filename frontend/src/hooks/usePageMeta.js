@@ -20,7 +20,7 @@ import { useEffect } from "react";
  */
 
 const SITE_ORIGIN = (import.meta.env.VITE_SITE_ORIGIN || "https://cusin.ir").replace(/\/$/, "");
-const SITE_NAME = "کوزین گالری";
+const SITE_NAME = "کازین گالری";
 const DEFAULT_TITLE = `${SITE_NAME} | فروشگاه لوازم آشپزخانه، بلور و کریستال`;
 const DEFAULT_DESCRIPTION =
   "فروشگاه آنلاین ظروف آشپزخانه، پخت‌وپز، بلور و کریستال و لوازم خانه. ارسال به سراسر ایران، پرداخت امن اینترنتی.";

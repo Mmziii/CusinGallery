@@ -286,7 +286,7 @@ def _deliver_password_reset_sms(user_id: int, phone: str, code: str) -> None:
             message_id = get_provider().send(phone, template=template, tokens={"token": code})
         else:
             message = (
-                f"کد بازیابی رمز عبور کوزین گالری: {code}\n"
+                f"کد بازیابی رمز عبور کازین گالری: {code}\n"
                 f"اعتبار: {settings.PASSWORD_RESET_CODE_TTL_MINUTES} دقیقه. "
                 "این کد را با کسی به اشتراک نگذارید."
             )
@@ -309,14 +309,29 @@ def _order_sms_content(notice: _OrderNotice):
         template = (settings.SMS_TEMPLATE_ORDER_CONFIRMED or "").strip()
         tokens = {"token": notice.order_number, "token2": f"{notice.total}"}
         message = (
-            f"سفارش {notice.order_number} در کوزین گالری با موفقیت پرداخت و ثبت شد. "
+            f"سفارش {notice.order_number} در کازین گالری با موفقیت پرداخت و ثبت شد. "
             f"مبلغ: {notice.total:,} تومان"
+        )
+    elif notice.event == Events.ORDER_SHIPPED and notice.shipping_method == "pickup":
+        # Pickup orders have no carrier: "shipped" means READY FOR
+        # PICKUP, and the message carries WHERE/WHEN instead of a
+        # tracking code (Part 1). Template mode is deliberately skipped
+        # here -- panel templates are built for courier tracking codes.
+        from apps.core.models import SiteSettings
+
+        site = SiteSettings.load()
+        template = ""
+        tokens = {}
+        message = (
+            f"سفارش {notice.order_number} کازین گالری آمادهٔ دریافت حضوری است. "
+            f"نشانی: {site.pickup_address or '-'}"
+            + (f" | ساعات دریافت: {site.pickup_hours}" if site.pickup_hours else "")
         )
     elif notice.event == Events.ORDER_SHIPPED:
         template = (settings.SMS_TEMPLATE_ORDER_SHIPPED or "").strip()
         tokens = {"token": notice.order_number, "token2": notice.tracking_code or "-"}
         message = (
-            f"سفارش {notice.order_number} کوزین گالری ارسال شد. "
+            f"سفارش {notice.order_number} کازین گالری ارسال شد. "
             f"کد رهگیری پستی: {notice.tracking_code or '-'}"
         )
     else:  # pragma: no cover - guarded by callers
@@ -327,7 +342,7 @@ def _order_sms_content(notice: _OrderNotice):
 def _order_email_content(notice: _OrderNotice):
     shipping_label = "اکسپرس" if notice.shipping_method == "express" else "استاندارد"
     if notice.event == Events.ORDER_CONFIRMED:
-        subject = f"تأیید سفارش {notice.order_number} — کوزین گالری"
+        subject = f"تأیید سفارش {notice.order_number} — کازین گالری"
         lines = [
             "سلام،",
             "",
@@ -343,10 +358,24 @@ def _order_email_content(notice: _OrderNotice):
         lines += [
             "",
             "می‌توانید وضعیت سفارش را در حساب کاربری خود پیگیری کنید.",
-            "با تشکر — کوزین گالری (cusin.ir)",
+            "با تشکر — کازین گالری (cusin.ir)",
         ]
+    elif notice.event == Events.ORDER_SHIPPED and notice.shipping_method == "pickup":
+        from apps.core.models import SiteSettings
+
+        site = SiteSettings.load()
+        subject = f"سفارش {notice.order_number} آمادهٔ دریافت حضوری — کازین گالری"
+        lines = [
+            "سلام،",
+            "",
+            f"سفارش {notice.order_number} آمادهٔ تحویل حضوری است.",
+            f"نشانی دریافت: {site.pickup_address or '-'}",
+        ]
+        if site.pickup_hours:
+            lines.append(f"ساعات دریافت: {site.pickup_hours}")
+        lines += ["", "با تشکر — کازین گالری (cusin.ir)"]
     elif notice.event == Events.ORDER_SHIPPED:
-        subject = f"سفارش {notice.order_number} ارسال شد — کوزین گالری"
+        subject = f"سفارش {notice.order_number} ارسال شد — کازین گالری"
         lines = [
             "سلام،",
             "",
@@ -354,7 +383,7 @@ def _order_email_content(notice: _OrderNotice):
             f"کد رهگیری پستی: {notice.tracking_code or '-'}",
             f"روش ارسال: {shipping_label}",
             "",
-            "با تشکر — کوزین گالری (cusin.ir)",
+            "با تشکر — کازین گالری (cusin.ir)",
         ]
     else:  # pragma: no cover
         raise ValueError(f"Unknown order event: {notice.event}")

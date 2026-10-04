@@ -40,10 +40,9 @@ describe("storefront smoke", () => {
 
   it("mounts /cart/ (logged-out state for a fresh visitor)", async () => {
     renderAt("/cart/");
-    // Pre-guest-cart behaviour: logged-out visitors get the "log in to
-    // see your cart" state. Part 1 replaces this with the guest cart;
-    // the smoke test only guards that the page MOUNTS without throwing.
-    expect(await screen.findByText("برای مشاهده سبد خرید وارد شوید.")).toBeTruthy();
+    // Guest cart (Part 1): a fresh visitor has no local lines, so the
+    // page mounts its empty guest state.
+    expect(await screen.findByText("سبد خرید شما خالی است.")).toBeTruthy();
   });
 
   it("mounts /login/ with its heading", async () => {

@@ -32,10 +32,20 @@
 <body>
 <button class="print-btn" onclick="window.print()">چاپ</button>
 <div class="sheet">
-  <h1>کوزین گالری — سفارش {{ order.order_number }}</h1>
+  <h1>کازین گالری — سفارش {{ order.order_number }}</h1>
   <div class="muted">تاریخ ثبت: {{ order.created_at|date:"Y/m/d H:i" }}</div>
 
   <div class="box">
+    {% if order.shipping_method == "pickup" %}
+    <h2>برچسب دریافت حضوری</h2>
+    <div class="label-addr">
+      <div><b>تحویل‌گیرنده:</b> {{ order.shipping_recipient_name }}</div>
+      <div><b>تلفن:</b> {{ order.shipping_phone }}</div>
+      <div><b>روش:</b> دریافت حضوری — «ارسال شده» به معنای «آمادهٔ تحویل» است؛ کد رهگیری ندارد.</div>
+      {% if site and site.pickup_address %}<div><b>نشانی دریافت:</b> {{ site.pickup_address }}</div>{% endif %}
+      {% if site and site.pickup_hours %}<div><b>ساعات دریافت:</b> {{ site.pickup_hours }}</div>{% endif %}
+    </div>
+    {% else %}
     <h2>برچسب ارسال</h2>
     <div class="label-addr">
       <div><b>گیرنده:</b> {{ order.shipping_recipient_name }}</div>
@@ -43,13 +53,14 @@
       <div><b>آدرس:</b> {{ order.shipping_province }}، {{ order.shipping_city }}، {{ order.shipping_address }}{% if order.shipping_unit %}، واحد {{ order.shipping_unit }}{% endif %}{% if order.shipping_building_number %}، پلاک {{ order.shipping_building_number }}{% endif %}</div>
       {% if order.shipping_postal_code %}<div><b>کد پستی:</b> {{ order.shipping_postal_code }}</div>{% endif %}
       <div><b>روش ارسال:</b>
-        {% if order.shipping_method == "express" %}ارسال اکسپرس{% else %}ارسال عادی{% endif %}
+        {{ shipping_method_label }}
         {% if order.estimated_delivery_min and order.estimated_delivery_max %}
           (تحویل: {{ order.estimated_delivery_min|date:"Y/m/d" }} تا {{ order.estimated_delivery_max|date:"Y/m/d" }})
         {% endif %}
       </div>
       {% if order.tracking_code %}<div><b>کد رهگیری:</b> {{ order.tracking_code }}</div>{% endif %}
     </div>
+    {% endif %}
   </div>
 
   <div class="box">

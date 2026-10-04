@@ -170,7 +170,7 @@ class ZarinpalGateway(PaymentGateway):
             "amount": payment.amount,
             "currency": CURRENCY_TOMAN,
             "callback_url": callback_url,
-            "description": f"سفارش {order.order_number} — کوزین گالری",
+            "description": f"سفارش {order.order_number} — کازین گالری",
             "metadata": {
                 "order_id": order.order_number,
                 "mobile": order.shipping_phone or "",

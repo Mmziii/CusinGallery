@@ -89,6 +89,23 @@ def _resolve_shipping_fields(user, validated_data):
     same "doesn't exist from this user's point of view" pattern used
     throughout this project (e.g. apps.accounts.views.AddressViewSet).
     """
+    from . import shipping
+
+    method = validated_data.get("shipping_method") or shipping.DEFAULT_METHOD
+    if not shipping.get_shipping_methods()[method].get("requires_address", True):
+        # Pickup (Part 1): the snapshot carries WHO collects the order;
+        # there is no delivery address to store.
+        return {
+            "shipping_recipient_name": validated_data["recipient_name"],
+            "shipping_phone": validated_data["phone"],
+            "shipping_province": "",
+            "shipping_city": "",
+            "shipping_address": "",
+            "shipping_postal_code": "",
+            "shipping_unit": "",
+            "shipping_building_number": "",
+        }
+
     address_id = validated_data.get("address_id")
 
     if address_id is not None:

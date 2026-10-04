@@ -13,6 +13,92 @@ const UNAVAILABLE_REASONS = {
   insufficient_stock: "موجودی این کالا کمتر از تعداد درخواستی است.",
 };
 
+/**
+ * Guest cart view (Part 1): lines come from localStorage (ids + qty
+ * only); names/prices/images are hydrated from the products API and
+ * never trusted from storage. Checkout still requires an account -- on
+ * login/register the store merges this cart server-side.
+ */
+function GuestCartView() {
+  const { guestLines, guestProducts, hydrateGuestProducts, updateGuestItem } = useCartStore();
+
+  useEffect(() => {
+    hydrateGuestProducts();
+  }, [guestLines, hydrateGuestProducts]);
+
+  if (guestLines.length === 0) {
+    return (
+      <EmptyState title="سبد خرید شما خالی است.">
+        <Link className="btn btn--primary" to="/shop/">مشاهده فروشگاه</Link>
+      </EmptyState>
+    );
+  }
+
+  const rows = guestLines.map((line) => ({ line, product: guestProducts[line.product_id] }));
+  const total = rows.reduce(
+    (sum, row) => sum + (row.product ? (row.product.price ?? 0) * row.line.quantity : 0),
+    0
+  );
+
+  return (
+    <div className="cart-page">
+      <h1>سبد خرید</h1>
+      <p className="muted cart-page__guest-note">
+        شما به‌صورت مهمان خرید می‌کنید؛ قیمت‌ها از سرور دریافت می‌شوند و با ورود یا ثبت‌نام،
+        همین سبد به حساب شما منتقل خواهد شد.
+      </p>
+      <div className="cart-page__items">
+        {rows.map(({ line, product }) => (
+          <div className="cart-item" key={`${line.product_id}-${line.variant_id ?? 0}`}>
+            {product?.primary_image?.image ? (
+              <img src={product.primary_image.image} alt={product.name} />
+            ) : (
+              <div className="cart-item__noimage" />
+            )}
+            <div className="cart-item__body">
+              <div className="cart-item__name">{product ? product.name : "در حال بارگذاری…"}</div>
+              <div className="cart-item__unit">
+                {product ? `${formatPrice(product.price)} تومان` : ""}
+              </div>
+              <div className="cart-item__qty">
+                <button
+                  type="button"
+                  aria-label="افزایش تعداد"
+                  onClick={() => updateGuestItem(line.product_id, line.variant_id, line.quantity + 1)}
+                >
+                  +
+                </button>
+                <span>{formatPrice(line.quantity)}</span>
+                <button
+                  type="button"
+                  aria-label="کاهش تعداد"
+                  onClick={() => updateGuestItem(line.product_id, line.variant_id, line.quantity - 1)}
+                >
+                  −
+                </button>
+              </div>
+            </div>
+            <div className="cart-item__total">
+              {product ? `${formatPrice((product.price ?? 0) * line.quantity)} تومان` : ""}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="cart-page__summary card">
+        <div className="cart-page__total">جمع: {formatPrice(total)} تومان</div>
+        <p className="muted">
+          برای پرداخت و ثبت سفارش وارد شوید یا ثبت‌نام کنید؛ سبد شما به‌صورت خودکار منتقل
+          می‌شود.
+        </p>
+        <div className="cart-page__actions">
+          <Link className="btn btn--primary" to="/login/">ورود به حساب</Link>
+          <Link className="btn btn--outline" to="/register/">ثبت‌نام</Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CartPage() {
   usePageMeta({ title: "سبد خرید", path: "/cart/", noindex: true });
   const navigate = useNavigate();
@@ -26,11 +112,7 @@ function CartPage() {
   if (authLoading || isLoading) return <Spinner label="در حال دریافت سبد خرید…" />;
 
   if (!isAuthenticated) {
-    return (
-      <EmptyState title="برای مشاهده سبد خرید وارد شوید.">
-        <Link className="btn btn--primary" to="/login/">ورود به حساب</Link>
-      </EmptyState>
-    );
+    return <GuestCartView />;
   }
 
   if (error) return <Alert>{errorMessage(error)}</Alert>;

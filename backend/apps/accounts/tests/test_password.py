@@ -72,13 +72,21 @@ class ChangePasswordTests(CacheIsolatedAPITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_change_password_enforces_strength_validators(self):
-        response = self.client.post(
+    def test_change_password_enforces_the_customer_policy(self):
+        # Part 1: digits-only 8 chars is ACCEPTED for customers; short or
+        # Persian passwords are not (see test_customer_passwords.py).
+        ok = self.client.post(
             self.url,
             {"current_password": "a-strong-passw0rd!", "new_password": "12345678", "new_password_confirm": "12345678"},
             format="json",
         )
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(ok.status_code, status.HTTP_200_OK)
+        too_short = self.client.post(
+            self.url,
+            {"current_password": "12345678", "new_password": "1234567", "new_password_confirm": "1234567"},
+            format="json",
+        )
+        self.assertEqual(too_short.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_anonymous_cannot_change_password(self):
         self.client.logout()

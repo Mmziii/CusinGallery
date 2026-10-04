@@ -1,3 +1,4 @@
+import PasswordHint from "../components/PasswordHint.jsx";
 import { usePageMeta } from "../hooks/usePageMeta";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -59,6 +60,7 @@ function RegisterPage() {
         <label className="field">
           <span>رمز عبور *</span>
           <input type="password" value={form.password} onChange={setField("password")} required />
+          <PasswordHint value={form.password} />
         </label>
         <label className="field">
           <span>تکرار رمز عبور *</span>

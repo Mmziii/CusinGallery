@@ -9,7 +9,13 @@ import django_filters
 from .models import Product
 
 
+class NumberInFilter(django_filters.BaseInFilter, django_filters.NumberFilter):
+    """?ids=1,2,3 -- used by the guest cart to hydrate its lines with
+    server-side names/prices (prices are NEVER trusted from the client)."""
+
+
 class ProductFilter(django_filters.FilterSet):
+    ids = NumberInFilter(field_name="id", lookup_expr="in")
     category = django_filters.CharFilter(field_name="category__slug", lookup_expr="iexact")
     brand = django_filters.CharFilter(field_name="brand__slug", lookup_expr="iexact")
     min_price = django_filters.NumberFilter(field_name="price", lookup_expr="gte")

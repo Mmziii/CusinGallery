@@ -194,7 +194,7 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticatedOrReadOnly",
     ],
-    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "DEFAULT_PAGINATION_CLASS": "apps.core.pagination.ConfigurablePageNumberPagination",
     "PAGE_SIZE": 20,
     "DEFAULT_FILTER_BACKENDS": [
         "django_filters.rest_framework.DjangoFilterBackend",
@@ -376,29 +376,44 @@ SHIPPING_MIN_DELIVERY_DAYS = env.int("SHIPPING_MIN_DELIVERY_DAYS", default=3)
 SHIPPING_MAX_DELIVERY_DAYS = env.int("SHIPPING_MAX_DELIVERY_DAYS", default=5)
 
 # Express method: fixed cost (never free -- the free-shipping threshold
-# is a standard-delivery promotion and deliberately does NOT apply here),
-# with its own faster window.
+# is a standard-delivery promotion and deliberately does NOT apply here).
 EXPRESS_SHIPPING_COST = env.int("EXPRESS_SHIPPING_COST", default=90000)
-EXPRESS_MIN_DELIVERY_DAYS = env.int("EXPRESS_MIN_DELIVERY_DAYS", default=1)
-EXPRESS_MAX_DELIVERY_DAYS = env.int("EXPRESS_MAX_DELIVERY_DAYS", default=2)
 
 # The selectable shipping methods offered at checkout. Cost and delivery
 # window per method are all env-configurable above. `free_threshold` is
-# None when the method is never free. New methods = a new entry here (plus
-# its settings); apps/orders/shipping.py and the checkout flow need no
-# change -- they only ever read this dict.
+# None when the method is never free. `requires_address` False means the
+# method needs no delivery address at checkout (name+phone still do).
+# Existing method keys ("standard", "express") are part of order
+# snapshots and must never be renamed; new methods are added additively
+# (Order.shipping_method is a plain CharField, so no migration is needed
+# to add a key).
 SHIPPING_METHODS = {
     "standard": {
+        "label": "عادی",
         "cost": STANDARD_SHIPPING_COST,
         "free_threshold": FREE_SHIPPING_THRESHOLD,
         "min_days": SHIPPING_MIN_DELIVERY_DAYS,
         "max_days": SHIPPING_MAX_DELIVERY_DAYS,
+        "requires_address": True,
     },
     "express": {
+        "label": "اکسپرس",
         "cost": EXPRESS_SHIPPING_COST,
         "free_threshold": None,
-        "min_days": EXPRESS_MIN_DELIVERY_DAYS,
-        "max_days": EXPRESS_MAX_DELIVERY_DAYS,
+        # Express is a next-day service by definition: exactly one day
+        # (min == max == 1), not env-tunable -- "faster express" is a
+        # different product, not a config tweak.
+        "min_days": 1,
+        "max_days": 1,
+        "requires_address": True,
+    },
+    "pickup": {
+        "label": "حضوری",
+        "cost": 0,
+        "free_threshold": None,
+        "min_days": 0,
+        "max_days": 0,
+        "requires_address": False,
     },
 }
 

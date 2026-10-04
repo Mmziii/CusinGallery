@@ -102,14 +102,16 @@ def validate_transition(current_status, new_status):
         )
 
 
-def check_transition(current_status, new_status, tracking_code):
+def check_transition(current_status, new_status, tracking_code, shipping_method="standard"):
     """
     Full pre-save validation for moving an order from ``current_status``
-    to ``new_status``: the DAG plus business preconditions (a shipped
-    order must carry a tracking code -- ``tracking_code`` is the value
-    that will be on the order after the save, so callers pass the
-    incoming form value). Raises OrderWorkflowError on any violation,
-    returns None when the move is legal.
+    to ``new_status``: the DAG plus business preconditions (a courier-
+    shipped order must carry a tracking code -- ``tracking_code`` is the
+    value that will be on the order after the save, so callers pass the
+    incoming form value). Pickup orders are the exception: there is no
+    carrier, so no tracking code is required (Part 1; "shipped" then
+    means "ready for pickup"). Raises OrderWorkflowError on any
+    violation, returns None when the move is legal.
 
     Admin runs this BEFORE saving anything so an invalid move persists
     nothing; set_status runs it again under the row lock as a safety
@@ -117,9 +119,12 @@ def check_transition(current_status, new_status, tracking_code):
     """
     validate_transition(current_status, new_status)
     if new_status != current_status and new_status == Order.Status.SHIPPED and not tracking_code:
-        raise OrderWorkflowError(
-            "Enter the carrier tracking code before marking the order as shipped."
-        )
+        from . import shipping
+
+        if shipping.get_shipping_methods()[shipping_method].get("requires_address", True):
+            raise OrderWorkflowError(
+                "Enter the carrier tracking code before marking the order as shipped."
+            )
 
 
 def set_status(order, new_status):
@@ -137,7 +142,9 @@ def set_status(order, new_status):
         if locked.status == new_status:
             return locked  # no-op: nothing to change, nothing to restore
 
-        check_transition(locked.status, new_status, locked.tracking_code)
+        check_transition(
+            locked.status, new_status, locked.tracking_code, locked.shipping_method
+        )
 
         cancelled_a_paid_order = (
             new_status == Order.Status.CANCELLED

@@ -1,3 +1,4 @@
+import PasswordHint from "../../components/PasswordHint.jsx";
 import { useState } from "react";
 
 import { Alert, errorMessage } from "../../components/ui";
@@ -77,6 +78,7 @@ function ProfilePage() {
         <label className="field">
           <span>رمز عبور جدید</span>
           <input type="password" value={pw.new_password} onChange={(e) => setPw((f) => ({ ...f, new_password: e.target.value }))} required />
+          <PasswordHint value={pw.new_password} />
         </label>
         <label className="field">
           <span>تکرار رمز عبور جدید</span>

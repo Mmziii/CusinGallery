@@ -13,6 +13,18 @@ import useCartStore from "./useCartStore";
  * previous user's cart is never shown to the next user (and vice versa),
  * per the spec's "don't leak one user's cart to another" rule.
  */
+/**
+ * On login/register success (Part 1): the guest cart is merged into the
+ * fresh session server-side. The local cart is cleared by the store ONLY
+ * after a successful merge; with no guest lines the server cart is simply
+ * fetched. Logout keeps calling reset() -- the browser-level guest lines
+ * are device state and never contain another user's server cart.
+ */
+async function mergeGuestCartIntoServer() {
+  const report = await useCartStore.getState().mergeGuestCart();
+  if (!report) await useCartStore.getState().fetchCart();
+}
+
 const useAuthStore = create((set) => ({
   user: null,
   isLoading: true, // true until the first /me/ probe resolves
@@ -43,7 +55,7 @@ const useAuthStore = create((set) => ({
     try {
       const user = await authApi.login({ identifier, password });
       set({ user, isAuthenticated: true, isLoading: false, error: null });
-      useCartStore.getState().reset();
+      await mergeGuestCartIntoServer();
       return { success: true };
     } catch (err) {
       const normalized = normalizeApiError(err);
@@ -57,7 +69,7 @@ const useAuthStore = create((set) => ({
     try {
       const user = await authApi.register(payload);
       set({ user, isAuthenticated: true, isLoading: false, error: null });
-      useCartStore.getState().reset();
+      await mergeGuestCartIntoServer();
       return { success: true };
     } catch (err) {
       const normalized = normalizeApiError(err);

@@ -27,6 +27,7 @@ from django.utils.html import format_html
 
 from .models import Order, OrderItem
 from .refunds import RefundError, finalize_refunded, validate_admin_refund_change
+from .shipping import method_label as shipping_method_label
 from .workflow import OrderWorkflowError, check_transition, set_status
 
 
@@ -46,11 +47,15 @@ class OrderItemInline(admin.TabularInline):
 class OrderAdmin(admin.ModelAdmin):
     list_display = (
         "order_number", "user", "status", "payment_status", "total",
-        "stock_restored_badge", "refund_badge", "created_at",
+        "shipping_method_label", "stock_restored_badge", "refund_badge", "created_at",
     )
     # refund_status in the filter list is the owner's daily "which orders
     # still owe a refund?" view: «نیازمند بازپرداخت» (Phase C).
     list_filter = ("status", "payment_status", "refund_status", "created_at")
+
+    @admin.display(description="روش ارسال")
+    def shipping_method_label(self, obj):
+        return shipping_method_label(obj.shipping_method)
     search_fields = ("order_number", "user__username", "user__email", "shipping_phone", "tracking_code")
     autocomplete_fields = ("user", "coupon")
     date_hierarchy = "created_at"
@@ -127,6 +132,10 @@ class OrderAdmin(admin.ModelAdmin):
         return custom + urls
 
     def print_view(self, request, pk):
+        from apps.core.models import SiteSettings
+
+        from . import shipping
+
         order = get_object_or_404(
             Order.objects.prefetch_related("items", "items__product", "items__variant"),
             pk=pk,
@@ -134,7 +143,13 @@ class OrderAdmin(admin.ModelAdmin):
         return TemplateResponse(
             request,
             "admin/orders/order_print.html",
-            {"order": order, "opts": self.model._meta, "title": f"Print {order.order_number}"},
+            {
+                "order": order,
+                "opts": self.model._meta,
+                "title": f"Print {order.order_number}",
+                "shipping_method_label": shipping.method_label(order.shipping_method),
+                "site": SiteSettings.load(),
+            },
         )
 
     def save_model(self, request, obj, form, change):
@@ -181,7 +196,9 @@ class OrderAdmin(admin.ModelAdmin):
         # Validate against the DB's current status but with the INCOMING
         # field values (e.g. a tracking code typed in this very save).
         try:
-            check_transition(db_obj.status, requested_status, obj.tracking_code)
+            check_transition(
+                db_obj.status, requested_status, obj.tracking_code, obj.shipping_method
+            )
         except OrderWorkflowError as exc:
             raise ValidationError(str(exc))
 
@@ -239,7 +256,7 @@ class OrderAdmin(admin.ModelAdmin):
                 order.discount_amount,
                 order.shipping_cost,
                 order.total,
-                order.shipping_method,
+                shipping_method_label(order.shipping_method),
                 order.tracking_code,
                 order.refund_status,
                 order.refund_amount,

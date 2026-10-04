@@ -85,14 +85,13 @@ class RegistrationTests(CacheIsolatedAPITestCase):
         self.assertIn("password_confirm", response.data)
         self.assertFalse(User.objects.filter(phone="+989121234567").exists())
 
-    def test_weak_password_is_rejected_by_djangos_validators(self):
-        # Exercises AUTH_PASSWORD_VALIDATORS (config/settings/base.py),
-        # not a hand-rolled strength check.
-        response = self.client.post(
+    def test_customer_policy_digits_only_ok_but_short_or_persian_rejected(self):
+        # Part 1: customers get min-8 + ASCII only (digits-only is fine);
+        # Django's stricter validators apply to staff/superusers only.
+        digits_only = self.client.post(
             self.url, self.valid_payload(password="12345678", password_confirm="12345678"), format="json"
         )
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("password", response.data)
+        self.assertEqual(digits_only.status_code, status.HTTP_201_CREATED, digits_only.content)
 
     def test_invalid_phone_format_is_rejected(self):
         response = self.client.post(self.url, self.valid_payload(phone="not-a-phone"), format="json")

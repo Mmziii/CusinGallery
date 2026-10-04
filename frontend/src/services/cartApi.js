@@ -43,3 +43,15 @@ export function removeCartItem(itemId) {
 export function clearCart() {
   return apiClient.delete("/cart/").then((res) => res.data);
 }
+
+/**
+ * Guest-cart merge (Part 1): posts the localStorage lines (ids +
+ * quantities only) plus the merge token; the server validates every
+ * line and returns the fresh cart + a per-line report. The caller must
+ * clear the local guest cart ONLY on success (the store does this).
+ */
+export function mergeGuestCart(lines, mergeToken) {
+  return apiClient
+    .post("/cart/merge/", { lines, merge_token: mergeToken })
+    .then((res) => res.data);
+}

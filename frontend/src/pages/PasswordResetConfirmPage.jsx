@@ -1,3 +1,4 @@
+import PasswordHint from "../components/PasswordHint.jsx";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
@@ -107,6 +108,7 @@ function PasswordResetConfirmPage() {
                 <label className="field">
                   <span>رمز عبور جدید</span>
                   <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                  <PasswordHint value={password} />
                 </label>
                 <label className="field">
                   <span>تکرار رمز عبور جدید</span>

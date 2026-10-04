@@ -71,9 +71,14 @@ class EstimatedDeliveryTests(TestCase):
             shipping.calculate_estimated_delivery("standard", from_date=day),
             (datetime.date(2026, 10, 4), datetime.date(2026, 10, 6)),
         )
+        # Express (Part 1): exactly one day -- min == max == 1.
         self.assertEqual(
             shipping.calculate_estimated_delivery("express", from_date=day),
-            (datetime.date(2026, 10, 2), datetime.date(2026, 10, 3)),
+            (datetime.date(2026, 10, 2), datetime.date(2026, 10, 2)),
+        )
+        self.assertEqual(
+            shipping.calculate_estimated_delivery("pickup", from_date=day),
+            (datetime.date(2026, 10, 1), datetime.date(2026, 10, 1)),
         )
 
     def test_window_defaults_to_today(self):
@@ -159,8 +164,10 @@ class CheckoutShippingMethodTests(CacheIsolatedAPITestCase):
 
         order = Order.objects.get(user=self.user)
         today = timezone.localdate()
-        self.assertEqual(order.estimated_delivery_min, today + datetime.timedelta(days=settings.EXPRESS_MIN_DELIVERY_DAYS))
-        self.assertEqual(order.estimated_delivery_max, today + datetime.timedelta(days=settings.EXPRESS_MAX_DELIVERY_DAYS))
+        # Express is a next-day service by definition (Part 1): exactly
+        # one day, min == max == 1, no longer env-tunable.
+        self.assertEqual(order.estimated_delivery_min, today + datetime.timedelta(days=1))
+        self.assertEqual(order.estimated_delivery_max, today + datetime.timedelta(days=1))
         # The API exposes the snapshot too.
         detail = self.client.get(reverse("order-detail", args=[order.id]))
         self.assertEqual(detail.data["shipping_method"], "express")

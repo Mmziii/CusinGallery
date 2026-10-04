@@ -1,29 +1,36 @@
 import { Link } from "react-router-dom";
 
+import useSiteSettings from "../hooks/useSiteSettings";
+
 /**
- * Site footer (Phase E: trust pages, business info and the e-namad slot).
+ * Site footer (Part 1: business info + e-namad come from the singleton
+ * SiteSettings, editable in admin -- no more hardcoded placeholders in
+ * the bundle; Part 3 will restyle it).
  *
- * ⚠ OWNER: replace the placeholder business details below (phone/address)
- * with the store's real information, and paste the e-namad (نماد اعتماد
- * الکترونیکی) embed code — the <script>/image snippet the enamad.ir panel
- * gives you — inside the marked div. Until then the slot shows a dashed
- * placeholder box so it is obvious something belongs there.
+ * e-namad: the owner pastes the embed snippet from the enamad.ir panel
+ * into SiteSettings.enamad_html; until then the marked placeholder slot
+ * stays visible so it is obvious something belongs there.
  */
 function Footer() {
+  const settings = useSiteSettings();
+
   return (
     <footer className="site-footer">
       <div className="container site-footer__grid">
         <div>
-          <h3>کوزین گالری</h3>
+          <h3>کازین گالری</h3>
           <p>
             فروشگاه آنلاین ظروف آشپزخانه، پخت‌وپز، بلور و کریستال و لوازم خانگی.
             خریدی مطمئن برای خانه‌ای زیباتر.
           </p>
-          {/* ⚠ OWNER: اطلاعات واقعی کسب‌وکار را جایگزین کنید */}
           <p className="site-footer__contact">
-            تلفن پشتیبانی: <span dir="ltr">+98 21 0000 0000</span>
-            <br />
-            آدرس: [آدرس واقعی فروشگاه را وارد کنید]
+            {settings.phone ? (
+              <>
+                تلفن پشتیبانی: <span dir="ltr">{settings.phone}</span>
+                <br />
+              </>
+            ) : null}
+            {settings.address ? <>{settings.address}</> : null}
           </p>
         </div>
         <div>
@@ -46,16 +53,22 @@ function Footer() {
         </div>
         <div>
           <h4>نمادها و مجوزها</h4>
-          {/* ⚠ OWNER: کد امبد نماد اعتماد الکترونیکی (e-namad) را از پنل
-              enamad.ir کپی و اینجا جای‌گذاری کنید. تا آن زمان این جعبهٔ
-              خط‌چین نمایش داده می‌شود. */}
-          <div className="site-footer__enamad" aria-label="محل نماد اعتماد الکترونیکی">
-            <span>محل نماد اعتماد الکترونیکی (e-namad)</span>
-          </div>
+          {settings.enamad_html ? (
+            <div
+              className="site-footer__enamad-embed"
+              // Owner-supplied embed snippet from the enamad.ir panel.
+              // eslint-disable-next-line react/no-danger
+              dangerouslySetInnerHTML={{ __html: settings.enamad_html }}
+            />
+          ) : (
+            <div className="site-footer__enamad" aria-label="محل نماد اعتماد الکترونیکی">
+              <span>محل نماد اعتماد الکترونیکی (e-namad)</span>
+            </div>
+          )}
         </div>
       </div>
       <div className="site-footer__bottom">
-        <div className="container">© {new Date().getFullYear()} کوزین گالری</div>
+        <div className="container">© {new Date().getFullYear()} کازین گالری</div>
       </div>
     </footer>
   );

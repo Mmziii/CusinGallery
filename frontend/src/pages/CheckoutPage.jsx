@@ -9,6 +9,7 @@ import { checkout, fetchShippingMethods } from "../services/orderApi";
 import { validateCoupon } from "../services/couponsApi";
 import { initiatePayment } from "../services/paymentsApi";
 import useCartStore from "../store/useCartStore";
+import useSiteSettings from "../hooks/useSiteSettings";
 import { normalizeApiError } from "../utils/apiError";
 import { formatPrice } from "../utils/formatPrice";
 
@@ -20,8 +21,9 @@ import { formatPrice } from "../utils/formatPrice";
  * redirects the browser to the gateway.
  */
 const METHOD_LABELS = {
-  standard: "ارسال استاندارد",
+  standard: "ارسال عادی",
   express: "ارسال اکسپرس",
+  pickup: "دریافت حضوری",
 };
 
 /** Persian display name for a method id; unknown ids render as-is. */
@@ -58,6 +60,8 @@ function CheckoutPage() {
   // only picks one; checkout recomputes everything server-side.
   const [shippingData, setShippingData] = useState(null);
   const [selectedMethod, setSelectedMethod] = useState(null);
+  const [pickupContact, setPickupContact] = useState({});
+  const siteSettings = useSiteSettings();
 
   const [couponCode, setCouponCode] = useState("");
   const [couponPreview, setCouponPreview] = useState(null);
@@ -110,8 +114,13 @@ function CheckoutPage() {
     setCheckoutError(null);
     setPlacing(true);
     try {
-      const payload =
-        addressMode === "saved" ? { address_id: selectedAddressId } : { ...inlineAddress };
+      const isPickupNow =
+        (shippingData?.methods || []).find((m) => m.id === selectedMethod)?.requires_address === false;
+      const payload = isPickupNow
+        ? { recipient_name: pickupContact.recipient_name, phone: pickupContact.phone }
+        : addressMode === "saved"
+          ? { address_id: selectedAddressId }
+          : { ...inlineAddress };
       if (couponPreview?.code) payload.coupon_code = couponPreview.code;
       if (selectedMethod) payload.shipping_method = selectedMethod;
       const order = await checkout(payload);
@@ -204,6 +213,44 @@ function CheckoutPage() {
 
       <div className="checkout__grid">
         <div className="checkout__main">
+          {currentMethod?.requires_address === false ? (
+            <section className="checkout__section">
+              <h2>دریافت حضوری</h2>
+              <p className="muted">
+                برای این روش، آدرس پستی لازم نیست؛ فقط نام و شمارهٔ تماس تحویل‌گیرنده:
+              </p>
+              <label className="field">
+                <span>نام تحویل‌گیرنده</span>
+                <input
+                  type="text"
+                  value={pickupContact.recipient_name || ""}
+                  onChange={(e) => setPickupContact((f) => ({ ...f, recipient_name: e.target.value }))}
+                  required
+                />
+              </label>
+              <label className="field">
+                <span>شماره تماس</span>
+                <input
+                  type="text"
+                  dir="ltr"
+                  value={pickupContact.phone || ""}
+                  onChange={(e) => setPickupContact((f) => ({ ...f, phone: e.target.value }))}
+                  required
+                />
+              </label>
+              {siteSettings.pickup_address ? (
+                <p className="checkout__pickup-info">
+                  <strong>نشانی دریافت:</strong> {siteSettings.pickup_address}
+                  {siteSettings.pickup_hours ? (
+                    <>
+                      <br />
+                      <strong>ساعات دریافت:</strong> {siteSettings.pickup_hours}
+                    </>
+                  ) : null}
+                </p>
+              ) : null}
+            </section>
+          ) : (
           <section className="checkout__section">
             <h2>آدرس ارسال</h2>
 
@@ -270,6 +317,7 @@ function CheckoutPage() {
               />
             ) : null}
           </section>
+          )}
 
           {methods.length ? (
             <section className="checkout__section">
@@ -293,9 +341,13 @@ function CheckoutPage() {
                         onChange={() => setSelectedMethod(method.id)}
                       />
                       <span className="shipping-method__body">
-                        <strong>{methodLabel(method.id)}</strong>
+                        <strong>{method.label || methodLabel(method.id)}</strong>
                         <span className="muted">
-                          تحویل {method.min_days} تا {method.max_days} روز کاری
+                          {method.requires_address === false
+                            ? "آمادهٔ تحویل حضوری پس از پرداخت"
+                            : method.min_days === method.max_days
+                              ? `تحویل ${method.min_days} روزه`
+                              : `تحویل ${method.min_days} تا ${method.max_days} روز کاری`}
                         </span>
                       </span>
                       <span className="shipping-method__cost">

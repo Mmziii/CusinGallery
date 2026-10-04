@@ -39,6 +39,11 @@ from django.conf import settings
 from django.db import connection
 from django.http import HttpResponse, JsonResponse
 from django.utils.encoding import iri_to_uri
+from rest_framework import permissions
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from .serializers import SiteSettingsSerializer
 
 logger = logging.getLogger("django")
 
@@ -120,3 +125,17 @@ def sitemap_xml(request):
         parts.append("  </url>")
     parts.append("</urlset>")
     return HttpResponse("\n".join(parts), content_type="application/xml; charset=utf-8")
+
+
+class SiteSettingsView(APIView):
+    """Public read-only view of the store's contact/branding settings
+    (Part 1): footer, contact page, pickup info and the floating contact
+    button all read this one endpoint instead of hardcoding business
+    content in the bundle."""
+
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        from .models import SiteSettings
+
+        return Response(SiteSettingsSerializer(SiteSettings.load()).data)

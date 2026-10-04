@@ -12,7 +12,7 @@ function PrivacyPage() {
     <InfoPageLayout
       title="حریم خصوصی"
       path="/privacy/"
-      description="سیاست حفظ حریم خصوصی و داده‌های کاربران در کوزین گالری."
+      description="سیاست حفظ حریم خصوصی و داده‌های کاربران در کازین گالری."
     >
       <p>
         <strong>[متن نمونه — منطبق بر وضعیت واقعی فروشگاه بازبینی شود]</strong>

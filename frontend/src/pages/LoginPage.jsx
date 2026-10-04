@@ -31,7 +31,7 @@ function LoginPage() {
   return (
     <div className="auth-page">
       <form className="auth-card" onSubmit={submit}>
-        <h1>ورود به کوزین گالری</h1>
+        <h1>ورود به کازین گالری</h1>
         <label className="field">
           <span>شماره موبایل یا ایمیل</span>
           <input

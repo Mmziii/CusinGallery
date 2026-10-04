@@ -12,7 +12,7 @@ function ShippingReturnsPage() {
     <InfoPageLayout
       title="رویهٔ ارسال و مرجوعی"
       path="/shipping-returns/"
-      description="شرایط ارسال، هزینه‌ها، بازهٔ تحویل و رویهٔ مرجوع کردن کالا در کوزین گالری."
+      description="شرایط ارسال، هزینه‌ها، بازهٔ تحویل و رویهٔ مرجوع کردن کالا در کازین گالری."
     >
       <h2>ارسال</h2>
       <ul>
