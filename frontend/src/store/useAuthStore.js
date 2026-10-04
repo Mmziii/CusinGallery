@@ -21,11 +21,18 @@ const useAuthStore = create((set) => ({
 
   async fetchMe() {
     try {
-      const user = await authApi.fetchMe();
-      set({ user, isAuthenticated: true, isLoading: false, error: null });
+      const data = await authApi.fetchMe();
+      // GET /accounts/me/ answers 200 for everyone: an authenticated
+      // visitor gets the user object, an anonymous one {"user": null}.
+      // Both are normal states -- neither logs nor surfaces an error.
+      if (!data || data.user === null || !data.id) {
+        set({ user: null, isAuthenticated: false, isLoading: false, error: null });
+        return { success: false };
+      }
+      set({ user: data, isAuthenticated: true, isLoading: false, error: null });
       return { success: true };
     } catch (err) {
-      // 401/403 just means "not logged in" -- not an error to surface.
+      // Network failure etc. -- still just "not logged in right now".
       set({ user: null, isAuthenticated: false, isLoading: false, error: null });
       return { success: false };
     }

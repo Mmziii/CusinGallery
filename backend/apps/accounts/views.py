@@ -22,7 +22,7 @@ from django.utils.decorators import method_decorator
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 from django.views.decorators.csrf import ensure_csrf_cookie
-from rest_framework import generics, permissions, status, viewsets
+from rest_framework import exceptions, generics, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -93,26 +93,36 @@ class LogoutView(APIView):
         return Response({"detail": "Logged out."})
 
 
-class MeView(generics.RetrieveUpdateAPIView):
+class MeView(generics.GenericAPIView):
     """GET the current user; PATCH to update the editable profile fields.
     PUT is intentionally not supported -- see ProfileUpdateSerializer for
-    which fields are (and aren't) editable here."""
+    which fields are (and aren't) editable here.
 
-    permission_classes = [permissions.IsAuthenticated]
+    GET is deliberately open to anonymous visitors and answers 200 with
+    ``{"user": null}`` for them: "not logged in" is a NORMAL state for a
+    storefront probe that runs on every page load, and answering 401/403
+    made every logged-out visit log a red network error in the browser
+    console. PATCH stays authentication-gated (401/403 as before).
+    """
+
+    permission_classes = [permissions.AllowAny]
     http_method_names = ["get", "patch", "head", "options"]
 
-    def get_object(self):
-        return self.request.user
+    def get(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return Response({"user": None, "detail": "Not logged in."})
+        return Response(UserSerializer(request.user).data)
 
     def get_serializer_class(self):
         return UserSerializer if self.request.method == "GET" else ProfileUpdateSerializer
 
     def patch(self, request, *args, **kwargs):
-        instance = self.get_object()
-        serializer = ProfileUpdateSerializer(instance, data=request.data, partial=True)
+        if not request.user.is_authenticated:
+            raise exceptions.NotAuthenticated()
+        serializer = ProfileUpdateSerializer(request.user, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        return Response(UserSerializer(instance).data)
+        return Response(UserSerializer(request.user).data)
 
 
 class ChangePasswordView(APIView):

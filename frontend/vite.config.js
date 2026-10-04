@@ -32,4 +32,12 @@ export default defineConfig({
     outDir: "dist",
     sourcemap: false,
   },
+  // `npm test` = vitest run (see package.json). The smoke test renders the
+  // real app root in jsdom with a fake axios adapter (src/test/setup.js).
+  test: {
+    environment: "jsdom",
+    globals: false,
+    setupFiles: ["src/test/setup.js"],
+    include: ["src/**/*.test.{js,jsx}"],
+  },
 });

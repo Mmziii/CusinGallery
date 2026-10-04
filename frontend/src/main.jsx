@@ -1,4 +1,5 @@
 import { StrictMode } from "react";
+import { BrowserRouter } from "react-router-dom";
 import { createRoot } from "react-dom/client";
 
 import App from "./App.jsx";
@@ -15,8 +16,14 @@ import "./styles/storefront.css";
 // cookie flowing too).
 ensureCsrfCookie();
 
+// App is a bare <Routes> tree: react-router needs a Router context
+// above it or every hook (useSearchParams, useParams, <Link>) throws
+// and the page renders WHITE. This wrapper is the fix for that bug --
+// the smoke test in src/App.smoke.test.jsx guards it.
 createRoot(document.getElementById("root")).render(
   <StrictMode>
-    <App />
+    <BrowserRouter>
+      <App />
+    </BrowserRouter>
   </StrictMode>
 );
