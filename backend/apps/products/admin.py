@@ -86,13 +86,33 @@ class BrandAdmin(admin.ModelAdmin):
         queryset.update(is_featured=False)
 
 
+class LowStockFilter(admin.SimpleListFilter):
+    """Part R4 item 3: one-click view of everything at/below the owner
+    low-stock threshold (env LOW_STOCK_THRESHOLD, default 3)."""
+
+    title = "وضعیت موجودی"
+    parameter_name = "low_stock"
+
+    def lookups(self, request, model_admin):
+        return (("1", "موجودی کم"), ("0", "موجودی کافی"))
+
+    def queryset(self, request, queryset):
+        from django.conf import settings
+
+        if self.value() == "1":
+            return queryset.filter(stock_quantity__lte=settings.LOW_STOCK_THRESHOLD)
+        if self.value() == "0":
+            return queryset.filter(stock_quantity__gt=settings.LOW_STOCK_THRESHOLD)
+        return queryset
+
+
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
     list_display = (
         "thumbnail_column", "name", "sku", "category", "brand", "price",
         "stock_column", "is_active", "is_featured",
     )
-    list_filter = ("is_active", "is_featured", "is_new", "is_best_seller", "category", "brand")
+    list_filter = ("is_active", "is_featured", "is_new", "is_best_seller", "category", "brand", LowStockFilter)
     search_fields = ("name", "sku", "slug")
     prepopulated_fields = {"slug": ("name",)}
     autocomplete_fields = ("category", "brand")

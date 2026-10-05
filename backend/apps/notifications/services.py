@@ -35,6 +35,7 @@ from django.core.mail import send_mail
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
+from .messengers import get_enabled_messengers
 from .models import NotificationLog
 from .providers import get_provider
 
@@ -47,6 +48,9 @@ class Events:
     PASSWORD_RESET = "password_reset"
     ORDER_CONFIRMED = "order_confirmed"
     ORDER_SHIPPED = "order_shipped"
+    # Part R4 item 3: OWNER-facing alerts (never sent to customers).
+    OWNER_PAID_ORDER = "owner_paid_order"
+    OWNER_LOW_STOCK = "owner_low_stock"
 
 
 # ---------------------------------------------------------------------------
@@ -426,3 +430,201 @@ def _error_text(exc: Exception) -> str:
     already written to avoid URLs/keys, this is the last line of defense)
     and keep the stored error bounded."""
     return f"{type(exc).__name__}: {exc}"[:2000]
+
+
+# ---------------------------------------------------------------------------
+# Owner alerts (Part R4 item 3)
+# ---------------------------------------------------------------------------
+# The shop owner is told about two things customers never trigger for
+# themselves: a newly PAID order, and stock crossing down to/through the
+# low-stock threshold after a sale. Recipients come ONLY from env
+# (OWNER_ALERT_PHONES / OWNER_ALERT_EMAILS); an empty value turns that
+# channel off. Messenger bots (Telegram/Bale, apps/notifications/
+# messengers.py) join in only when explicitly configured. Everything runs
+# post-commit, is idempotent per (event, order, channel) through the
+# NotificationLog unique constraint, and NEVER raises into the payment or
+# inventory flows.
+
+def _split_csv(value):
+    return [part.strip() for part in (value or "").split(",") if part.strip()]
+
+
+def _admin_order_url(order_id):
+    """Deep link into the order's admin change page, honouring the
+    configurable ADMIN_URL path (Part R3)."""
+    import os
+
+    admin_path = (os.environ.get("ADMIN_URL", "admin/") or "admin/").strip().strip("/") or "admin"
+    return f"{settings.FRONTEND_URL.rstrip('/')}/{admin_path}/orders/order/{order_id}/change/"
+
+
+@dataclass(frozen=True)
+class _OwnerOrderNotice:
+    """Post-commit snapshot of a newly paid order for the owner alert."""
+
+    order_id: int
+    order_number: str
+    total: int
+    item_count: int
+    shipping_label: str
+    customer_name: str
+    customer_phone: str
+    admin_url: str
+
+
+def notify_owner_new_paid_order(order) -> None:
+    """Queue the owner alert for a newly paid order. Call INSIDE the
+    payment-verification transaction (delivery is on_commit)."""
+    from apps.orders.shipping import method_label
+
+    user = order.user
+    notice = _OwnerOrderNotice(
+        order_id=order.pk,
+        order_number=order.order_number,
+        total=order.total,
+        item_count=sum(item.quantity for item in order.items.all()),
+        shipping_label=method_label(order.shipping_method),
+        customer_name=(user.get_full_name() or "").strip() or "-",
+        customer_phone=user.phone or "",
+        admin_url=_admin_order_url(order.pk),
+    )
+    transaction.on_commit(lambda: _deliver_owner_paid_order(notice))
+
+
+def _owner_paid_order_text(notice: _OwnerOrderNotice) -> str:
+    return (
+        "سفارش جدید پرداخت شد - کازین گالری\n"
+        f"شماره سفارش: {notice.order_number}\n"
+        f"مبلغ: {notice.total:,} تومان\n"
+        f"تعداد اقلام: {notice.item_count}\n"
+        f"روش ارسال: {notice.shipping_label}\n"
+        f"مشتری: {notice.customer_name} ({notice.customer_phone})\n"
+        f"پنل مدیریت: {notice.admin_url}"
+    )
+
+
+def _deliver_owner_paid_order(notice: _OwnerOrderNotice) -> None:
+    """Post-commit owner delivery. NEVER raises."""
+    try:
+        text = _owner_paid_order_text(notice)
+        _deliver_owner_alert(
+            event=Events.OWNER_PAID_ORDER,
+            order_id=notice.order_id,
+            sms_text=text,
+            email_subject=f"سفارش جدید پرداخت شد: {notice.order_number}",
+            email_body=text,
+        )
+    except Exception:  # pragma: no cover - containment backstop
+        logger.exception("Unexpected error delivering owner paid-order alert %s",
+                         notice.order_number)
+
+
+def notify_owner_low_stock(order, crossings) -> None:
+    """Queue ONE owner alert for every stock crossing detected by this
+    order's decrement. `crossings` is a list of (label, remaining) tuples
+    captured while the row locks are held; delivery is on_commit."""
+    if not crossings:
+        return
+    snapshot = (order.pk, order.order_number, tuple(crossings))
+    transaction.on_commit(lambda: _deliver_owner_low_stock(*snapshot))
+
+
+def _owner_low_stock_text(order_number, crossings) -> str:
+    lines = ["هشدار موجودی کم - کازین گالری"]
+    for label, remaining in crossings:
+        lines.append(f"- {label}: موجودی {remaining}")
+    lines.append(f"سفارش مربوط: {order_number}")
+    lines.append(f"آستانه هشدار: {settings.LOW_STOCK_THRESHOLD}")
+    return "\n".join(lines)
+
+
+def _deliver_owner_low_stock(order_id, order_number, crossings) -> None:
+    try:
+        text = _owner_low_stock_text(order_number, crossings)
+        _deliver_owner_alert(
+            event=Events.OWNER_LOW_STOCK,
+            order_id=order_id,
+            sms_text=text,
+            email_subject="هشدار موجودی کم - کازین گالری",
+            email_body=text,
+        )
+    except Exception:  # pragma: no cover
+        logger.exception("Unexpected error delivering owner low-stock alert")
+
+
+def _deliver_owner_alert(event, order_id, sms_text, email_subject, email_body) -> None:
+    """The shared per-channel delivery for owner alerts. Each channel gets
+    ONE NotificationLog row (the idempotency backstop); inside a channel,
+    every configured recipient is attempted and one recipient's failure
+    never stops the others."""
+    phones = _split_csv(settings.OWNER_ALERT_PHONES)
+    emails = _split_csv(settings.OWNER_ALERT_EMAILS)
+
+    if phones:
+        log = _begin_log(
+            event=event, channel=NotificationLog.Channel.SMS, order_id=order_id,
+            recipient_masked="، ".join(mask_phone(p) for p in phones),
+        )
+        if log is not None:
+            try:
+                if not settings.SMS_ENABLED:
+                    _finish_log(log, NotificationLog.Status.SKIPPED,
+                                error="SMS_ENABLED=False -- owner SMS channel off.")
+                else:
+                    sent_ids, errors = [], []
+                    for phone in phones:
+                        try:
+                            sent_ids.append(get_provider().send(phone, message=sms_text))
+                        except Exception as exc:
+                            errors.append(f"{mask_phone(phone)}: {_error_text(exc)}")
+                            logger.error("Owner SMS failed (%s): %s", mask_phone(phone), exc)
+                    if sent_ids:
+                        _finish_log(log, NotificationLog.Status.SENT,
+                                    error="; ".join(errors),
+                                    provider_message_id=sent_ids[0])
+                    else:
+                        _finish_log(log, NotificationLog.Status.FAILED,
+                                    error="; ".join(errors) or "no recipients")
+            except Exception as exc:
+                _finish_log(log, NotificationLog.Status.FAILED, error=_error_text(exc))
+
+    if emails:
+        log = _begin_log(
+            event=event, channel=NotificationLog.Channel.EMAIL, order_id=order_id,
+            recipient_masked="، ".join(mask_email(e) for e in emails),
+        )
+        if log is not None:
+            try:
+                if _smtp_required_but_unconfigured():
+                    _finish_log(log, NotificationLog.Status.SKIPPED,
+                                error="EMAIL_HOST is not configured (SMTP disabled).")
+                else:
+                    send_mail(subject=email_subject, message=email_body, from_email=None,
+                              recipient_list=emails, fail_silently=False)
+                    _finish_log(log, NotificationLog.Status.SENT)
+            except Exception as exc:
+                _finish_log(log, NotificationLog.Status.FAILED, error=_error_text(exc))
+                logger.error("Owner email failed for %s: %s", event, exc)
+
+    messengers = get_enabled_messengers()
+    if messengers:
+        log = _begin_log(
+            event=event, channel=NotificationLog.Channel.MESSENGER, order_id=order_id,
+            recipient_masked="، ".join(f"{m.name}:{mask_phone(str(m.chat_id))}"
+                                       for m in messengers),
+        )
+        if log is not None:
+            sent_ids, errors = [], []
+            for messenger in messengers:
+                try:
+                    sent_ids.append(messenger.send(sms_text))
+                except Exception as exc:
+                    errors.append(f"{messenger.name}: {_error_text(exc)}")
+                    logger.error("Owner messenger (%s) failed: %s", messenger.name, exc)
+            if sent_ids:
+                _finish_log(log, NotificationLog.Status.SENT,
+                            error="; ".join(errors),
+                            provider_message_id=(sent_ids[0] or "")[:64])
+            else:
+                _finish_log(log, NotificationLog.Status.FAILED,
+                            error="; ".join(errors) or "no messengers")

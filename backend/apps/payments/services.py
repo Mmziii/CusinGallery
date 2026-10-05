@@ -384,9 +384,16 @@ def _complete_successful_payment(payment: Payment, verification) -> Payment:
     # the delivery never holds this transaction open, provider failures
     # can never break the payment, and the NotificationLog unique
     # constraint keeps replayed callbacks from notifying twice.
-    from apps.notifications.services import Events, notify_order_event
+    from apps.notifications.services import (
+        Events,
+        notify_order_event,
+        notify_owner_new_paid_order,
+    )
 
     notify_order_event(order, Events.ORDER_CONFIRMED)
+    # Part R4 item 3: tell the OWNER a paid order arrived (on_commit,
+    # idempotent, provider failures can never break this transition).
+    notify_owner_new_paid_order(order)
 
     logger.info(
         "Payment %s verified: order %s paid (%s Toman).",

@@ -51,6 +51,13 @@ THIRD_PARTY_APPS = [
     "rest_framework",
     "corsheaders",
     "django_filters",
+    # Part R4 item 4: admin two-factor auth (TOTP + one-time backup
+    # codes). Chosen over django-two-factor-auth: django-otp is the
+    # smaller, dependency-light core the larger package wraps itself,
+    # and all we need is admin enforcement + device models.
+    "django_otp",
+    "django_otp.plugins.otp_totp",
+    "django_otp.plugins.otp_static",
 ]
 
 # Local apps. Each is a clean foundation in Phase 1 -- business models and
@@ -80,6 +87,9 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    # Part R4 item 4: exposes request.user.is_verified() for the admin
+    # two-factor gate (inactive unless ADMIN_2FA_REQUIRED is on).
+    "django_otp.middleware.OTPMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -340,6 +350,37 @@ SMS_SENDER = env("SMS_SENDER", default="")
 SMS_TEMPLATE_PASSWORD_RESET = env("SMS_TEMPLATE_PASSWORD_RESET", default="")
 SMS_TEMPLATE_ORDER_CONFIRMED = env("SMS_TEMPLATE_ORDER_CONFIRMED", default="")
 SMS_TEMPLATE_ORDER_SHIPPED = env("SMS_TEMPLATE_ORDER_SHIPPED", default="")
+
+# --- Owner alerts (Part R4 item 3) ----------------------------------------
+# The owner (not the customer) is told about important shop events:
+# a new PAID order, and stock crossing down to/through the low-stock
+# threshold. Recipients come ONLY from env, comma separated; an EMPTY
+# value turns that channel off entirely (the default -- nothing is sent
+# until the owner opts in by filling these in).
+OWNER_ALERT_PHONES = env("OWNER_ALERT_PHONES", default="")
+OWNER_ALERT_EMAILS = env("OWNER_ALERT_EMAILS", default="")
+
+# Messenger channels (disabled by default): when token AND chat id are
+# both set, owner alerts are ALSO pushed there. Telegram may be filtered
+# or unreliable from Iranian servers -- Bale is the domestic option.
+TELEGRAM_BOT_TOKEN = env("TELEGRAM_BOT_TOKEN", default="")
+TELEGRAM_CHAT_ID = env("TELEGRAM_CHAT_ID", default="")
+TELEGRAM_API_BASE = env("TELEGRAM_API_BASE", default="https://api.telegram.org")
+BALE_BOT_TOKEN = env("BALE_BOT_TOKEN", default="")
+BALE_CHAT_ID = env("BALE_CHAT_ID", default="")
+BALE_API_BASE = env("BALE_API_BASE", default="https://tapi.bale.ai/business")
+
+# Owner low-stock alert threshold: an alert fires ONCE when a variant's
+# (or a variant-less product's) stock crosses down to or below this
+# number after a sale, and re-arms when stock goes back above it.
+LOW_STOCK_THRESHOLD = env.int("LOW_STOCK_THRESHOLD", default=3)
+
+# Admin two-factor auth (Part R4 item 4): when on, staff/superusers can
+# only enter the admin with a verified TOTP device (+ one-time backup
+# codes). Default OFF here so development/tests behave as before;
+# config/settings/production.py defaults it ON, and check_production
+# FAILs if it is explicitly disabled there.
+ADMIN_2FA_REQUIRED = env.bool("ADMIN_2FA_REQUIRED", default=False)
 
 # Seconds to wait for an SMS provider HTTP call before treating it as
 # unreachable. Delivery failures never break the triggering flow.

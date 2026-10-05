@@ -23,6 +23,13 @@ from apps.core.views import healthz, robots_txt, sitemap_xml
 _admin_path = os.environ.get("ADMIN_URL", "admin/").strip()
 _admin_path = (_admin_path.strip("/") + "/") if _admin_path.strip("/") else "admin/"
 
+# Part R4 item 4: admin two-factor gate -- swaps the admin site class to
+# django-otp's OTPAdminSite when ADMIN_2FA_REQUIRED is on (no-op in dev
+# and tests, where the flag defaults off). Must run before admin.urls.
+from apps.core.admin_2fa import configure_admin_2fa  # noqa: E402
+
+configure_admin_2fa()
+
 urlpatterns = [
     path(_admin_path, admin.site.urls),
     path("api/v1/", include("config.api_urls")),

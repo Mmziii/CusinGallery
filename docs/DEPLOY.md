@@ -158,6 +158,11 @@ nano .env
 | `KAVENEGAR_API_KEY` | کلید API پنل کاوه‌نگار (بخش ۱۳) |
 | `SMS_SENDER` | شمارهٔ خط ارسال کاوه‌نگار (برای پیامک مستقیم) |
 | `SMS_TEMPLATE_*` | نام قالب‌های تأییدشدهٔ پنل کاوه‌نگار؛ خالی = متن آمادهٔ خود سیستم |
+| `OWNER_ALERT_PHONES` / `OWNER_ALERT_EMAILS` | شماره/ایمیل خودتان برای دریافت هشدار «سفارش جدید پرداخت شد» و «موجودی کم» (جداشده با کاما؛ خالی = آن کانال خاموش) |
+| `LOW_STOCK_THRESHOLD` | آستانهٔ هشدار موجودی کم (پیش‌فرض ۳) |
+| `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | اختیاری — ارسال هشدارهای مالک به تلگرام؛ هر دو لازم است وگرنه کانال خاموش می‌ماند (تلگرام از سرورهای ایرانی ممکن است فیلتر/ناپایدار باشد) |
+| `BALE_BOT_TOKEN` / `BALE_CHAT_ID` | اختیاری — همین قابلیت در پیام‌رسان بله (پیش‌فرض داخلی؛ آدرس `https://tapi.bale.ai/business/bot<TOKEN>/sendMessage`) |
+| `ADMIN_2FA_REQUIRED` | در production پیش‌فرض `True` است؛ ورود به پنل مدیریت با کد یک‌بارمصرف اپلیکیشن (بخش ۲۲). غیرفعال‌سازی صریح = خطای FAIL در `check_production` |
 | `HTTPS_ENABLED` | تا وقتی SSL نگرفته‌اید `False`؛ بعد از بخش ۹ → `True` |
 | `ADMIN_URL` | آدرس پنل مدیریت. پیش‌فرض `admin/` است ولی ربات‌ها مدام آن را اسکن می‌کنند؛ یک مقدار خصوصی بگذارید (مثلاً `panel-cusin-88`) و بک‌اند را ری‌استارت کنید — پنل در `https://cusin.ir/panel-cusin-88/` باز می‌شود |
 | `SENTRY_DSN` | اختیاری — DSN پروژهٔ رایگان sentry.io برای دریافت خطاها |
@@ -474,6 +479,39 @@ curl https://cusin.ir/healthz
 docker compose -f docker-compose.prod.yml build frontend && \
 docker compose -f docker-compose.prod.yml up -d
 ```
+
+## ۲۲. تائید دومرحله‌ای پنل مدیریت (2FA)
+
+در production ورود به پنل مدیریت علاوه بر نام‌کاربری/رمز، به یک **کد یک‌بارمصرف**
+از اپلیکیشن authenticator (TOTP) نیاز دارد (`ADMIN_2FA_REQUIRED` در production به‌طور
+پیش‌فرض روشن است و `manage.py check_production` در صورت غیرفعال‌شدنِ صریح، خطای FAIL می‌دهد).
+
+### ثبت‌نام دستگاه برای یک کاربر (enroll)
+
+```bash
+docker compose -f docker-compose.prod.yml exec backend \
+    python manage.py enroll_admin_2fa <username>
+```
+
+خروجی سه چیز می‌دهد:
+1. آدرس `otpauth://...` — همین آدرس را در اپلیکیشن authenticator کاربر
+   (Google Authenticator، FreeOTP، Microsoft Authenticator و…) اسکن/وارد کنید؛
+2. مسیر یک فایل **QR** (PNG) — برای اسکن راحت‌تر با گوشی؛
+3. چند **کد پشتیبان یک‌بارمصرف** — هر کدام فقط یک بار کار می‌کند؛ جای امن نگه‌دارید
+   (اگر گوشی گم شود و این کدها هم نباشند، فقط با دستور بازیابی زیر می‌توان وارد شد).
+
+### بازیابی (گم‌شدن گوشی یا کدها)
+
+```bash
+docker compose -f docker-compose.prod.yml exec backend \
+    python manage.py reset_admin_2fa <username>     # حذف دستگاه‌ها
+docker compose -f docker-compose.prod.yml exec backend \
+    python manage.py enroll_admin_2fa <username>    # ثبت‌نام دوباره
+```
+
+> مشتریان هیچ تأثیری نمی‌بینند؛ این لایه فقط برای ورود کارکنان به `/admin/` است.
+> برای غیرفعال‌کردن (توصیه نمی‌شود) مقدار `ADMIN_2FA_REQUIRED=False` را در `.env`
+> بگذارید و بک‌اند را ری‌استارت کنید.
 
 ---
 

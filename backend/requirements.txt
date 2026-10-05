@@ -33,6 +33,12 @@ Pillow==10.4.0
 # stdlib-only; this adds the Excel half of "CSV/Excel import".
 openpyxl==3.1.5
 
+# --- Admin two-factor auth (Part R4 item 4) --------------------------------
+# TOTP + one-time backup-code devices for the admin login gate. qrcode
+# renders the enrollment QR PNG printed by manage.py enroll_admin_2fa.
+django-otp==1.7.3
+qrcode==8.2
+
 # --- Static & production server -----------------------------------------------
 gunicorn==22.0.0
 whitenoise==6.7.0

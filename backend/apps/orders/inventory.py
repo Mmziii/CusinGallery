@@ -27,9 +27,19 @@ at checkout, not here.
 """
 import logging
 
+from django.conf import settings
+
 from apps.products.models import Product, ProductVariant
 
 logger = logging.getLogger("payments")
+
+
+def _crossing_label(row, item) -> str:
+    """Human-readable Persian label for a low-stock alert line."""
+    base = item.product.name
+    if item.variant_id is not None:
+        return f"{base} (SKU: {row.sku})"
+    return base
 
 
 def decrement_stock_for_order(order) -> None:
@@ -46,6 +56,8 @@ def decrement_stock_for_order(order) -> None:
     TransactionManagementError -- a deliberate fail-loud guard against
     someone ever invoking it from a non-atomic context.
     """
+    threshold = settings.LOW_STOCK_THRESHOLD
+    crossings = []
     for item in order.items.select_related("product", "variant"):
         if item.variant_id is not None:
             target_model, target_id, label = ProductVariant, item.variant_id, f"variant {item.variant_id}"
@@ -59,8 +71,18 @@ def decrement_stock_for_order(order) -> None:
                 "requires %d; clamping at 0.",
                 order.order_number, label, row.stock_quantity, item.quantity,
             )
-        row.stock_quantity = max(0, row.stock_quantity - item.quantity)
+        old_stock = row.stock_quantity
+        row.stock_quantity = max(0, old_stock - item.quantity)
         row.save(update_fields=["stock_quantity", "updated_at"])
+        # Part R4 item 3: a DOWNWARD crossing of the low-stock threshold
+        # alerts the owner exactly once per crossing (re-arms only after
+        # stock goes back above the threshold).
+        if old_stock > threshold >= row.stock_quantity:
+            crossings.append((_crossing_label(row, item), row.stock_quantity))
+    if crossings:
+        from apps.notifications.services import notify_owner_low_stock
+
+        notify_owner_low_stock(order, crossings)
 
 
 def restore_stock_for_order(order) -> None:

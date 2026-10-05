@@ -167,5 +167,12 @@ if SMS_ENABLED:
             "run without SMS."
         )
 
+# --- Admin two-factor auth is ON by default in production (Part R4) -------
+# Set ADMIN_2FA_REQUIRED=False explicitly to disable it (strongly
+# discouraged -- check_production reports it as a FAIL). Enrollment and
+# recovery commands: manage.py enroll_admin_2fa / reset_admin_2fa
+# (docs/DEPLOY.md + docs/OWNER_GUIDE.fa.md).
+ADMIN_2FA_REQUIRED = env.bool("ADMIN_2FA_REQUIRED", default=True)
+
 # Production always sends real email via SMTP.
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"

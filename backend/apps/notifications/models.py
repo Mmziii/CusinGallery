@@ -25,6 +25,8 @@ class NotificationLog(TimeStampedModel):
     class Channel(models.TextChoices):
         SMS = "sms", "پیامک"
         EMAIL = "email", "ایمیل"
+        # Part R4 item 3: messenger bots (Telegram/Bale) for OWNER alerts.
+        MESSENGER = "messenger", "پیام‌رسان"
 
     class Status(models.TextChoices):
         PENDING = "pending", "در انتظار ارسال"

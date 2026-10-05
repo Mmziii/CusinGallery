@@ -278,6 +278,18 @@ class Command(BaseCommand):
             add(PASS, f"ADMIN_URL customised ({admin_url}).",
                 "آدرس پنل مدیریت سفارشی‌سازی شده است.")
 
+        # --- Admin two-factor auth (Part R4 item 4) ------------------------------------
+        raw_2fa = os.environ.get("ADMIN_2FA_REQUIRED")
+        if raw_2fa is not None and raw_2fa.strip().lower() in {"0", "false", "no", "off"}:
+            add(FAIL,
+                "ADMIN_2FA_REQUIRED is explicitly disabled -- the admin panel must stay "
+                "behind two-factor auth in production (remove the variable or set True).",
+                "تائید دومرحله‌ای پنل مدیریت صریحاً غیرفعال شده است — در production باید روشن "
+                "بماند (متغیر را حذف کنید یا True بگذارید).")
+        else:
+            add(PASS, "ADMIN_2FA_REQUIRED is on (production default).",
+                "تائید دومرحله‌ای پنل مدیریت فعال است (پیش‌فرض production).")
+
         # --- The real boot test -------------------------------------------------------------
         boot_error = self._production_boot_check()
         if boot_error:
