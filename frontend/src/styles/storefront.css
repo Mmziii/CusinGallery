@@ -462,6 +462,10 @@ input:focus, textarea:focus, select:focus {
 .complements__name { padding: 8px 12px 0; color: var(--color-text); }
 .complements__price { padding: 4px 12px 10px; color: var(--color-text-muted); }
 .complements__actions { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; margin-top: var(--space-3); }
+
+/* Part R5 item 10: recently-viewed strip (home / product / cart). */
+.recently-viewed { margin-top: var(--space-5); }
+.recently-viewed h2 { margin-bottom: var(--space-3); }
 .related-card__price { font-weight: 700; padding-bottom: var(--space-2) !important; color: var(--color-primary); }
 
 /* ============================================================== Reviews */

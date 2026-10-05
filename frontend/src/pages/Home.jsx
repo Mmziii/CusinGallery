@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import BrandTiles from "../components/BrandTiles";
 import Icon from "../components/Icon";
 import ProductCard from "../components/ProductCard";
+import RecentlyViewed from "../components/RecentlyViewed";
 import StarRating from "../components/StarRating";
 import SmartImage from "../components/SmartImage";
 import { CardRowSkeleton, HeroSkeleton } from "../components/Skeletons";
@@ -324,6 +325,7 @@ function Home() {
       {bestSellersState.data?.results?.length ? (
         <ReviewHighlights products={bestSellersState.data.results} />
       ) : null}
+      <RecentlyViewed />
       <BrandStory />
     </div>
   );

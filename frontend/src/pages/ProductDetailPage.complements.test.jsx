@@ -147,4 +147,12 @@ describe("product page complements section", () => {
     await screen.findByRole("heading", { level: 1, name: "قابلمه گرانیتی" });
     expect(screen.queryByText("پیشنهاد همراه")).toBeNull();
   });
+
+  it("records the view in browser-local storage (item 10)", async () => {
+    renderPage();
+    await screen.findByText("پیشنهاد همراه");
+    await waitFor(() => {
+      expect(JSON.parse(localStorage.getItem("cusin_recently_viewed"))).toEqual([1]);
+    });
+  });
 });

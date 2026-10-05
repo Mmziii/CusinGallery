@@ -2,6 +2,7 @@ import { usePageMeta } from "../hooks/usePageMeta";
 import { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
+import RecentlyViewed from "../components/RecentlyViewed";
 import SmartImage from "../components/SmartImage";
 import { EmptyState, ErrorState, Spinner, errorMessage } from "../components/ui";
 import useAuthStore from "../store/useAuthStore";
@@ -92,6 +93,9 @@ function GuestCartView() {
           <Link className="btn btn--outline" to="/register/">ثبت‌نام</Link>
         </div>
       </div>
+
+      {/* Part R5 item 10 */}
+      <RecentlyViewed />
     </div>
   );
 }
@@ -203,6 +207,9 @@ function CartPage() {
           </p>
         </aside>
       </div>
+
+      {/* Part R5 item 10 */}
+      <RecentlyViewed />
     </div>
   );
 }

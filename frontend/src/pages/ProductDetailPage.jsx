@@ -18,6 +18,8 @@ import useAuthStore from "../store/useAuthStore";
 import useCartStore from "../store/useCartStore";
 import { normalizeApiError } from "../utils/apiError";
 import { formatPrice } from "../utils/formatPrice";
+import { recordView } from "../utils/recentlyViewed";
+import RecentlyViewed from "../components/RecentlyViewed";
 
 function Stars({ value, size = "md" }) {
   // Part R2: SVG stars (no text glyphs).
@@ -266,6 +268,11 @@ function ProductDetailPage() {
   const [bisState, setBisState] = useState(null); // null | busy | done | error
 
   const images = product?.images || [];
+
+  // Part R5 item 10: record the view in browser-local storage only.
+  useEffect(() => {
+    if (product?.id) recordView(product.id);
+  }, [product?.id]);
 
   // Per-product SEO/social metadata (Phase E). Values start undefined
   // and settle once the product loads; the canonical always points at
@@ -539,6 +546,9 @@ function ProductDetailPage() {
       </div>
 
       <ReviewSection product={product} />
+
+      {/* Part R5 item 10: browser-local, server knows nothing about it */}
+      <RecentlyViewed />
 
       <div className="product-detail__stickybar">
         <PriceTag priceInfo={displayPrice} size="md" />
