@@ -17,13 +17,15 @@ from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode
 from rest_framework import serializers
 
+from apps.core.serializers import NullToBlankTextMixin
+
 from . import locations, validators
 from .models import Address, phone_validator
 
 User = get_user_model()
 
 
-class RegisterSerializer(serializers.Serializer):
+class RegisterSerializer(NullToBlankTextMixin, serializers.Serializer):
     """
     Customer self-registration. A plain Serializer, not a ModelSerializer
     -- the input shape (password + password_confirm) doesn't map 1:1 onto
@@ -40,17 +42,17 @@ class RegisterSerializer(serializers.Serializer):
 
     def validate_phone(self, value):
         if User.objects.filter(phone=value).exists():
-            raise serializers.ValidationError("An account with this phone number already exists.")
+            raise serializers.ValidationError("حساب کاربری با این شماره موبایل قبلاً ساخته شده است.")
         return value
 
     def validate_email(self, value):
         if value and User.objects.filter(email=value).exists():
-            raise serializers.ValidationError("An account with this email already exists.")
+            raise serializers.ValidationError("حساب کاربری با این ایمیل قبلاً ساخته شده است.")
         return value
 
     def validate(self, attrs):
         if attrs["password"] != attrs["password_confirm"]:
-            raise serializers.ValidationError({"password_confirm": "Passwords do not match."})
+            raise serializers.ValidationError({"password_confirm": "رمز عبور و تکرار آن یکسان نیستند."})
         # CUSTOMER policy only: min 8 chars + ASCII (see passwords.py).
         # Staff/superuser passwords keep Django's strict validators.
         try:
@@ -72,7 +74,7 @@ class RegisterSerializer(serializers.Serializer):
         return user
 
 
-class LoginSerializer(serializers.Serializer):
+class LoginSerializer(NullToBlankTextMixin, serializers.Serializer):
     """
     Accepts either phone or email as the identifier. Does NOT go through
     Django's authenticate()/auth backends -- the user is looked up
@@ -97,7 +99,7 @@ class LoginSerializer(serializers.Serializer):
                 "No account matches those credentials, or the password is incorrect."
             )
         if not user.is_active:
-            raise serializers.ValidationError("This account is inactive.")
+            raise serializers.ValidationError("این حساب کاربری غیرفعال است.")
 
         attrs["user"] = user
         return attrs
@@ -118,7 +120,7 @@ class UserSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-class ProfileUpdateSerializer(serializers.ModelSerializer):
+class ProfileUpdateSerializer(NullToBlankTextMixin, serializers.ModelSerializer):
     """
     Used for PATCH /me/. Deliberately excludes `phone` -- changing the
     phone number a real e-commerce account logs in with must require
@@ -139,11 +141,11 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
         if value:
             qs = User.objects.filter(email=value).exclude(pk=self.instance.pk)
             if qs.exists():
-                raise serializers.ValidationError("An account with this email already exists.")
+                raise serializers.ValidationError("حساب کاربری با این ایمیل قبلاً ساخته شده است.")
         return value
 
 
-class ChangePasswordSerializer(serializers.Serializer):
+class ChangePasswordSerializer(NullToBlankTextMixin, serializers.Serializer):
     current_password = serializers.CharField(write_only=True)
     new_password = serializers.CharField(write_only=True)
     new_password_confirm = serializers.CharField(write_only=True)
@@ -151,12 +153,12 @@ class ChangePasswordSerializer(serializers.Serializer):
     def validate_current_password(self, value):
         user = self.context["request"].user
         if not user.check_password(value):
-            raise serializers.ValidationError("Current password is incorrect.")
+            raise serializers.ValidationError("رمز عبور فعلی نادرست است.")
         return value
 
     def validate(self, attrs):
         if attrs["new_password"] != attrs["new_password_confirm"]:
-            raise serializers.ValidationError({"new_password_confirm": "Passwords do not match."})
+            raise serializers.ValidationError({"new_password_confirm": "رمز عبور و تکرار آن یکسان نیستند."})
         user = self.context["request"].user
         try:
             validate_customer_password(attrs["new_password"], user=user)
@@ -171,11 +173,11 @@ class ChangePasswordSerializer(serializers.Serializer):
         return user
 
 
-class PasswordResetRequestSerializer(serializers.Serializer):
+class PasswordResetRequestSerializer(NullToBlankTextMixin, serializers.Serializer):
     identifier = serializers.CharField(help_text="Phone number or email address.")
 
 
-class PasswordResetConfirmSerializer(serializers.Serializer):
+class PasswordResetConfirmSerializer(NullToBlankTextMixin, serializers.Serializer):
     """
     Two accepted shapes, one outcome (a new password for one user):
 
@@ -239,7 +241,7 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
             )
 
         if attrs["new_password"] != attrs["new_password_confirm"]:
-            raise serializers.ValidationError({"new_password_confirm": "Passwords do not match."})
+            raise serializers.ValidationError({"new_password_confirm": "رمز عبور و تکرار آن یکسان نیستند."})
 
         try:
             validate_customer_password(attrs["new_password"], user=user)

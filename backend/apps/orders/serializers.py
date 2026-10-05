@@ -83,7 +83,10 @@ class OrderSerializer(serializers.ModelSerializer):
         return obj.coupon.code if obj.coupon_id else None
 
 
-class CheckoutSerializer(serializers.Serializer):
+from apps.core.serializers import NullToBlankTextMixin
+
+
+class CheckoutSerializer(NullToBlankTextMixin, serializers.Serializer):
     """
     Input for POST /orders/checkout/. Exactly one of two shapes:
         - {"address_id": <id of one of the caller's own saved addresses>}

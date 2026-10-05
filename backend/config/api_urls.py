@@ -37,4 +37,11 @@ urlpatterns = [
     # Public store contact/branding settings (Part 1): footer, contact
     # page, pickup info, floating contact button.
     path("site/settings/", apps_core_views.SiteSettingsView.as_view(), name="site-settings"),
+    # Part S3 item 9: storefront error reports land here and are forwarded
+    # to the existing Sentry setup (only when SENTRY_DSN is configured).
+    path(
+        "site/report-error/",
+        apps_core_views.ReportFrontendErrorView.as_view(),
+        name="site-report-error",
+    ),
 ]

@@ -235,6 +235,9 @@ REST_FRAMEWORK = {
         # Payment initiation creates a gateway attempt per call -- same
         # abuse shape as checkout (both turn intent into persisted rows).
         "payment_initiate": "20/hour",
+        # Frontend error reports (Part S3 item 9): a crashing page may
+        # retry, but the endpoint must not double as a log-flood pipe.
+        "error_report": "30/hour",
     },
 }
 

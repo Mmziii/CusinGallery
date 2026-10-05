@@ -2,6 +2,8 @@ import { Component } from "react";
 import PropTypes from "prop-types";
 import { Link } from "react-router-dom";
 
+import { reportFrontendError } from "../utils/errorReporting";
+
 /**
  * React error boundary (Part R3): a render crash anywhere inside shows a
  * friendly Persian "مشکلی پیش آمد" page with retry + back-home actions,
@@ -22,6 +24,13 @@ class ErrorBoundary extends Component {
   componentDidCatch(error, info) {
     // Visible in the owner's devtools; the user sees the friendly page.
     console.error("render error caught by ErrorBoundary:", error, info?.componentStack);
+    // Part S3 item 9: forward to the backend capture endpoint (no-op
+    // unless VITE_SENTRY_DSN was set at build time).
+    reportFrontendError({
+      message: error?.message || String(error),
+      component: info?.componentStack?.split("\n").find(Boolean)?.trim() || null,
+      stack: error?.stack || null,
+    });
   }
 
   render() {

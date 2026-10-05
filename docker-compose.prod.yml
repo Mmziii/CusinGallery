@@ -126,6 +126,10 @@ services:
         # docs/DEPLOY.md «آنالیتیکس».
         VITE_ANALYTICS_SCRIPT_URL: ${ANALYTICS_SCRIPT_URL:-}
         VITE_ANALYTICS_SITE_ID: ${ANALYTICS_SITE_ID:-}
+        # Optional frontend error reporting (Part S3 item 9): empty =
+        # the browser sends nothing; any non-empty value enables crash
+        # reports through the backend's existing Sentry setup.
+        VITE_SENTRY_DSN: ${VITE_SENTRY_DSN:-}
     restart: unless-stopped
     depends_on:
       - backend

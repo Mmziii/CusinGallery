@@ -139,3 +139,60 @@ class SiteSettingsView(APIView):
         from .models import SiteSettings
 
         return Response(SiteSettingsSerializer(SiteSettings.load()).data)
+
+
+class ReportFrontendErrorView(APIView):
+    """
+    Part S3 item 9: capture endpoint for storefront error reports.
+
+    The frontend ships WITHOUT a Sentry SDK (no heavy dependency); when
+    VITE_SENTRY_DSN is set at build time the ErrorBoundary/window error
+    handler POSTs a short report here, and THIS view forwards it into the
+    existing backend Sentry setup (settings.SENTRY_DSN + sentry_sdk).
+    Both gates must be open for data to leave the browser: no frontend
+    env var = the browser never sends; no backend DSN = the report is
+    only written to the server log.
+
+    AllowAny + strict size caps + a dedicated throttle scope: an error
+    reporter must work for logged-out visitors (crashes are not
+    authenticated) but must not be usable as a free spam/log-flood pipe.
+    """
+
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+    throttle_scope = "error_report"
+
+    def post(self, request):
+        message = str(request.data.get("message") or "")[:2000].strip()
+        if not message:
+            return Response({"message": ["پیام خطا الزامی است."]}, status=400)
+        component = str(request.data.get("component") or "")[:200]
+        page_url = str(request.data.get("url") or "")[:500]
+        stack = str(request.data.get("stack") or "")[:8000]
+
+        forwarded = False
+        if getattr(settings, "SENTRY_DSN", ""):
+            try:
+                import sentry_sdk
+
+                sentry_sdk.set_context(
+                    "frontend_report",
+                    {
+                        "component": component,
+                        "url": page_url,
+                        "stack": stack,
+                    },
+                )
+                sentry_sdk.capture_message(f"[frontend] {message}", level="error")
+                forwarded = True
+            except Exception:  # noqa: BLE001 - reporting must never crash
+                logger.exception("frontend error report could not reach Sentry")
+
+        # Always keep a server-side trace too (works with no Sentry at all).
+        logger.warning(
+            "frontend error report: %s | component=%s url=%s",
+            message,
+            component or "-",
+            page_url or "-",
+        )
+        return Response({"detail": "گزارش دریافت شد.", "forwarded": forwarded}, status=202)

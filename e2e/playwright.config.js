@@ -36,5 +36,12 @@ module.exports = defineConfig({
       name: "chromium",
       use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 800 } },
     },
+    // Part S3 item 12: run the SAME flows with a mobile device profile --
+    //   npx playwright test --project=mobile-pixel
+    //   npx playwright test --project=mobile-iphone
+    // Covers the small-viewport behaviour (drawer menu, sticky add-to-cart
+    // bar, checkout summary reordering) that a desktop run cannot see.
+    { name: "mobile-pixel", use: { ...devices["Pixel 5"] } },
+    { name: "mobile-iphone", use: { ...devices["iPhone 13"] } },
   ],
 });
