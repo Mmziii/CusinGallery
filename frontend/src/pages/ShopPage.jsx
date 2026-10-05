@@ -6,7 +6,7 @@ import Icon from "../components/Icon";
 import ProductCard from "../components/ProductCard";
 import { EmptyState, ErrorState, Spinner } from "../components/ui";
 import { useAsync } from "../hooks/useAsync";
-import { listBrands, listCategories, listProducts } from "../services/catalogApi";
+import { listBrands, listCategories, listFacets, listProducts } from "../services/catalogApi";
 import { errorMessage } from "../components/ui";
 import { normalizeApiError } from "../utils/apiError";
 
@@ -37,12 +37,24 @@ function ShopPage() {
       const value = searchParams.get(key);
       if (value) p[key] = value;
     }
+    // Part R5 item 8: attribute facet filters live in attr_<attribute-slug>
+    // params (comma-joined values) and are forwarded verbatim to the API.
+    for (const key of searchParams.keys()) {
+      const value = searchParams.get(key);
+      if (key.startsWith("attr_") && value) p[key] = value;
+    }
     return p;
   }, [searchParams]);
 
   const productsState = useAsync(() => listProducts(params), [searchParams.toString()]);
   const categoriesState = useAsync(() => listCategories(), []);
   const brandsState = useAsync(() => listBrands(), []);
+  // Facets re-scope whenever the selected category changes; the facet
+  // counts then only cover that category's products.
+  const facetsState = useAsync(
+    () => listFacets(params.category ? { category: params.category } : {}),
+    [params.category || ""]
+  );
 
   const setParam = (key, value) => {
     const next = new URLSearchParams(searchParams);
@@ -56,8 +68,28 @@ function ShopPage() {
     setSearchParams(next);
   };
 
+  // Part R5 item 8: toggle one value inside attr_<attribute-slug>. Values
+  // are comma-joined in the URL so a facet selection survives reload and
+  // is shareable, exactly like every other filter.
+  const selectedAttrValues = (attributeSlug) => {
+    const raw = searchParams.get(`attr_${attributeSlug}`);
+    return raw ? raw.split(",").filter(Boolean) : [];
+  };
+  const toggleAttrValue = (attributeSlug, value) => {
+    const current = selectedAttrValues(attributeSlug);
+    const next = current.includes(value)
+      ? current.filter((v) => v !== value)
+      : [...current, value];
+    setParam(`attr_${attributeSlug}`, next.join(","));
+  };
+
   const products = productsState.data;
   const totalPages = products ? Math.ceil(products.count / 20) : 0;
+
+  // Attribute facet keys currently present in the URL (e.g. ["attr_rang"]).
+  const attrKeys = [...searchParams.keys()].filter(
+    (key) => key.startsWith("attr_") && searchParams.get(key)
+  );
 
   return (
     <div className="shop">
@@ -90,6 +122,28 @@ function ShopPage() {
           </select>
         </div>
 
+        {/* Part R5 item 8: dynamic attribute facets, one checkbox group
+            per attribute that exists on active products (re-scoped to
+            the selected category). */}
+        {(facetsState.data?.results || []).map((attribute) => {
+          const selected = selectedAttrValues(attribute.slug);
+          return (
+            <div className="filter-group" key={attribute.slug}>
+              <h3>{attribute.name}</h3>
+              {attribute.values.map((entry) => (
+                <label className="checkbox" key={entry.value}>
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(entry.value)}
+                    onChange={() => toggleAttrValue(attribute.slug, entry.value)}
+                  />
+                  {entry.value} <span className="filter-group__count">({entry.count})</span>
+                </label>
+              ))}
+            </div>
+          );
+        })}
+
         <div className="filter-group">
           <h3>محدوده قیمت (تومان)</h3>
           <div className="filter-group__row">
@@ -121,10 +175,10 @@ function ShopPage() {
           </label>
         </div>
 
-        {(searchParams.get("category") || searchParams.get("brand") || searchParams.get("min_price") || searchParams.get("max_price") || searchParams.get("in_stock")) ? (
+        {(searchParams.get("category") || searchParams.get("brand") || searchParams.get("min_price") || searchParams.get("max_price") || searchParams.get("in_stock") || attrKeys.length > 0) ? (
           <button type="button" className="btn btn--outline btn--sm" onClick={() => {
             const next = new URLSearchParams(searchParams);
-            ["category", "brand", "min_price", "max_price", "in_stock", "page"].forEach((k) => next.delete(k));
+            ["category", "brand", "min_price", "max_price", "in_stock", "page", ...attrKeys].forEach((k) => next.delete(k));
             setSearchParams(next);
           }}>
             حذف فیلترها
@@ -160,7 +214,20 @@ function ShopPage() {
           const categorySlug = searchParams.get("category");
           const brand = (brandsState.data?.results || []).find((b) => b.slug === brandSlug);
           const category = (categoriesState.data?.results || []).find((c) => c.slug === categorySlug);
-          if (!brand && !category) return null;
+          const facets = facetsState.data?.results || [];
+          const activeAttrs = attrKeys
+            .map((key) => {
+              const facet = facets.find((f) => f.slug === key.slice(5));
+              return {
+                key,
+                // Fall back to the raw slug if the facet payload is not
+                // loaded yet (label still stays human-deletable).
+                name: facet ? facet.name : key.slice(5),
+                values: selectedAttrValues(key.slice(5)).join("، "),
+              };
+            })
+            .filter((entry) => entry.values);
+          if (!brand && !category && activeAttrs.length === 0) return null;
           return (
             <div className="shop__chips">
               {brand ? (
@@ -179,6 +246,14 @@ function ShopPage() {
                   </button>
                 </span>
               ) : null}
+              {activeAttrs.map((entry) => (
+                <span className="shop__chip" key={entry.key}>
+                  {entry.name}: {entry.values}
+                  <button type="button" aria-label={`حذف فیلتر ${entry.name}`} onClick={() => setParam(entry.key, "")}>
+                    <Icon name="close" size={14} />
+                  </button>
+                </span>
+              ))}
             </div>
           );
         })()}

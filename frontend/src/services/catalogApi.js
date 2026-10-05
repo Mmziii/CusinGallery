@@ -49,6 +49,15 @@ export function listProducts(params = {}) {
   return apiClient.get("/products/", { params }).then((res) => res.data);
 }
 
+/**
+ * Part R5 item 8: dynamic attribute facets (one checkbox group per
+ * attribute) for the shop sidebar. Optionally narrowed by category:
+ * { results: [{ slug, name, values: [{ value, count }] }] }.
+ */
+export function listFacets(params = {}) {
+  return apiClient.get("/products/facets/", { params }).then((res) => res.data);
+}
+
 export function getProduct(slug) {
   return apiClient.get(`/products/${slug}/`).then((res) => res.data);
 }
