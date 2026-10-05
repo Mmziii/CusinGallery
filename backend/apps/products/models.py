@@ -16,6 +16,7 @@ assumes and formats plain integer amounts.
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator, RegexValidator
 from django.db import models
+from django.db.models import Q
 
 from apps.categories.models import Category
 from apps.core.image_files import validate_image_file
@@ -120,6 +121,17 @@ class Product(TimeStampedModel, ActivableModel):
     )
     is_new = models.BooleanField("محصول جدید", default=False)
     is_best_seller = models.BooleanField("محصول پرفروش", default=False)
+
+    # Part R5 item 9: MANUAL complementary products («پیشنهاد همراه» on the
+    # product page). Asymmetric: picking B for A does not pick A for B.
+    # When a product has none, the storefront falls back to the mined
+    # FrequentlyBoughtTogether table (see below).
+    complements = models.ManyToManyField(
+        "self", symmetrical=False, blank=True,
+        related_name="complemented_by",
+        verbose_name="پیشنهادهای همراه (دستی)",
+        help_text="کالاهایی که در صفحهٔ این محصول به‌عنوان «پیشنهاد همراه» نمایش داده می‌شوند.",
+    )
 
     class Meta:
         verbose_name = "محصول"
@@ -385,3 +397,48 @@ class BackInStockSubscription(TimeStampedModel):
     def __str__(self):
         target = f"{self.product_id}/{self.variant_id or '-'}"
         return f"{self.phone} -> {target} ({'notified' if self.notified_at else 'waiting'})"
+
+
+def purchasable_products():
+    """Part R5 item 9: products that can actually be added to the cart
+    RIGHT NOW -- active, with product-level stock or at least one active
+    variant in stock. Used to keep «پیشنهاد همراه» free of inactive or
+    out-of-stock items (the storefront never offers what it cannot sell).
+    """
+    return Product.objects.filter(is_active=True).filter(
+        Q(stock_quantity__gt=0)
+        | Q(variants__is_active=True, variants__stock_quantity__gt=0)
+    ).distinct()
+
+
+class FrequentlyBoughtTogether(TimeStampedModel):
+    """Part R5 item 9: AUTOMATIC complementary pairs, mined from PAID
+    orders by ``manage.py rebuild_frequently_bought_together`` (run
+    daily by the production scheduler). Deliberately a dumb denormalized
+    table: full idempotent rebuild each run, no incremental state.
+
+    Used ONLY for products that have no manual complements, and only
+    rows pointing at purchasable products are ever shown. No bundle
+    pricing/stock logic exists anywhere -- each product keeps its own
+    price and stock, per the task spec.
+    """
+
+    product = models.ForeignKey(
+        Product, on_delete=models.CASCADE, related_name="fbt_pairs", verbose_name="محصول"
+    )
+    complement = models.ForeignKey(
+        Product, on_delete=models.CASCADE, related_name="fbt_as_complement",
+        verbose_name="کالای همراه",
+    )
+    co_count = models.PositiveIntegerField("تعداد خرید همراه", default=0)
+
+    class Meta:
+        verbose_name = "خرید همراه (خودکار)"
+        verbose_name_plural = "خریدهای همراه (خودکار)"
+        ordering = ["-co_count"]
+        constraints = [
+            models.UniqueConstraint(fields=["product", "complement"], name="unique_fbt_pair"),
+        ]
+
+    def __str__(self):
+        return f"{self.product_id} + {self.complement_id} ({self.co_count})"

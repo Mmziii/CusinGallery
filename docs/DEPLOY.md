@@ -333,14 +333,21 @@ curl https://cusin.ir/sitemap.xml | head
 - **لاگ‌ها:**
   ```bash
   docker compose -f docker-compose.prod.yml logs -f backend     # API
-  docker compose -f docker-compose.prod.yml logs scheduler      # لغو خودکار سفارش‌های رهاشده
+  docker compose -f docker-compose.prod.yml logs scheduler      # کارهای زمان‌بندی‌شده
   docker compose -f docker-compose.prod.yml logs nginx
   ```
 - **مانیتورینگ:** یک سرویس uptime (هر نمونهٔ رایگان) روی
   `https://cusin.ir/healthz` تنظیم کنید؛ خطاهای برنامه هم با `SENTRY_DSN`
   به ایمیل‌تان می‌آید.
-- **سفارش‌های رهاشده:** خودکار توسط سرویس `scheduler` هر ساعت لغو می‌شوند
-  (بدون دخالت شما).
+- **کارهای خودکار سرویس `scheduler` (بدون دخالت شما):**
+  - هر ساعت: لغو سفارش‌های پرداخت‌نشدهٔ رهاشده (`expire_unpaid_orders`).
+  - روزانه: بازسازی جدول «کالاهایی که با هم خریده شده‌اند» از سفارش‌های
+    پرداخت‌شده (`rebuild_frequently_bought_together`) -- خوراکِ بخش
+    «پیشنهاد همراه» صفحهٔ محصول. اجرای دستی همان لحظه هم ممکن است:
+    ```bash
+    docker compose -f docker-compose.prod.yml exec backend \
+      python manage.py rebuild_frequently_bought_together
+    ```
 
 ---
 

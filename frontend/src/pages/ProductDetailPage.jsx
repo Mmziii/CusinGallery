@@ -111,7 +111,7 @@ function ReviewSection({ product }) {
       ) : null}
 
       {isLoading ? <Spinner /> : null}
-      {reviews && reviews.results.length === 0 ? (
+      {reviews && reviews.results?.length === 0 ? (
         <EmptyState title="هنوز نظری برای این محصول ثبت نشده است." />
       ) : null}
 
@@ -167,6 +167,84 @@ function ReviewSection({ product }) {
             </button>
           </form>
         )}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Part R5 item 9: «پیشنهاد همراه» -- manual or mined complements with a
+ * bulk "add selected to cart" action. The API (see
+ * ProductDetailSerializer.get_complements) only ever returns ACTIVE,
+ * IN-STOCK products, so no unavailable-state UI is needed here. Each
+ * item keeps its own price/stock -- deliberately no bundle logic.
+ */
+function ComplementsSection({ complements }) {
+  const addItem = useCartStore((s) => s.addItem);
+  const [selected, setSelected] = useState(() => new Set(complements.map((c) => c.id)));
+  const [state, setState] = useState(null); // null | "busy" | "done" | error string
+
+  if (!complements?.length) return null;
+
+  const toggle = (id) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    setState(null);
+  };
+
+  const addSelected = async () => {
+    const items = complements.filter((c) => selected.has(c.id));
+    if (!items.length) return;
+    setState("busy");
+    const failed = [];
+    for (const item of items) {
+      const result = await addItem(item.id, null, 1);
+      if (!result.success) failed.push(item.name);
+    }
+    setState(
+      failed.length
+        ? `افزودن ${failed.join("، ")} به سبد ناموفق بود؛ موجودی آن‌ها را بررسی کنید.`
+        : "done"
+    );
+  };
+
+  return (
+    <section className="complements">
+      <h2>پیشنهاد همراه</h2>
+      <p className="complements__hint">
+        این کالاها را مشتریان همراه با این محصول می‌خرند؛ می‌توانید انتخاب‌شده‌ها را یک‌جا به سبد اضافه کنید.
+      </p>
+      <div className="complements__grid">
+        {complements.map((item) => (
+          <label className="complements__card" key={item.id}>
+            <input
+              type="checkbox"
+              checked={selected.has(item.id)}
+              onChange={() => toggle(item.id)}
+            />
+            <Link to={`/products/${item.slug}/`} className="complements__media">
+              <SmartImage image={item.primary_image || null} alt={item.name} />
+            </Link>
+            <Link to={`/products/${item.slug}/`} className="complements__name">{item.name}</Link>
+            <span className="complements__price">{formatPrice(item.price_info.price)} تومان</span>
+          </label>
+        ))}
+      </div>
+      <div className="complements__actions">
+        <button
+          type="button"
+          className="btn btn--primary"
+          onClick={addSelected}
+          disabled={state === "busy" || selected.size === 0}
+        >
+          {state === "busy" ? "در حال افزودن…" : "افزودن انتخاب‌شده‌ها به سبد"}
+        </button>
+        {state === "done" ? <Alert kind="success">کالاهای انتخاب‌شده به سبد خرید اضافه شدند.</Alert> : null}
+        {state && state !== "done" && state !== "busy" ? <Alert>{state}</Alert> : null}
       </div>
     </section>
   );
@@ -456,6 +534,8 @@ function ProductDetailPage() {
             </div>
           </section>
         ) : null}
+
+        <ComplementsSection complements={product.complements || []} />
       </div>
 
       <ReviewSection product={product} />
@@ -478,5 +558,10 @@ function ProductDetailPage() {
 Stars.propTypes = { value: PropTypes.number, size: PropTypes.oneOf(["sm", "md", "lg"]) };
 RatingInput.propTypes = { value: PropTypes.number.isRequired, onChange: PropTypes.func.isRequired };
 ReviewSection.propTypes = { product: productDetailShape.isRequired };
+ComplementsSection.propTypes = {
+  complements: PropTypes.arrayOf(
+    PropTypes.shape({ id: PropTypes.number.isRequired, name: PropTypes.string.isRequired })
+  ).isRequired,
+};
 
 export default ProductDetailPage;

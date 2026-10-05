@@ -162,10 +162,12 @@ class ProductDetailSerializer(ProductListSerializer):
     variants = serializers.SerializerMethodField()
     specifications = serializers.SerializerMethodField()
     related_products = serializers.SerializerMethodField()
+    complements = serializers.SerializerMethodField()
 
     class Meta(ProductListSerializer.Meta):
         fields = ProductListSerializer.Meta.fields + [
-            "description", "sku", "images", "variants", "specifications", "related_products",
+            "description", "sku", "images", "variants", "specifications",
+            "related_products", "complements",
         ]
 
     def _active_variants(self, obj):
@@ -227,3 +229,35 @@ class ProductDetailSerializer(ProductListSerializer):
             .order_by("-is_best_seller", "-is_featured", "-created_at")[:6]
         )
         return ProductListSerializer(related, many=True, context=self.context).data
+
+    def get_complements(self, obj):
+        """Part R5 item 9: «پیشنهاد همراه» candidates for the product page.
+
+        Manual complements win when present; otherwise the mined
+        FrequentlyBoughtTogether pairs (best co_count first). In BOTH
+        cases only ACTIVE, IN-STOCK products are ever returned -- the
+        storefront never offers what it cannot sell. No bundle pricing
+        or stock logic: each item keeps its own price/stock.
+        """
+        from .models import FrequentlyBoughtTogether, purchasable_products
+
+        purchasable_ids = set(purchasable_products().values_list("id", flat=True))
+
+        manual = [p for p in obj.complements.all() if p.id in purchasable_ids]
+        if manual:
+            candidates = manual
+        else:
+            fbt = (
+                FrequentlyBoughtTogether.objects.filter(product=obj)
+                .select_related("complement")
+                .order_by("-co_count", "id")
+            )
+            candidates = [
+                row.complement for row in fbt if row.complement_id in purchasable_ids
+            ]
+        candidates = candidates[:8]
+        # Same lean payload shape as the product list so the storefront
+        # can reuse ProductCard directly.
+        return ProductListSerializer(
+            candidates, many=True, context=self.context
+        ).data

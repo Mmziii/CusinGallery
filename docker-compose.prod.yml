@@ -99,6 +99,12 @@ services:
         while true; do
           echo "[scheduler] $$(date -u +%FT%TZ) running expire_unpaid_orders"
           python manage.py expire_unpaid_orders || echo "[scheduler] run failed (will retry next hour)"
+          today=$$(date -u +%F)
+          if [ "$$today" != "$$(cat /tmp/fbt_last 2>/dev/null)" ]; then
+            echo "[scheduler] $$(date -u +%FT%TZ) running rebuild_frequently_bought_together (daily)"
+            python manage.py rebuild_frequently_bought_together || echo "[scheduler] fbt rebuild failed (will retry tomorrow)"
+            echo "$$today" > /tmp/fbt_last
+          fi
           sleep 3600
         done
     depends_on:

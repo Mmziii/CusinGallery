@@ -124,7 +124,9 @@ class ProductAdmin(admin.ModelAdmin):
     list_filter = ("is_active", "is_featured", "is_new", "is_best_seller", "category", "brand", LowStockFilter)
     search_fields = ("name", "sku", "slug")
     prepopulated_fields = {"slug": ("name",)}
-    autocomplete_fields = ("category", "brand")
+    # Part R5 item 9: complements is an M2M to Product itself -- the
+    # autocomplete widget searches by ProductAdmin.search_fields above.
+    autocomplete_fields = ("category", "brand", "complements")
     inlines = [ProductImageInline, ProductVariantInline]
     actions = ["activate_products", "deactivate_products", "mark_featured", "unmark_featured"]
     change_list_template = "admin/products/product_change_list.html"
@@ -433,6 +435,34 @@ class BackInStockSubscriptionAdmin(admin.ModelAdmin):
     list_filter = ("notified_at", "created_at")
     search_fields = ("phone", "product__name")
     readonly_fields = tuple(f.name for f in BackInStockSubscription._meta.concrete_fields)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+from .models import FrequentlyBoughtTogether  # noqa: E402
+
+
+@admin.register(FrequentlyBoughtTogether)
+class FrequentlyBoughtTogetherAdmin(admin.ModelAdmin):
+    """Part R5 item 9: read-only view of the mined «خرید همراه» pairs.
+
+    Data is owned by the rebuild_frequently_bought_together command
+    (full idempotent rebuild, run daily by the production scheduler);
+    hand-editing rows here would be wiped at the next rebuild, so the
+    admin is strictly read-only.
+    """
+
+    list_display = ("product", "complement", "co_count", "updated_at")
+    ordering = ("-co_count",)
+    search_fields = ("product__name", "complement__name")
+    readonly_fields = tuple(f.name for f in FrequentlyBoughtTogether._meta.concrete_fields)
 
     def has_add_permission(self, request):
         return False
