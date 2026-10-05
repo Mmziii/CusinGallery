@@ -49,6 +49,13 @@ class Brand(TimeStampedModel, ActivableModel):
         return self.name
 
     def save(self, *args, **kwargs):
+        # Part R5 item 7: detect a rename so the products' normalized
+        # search index can be refreshed after the save.
+        old_name = None
+        if self.pk:
+            old_name = (
+                type(self).objects.filter(pk=self.pk).values_list("name", flat=True).first()
+            )
         super().save(*args, **kwargs)
         if self.tile_image and not self.webp_400:
             from apps.core.image_files import make_responsive_variants
@@ -59,6 +66,10 @@ class Brand(TimeStampedModel, ActivableModel):
                 self.webp_800 = variants.get(800, "")
                 self.webp_1200 = variants.get(1200, "")
                 super().save(update_fields=["webp_400", "webp_800", "webp_1200", "updated_at"])
+        if old_name is not None and old_name != self.name:
+            from .search import refresh_search_fields
+
+            refresh_search_fields(self.products.all())
 
 
 class Product(TimeStampedModel, ActivableModel):
@@ -79,6 +90,13 @@ class Product(TimeStampedModel, ActivableModel):
 
     short_description = models.CharField("توضیح کوتاه", max_length=500, blank=True)
     description = models.TextField("توضیحات کامل", blank=True)
+
+    # Part R5 item 7: normalized Persian search index -- ONE shared
+    # normalizer (apps/products/search.py) fills these on save from
+    # name+sku+brand name+category name+short description; the query side
+    # of the same module reads them. Never hand-edited (editable=False).
+    search_text = models.TextField("متن جستجوی نرمال‌شده", blank=True, default="", editable=False)
+    search_name = models.TextField("نام نرمال‌شده (رتبه‌بندی جستجو)", blank=True, default="", editable=False)
 
     price = models.PositiveBigIntegerField("قیمت (تومان)")
     compare_at_price = models.PositiveBigIntegerField(
@@ -134,8 +152,17 @@ class Product(TimeStampedModel, ActivableModel):
     def is_in_stock(self):
         return self.stock_quantity > 0
 
+    def refresh_search_fields(self):
+        """Recompute the normalized search index (Part R5 item 7)."""
+        from .search import build_product_search_fields
+
+        self.search_text, self.search_name = build_product_search_fields(self)
+
 
     def save(self, *args, **kwargs):
+        # Part R5 item 7: keep the normalized search index fresh on every
+        # save (admin edit, import upsert, order-cancel stock restore...).
+        self.refresh_search_fields()
         old_stock = None
         if self.pk:
             old_stock = (
@@ -155,6 +182,9 @@ class Product(TimeStampedModel, ActivableModel):
 
 
     def save(self, *args, **kwargs):
+        # Part R5 item 7: keep the normalized search index fresh on every
+        # save (admin edit, import upsert, order-cancel stock restore...).
+        self.refresh_search_fields()
         old_stock = None
         if self.pk:
             old_stock = (

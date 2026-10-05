@@ -13,7 +13,6 @@ from rest_framework import permissions, status, viewsets
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.filters import SearchFilter
 
 from .filters import ProductFilter
 from .models import Brand, Product, ProductImage
@@ -56,9 +55,8 @@ class BrandViewSet(viewsets.ReadOnlyModelViewSet):
 class ProductViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.AllowAny]
     lookup_field = "slug"
-    filter_backends = [DjangoFilterBackend, SearchFilter]
+    filter_backends = [DjangoFilterBackend]
     filterset_class = ProductFilter
-    search_fields = ["name", "sku", "short_description", "brand__name", "category__name"]
 
     def get_serializer_class(self):
         return ProductDetailSerializer if self.action == "retrieve" else ProductListSerializer
@@ -80,6 +78,15 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
                 )
             )
         )
+        # Part R5 item 7: normalized Persian search (also powers the
+        # header's live suggestions, which hit this same endpoint). Token
+        # AND-match + relevance ranking; ONE shared normalizer with the
+        # indexing side (apps/products/search.py).
+        search_term = self.request.query_params.get("search", "").strip()
+        if search_term:
+            from .search import product_search
+
+            return product_search(queryset, search_term)
         return queryset.order_by(self._resolve_ordering())
 
     def _resolve_ordering(self):

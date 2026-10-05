@@ -182,6 +182,13 @@ docker compose -f docker-compose.prod.yml logs -f backend
 
 # ساخت حساب مدیر پنل:
 docker compose -f docker-compose.prod.yml exec backend python manage.py createsuperuser
+
+# بازسازی فهرست جستجوی نرمال‌شدهٔ محصولات (Part R5 — جستجوی فارسی):
+# این دستور تکرارپذیر (idempotent) و بی‌خطر است؛ یک‌بار بعد از اعمال
+# مایگریشن‌ها اجرا شود تا محصولاتِ از قبل موجود هم متن جستجوی نرمال‌شده
+# بگیرند. محصولات جدید هنگام ذخیره خودشان به‌روز می‌شوند و تغییر نام
+# برند/دسته هم به‌صورت خودکار در جستجو منتشر می‌شود.
+docker compose -f docker-compose.prod.yml exec backend python manage.py backfill_search_text
 ```
 
 حالا با `http://YOUR_SERVER_IP/admin/` (موقتاً بدون دامنه/SSL) یا پس از بالا
