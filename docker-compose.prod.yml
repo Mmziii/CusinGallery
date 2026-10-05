@@ -99,6 +99,10 @@ services:
         while true; do
           echo "[scheduler] $$(date -u +%FT%TZ) running expire_unpaid_orders"
           python manage.py expire_unpaid_orders || echo "[scheduler] run failed (will retry next hour)"
+          # Part R5 item 11: opt-in cart-reminder SMS. No-op unless the
+          # owner set CART_REMINDER_ENABLED=True; quiet hours and all
+          # eligibility rules live inside the command itself.
+          python manage.py send_cart_reminders || echo "[scheduler] cart reminders failed (will retry next hour)"
           today=$$(date -u +%F)
           if [ "$$today" != "$$(cat /tmp/fbt_last 2>/dev/null)" ]; then
             echo "[scheduler] $$(date -u +%FT%TZ) running rebuild_frequently_bought_together (daily)"

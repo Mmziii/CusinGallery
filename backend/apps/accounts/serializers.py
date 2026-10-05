@@ -113,7 +113,7 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             "id", "first_name", "last_name", "email", "phone",
-            "is_staff", "date_joined", "last_login",
+            "is_staff", "date_joined", "last_login", "marketing_sms_consent",
         ]
         read_only_fields = fields
 
@@ -132,7 +132,7 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["first_name", "last_name", "email"]
+        fields = ["first_name", "last_name", "email", "marketing_sms_consent"]
 
     def validate_email(self, value):
         value = value or None

@@ -99,6 +99,16 @@ class User(AbstractUser):
         "rather than a plain unique CharField.",
     )
 
+    # Part R5 item 11: opt-in marketing consent. Default OFF, never
+    # pre-ticked; the customer toggles it themselves on the account page
+    # (ProfileUpdateSerializer). The cart-reminder command refuses to
+    # send without it.
+    marketing_sms_consent = models.BooleanField(
+        "رضایت دریافت پیامک تبلیغاتی",
+        default=False,
+        help_text="فقط با روشن‌کردن توسط خود مشتری در صفحهٔ حساب کاربری؛ برای پیامک یادآور سبد خرید.",
+    )
+
     class Meta:
         verbose_name = "کاربر"
         verbose_name_plural = "کاربران"

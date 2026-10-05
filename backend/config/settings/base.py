@@ -333,6 +333,13 @@ ORDER_EXPIRY_HOURS = env.int("ORDER_EXPIRY_HOURS", default=24)
 # like the mock payment gateway).
 SMS_ENABLED = env.bool("SMS_ENABLED", default=True)
 
+# Part R5 item 11: opt-in cart-reminder SMS. DISABLED by default -- the
+# owner must (a) confirm promotional-SMS rules with the provider and
+# (b) flip CART_REMINDER_ENABLED=True explicitly. See docs/DEPLOY.md.
+CART_REMINDER_ENABLED = env.bool("CART_REMINDER_ENABLED", default=False)
+CART_REMINDER_AFTER_HOURS = env.int("CART_REMINDER_AFTER_HOURS", default=24)
+CART_REMINDER_COOLDOWN_DAYS = env.int("CART_REMINDER_COOLDOWN_DAYS", default=7)
+
 # Provider selection: "console" (or empty) = log-only, development/tests
 # ONLY; "kavenegar" = the real Kavenegar adapter. Another provider later
 # is one new class + one registry line (apps/notifications/providers/).

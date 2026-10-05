@@ -58,3 +58,23 @@ class ProfileTests(CacheIsolatedAPITestCase):
         self.client.logout()
         response = self.client.patch(self.me_url, {"first_name": "X"}, format="json")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    # Part R5 item 11: marketing SMS consent is opt-in and customer-owned.
+    def test_marketing_sms_consent_defaults_to_false_in_profile_payload(self):
+        response = self.client.get(self.me_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("marketing_sms_consent", response.data)
+        self.assertFalse(response.data["marketing_sms_consent"])
+
+    def test_marketing_sms_consent_is_customer_editable_via_patch(self):
+        response = self.client.patch(self.me_url, {"marketing_sms_consent": True}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["marketing_sms_consent"])
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.marketing_sms_consent)
+
+        # And it can be switched back off at any time.
+        response = self.client.patch(self.me_url, {"marketing_sms_consent": False}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.marketing_sms_consent)

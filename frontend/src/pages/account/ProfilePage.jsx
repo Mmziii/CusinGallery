@@ -13,6 +13,9 @@ function ProfilePage() {
     first_name: user?.first_name || "",
     last_name: user?.last_name || "",
     email: user?.email || "",
+    // Part R5 item 11: opt-in marketing consent. Comes from the profile
+    // (default false server-side) and is NEVER pre-ticked by this form.
+    marketing_sms_consent: Boolean(user?.marketing_sms_consent),
   });
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState(null);
@@ -63,6 +66,19 @@ function ProfilePage() {
         <label className="field">
           <span>ایمیل</span>
           <input type="email" dir="ltr" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
+        </label>
+        {/* Part R5 item 11: opt-in cart-reminder SMS consent. */}
+        <label className="checkbox field">
+          <input
+            type="checkbox"
+            checked={form.marketing_sms_consent}
+            onChange={(e) => setForm((f) => ({ ...f, marketing_sms_consent: e.target.checked }))}
+          />
+          <span>
+            مایل‌ام پیامک یادآور سبد خرید دریافت کنم. اگر کالایی را در سبد بگذارم و خرید را
+            کامل نکنم، حداکثر هر ۷ روز یک پیامک یادآوری برایم ارسال می‌شود. این گزینه به‌صورت
+            پیش‌فرض خاموش است و هر زمان بخواهم می‌توانم آن را خاموش کنم.
+          </span>
         </label>
         {error ? <Alert>{error}</Alert> : null}
         {saved ? <Alert kind="success">ذخیره شد.</Alert> : null}
