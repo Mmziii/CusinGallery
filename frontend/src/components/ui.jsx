@@ -39,6 +39,25 @@ export function EmptyState({ title, children }) {
   );
 }
 
+/**
+ * Part R3: friendly network/API failure state with a clear retry action --
+ * a failed fetch must never render as "nothing".
+ */
+export function ErrorState({ message, onRetry, retryLabel = "تلاش دوباره" }) {
+  return (
+    <div className="empty-state empty-state--error" role="alert">
+      <p className="empty-state__title">ارتباط با سرور برقرار نشد.</p>
+      <p className="muted">{message || "لطفاً اتصال اینترنت خود را بررسی کنید."}</p>
+      {onRetry ? (
+        <button type="button" className="btn btn--primary" onClick={onRetry}>
+          {retryLabel}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+ErrorState.propTypes = { message: PropTypes.node, onRetry: PropTypes.func, retryLabel: PropTypes.string };
+
 Spinner.propTypes = { label: PropTypes.string };
 Alert.propTypes = { kind: PropTypes.oneOf(["error", "success"]), children: PropTypes.node };
 EmptyState.propTypes = { title: PropTypes.string.isRequired, children: PropTypes.node };

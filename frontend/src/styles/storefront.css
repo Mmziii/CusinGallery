@@ -1236,3 +1236,17 @@ html.js-reveal .reveal.is-revealed, .reveal.is-revealed { opacity: 1; transform:
   font-size: var(--font-size-sm); font-weight: 600;
 }
 .shop__chip button { background: none; border: none; cursor: pointer; color: var(--brand-gold-deep); display: inline-grid; place-items: center; }
+
+/* ==========================================================================
+   PART R3 — error boundary, API error state, address city combo
+   ========================================================================== */
+
+.error-boundary { max-width: 30rem; margin: 5rem auto; padding: 2rem; text-align: center; }
+.error-boundary h1 { font-size: 1.5rem; font-weight: 800; margin-bottom: var(--space-3); }
+.error-boundary p { color: var(--brand-muted, #5F6552); margin-bottom: var(--space-4); line-height: 1.9; }
+.error-boundary__actions { display: flex; gap: var(--space-3); justify-content: center; flex-wrap: wrap; }
+
+.empty-state--error .empty-state__title { color: var(--brand-green-dark, #263012); }
+.empty-state--error .btn { margin-top: var(--space-3); }
+
+.field__city-combo { display: flex; flex-direction: column; gap: var(--space-2); }

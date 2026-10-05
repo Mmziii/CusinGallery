@@ -17,7 +17,7 @@ from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode
 from rest_framework import serializers
 
-from . import validators
+from . import locations, validators
 from .models import Address, phone_validator
 
 User = get_user_model()
@@ -282,6 +282,25 @@ class AddressSerializer(serializers.ModelSerializer):
 
     def validate_postal_code(self, value):
         return validators.validate_postal_code(value)
+
+    def validate(self, attrs):
+        """Part R3: province must be one of the 31 known provinces and a
+        known city must belong to its province; free-text cities are still
+        allowed. Unchanged values on update skip validation so addresses
+        created before this rule stay editable."""
+        instance = self.instance
+        province = attrs.get("province", getattr(instance, "province", None))
+        city = attrs.get("city", getattr(instance, "city", None))
+        if (
+            instance is not None
+            and province == instance.province
+            and city == instance.city
+        ):
+            return attrs
+        error = locations.validate_province_city(province or "", city or "")
+        if error:
+            raise serializers.ValidationError(error)
+        return attrs
 
     def create(self, validated_data):
         user = self.context["request"].user

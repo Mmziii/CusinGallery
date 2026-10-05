@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 
 import StarRating from "../../components/StarRating";
-import { Alert, EmptyState, Spinner, errorMessage } from "../../components/ui";
+import { EmptyState, ErrorState, Spinner, errorMessage } from "../../components/ui";
 import { useAsync } from "../../hooks/useAsync";
 import * as reviewsApi from "../../services/reviewsApi";
 
@@ -15,7 +15,7 @@ function ReviewsPage() {
   const { data, isLoading, error, refetch } = useAsync(() => reviewsApi.fetchMyReviews(), []);
 
   if (isLoading) return <Spinner label="در حال دریافت نظرات…" />;
-  if (error) return <Alert>{errorMessage(error)}</Alert>;
+  if (error) return <ErrorState message={errorMessage(error)} onRetry={refetch} />;
 
   const reviews = data?.results || [];
   if (!reviews.length) {

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
-import { Alert, EmptyState, Spinner, errorMessage } from "../../components/ui";
+import { EmptyState, ErrorState, Spinner, errorMessage } from "../../components/ui";
 import { useAsync } from "../../hooks/useAsync";
 import { fetchOrders } from "../../services/orderApi";
 import { formatPrice } from "../../utils/formatPrice";
@@ -26,10 +26,10 @@ export const PAYMENT_STATUS_LABELS = {
 
 function OrdersPage() {
   const [page, setPage] = useState(1);
-  const { data, isLoading, error } = useAsync(() => fetchOrders({ page }), [page]);
+  const { data, isLoading, error, refetch } = useAsync(() => fetchOrders({ page }), [page]);
 
   if (isLoading) return <Spinner label="در حال دریافت سفارش‌ها…" />;
-  if (error) return <Alert>{errorMessage(error)}</Alert>;
+  if (error) return <ErrorState message={errorMessage(error)} onRetry={refetch} />;
   if (!data?.results?.length) {
     return (
       <EmptyState title="هنوز سفارشی ثبت نکرده‌اید.">

@@ -17,3 +17,21 @@ export function fetchSiteSettings() {
     })
     .catch(() => ({}));
 }
+
+/**
+ * Part R3: Iran's 31 provinces + main cities for the address selects.
+ * Cached after the first successful fetch (the dataset ships with the
+ * backend and only changes when the owner extends it).
+ */
+let locationsCache = null;
+
+export function fetchLocations() {
+  if (locationsCache) return Promise.resolve(locationsCache);
+  return apiClient
+    .get("/accounts/locations/")
+    .then((res) => {
+      locationsCache = res.data || { provinces: [] };
+      return locationsCache;
+    })
+    .catch(() => ({ provinces: [] }));
+}

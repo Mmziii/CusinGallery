@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 
+import ErrorBoundary from "../components/ErrorBoundary";
 import FloatingContact from "../components/FloatingContact";
 import Icon from "../components/Icon";
 import Footer from "../components/Footer";
@@ -67,7 +68,11 @@ function MainLayout() {
 
       <main className="app-shell__main" ref={mainRef}>
         <div className="container">
-          <Outlet />
+          {/* Part R3: per-route boundary keeps header/footer alive when a
+              single page crashes. */}
+          <ErrorBoundary>
+            <Outlet />
+          </ErrorBoundary>
         </div>
       </main>
 

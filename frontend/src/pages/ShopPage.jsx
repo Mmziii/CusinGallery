@@ -4,7 +4,7 @@ import { useSearchParams } from "react-router-dom";
 
 import Icon from "../components/Icon";
 import ProductCard from "../components/ProductCard";
-import { Alert, EmptyState, Spinner } from "../components/ui";
+import { EmptyState, ErrorState, Spinner } from "../components/ui";
 import { useAsync } from "../hooks/useAsync";
 import { listBrands, listCategories, listProducts } from "../services/catalogApi";
 import { errorMessage } from "../components/ui";
@@ -184,7 +184,7 @@ function ShopPage() {
         })()}
 
         {productsState.isLoading ? <Spinner label="در حال دریافت محصولات…" /> : null}
-        {productsState.error ? <Alert>{errorMessage(normalizeApiError(productsState.error))}</Alert> : null}
+        {productsState.error ? <ErrorState message={errorMessage(normalizeApiError(productsState.error))} onRetry={productsState.refetch} /> : null}
 
         {products && products.results.length === 0 ? (
           <EmptyState title="محصولی با این مشخصات پیدا نشد." />

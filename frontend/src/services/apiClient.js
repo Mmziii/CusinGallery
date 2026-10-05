@@ -43,9 +43,24 @@ apiClient.interceptors.request.use((config) => {
 
 // Normalizes rejections so calling code has one consistent shape to
 // catch (see utils/apiError.js); nothing is swallowed.
+//
+// Part R3: a 401 on a request that EXPECTED a session (anything except the
+// anonymous probes: /me/, login, register, csrf, password-reset) means the
+// session expired mid-use. We broadcast an event the auth store listens
+// to so the user lands on the login page with a clear Persian notice
+// instead of silently logged-out confusion.
+const ANONYMOUS_SAFE = /\/accounts\/(me|login|register|csrf|password-reset)/;
 apiClient.interceptors.response.use(
   (response) => response,
-  (error) => Promise.reject(error)
+  (error) => {
+    const url = error?.config?.url || "";
+    if (error?.response?.status === 401 && !ANONYMOUS_SAFE.test(url)) {
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("auth:session-expired"));
+      }
+    }
+    return Promise.reject(error);
+  }
 );
 
 /**

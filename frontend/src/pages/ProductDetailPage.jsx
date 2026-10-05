@@ -8,7 +8,7 @@ import StarRating from "../components/StarRating";
 import PriceTag from "../components/PriceTag";
 import SmartImage from "../components/SmartImage";
 import { productDetailShape } from "../utils/shapes";
-import { Alert, EmptyState, Spinner, errorMessage } from "../components/ui";
+import { Alert, EmptyState, ErrorState, Spinner, errorMessage } from "../components/ui";
 import { useAsync } from "../hooks/useAsync";
 import { getProduct } from "../services/catalogApi";
 import { subscribeBackInStock } from "../services/productsApi";
@@ -174,7 +174,7 @@ function ReviewSection({ product }) {
 
 function ProductDetailPage() {
   const { slug } = useParams();
-  const { data: product, isLoading, error } = useAsync(() => getProduct(slug), [slug]);
+  const { data: product, isLoading, error, refetch } = useAsync(() => getProduct(slug), [slug]);
 
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const addItem = useCartStore((s) => s.addItem);
@@ -244,7 +244,7 @@ function ProductDetailPage() {
   }, [isAuthenticated, product]);
 
   if (isLoading) return <Spinner label="در حال دریافت محصول…" />;
-  if (error) return <Alert>{errorMessage(normalizeApiError(error))}</Alert>;
+  if (error) return <ErrorState message={errorMessage(normalizeApiError(error))} onRetry={refetch} />;
   if (!product) return null;
 
   const handleAdd = async () => {

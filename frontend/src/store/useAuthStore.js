@@ -30,6 +30,8 @@ const useAuthStore = create((set) => ({
   isLoading: true, // true until the first /me/ probe resolves
   isAuthenticated: false,
   error: null,
+  /** Part R3: set when the server rejected a session mid-use (401). */
+  sessionExpired: false,
 
   async fetchMe() {
     try {
@@ -54,7 +56,7 @@ const useAuthStore = create((set) => ({
     set({ isLoading: true, error: null });
     try {
       const user = await authApi.login({ identifier, password });
-      set({ user, isAuthenticated: true, isLoading: false, error: null });
+      set({ user, isAuthenticated: true, isLoading: false, error: null, sessionExpired: false });
       await mergeGuestCartIntoServer();
       return { success: true };
     } catch (err) {
@@ -68,7 +70,7 @@ const useAuthStore = create((set) => ({
     set({ isLoading: true, error: null });
     try {
       const user = await authApi.register(payload);
-      set({ user, isAuthenticated: true, isLoading: false, error: null });
+      set({ user, isAuthenticated: true, isLoading: false, error: null, sessionExpired: false });
       await mergeGuestCartIntoServer();
       return { success: true };
     } catch (err) {
@@ -103,5 +105,25 @@ const useAuthStore = create((set) => ({
     set({ error: null });
   },
 }));
+
+/**
+ * Part R3: mid-use session expiry. The apiClient broadcasts
+ * "auth:session-expired" on any unexpected 401; we downgrade the user to
+ * anonymous and raise a flag the login page turns into a friendly notice.
+ */
+if (typeof window !== "undefined") {
+  window.addEventListener("auth:session-expired", () => {
+    const state = useAuthStore.getState();
+    if (state.isAuthenticated || state.user) {
+      useAuthStore.setState({
+        user: null,
+        isAuthenticated: false,
+        isLoading: false,
+        error: null,
+        sessionExpired: true,
+      });
+    }
+  });
+}
 
 export default useAuthStore;

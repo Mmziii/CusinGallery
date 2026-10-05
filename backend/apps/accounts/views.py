@@ -27,6 +27,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from . import locations
 from .models import Address
 from .permissions import IsOwner
 from .serializers import (
@@ -42,6 +43,16 @@ from .serializers import (
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
+
+
+class LocationsView(APIView):
+    """Part R3: public list of Iran's 31 provinces + main cities, from
+    data/iran_locations.json, powering the address form selects."""
+
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        return Response({"provinces": locations.load_locations()})
 
 
 class CsrfTokenView(APIView):

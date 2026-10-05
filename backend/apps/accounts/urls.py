@@ -13,6 +13,7 @@ router = DefaultRouter()
 router.register("addresses", views.AddressViewSet, basename="address")
 
 urlpatterns = [
+    path("locations/", views.LocationsView.as_view(), name="locations"),
     path("csrf/", views.CsrfTokenView.as_view(), name="csrf"),
     path("register/", views.RegisterView.as_view(), name="register"),
     path("login/", views.LoginView.as_view(), name="login"),

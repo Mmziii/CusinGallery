@@ -265,6 +265,19 @@ class Command(BaseCommand):
             add(WARN, "ORDER_EXPIRY_HOURS should be a positive number of hours.",
                 "ORDER_EXPIRY_HOURS باید عددی مثبت باشد.")
 
+        # --- Admin path (Part R3) ------------------------------------------------------
+        admin_url = _env("ADMIN_URL", "admin/").strip()
+        if admin_url.strip("/") in {"", "admin"}:
+            add(WARN,
+                "ADMIN_URL is the default 'admin/' -- bots scan it constantly. Set a "
+                "private value in .env (e.g. ADMIN_URL=panel-cusin-88) and restart.",
+                "آدرس پنل مدیریت همان پیش‌فرض admin/ است — ربات‌ها مدام آن را اسکن می‌کنند. "
+                "در .env یک مقدار خصوصی بگذارید (مثلاً ADMIN_URL=panel-cusin-88) و سرویس را "
+                "ری‌استارت کنید.")
+        else:
+            add(PASS, f"ADMIN_URL customised ({admin_url}).",
+                "آدرس پنل مدیریت سفارشی‌سازی شده است.")
+
         # --- The real boot test -------------------------------------------------------------
         boot_error = self._production_boot_check()
         if boot_error:

@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 
 import Analytics from "./components/Analytics.jsx";
 import App from "./App.jsx";
+import ErrorBoundary from "./components/ErrorBoundary.jsx";
 import { ensureCsrfCookie } from "./services/apiClient.js";
 
 // SELF-HOSTED FONTS (Part R2): one family -- Vazirmatn Variable (SIL OFL
@@ -32,7 +33,11 @@ createRoot(document.getElementById("root")).render(
         payment-callback pages (server templates never mount the SPA). */}
     <Analytics />
     <BrowserRouter>
-      <App />
+      {/* Part R3: a render crash shows a friendly Persian error page,
+          never a blank white screen (per-route boundaries in MainLayout). */}
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
     </BrowserRouter>
   </StrictMode>
 );

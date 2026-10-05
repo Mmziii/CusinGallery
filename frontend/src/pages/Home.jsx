@@ -8,7 +8,7 @@ import ProductCard from "../components/ProductCard";
 import StarRating from "../components/StarRating";
 import SmartImage from "../components/SmartImage";
 import { CardRowSkeleton, HeroSkeleton } from "../components/Skeletons";
-import { Alert } from "../components/ui";
+import { ErrorState } from "../components/ui";
 import { usePageMeta } from "../hooks/usePageMeta";
 import useReveal from "../hooks/useReveal";
 import { useAsync } from "../hooks/useAsync";
@@ -196,7 +196,7 @@ function DailyDealsSection() {
 
 function ProductRow({ title, params }) {
   const ref = useReveal();
-  const { data, isLoading, error } = useAsync(() => listProducts(params), [JSON.stringify(params)]);
+  const { data, isLoading, error, refetch } = useAsync(() => listProducts(params), [JSON.stringify(params)]);
 
   if (isLoading)
     return (
@@ -205,7 +205,7 @@ function ProductRow({ title, params }) {
         <CardRowSkeleton />
       </section>
     );
-  if (error) return <Alert>{normalizeApiError(error).message}</Alert>;
+  if (error) return <ErrorState message={normalizeApiError(error).message} onRetry={refetch} />;
   if (!data?.results?.length) return null;
 
   return (

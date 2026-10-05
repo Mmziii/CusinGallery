@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import SmartImage from "../../components/SmartImage";
-import { Alert, Spinner, errorMessage } from "../../components/ui";
+import { Alert, ErrorState, Spinner, errorMessage } from "../../components/ui";
 import { useAsync } from "../../hooks/useAsync";
 import { fetchOrder } from "../../services/orderApi";
 import { initiatePayment } from "../../services/paymentsApi";
@@ -12,13 +12,13 @@ import { ORDER_STATUS_LABELS, PAYMENT_STATUS_LABELS } from "./OrdersPage";
 
 function OrderDetailPage() {
   const { orderId } = useParams();
-  const { data: order, isLoading, error } = useAsync(() => fetchOrder(orderId), [orderId]);
+  const { data: order, isLoading, error, refetch } = useAsync(() => fetchOrder(orderId), [orderId]);
 
   const [paying, setPaying] = useState(false);
   const [payError, setPayError] = useState(null);
 
   if (isLoading) return <Spinner label="در حال دریافت سفارش…" />;
-  if (error) return <Alert>{errorMessage(error)}</Alert>;
+  if (error) return <ErrorState message={errorMessage(error)} onRetry={refetch} />;
   if (!order) return null;
 
   // unpaid/failed are obviously retryable; "pending" means a previous

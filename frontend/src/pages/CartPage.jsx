@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import SmartImage from "../components/SmartImage";
-import { Alert, EmptyState, Spinner, errorMessage } from "../components/ui";
+import { EmptyState, ErrorState, Spinner, errorMessage } from "../components/ui";
 import useAuthStore from "../store/useAuthStore";
 import useCartStore from "../store/useCartStore";
 import { formatPrice } from "../utils/formatPrice";
@@ -112,7 +112,7 @@ function CartPage() {
     return <GuestCartView />;
   }
 
-  if (error) return <Alert>{errorMessage(error)}</Alert>;
+  if (error) return <ErrorState message={errorMessage(error)} onRetry={fetchCart} />;
   if (!cart) return null;
 
   if (cart.items.length === 0) {

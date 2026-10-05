@@ -3,17 +3,17 @@ import { Link } from "react-router-dom";
 
 import PriceTag from "../components/PriceTag";
 import SmartImage from "../components/SmartImage";
-import { Alert, EmptyState, Spinner, errorMessage } from "../components/ui";
+import { EmptyState, ErrorState, Spinner, errorMessage } from "../components/ui";
 import { useWishlist } from "../hooks/useWishlist";
 import useCartStore from "../store/useCartStore";
 
 function WishlistPage() {
   usePageMeta({ title: "علاقه‌مندی‌ها", path: "/wishlist/", noindex: true });
-  const { items, isLoading, error, removeItem } = useWishlist();
+  const { items, isLoading, error, removeItem, refetch } = useWishlist();
   const addToCart = useCartStore((s) => s.addItem);
 
   if (isLoading) return <Spinner label="در حال دریافت علاقه‌مندی‌ها…" />;
-  if (error) return <Alert>{errorMessage(error)}</Alert>;
+  if (error) return <ErrorState message={errorMessage(error)} onRetry={refetch} />;
 
   if (!items.length) {
     return (

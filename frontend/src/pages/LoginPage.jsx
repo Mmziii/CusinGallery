@@ -9,7 +9,7 @@ function LoginPage() {
   usePageMeta({ title: "ورود به حساب کاربری", path: "/login/" });
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, isLoading } = useAuthStore();
+  const { login, isLoading, sessionExpired } = useAuthStore();
 
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
@@ -52,6 +52,12 @@ function LoginPage() {
             required
           />
         </label>
+
+        {sessionExpired ? (
+          <Alert>نشست شما به پایان رسیده است؛ برای ادامه دوباره وارد شوید.</Alert>
+        ) : location.state?.from ? (
+          <Alert>برای ادامه، ابتدا وارد شوید.</Alert>
+        ) : null}
 
         {error ? <Alert>{error}</Alert> : null}
 
