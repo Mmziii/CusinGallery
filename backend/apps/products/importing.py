@@ -315,3 +315,235 @@ def import_products_from_rows(rows, header, *, dry_run=False):
                 product.save()
                 result.updated += 1
     return result
+
+
+# ---------------------------------------------------------------------------
+# Part R4 item 6: spreadsheet PRICE/STOCK updates + export
+# ---------------------------------------------------------------------------
+# The owner exports the catalog in the exact import format, edits prices
+# and stock in Excel, and re-uploads it. Two safe modes are layered on
+# top of the same engine:
+#   * update-only (minimal template: sku + any of price/sale_price/stock)
+#     NEVER creates products and NEVER touches a field that is not in
+#     the file;
+#   * dry-run preview: shows old -> new per field before the owner
+#     confirms, still all-or-nothing.
+# Column mapping (stated here AND in the admin page + owner guide):
+#   price     -> Product.price            (قیمت فروش -- what is charged)
+#   sale_price-> Product.compare_at_price (قیمت خط‌خوردهٔ قبل از تخفیف)
+#   stock     -> Product.stock_quantity
+
+UPDATE_TEMPLATE_COLUMNS = ["sku", "price", "sale_price", "stock"]
+UPDATE_UPDATABLE = ["price", "sale_price", "stock"]
+
+_UPDATE_FIELD_MAP = {
+    "price": ("price", "قیمت فروش"),
+    "sale_price": ("compare_at_price", "قیمت قبل از تخفیف"),
+    "stock": ("stock_quantity", "موجودی"),
+}
+
+
+class UpdateResult:
+    def __init__(self):
+        self.changes = []    # {row, sku, name, field, label, old, new}
+        self.skipped = 0     # rows that matched but changed nothing
+        self.updated = 0     # distinct products changed
+        self.errors = []
+        self.applied = False
+
+    @property
+    def ok(self):
+        return not self.errors
+
+
+def _update_template_csv():
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(UPDATE_TEMPLATE_COLUMNS)
+    writer.writerow(["MUG-001", 190000, 230000, 30])
+    writer.writerow(["PAN-002", "", "", 12])  # blank cells = no change
+    return buffer.getvalue()
+
+
+def _validate_update_row(number, row, existing_by_sku):
+    errors = []
+    sku = _normalize(row.get("sku"))
+    if not sku:
+        errors.append(f"ردیف {number}: ستون «sku» الزامی است.")
+        return errors, None
+
+    product = existing_by_sku.get(sku)
+    if product is None:
+        errors.append(
+            f"ردیف {number}: کالایی با کد «{sku}» وجود ندارد. حالت فقط-به‌روزرسانی "
+            "هرگز محصول جدید نمی‌سازد؛ اول محصول را در پنل بسازید یا از واردکردن "
+            "کامل استفاده کنید."
+        )
+        return errors, None
+
+    values = {}
+    for column in UPDATE_UPDATABLE:
+        raw = row.get(column)
+        text = _normalize(raw)
+        if text == "":
+            continue  # blank cell = leave the field untouched
+        try:
+            minimum = 0 if column == "stock" else 1
+            values[column] = _to_int(raw, minimum=minimum)
+        except ValueError as exc:
+            errors.append(f"ردیف {number}: ستون «{column}» -- {exc}.")
+
+    if errors:
+        return errors, None
+
+    # Cross-field sanity on the FINAL price pair (new values override).
+    final_price = values.get("price", product.price)
+    final_compare = values.get("sale_price", product.compare_at_price)
+    if final_compare is not None and final_price is not None and final_compare < final_price:
+        errors.append(
+            f"ردیف {number}: «sale_price» نمی‌تواند کمتر از «price» باشد "
+            f"(price={final_price}, sale_price={final_compare})."
+        )
+        return errors, None
+    return errors, {"sku": sku, "product": product, "values": values}
+
+
+def update_products_from_rows(rows, header, *, dry_run=False):
+    """Update-only import (Part R4 item 6). Never creates, never touches
+    unlisted fields, all-or-nothing, Persian digits normalized. Returns
+    an UpdateResult; with dry_run=True nothing is written and `changes`
+    holds the old->new preview."""
+    result = UpdateResult()
+
+    header_set = [h.strip() for h in header if h and h.strip()]
+    if "sku" not in header_set:
+        result.errors.append("ستون «sku» در سرتیت فایل وجود ندارد.")
+        return result
+    unknown = [h for h in header_set if h not in UPDATE_TEMPLATE_COLUMNS]
+    if unknown:
+        result.errors.append(
+            "ستون(های) ناشناخته برای به‌روزرسانی: " + ", ".join(unknown) +
+            ". ستون‌های مجاز: " + ", ".join(UPDATE_TEMPLATE_COLUMNS) + "."
+        )
+        return result
+    if not [h for h in header_set if h in UPDATE_UPDATABLE]:
+        result.errors.append(
+            "هیچ ستون قابل‌به‌روزرسانی (price / sale_price / stock) در فایل نیست."
+        )
+        return result
+    if not rows:
+        result.errors.append("فایل هیچ ردیف داده‌ای ندارد.")
+        return result
+
+    existing_by_sku = {
+        p.sku: p for p in Product.objects.filter(
+            sku__in=[_normalize(r.get("sku")) for r in rows]
+        )
+    }
+
+    cleaned_rows = []
+    seen_skus = {}
+    for index, row in enumerate(rows):
+        number = index + 2
+        errors, cleaned = _validate_update_row(number, row, existing_by_sku)
+        result.errors.extend(errors)
+        if cleaned is None:
+            continue
+        sku = cleaned["sku"]
+        if sku in seen_skus:
+            result.errors.append(
+                f"ردیف {number}: کد کالای «{sku}» بیش از یک بار در فایل آمده است."
+            )
+            continue
+        seen_skus[sku] = number
+        cleaned_rows.append(cleaned)
+
+    if result.errors:
+        return result
+
+    for cleaned in cleaned_rows:
+        product = cleaned["product"]
+        row_changes = []
+        for column, value in cleaned["values"].items():
+            field, label = _UPDATE_FIELD_MAP[column]
+            old = getattr(product, field)
+            if old == value:
+                continue
+            row_changes.append({
+                "row": seen_skus[cleaned["sku"]], "sku": cleaned["sku"],
+                "name": product.name, "field": field, "label": label,
+                "old": old, "new": value,
+            })
+        if row_changes:
+            result.changes.extend(row_changes)
+            result.updated += 1
+        else:
+            result.skipped += 1
+
+    if dry_run:
+        return result
+
+    with transaction.atomic():
+        for cleaned in cleaned_rows:
+            product = cleaned["product"]
+            changed = False
+            for column, value in cleaned["values"].items():
+                field, _label = _UPDATE_FIELD_MAP[column]
+                if getattr(product, field) != value:
+                    setattr(product, field, value)
+                    changed = True
+            if changed:
+                product.save()
+    result.applied = True
+    return result
+
+
+def export_products_rows(queryset=None):
+    """All products as dicts in EXACTLY the import template format, so
+    the owner can edit the export and re-upload it."""
+    products = (queryset if queryset is not None else Product.objects.all())
+    products = products.select_related("brand", "category").order_by("id")
+    out = []
+    for product in products:
+        out.append({
+            "name": product.name,
+            "slug": product.slug,
+            "sku": product.sku,
+            "category_slug": product.category.slug if product.category_id else "",
+            "brand_name": product.brand.name if product.brand_id else "",
+            "price": product.price,
+            "compare_at_price": product.compare_at_price if product.compare_at_price is not None else "",
+            "discount_percentage": product.discount_percentage,
+            "stock_quantity": product.stock_quantity,
+            "low_stock_threshold": product.low_stock_threshold,
+            "short_description": product.short_description,
+            "description": product.description,
+            "is_active": "true" if product.is_active else "false",
+            "is_featured": "true" if product.is_featured else "false",
+        })
+    return out
+
+
+def export_products_csv(queryset=None):
+    """UTF-8 CSV text (the view adds the BOM for Excel)."""
+    buffer = io.StringIO()
+    writer = csv.DictWriter(buffer, fieldnames=TEMPLATE_COLUMNS)
+    writer.writeheader()
+    for row in export_products_rows(queryset):
+        writer.writerow(row)
+    return buffer.getvalue()
+
+
+def export_products_xlsx(queryset=None):
+    """Excel workbook bytes in the same template format."""
+    from openpyxl import Workbook
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "products"
+    sheet.append(TEMPLATE_COLUMNS)
+    for row in export_products_rows(queryset):
+        sheet.append([row[column] for column in TEMPLATE_COLUMNS])
+    buffer = io.BytesIO()
+    workbook.save(buffer)
+    return buffer.getvalue()

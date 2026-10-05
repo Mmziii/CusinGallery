@@ -12,7 +12,12 @@ the admin behave identically.
 """
 from django.core.management.base import BaseCommand, CommandError
 
-from apps.products.importing import import_products_from_rows, read_rows, template_csv
+from apps.products.importing import (
+    import_products_from_rows,
+    read_rows,
+    template_csv,
+    update_products_from_rows,
+)
 
 
 class Command(BaseCommand):
@@ -39,6 +44,15 @@ class Command(BaseCommand):
             metavar="PATH",
             help="Write the documented sample/template CSV to PATH and exit.",
         )
+        parser.add_argument(
+            "--update-only",
+            action="store_true",
+            help=(
+                "Price/stock update mode (Part R4 item 6): minimal columns "
+                "sku/price/sale_price/stock; never creates products, never "
+                "touches unlisted fields."
+            ),
+        )
 
     def handle(self, *args, **options):
         if options["write_template"]:
@@ -55,6 +69,32 @@ class Command(BaseCommand):
             rows, header = read_rows(options["file"])
         except (ValueError, OSError) as exc:
             raise CommandError(str(exc))
+
+        if options["update_only"]:
+            result = update_products_from_rows(rows, header, dry_run=options["dry_run"])
+            if not result.ok:
+                self.stderr.write(self.style.ERROR("Update rejected -- nothing was saved:"))
+                for message in result.errors:
+                    self.stderr.write(self.style.ERROR(f"  {message}"))
+                raise CommandError(f"{len(result.errors)} validation error(s).")
+            if options["dry_run"]:
+                self.stdout.write(self.style.SUCCESS(
+                    f"Preview: {result.updated} product(s) would change "
+                    f"({len(result.changes)} field change(s)), "
+                    f"{result.skipped} row(s) unchanged."
+                ))
+                for change in result.changes[:50]:
+                    self.stdout.write(
+                        f"  {change['sku']} | {change['label']}: "
+                        f"{change['old']} -> {change['new']}"
+                    )
+                if len(result.changes) > 50:
+                    self.stdout.write(f"  ... and {len(result.changes) - 50} more")
+            else:
+                self.stdout.write(self.style.SUCCESS(
+                    f"OK: {result.updated} updated, {result.skipped} unchanged."
+                ))
+            return
 
         result = import_products_from_rows(rows, header, dry_run=options["dry_run"])
 

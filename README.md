@@ -16,25 +16,25 @@ deployment wiring. It was built phase by phase; this README describes the
 
 | Area | Status |
 |---|---|
-| Catalog (categories, brands, products, variants, images, specifications) | ✅ API + Django Admin |
-| Authentication (session + CSRF, phone/email login, password reset) | ✅ API + storefront pages |
-| Cart (authenticated, server-priced, server-validated stock) | ✅ API + storefront |
-| Wishlist | ✅ API + storefront |
-| Checkout (address snapshot, shipping-method choice, coupon, server totals) | ✅ API + storefront |
-| Shipping (standard/express, configurable costs + delivery windows, snapshotted on the order) | ✅ |
-| Coupons (active/window/limits/min-order, product+category targeting, server-side math) | ✅ API + storefront |
-| Orders (history, detail, ownership-scoped, immutable price snapshots) | ✅ API + storefront |
-| Payments (attempts, gateway abstraction, initiate/redirect/callback/verify, idempotent, exactly-once stock decrement) | ✅ Real **ZarinPal** adapter (sandbox + production) + mock for dev/test |
-| Refund tracking (required/refunded ledger, admin workflow, manual PSP refunds) | ✅ Phase C |
-| Abandoned unpaid orders (`expire_unpaid_orders` cron command) | ✅ Phase C |
-| Customer notifications (order confirmation, shipped + tracking code, SMS password-reset codes; provider abstraction: Kavenegar + dev console; masked audit log) | ✅ Phase D |
-| Password reset end-to-end for phone-only accounts (hashed, expiring, single-use SMS codes, no enumeration) | ✅ Phase D |
-| Production readiness (`check_production` env audit, prod compose with TLS/certbot/scheduler/auto-migrate, backup+restore scripts, `/healthz`, JSON logs, optional Sentry) | ✅ Phase E |
-| SEO (dynamic `sitemap.xml` with percent-encoded Persian slugs, `robots.txt`, per-page titles/canonical/OG, `allow_unicode` slugs) + trust pages (about/contact/shipping-returns/terms/privacy, footer e-namad slot) | ✅ Phase E |
-| Reviews (authenticated create, moderation, verified-purchase computed server-side) | ✅ API + storefront |
-| Banners & daily deals (active windows, ordering, server-provided timing) | ✅ API + storefront |
-| Storefront (home, shop w/ filters+search+pagination, product detail, cart, checkout, payment result, account area) | ✅ Persian/RTL, responsive |
-| Owner admin — Persian Django admin: catalog w/ images+variants, order fulfilment workflow + stock restore, print label, CSV export, bulk import (CSV/Excel), coupons/banners management, `seed_demo` | ✅ |
+| Catalog (categories, brands, products, variants, images, specifications) | API + Django Admin |
+| Authentication (session + CSRF, phone/email login, password reset) | API + storefront pages |
+| Cart (authenticated, server-priced, server-validated stock) | API + storefront |
+| Wishlist | API + storefront |
+| Checkout (address snapshot, shipping-method choice, coupon, server totals) | API + storefront |
+| Shipping (standard/express, configurable costs + delivery windows, snapshotted on the order) | |
+| Coupons (active/window/limits/min-order, product+category targeting, server-side math) | API + storefront |
+| Orders (history, detail, ownership-scoped, immutable price snapshots) | API + storefront |
+| Payments (attempts, gateway abstraction, initiate/redirect/callback/verify, idempotent, exactly-once stock decrement) | Real **ZarinPal** adapter (sandbox + production) + mock for dev/test |
+| Refund tracking (required/refunded ledger, admin workflow, manual PSP refunds) | Phase C |
+| Abandoned unpaid orders (`expire_unpaid_orders` cron command) | Phase C |
+| Customer notifications (order confirmation, shipped + tracking code, SMS password-reset codes; provider abstraction: Kavenegar + dev console; masked audit log) | Phase D |
+| Password reset end-to-end for phone-only accounts (hashed, expiring, single-use SMS codes, no enumeration) | Phase D |
+| Production readiness (`check_production` env audit, prod compose with TLS/certbot/scheduler/auto-migrate, backup+restore scripts, `/healthz`, JSON logs, optional Sentry) | Phase E |
+| SEO (dynamic `sitemap.xml` with percent-encoded Persian slugs, `robots.txt`, per-page titles/canonical/OG, `allow_unicode` slugs) + trust pages (about/contact/shipping-returns/terms/privacy, footer e-namad slot) | Phase E |
+| Reviews (authenticated create, moderation, verified-purchase computed server-side) | API + storefront |
+| Banners & daily deals (active windows, ordering, server-provided timing) | API + storefront |
+| Storefront (home, shop w/ filters+search+pagination, product detail, cart, checkout, payment result, account area) | Persian/RTL, responsive |
+| Owner admin — Persian Django admin: catalog w/ images+variants, order fulfilment workflow + stock restore, print label, CSV export, bulk import (CSV/Excel), coupons/banners management, `seed_demo` | |
 
 ---
 
