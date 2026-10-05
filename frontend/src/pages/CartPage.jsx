@@ -9,6 +9,7 @@ import { Alert, EmptyState, ErrorState, Spinner, errorMessage } from "../compone
 import useAuthStore from "../store/useAuthStore";
 import useCartStore from "../store/useCartStore";
 import { formatPrice } from "../utils/formatPrice";
+import { toast } from "../utils/toast";
 
 const UNAVAILABLE_REASONS = {
   product_unavailable: "این محصول دیگر در دسترس نیست.",
@@ -106,7 +107,7 @@ function GuestCartView() {
               <div className="cart-item__unit">
                 {product ? `${formatPrice(product.price)} تومان` : ""}
               </div>
-              <div className="cart-item__qty">
+                <div className="cart-item__qty">
                 <button
                   type="button"
                   aria-label="افزایش تعداد"
@@ -118,7 +119,12 @@ function GuestCartView() {
                 <button
                   type="button"
                   aria-label="کاهش تعداد"
-                  onClick={() => updateGuestItem(line.product_id, line.variant_id, line.quantity - 1)}
+                  onClick={() => {
+                    // Part S2 item 6: dropping the last item removes the
+                    // line -- confirm that destructive step.
+                    if (line.quantity - 1 <= 0 && !window.confirm("این کالا از سبد خرید حذف شود؟")) return;
+                    updateGuestItem(line.product_id, line.variant_id, line.quantity - 1);
+                  }}
                 >
                   −
                 </button>
@@ -210,7 +216,16 @@ function CartPage() {
                   <button
                     type="button"
                     aria-label="کاهش تعداد"
-                    onClick={() => updateItem(item.id, item.quantity - 1)}
+                    onClick={() => {
+                      if (item.quantity - 1 <= 0) {
+                        if (!window.confirm("این کالا از سبد خرید حذف شود؟")) return;
+                      }
+                      updateItem(item.id, item.quantity - 1).then((result) => {
+                        if (result && !result.success) {
+                          toast(errorMessage(result.error) || "تغییر تعداد انجام نشد.", "error");
+                        }
+                      });
+                    }}
                   >
                     −
                   </button>
@@ -218,13 +233,31 @@ function CartPage() {
                   <button
                     type="button"
                     aria-label="افزایش تعداد"
-                    onClick={() => updateItem(item.id, item.quantity + 1)}
+                    onClick={() => {
+                      updateItem(item.id, item.quantity + 1).then((result) => {
+                        if (result && !result.success) {
+                          toast(errorMessage(result.error) || "تغییر تعداد انجام نشد.", "error");
+                        }
+                      });
+                    }}
                   >
                     +
                   </button>
                 </div>
                 <div className="cart-item__total">{formatPrice(item.line_total)} تومان</div>
-                <button type="button" className="link-danger" onClick={() => removeItem(item.id)}>
+                <button
+                  type="button"
+                  className="link-danger"
+                  onClick={() => {
+                    // Part S2 item 6: destructive action needs confirmation.
+                    if (!window.confirm("این کالا از سبد خرید حذف شود؟")) return;
+                    removeItem(item.id).then((result) => {
+                      if (result && !result.success) {
+                        toast(errorMessage(result.error) || "حذف انجام نشد.", "error");
+                      }
+                    });
+                  }}
+                >
                   حذف
                 </button>
               </div>

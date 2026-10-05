@@ -1,7 +1,8 @@
 import { usePageMeta } from "../hooks/usePageMeta";
-import { useMemo } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useEffect, useMemo } from "react";
+import { useNavigationType, useSearchParams } from "react-router-dom";
 
+import Breadcrumbs from "../components/Breadcrumbs";
 import Icon from "../components/Icon";
 import ProductCard from "../components/ProductCard";
 import { EmptyState, ErrorState, Spinner } from "../components/ui";
@@ -9,6 +10,7 @@ import { useAsync } from "../hooks/useAsync";
 import { listBrands, listCategories, listFacets, listProducts } from "../services/catalogApi";
 import { errorMessage } from "../components/ui";
 import { normalizeApiError } from "../utils/apiError";
+import { formatPrice } from "../utils/formatPrice";
 
 const SORT_OPTIONS = [
   { value: "newest", label: "جدیدترین" },
@@ -85,6 +87,30 @@ function ShopPage() {
 
   const products = productsState.data;
   const totalPages = products ? Math.ceil(products.count / 20) : 0;
+
+  // Part S2 item 7: preserve scroll position when the browser navigates
+  // BACK to this listing (filters already survive via the URL). The
+  // position is stored per filter-set, so forward navigation starts fresh.
+  const navigationType = useNavigationType();
+  useEffect(() => {
+    const key = `cusin.shop.scroll.${searchParams.toString()}`;
+    if (navigationType === "POP") {
+      const saved = sessionStorage.getItem(key);
+      if (saved) {
+        const y = Number(saved);
+        requestAnimationFrame(() => window.scrollTo(0, y));
+      }
+    }
+    return () => {
+      sessionStorage.setItem(key, String(window.scrollY));
+    };
+  }, [searchParams, navigationType]);
+
+  const clearAllFilters = () => {
+    const next = new URLSearchParams(searchParams);
+    ["category", "brand", "min_price", "max_price", "in_stock", "page", ...attrKeys].forEach((k) => next.delete(k));
+    setSearchParams(next);
+  };
 
   // Attribute facet keys currently present in the URL (e.g. ["attr_rang"]).
   const attrKeys = [...searchParams.keys()].filter(
@@ -176,19 +202,34 @@ function ShopPage() {
         </div>
 
         {(searchParams.get("category") || searchParams.get("brand") || searchParams.get("min_price") || searchParams.get("max_price") || searchParams.get("in_stock") || attrKeys.length > 0) ? (
-          <button type="button" className="btn btn--outline btn--sm" onClick={() => {
-            const next = new URLSearchParams(searchParams);
-            ["category", "brand", "min_price", "max_price", "in_stock", "page", ...attrKeys].forEach((k) => next.delete(k));
-            setSearchParams(next);
-          }}>
-            حذف فیلترها
+          <button type="button" className="btn btn--outline btn--sm" onClick={clearAllFilters}>
+            حذف همه فیلترها
           </button>
         ) : null}
       </aside>
 
       <div className="shop__main">
+        {/* Part S2 item 7: breadcrumbs (category name once loaded) */}
+        <Breadcrumbs
+          items={[
+            { label: "خانه", to: "/" },
+            { label: "فروشگاه", to: "/shop/" },
+            ...(searchParams.get("category")
+              ? [
+                  {
+                    label:
+                      (categoriesState.data?.results || []).find(
+                        (c) => c.slug === searchParams.get("category")
+                      )?.name || searchParams.get("category"),
+                  },
+                ]
+              : []),
+          ]}
+        />
         <div className="shop__toolbar">
           <h1>فروشگاه</h1>
+          {/* Part S2 item 7: result count, always derived from the server. */}
+          {products ? <span className="shop__count">{formatPrice(products.count)} کالا</span> : null}
           <label>
             مرتب‌سازی:
             <select
@@ -262,7 +303,12 @@ function ShopPage() {
         {productsState.error ? <ErrorState message={errorMessage(normalizeApiError(productsState.error))} onRetry={productsState.refetch} /> : null}
 
         {products && products.results.length === 0 ? (
-          <EmptyState title="محصولی با این مشخصات پیدا نشد." />
+          <EmptyState title="محصولی با این مشخصات پیدا نشد.">
+            <p className="muted">فیلترها یا عبارت جستجو را تغییر دهید، یا همه فیلترها را حذف کنید.</p>
+            <button type="button" className="btn btn--outline" onClick={clearAllFilters}>
+              حذف همه فیلترها
+            </button>
+          </EmptyState>
         ) : null}
 
         {products?.results?.length ? (

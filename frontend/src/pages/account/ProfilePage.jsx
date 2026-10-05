@@ -19,6 +19,9 @@ function ProfilePage() {
   });
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState(null);
+  // Part S2 item 6: busy flags on BOTH forms -- no double submit.
+  const [profileBusy, setProfileBusy] = useState(false);
+  const [pwBusy, setPwBusy] = useState(false);
 
   const [pw, setPw] = useState({ current_password: "", new_password: "", new_password_confirm: "" });
   const [pwMessage, setPwMessage] = useState(null);
@@ -28,7 +31,16 @@ function ProfilePage() {
     event.preventDefault();
     setSaved(false);
     setError(null);
-    const result = await updateProfile(form);
+    setProfileBusy(true);
+    // Part S2 item 5: trim stray whitespace around text values.
+    const payload = {
+      ...form,
+      first_name: form.first_name.trim(),
+      last_name: form.last_name.trim(),
+      email: form.email.trim(),
+    };
+    const result = await updateProfile(payload);
+    setProfileBusy(false);
     if (result.success) setSaved(true);
     else setError(errorMessage(result.error));
   };
@@ -37,12 +49,15 @@ function ProfilePage() {
     event.preventDefault();
     setPwMessage(null);
     setPwError(null);
+    setPwBusy(true);
     try {
       await authApi.changePassword(pw);
       setPwMessage("رمز عبور با موفقیت تغییر کرد.");
       setPw({ current_password: "", new_password: "", new_password_confirm: "" });
     } catch (err) {
       setPwError(errorMessage(normalizeApiError(err)));
+    } finally {
+      setPwBusy(false);
     }
   };
 
@@ -56,16 +71,16 @@ function ProfilePage() {
         <div className="field-row">
           <label className="field">
             <span>نام</span>
-            <input value={form.first_name} onChange={(e) => setForm((f) => ({ ...f, first_name: e.target.value }))} />
+            <input autoComplete="given-name" value={form.first_name} onChange={(e) => setForm((f) => ({ ...f, first_name: e.target.value }))} />
           </label>
           <label className="field">
             <span>نام خانوادگی</span>
-            <input value={form.last_name} onChange={(e) => setForm((f) => ({ ...f, last_name: e.target.value }))} />
+            <input autoComplete="family-name" value={form.last_name} onChange={(e) => setForm((f) => ({ ...f, last_name: e.target.value }))} />
           </label>
         </div>
         <label className="field">
           <span>ایمیل</span>
-          <input type="email" dir="ltr" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
+          <input type="email" dir="ltr" autoComplete="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
         </label>
         {/* Part R5 item 11: opt-in cart-reminder SMS consent. */}
         <label className="checkbox field">
@@ -82,27 +97,31 @@ function ProfilePage() {
         </label>
         {error ? <Alert>{error}</Alert> : null}
         {saved ? <Alert kind="success">ذخیره شد.</Alert> : null}
-        <button type="submit" className="btn btn--primary">ذخیره تغییرات</button>
+        <button type="submit" className="btn btn--primary" disabled={profileBusy}>
+          {profileBusy ? "در حال ذخیره…" : "ذخیره تغییرات"}
+        </button>
       </form>
 
       <form className="card" onSubmit={submitPassword}>
         <h2>تغییر رمز عبور</h2>
         <label className="field">
           <span>رمز عبور فعلی</span>
-          <input type="password" value={pw.current_password} onChange={(e) => setPw((f) => ({ ...f, current_password: e.target.value }))} required />
+          <input type="password" autoComplete="current-password" value={pw.current_password} onChange={(e) => setPw((f) => ({ ...f, current_password: e.target.value }))} required />
         </label>
         <label className="field">
           <span>رمز عبور جدید</span>
-          <input type="password" value={pw.new_password} onChange={(e) => setPw((f) => ({ ...f, new_password: e.target.value }))} required />
+          <input type="password" autoComplete="new-password" value={pw.new_password} onChange={(e) => setPw((f) => ({ ...f, new_password: e.target.value }))} required />
           <PasswordHint value={pw.new_password} />
         </label>
         <label className="field">
           <span>تکرار رمز عبور جدید</span>
-          <input type="password" value={pw.new_password_confirm} onChange={(e) => setPw((f) => ({ ...f, new_password_confirm: e.target.value }))} required />
+          <input type="password" autoComplete="new-password" value={pw.new_password_confirm} onChange={(e) => setPw((f) => ({ ...f, new_password_confirm: e.target.value }))} required />
         </label>
         {pwError ? <Alert>{pwError}</Alert> : null}
         {pwMessage ? <Alert kind="success">{pwMessage}</Alert> : null}
-        <button type="submit" className="btn btn--primary">تغییر رمز عبور</button>
+        <button type="submit" className="btn btn--primary" disabled={pwBusy}>
+          {pwBusy ? "در حال تغییر…" : "تغییر رمز عبور"}
+        </button>
       </form>
     </div>
   );

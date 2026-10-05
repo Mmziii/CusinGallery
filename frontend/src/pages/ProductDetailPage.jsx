@@ -3,6 +3,7 @@ import PropTypes from "prop-types";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
+import Breadcrumbs from "../components/Breadcrumbs";
 import Icon from "../components/Icon";
 import StarRating from "../components/StarRating";
 import PriceTag from "../components/PriceTag";
@@ -354,6 +355,17 @@ function ProductDetailPage() {
 
   return (
     <div className="product-detail">
+      {/* Part S2 item 7: breadcrumbs on the product page */}
+      <Breadcrumbs
+        items={[
+          { label: "خانه", to: "/" },
+          { label: "فروشگاه", to: "/shop/" },
+          ...(product.category
+            ? [{ label: product.category.name, to: `/shop/?category=${encodeURIComponent(product.category.slug)}` }]
+            : []),
+          { label: product.name },
+        ]}
+      />
       <div className="product-detail__gallery">
         <div
           className="product-detail__main-image"

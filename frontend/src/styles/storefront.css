@@ -1397,3 +1397,73 @@ input.is-invalid, select.is-invalid, textarea.is-invalid { border-color: var(--c
 /* Guest cart skeleton rows (CartPage S1.2) */
 .cart-item--skeleton { display: flex; gap: var(--space-3); align-items: center; }
 .cart-item--skeleton .skeleton { flex: none; }
+
+/* ==========================================================================
+   PART S2 — forms, feedback, navigation & discovery, a11y additions
+   ========================================================================== */
+
+/* --- Breadcrumbs (item 7) --- */
+.breadcrumbs { margin: var(--space-2) 0 var(--space-3); font-size: var(--font-size-sm); }
+.breadcrumbs ol { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; list-style: none; margin: 0; padding: 0; }
+.breadcrumbs li { display: inline-flex; align-items: center; gap: 4px; color: var(--color-text-muted); }
+.breadcrumbs li + li::before { content: "‹"; color: var(--brand-gold-deep); transform: scaleX(-1); }
+.breadcrumbs a:hover { color: var(--brand-gold-deep); }
+.breadcrumbs [aria-current="page"] { color: var(--brand-green-dark); font-weight: 700; }
+/* inside the PDP grid the trail spans both columns */
+.product-detail > .breadcrumbs { grid-column: 1 / -1; margin-top: 0; }
+
+/* --- Shop toolbar: result count (item 7) --- */
+.shop__count {
+  margin-inline-start: auto; color: var(--color-text-muted);
+  font-size: var(--font-size-sm); font-weight: 600;
+  display: inline-flex; align-items: center;
+}
+.shop__toolbar { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+
+/* --- Checkout progress steps (item 6) --- */
+.checkout__steps {
+  display: flex; flex-wrap: wrap; gap: var(--space-2);
+  list-style: none; margin: 0 0 var(--space-4); padding: 0;
+}
+.checkout__step {
+  display: inline-flex; align-items: center; gap: var(--space-2);
+  border: 1px solid var(--color-border); border-radius: 999px;
+  padding: 6px 14px; font-size: var(--font-size-sm); color: var(--color-text-muted);
+  background: var(--color-surface);
+}
+.checkout__step-num {
+  display: inline-grid; place-items: center;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--color-bg); border: 1px solid var(--color-border);
+  font-size: 0.75rem; font-weight: 700;
+}
+.checkout__step--done { color: var(--brand-green-dark); border-color: rgba(138,164,90,.5); }
+.checkout__step--done .checkout__step-num { background: var(--brand-green-tint); color: var(--brand-green-dark); border-color: transparent; }
+.checkout__step--current { color: var(--brand-green-dark); font-weight: 700; border-color: var(--brand-gold-deep); }
+.checkout__step--current .checkout__step-num { background: var(--brand-gold-deep); color: #fff; border-color: transparent; }
+
+/* --- Mobile order summary (item 6): visible first, no long scroll past
+       the whole form just to see what is being paid --- */
+@media (max-width: 768px) {
+  .checkout__grid { display: flex; flex-direction: column; }
+  .checkout__summary { order: -1; position: static; }
+}
+
+/* --- Back-to-top (item 7) --- */
+.back-to-top {
+  width: 50px; height: 50px; border-radius: 50%;
+  display: grid; place-items: center; cursor: pointer;
+  background: var(--brand-green-dark); color: var(--brand-gold);
+  border: 1px solid rgba(206,180,100,.6); box-shadow: var(--shadow-md);
+}
+
+/* --- Toast action link (item 6) --- */
+.toast { display: flex; align-items: center; gap: var(--space-3); pointer-events: auto; }
+.toast__action {
+  color: var(--brand-gold); font-weight: 700; white-space: nowrap;
+  text-decoration: underline; text-underline-offset: 3px;
+}
+.toast__action:hover { color: #fff; }
+
+/* --- Field helper text (item 5) --- */
+.field__hint { font-size: 0.78rem; }

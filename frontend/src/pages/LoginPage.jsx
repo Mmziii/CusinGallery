@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import { Alert, errorMessage } from "../components/ui";
 import useAuthStore from "../store/useAuthStore";
+import { toAsciiDigits } from "../utils/iranianFields";
 
 function LoginPage() {
   usePageMeta({ title: "ورود به حساب کاربری", path: "/login/" });
@@ -36,9 +37,11 @@ function LoginPage() {
           <span>شماره موبایل یا ایمیل</span>
           <input
             type="text"
+            dir="ltr"
             value={identifier}
             autoComplete="username"
-            onChange={(e) => setIdentifier(e.target.value)}
+            inputMode="tel"
+            onChange={(e) => setIdentifier(toAsciiDigits(e.target.value))}
             required
           />
         </label>

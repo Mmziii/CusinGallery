@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { Alert, errorMessage } from "../components/ui";
 import * as authApi from "../services/authApi";
 import { normalizeApiError } from "../utils/apiError";
+import { toAsciiDigits } from "../utils/iranianFields";
 
 /**
  * Password reset — step 1 (Phase D: complete for BOTH account shapes).
@@ -74,7 +75,13 @@ function PasswordResetRequestPage() {
           <>
             <label className="field">
               <span>شماره موبایل یا ایمیل</span>
-              <input type="text" value={identifier} onChange={(e) => setIdentifier(e.target.value)} required />
+              <input
+                type="text"
+                dir="ltr"
+                value={identifier}
+                onChange={(e) => setIdentifier(toAsciiDigits(e.target.value))}
+                required
+              />
             </label>
             {error ? <Alert>{error}</Alert> : null}
             <button type="submit" className="btn btn--primary btn--block" disabled={busy}>

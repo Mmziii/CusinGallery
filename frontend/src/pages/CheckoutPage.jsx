@@ -1,9 +1,10 @@
 import { usePageMeta } from "../hooks/usePageMeta";
+import PropTypes from "prop-types";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import AddressForm from "../components/AddressForm";
-import { validateAddressPayload } from "../utils/iranianFields";
+import { normalizePhone, validateAddressPayload } from "../utils/iranianFields";
 import { Alert, Spinner, errorMessage } from "../components/ui";
 import * as authApi from "../services/authApi";
 import { checkout, fetchShippingMethods } from "../services/orderApi";
@@ -31,6 +32,40 @@ const METHOD_LABELS = {
 function methodLabel(id) {
   return METHOD_LABELS[id] || id;
 }
+
+/**
+ * Part S2 item 6: checkout progress indicator (address -> shipping ->
+ * review -> payment). `done` marks completed steps, `current` the active
+ * one; everything is visible on mobile too (horizontal wrap).
+ */
+function CheckoutSteps({ done, current }) {
+  const labels = ["آدرس", "روش ارسال", "بازبینی", "پرداخت"];
+  return (
+    <ol className="checkout__steps" aria-label="مراحل ثبت سفارش">
+      {labels.map((label, index) => {
+        const isDone = index < current || (done || []).includes(index);
+        const isCurrent = index === current;
+        return (
+          <li
+            key={label}
+            className={`checkout__step ${isDone ? "checkout__step--done" : ""} ${
+              isCurrent ? "checkout__step--current" : ""
+            }`}
+            aria-current={isCurrent ? "step" : undefined}
+          >
+            <span className="checkout__step-num" aria-hidden="true">{formatPrice(index + 1)}</span>
+            {label}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+CheckoutSteps.propTypes = {
+  current: PropTypes.number.isRequired,
+  done: PropTypes.arrayOf(PropTypes.number),
+};
 
 /** Server-configured cost of a method for a given subtotal -- the same
  *  free-threshold rule the backend applies (see apps/orders/shipping.py);
@@ -180,6 +215,7 @@ function CheckoutPage() {
   if (placedOrder) {
     return (
       <div className="checkout-done">
+        <CheckoutSteps current={3} done={[0, 1, 2]} />
         <h1>سفارش شما ثبت شد</h1>
         <p>شماره سفارش: <strong>{placedOrder.order_number}</strong></p>
 
@@ -230,6 +266,19 @@ function CheckoutPage() {
 
   const methods = shippingData?.methods || [];
   const currentMethod = methods.find((m) => m.id === selectedMethod) || null;
+
+  // Part S2 item 6: which early steps already count as done, so the
+  // progress indicator reflects real completion (not just position).
+  const needsAddress = currentMethod ? currentMethod.requires_address !== false : true;
+  const addressDone = !needsAddress
+    ? Boolean((pickupContact.recipient_name || "").trim() && (pickupContact.phone || "").trim())
+    : addressMode === "saved"
+      ? Boolean(selectedAddressId)
+      : Object.keys(validateAddressPayload(inlineAddress)).length === 0;
+  const doneSteps = [
+    ...(addressDone ? [0] : []),
+    ...(addressDone && selectedMethod ? [1] : []),
+  ];
   const previewedShippingCost = currentMethod ? methodCostFor(currentMethod, cart.subtotal) : (cart.shipping_cost_preview || 0);
 
   const estimatedTotal =
@@ -240,6 +289,8 @@ function CheckoutPage() {
   return (
     <div className="checkout">
       <h1>ثبت سفارش</h1>
+
+      <CheckoutSteps current={2} done={doneSteps} />
 
       <div className="checkout__grid">
         <div className="checkout__main">
@@ -253,6 +304,7 @@ function CheckoutPage() {
                 <span>نام تحویل‌گیرنده</span>
                 <input
                   type="text"
+                  autoComplete="name"
                   value={pickupContact.recipient_name || ""}
                   onChange={(e) => setPickupContact((f) => ({ ...f, recipient_name: e.target.value }))}
                   required
@@ -263,8 +315,12 @@ function CheckoutPage() {
                 <input
                   type="text"
                   dir="ltr"
+                  inputMode="tel"
+                  autoComplete="tel"
                   value={pickupContact.phone || ""}
-                  onChange={(e) => setPickupContact((f) => ({ ...f, phone: e.target.value }))}
+                  onChange={(e) =>
+                    setPickupContact((f) => ({ ...f, phone: normalizePhone(e.target.value) }))
+                  }
                   required
                 />
               </label>
@@ -408,6 +464,7 @@ function CheckoutPage() {
             <div className="coupon-row">
               <input
                 type="text"
+                dir="ltr"
                 value={couponCode}
                 placeholder="مثلاً: WELCOME10"
                 onChange={(e) => setCouponCode(e.target.value)}

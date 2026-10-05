@@ -12,6 +12,9 @@ function AddressesPage() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [actionError, setActionError] = useState(null);
+  // Part S2 item 6: per-row busy flag so destructive buttons can neither
+  // double-submit nor be spammed while a request is in flight.
+  const [busyId, setBusyId] = useState(null);
 
   const load = () => {
     setIsLoading(true);
@@ -25,22 +28,30 @@ function AddressesPage() {
   useEffect(load, []);
 
   const handleDelete = async (id) => {
+    // Part S2 item 6: destructive action needs confirmation.
+    if (!window.confirm("این آدرس برای همیشه حذف شود؟")) return;
     setActionError(null);
+    setBusyId(id);
     try {
       await authApi.deleteAddress(id);
       setAddresses((list) => list.filter((a) => a.id !== id));
     } catch (err) {
       setActionError(errorMessage(normalizeApiError(err)));
+    } finally {
+      setBusyId(null);
     }
   };
 
   const handleSetDefault = async (id) => {
     setActionError(null);
+    setBusyId(id);
     try {
       await authApi.setDefaultAddress(id);
       setAddresses((list) => list.map((a) => ({ ...a, is_default: a.id === id })));
     } catch (err) {
       setActionError(errorMessage(normalizeApiError(err)));
+    } finally {
+      setBusyId(null);
     }
   };
 
@@ -98,7 +109,12 @@ function AddressesPage() {
               </div>
               <div className="address-card__actions">
                 {!address.is_default ? (
-                  <button type="button" className="btn btn--outline btn--sm" onClick={() => handleSetDefault(address.id)}>
+                  <button
+                    type="button"
+                    className="btn btn--outline btn--sm"
+                    disabled={busyId === address.id}
+                    onClick={() => handleSetDefault(address.id)}
+                  >
                     پیش‌فرض
                   </button>
                 ) : null}
@@ -112,8 +128,13 @@ function AddressesPage() {
                 >
                   ویرایش
                 </button>
-                <button type="button" className="link-danger" onClick={() => handleDelete(address.id)}>
-                  حذف
+                <button
+                  type="button"
+                  className="link-danger"
+                  disabled={busyId === address.id}
+                  onClick={() => handleDelete(address.id)}
+                >
+                  {busyId === address.id ? "…" : "حذف"}
                 </button>
               </div>
             </div>

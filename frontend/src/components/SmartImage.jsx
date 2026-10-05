@@ -66,6 +66,12 @@ function SmartImage({ image, alt, className, eager = false, sizes }) {
         alt={alt || ""}
         className={className}
         loading={eager ? "eager" : "lazy"}
+        /* Part S2 item 8: reserve the intrinsic size when the API ever
+           provides it, so the browser can prevent layout shift. The
+           backend does not serve width/height today (see report); the
+           attributes render only when present, never fabricated. */
+        width={image?.width || undefined}
+        height={image?.height || undefined}
         onError={() => setFailed(true)}
       />
     </picture>
@@ -78,6 +84,8 @@ SmartImage.propTypes = {
     webp_400: PropTypes.string,
     webp_800: PropTypes.string,
     webp_1200: PropTypes.string,
+    width: PropTypes.number,
+    height: PropTypes.number,
   }),
   alt: PropTypes.string,
   className: PropTypes.string,

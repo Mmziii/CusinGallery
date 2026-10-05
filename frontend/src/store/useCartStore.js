@@ -35,6 +35,28 @@ import {
 // overwrite the result of a newer request.
 let hydrationSeq = 0;
 
+/**
+ * Part S2 item 6: optimistic view for a quantity change. Recomputes ONLY
+ * display numbers that follow mechanically from existing server values
+ * (line_total = price x qty, subtotal, item_count); the next server
+ * response replaces the whole object anyway, so nothing here can drift
+ * from the backend's own arithmetic.
+ */
+function withOptimisticQty(cart, itemId, quantity) {
+  let items = cart.items.map((item) =>
+    item.id === itemId ? { ...item, quantity, line_total: item.price_info.price * quantity } : item
+  );
+  if (quantity <= 0) items = items.filter((item) => item.id !== itemId);
+  const subtotal = items.reduce((sum, item) => sum + item.line_total, 0);
+  return { ...cart, items, subtotal, item_count: items.reduce((sum, item) => sum + item.quantity, 0) };
+}
+
+function withoutItem(cart, itemId) {
+  const items = cart.items.filter((item) => item.id !== itemId);
+  const subtotal = items.reduce((sum, item) => sum + item.line_total, 0);
+  return { ...cart, items, subtotal, item_count: items.reduce((sum, item) => sum + item.quantity, 0) };
+}
+
 const useCartStore = create((set, get) => ({
   cart: null,
   guestLines: loadGuestLines(),
@@ -171,14 +193,18 @@ const useCartStore = create((set, get) => ({
     if (guestKey) {
       return get().updateGuestItem(guestKey.product_id, guestKey.variant_id, quantity);
     }
-    set({ isLoading: true, error: null });
+    // Part S2 item 6: optimistic quantity update -- the UI reacts
+    // instantly; on failure the pre-change snapshot is rolled back.
+    const snapshot = get().cart;
+    if (snapshot) set({ cart: withOptimisticQty(snapshot, itemId, quantity) });
+    set({ error: null });
     try {
       const cart = await cartApi.updateCartItem(itemId, quantity);
       set({ cart, isLoading: false });
       return { success: true };
     } catch (err) {
       const normalized = normalizeApiError(err);
-      set({ isLoading: false, error: normalized });
+      set({ cart: snapshot, isLoading: false, error: normalized });
       return { success: false, error: normalized };
     }
   },
@@ -187,14 +213,17 @@ const useCartStore = create((set, get) => ({
     if (guestKey) {
       return get().updateGuestItem(guestKey.product_id, guestKey.variant_id, 0);
     }
-    set({ isLoading: true, error: null });
+    // Part S2 item 6: optimistic removal with rollback on failure.
+    const snapshot = get().cart;
+    if (snapshot) set({ cart: withoutItem(snapshot, itemId) });
+    set({ error: null });
     try {
       const cart = await cartApi.removeCartItem(itemId);
       set({ cart, isLoading: false });
       return { success: true };
     } catch (err) {
       const normalized = normalizeApiError(err);
-      set({ isLoading: false, error: normalized });
+      set({ cart: snapshot, isLoading: false, error: normalized });
       return { success: false, error: normalized };
     }
   },

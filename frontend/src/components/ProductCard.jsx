@@ -33,7 +33,12 @@ function ProductCard({ product }) {
     setAdding(true);
     const result = await addItem(product.id, null, 1);
     setAdding(false);
-    if (result?.success) toast("به سبد خرید اضافه شد");
+    // Part S2 item 6: toast feedback with a direct view-cart action.
+    if (result?.success) {
+      toast("به سبد خرید اضافه شد", "success", { label: "مشاهده سبد", to: "/cart/" });
+    } else if (result?.error) {
+      toast(result.error.message || "افزودن به سبد انجام نشد.", "error");
+    }
   };
 
   // Card-level wishlist action is add-only (the filled state lives on

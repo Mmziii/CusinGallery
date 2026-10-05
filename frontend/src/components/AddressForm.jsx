@@ -12,11 +12,11 @@ const OTHER_CITY = "__other__";
 
 const FIELDS = [
   { key: "recipient_name", label: "نام گیرنده", required: true, maxLength: 150, autoComplete: "name" },
-  { key: "phone", label: "شماره تماس", required: true, maxLength: 20, numeric: true, inputMode: "tel", autoComplete: "tel" },
+  { key: "phone", label: "شماره تماس", required: true, maxLength: 20, numeric: true, inputMode: "tel", autoComplete: "tel", helper: "موبایل (مانند 09123456789) یا ثابت با کد شهر (مانند 02112345678)" },
   { key: "province", label: "استان", required: true, maxLength: 100 },
   { key: "city", label: "شهر", required: true, maxLength: 100 },
   { key: "address", label: "آدرس کامل", required: true, textarea: true, autoComplete: "street-address" },
-  { key: "postal_code", label: "کد پستی", required: true, maxLength: 10, numeric: true, inputMode: "numeric", autoComplete: "postal-code" },
+  { key: "postal_code", label: "کد پستی", required: true, maxLength: 10, numeric: true, inputMode: "numeric", autoComplete: "postal-code", helper: "کد پستی ۱۰ رقمی، بدون خط تیره" },
   { key: "unit", label: "واحد (اختیاری)", required: false, maxLength: 20 },
   { key: "building_number", label: "پلاک (اختیاری)", required: false, maxLength: 20 },
 ];
@@ -286,6 +286,7 @@ function AddressForm({ value = {}, onChange, onSaved, compact = false, initial =
                 aria-invalid={Boolean(errors[field.key])}
               />
             ) : null}
+            {field.helper ? <span className="muted field__hint">{field.helper}</span> : null}
             {renderFieldError(field.key)}
           </label>
         ))}

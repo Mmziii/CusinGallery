@@ -3,6 +3,7 @@ import { Link, NavLink, useNavigate } from "react-router-dom";
 
 import Icon from "./Icon";
 import SmartImage from "./SmartImage";
+import useFocusTrap from "../hooks/useFocusTrap";
 import useAuthStore from "../store/useAuthStore";
 import useCartStore from "../store/useCartStore";
 import { getCategoryTree, listProducts } from "../services/catalogApi";
@@ -38,6 +39,15 @@ function Header() {
   const searchTimer = useRef(null);
   const megaRef = useRef(null);
   const megaCloseTimer = useRef(null);
+  const drawerRef = useRef(null);
+  const minicartRef = useRef(null);
+
+  // Part S2 item 8: focus trap + Escape + focus restore for the two
+  // full drawers (mobile menu, mini-cart). The hover-driven mega menu
+  // intentionally stays trap-free; it handles Escape below and returns
+  // focus to its trigger.
+  useFocusTrap(drawerRef, menuOpen, () => setMenuOpen(false));
+  useFocusTrap(minicartRef, cartOpen, () => setCartOpen(false));
 
   useEffect(() => {
     fetchMe().then(({ success }) => {
@@ -89,6 +99,8 @@ function Header() {
       megaCloseTimer.current = null;
     }
   };
+  const megaBtnRef = useRef(null);
+  const megaFocusPending = useRef(false);
   const openMega = () => {
     cancelMegaClose();
     setMegaOpen(true);
@@ -107,11 +119,24 @@ function Header() {
   useEffect(() => {
     if (!megaOpen) return undefined;
     function onKey(event) {
-      if (event.key === "Escape") setMegaOpen(false);
+      if (event.key === "Escape") {
+        setMegaOpen(false);
+        // Part S2 item 8: focus restore for keyboard users.
+        megaBtnRef.current?.focus();
+      }
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [megaOpen]);
+
+  // Part S2 item 8: when the mega menu was opened by CLICK/keyboard (not
+  // hover), move focus to the first category so Tab users land inside.
+  useEffect(() => {
+    if (!megaOpen || !megaFocusPending.current) return;
+    megaFocusPending.current = false;
+    const first = megaRef.current?.querySelector(".mega-menu__roots button");
+    if (first) first.focus();
+  }, [megaOpen, megaCategory]);
 
   // Debounced live suggestions.
   useEffect(() => {
@@ -225,9 +250,17 @@ function Header() {
             <button
               type="button"
               className="site-header__mega-btn"
+              ref={megaBtnRef}
               aria-haspopup="true"
               aria-expanded={megaOpen}
-              onClick={() => (megaOpen ? closeMega() : openMega())}
+              onClick={() => {
+                if (megaOpen) {
+                  closeMega();
+                } else {
+                  megaFocusPending.current = true;
+                  openMega();
+                }
+              }}
             >
               دسته‌بندی کالاها
               <Icon name="chevron-down" size={16} />
@@ -313,7 +346,7 @@ function Header() {
       </div>
 
       {menuOpen ? (
-        <div className="site-header__drawer" role="dialog" aria-label="منوی اصلی">
+        <div className="site-header__drawer" role="dialog" aria-modal="true" aria-label="منوی اصلی" ref={drawerRef}>
           <div className="site-header__drawer-head">
             <span className="site-header__brand-name">کازین گالری</span>
             <button type="button" aria-label="بستن منو" onClick={() => setMenuOpen(false)}>
@@ -340,9 +373,9 @@ function Header() {
       ) : null}
 
       {cartOpen ? (
-        <div className="minicart" role="dialog" aria-label="سبد خرید">
+        <div className="minicart" role="dialog" aria-modal="true" aria-label="سبد خرید">
           <div className="minicart__backdrop" onClick={() => setCartOpen(false)} />
-          <div className="minicart__panel">
+          <div className="minicart__panel" ref={minicartRef}>
             <div className="minicart__head">
               <strong>سبد خرید</strong>
               <button type="button" aria-label="بستن سبد" onClick={() => setCartOpen(false)}>
