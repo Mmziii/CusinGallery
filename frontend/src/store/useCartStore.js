@@ -30,10 +30,21 @@ import {
  * `cart` always holds a badge-compatible view: the server payload for
  * logged-in users, or a synthesized {items, item_count} for guests.
  */
+// Part S1 item 2: hydration requests are sequenced so a stale response
+// (slow network, fast repeated cart changes, navigation) can never
+// overwrite the result of a newer request.
+let hydrationSeq = 0;
+
 const useCartStore = create((set, get) => ({
   cart: null,
   guestLines: loadGuestLines(),
   guestProducts: {}, // product_id -> product payload (display-only)
+  // Part S1 item 2: explicit hydration lifecycle so the cart page never
+  // shows half-rendered rows with a fake 0 total: "idle" before the
+  // first attempt, "loading" in flight, "ready" once hydrated, "error"
+  // when the products request failed (retry via hydrateGuestProducts()).
+  guestHydration: "idle",
+  guestHydrationError: null,
   lastMergeReport: null,
   isLoading: false,
   error: null,
@@ -84,16 +95,22 @@ const useCartStore = create((set, get) => ({
   async hydrateGuestProducts() {
     const ids = [...new Set(get().guestLines.map((l) => l.product_id))];
     if (ids.length === 0) {
-      set({ guestProducts: {} });
+      set({ guestProducts: {}, guestHydration: "ready", guestHydrationError: null });
       return;
     }
+    const seq = ++hydrationSeq;
+    set({ guestHydration: "loading", guestHydrationError: null });
     try {
       const data = await catalogApi.listProducts({ ids: ids.join(","), page_size: ids.length });
+      if (seq !== hydrationSeq) return; // a newer request owns the result
       const byId = {};
       for (const product of data.results || []) byId[product.id] = product;
-      set({ guestProducts: byId });
-    } catch {
-      // Display-only hydration; the merge validates everything anyway.
+      set({ guestProducts: byId, guestHydration: "ready", guestHydrationError: null });
+    } catch (err) {
+      if (seq !== hydrationSeq) return; // a newer request owns the state
+      // Never swallow: the cart page shows a friendly error + retry, and
+      // already-hydrated rows keep their data (guestProducts untouched).
+      set({ guestHydration: "error", guestHydrationError: normalizeApiError(err) });
     }
   },
 

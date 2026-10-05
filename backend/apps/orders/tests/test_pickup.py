@@ -88,7 +88,8 @@ class PickupCheckoutTests(CacheIsolatedAPITestCase):
         self.assertEqual(order.total, order.subtotal)  # no shipping, no fee
         self.assertEqual(order.shipping_address, "")  # no delivery address snapshot
         self.assertEqual(order.shipping_recipient_name, "Maryam Rezaei")
-        self.assertEqual(order.shipping_phone, "+989121112233")
+        # Part S1 item 3: phones are normalized to the canonical 0... form.
+        self.assertEqual(order.shipping_phone, "09121112233")
         self.assertEqual(order.estimated_delivery_min, order.estimated_delivery_max)
 
     def test_pickup_without_name_is_rejected(self):

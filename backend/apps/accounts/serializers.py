@@ -269,7 +269,22 @@ class AddressSerializer(serializers.ModelSerializer):
     from Phase 2 (`addr_one_default_per_user`). Setting `is_default=True`
     here first atomically clears any other default address for the same
     user, so the create/update below never collides with that constraint.
+
+    Part S1 (item 3): explicit field overrides so (a) `unit` and
+    `building_number` accept JSON null and store it as an empty string
+    (blank=True, null=False CharFields), and (b) phone/postal-code use
+    the normalizing validators (Persian digits -> ASCII, exact formats).
     """
+
+    # Declared explicitly so the model field's generic RegexValidator is
+    # replaced by the stricter, normalizing address-phone rule (applied
+    # in validate_phone, which -- unlike `validators=` -- can also
+    # TRANSFORM the stored value into the normalized form).
+    phone = serializers.CharField(max_length=20)
+    unit = serializers.CharField(max_length=20, required=False, allow_blank=True, allow_null=True)
+    building_number = serializers.CharField(
+        max_length=20, required=False, allow_blank=True, allow_null=True
+    )
 
     class Meta:
         model = Address
@@ -279,6 +294,19 @@ class AddressSerializer(serializers.ModelSerializer):
             "created_at", "updated_at",
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
+
+    def to_internal_value(self, data):
+        # JSON clients (the storefront among them) may send null for the
+        # optional unit/building_number; the model stores "" for those.
+        if isinstance(data, dict):
+            data = dict(data)
+            for key in ("unit", "building_number"):
+                if data.get(key) is None and key in data:
+                    data[key] = ""
+        return super().to_internal_value(data)
+
+    def validate_phone(self, value):
+        return validators.validate_address_phone(value)
 
     def validate_postal_code(self, value):
         return validators.validate_postal_code(value)

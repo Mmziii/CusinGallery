@@ -1278,3 +1278,122 @@ html.js-reveal .reveal.is-revealed, .reveal.is-revealed { opacity: 1; transform:
 .empty-state--error .btn { margin-top: var(--space-3); }
 
 .field__city-combo { display: flex; flex-direction: column; gap: var(--space-2); }
+
+/* ==========================================================================
+   PART S1 — mobile layout + centering audit fixes (owner-reported)
+   Audited at 320 / 360 / 375 / 390 / 412 / 768 px. Goals: no horizontal
+   scroll, tap targets >= 44px, readable text (>= 14px body, inputs 16px
+   under 640px so iOS does not zoom), nothing hidden behind sticky/floating
+   bars, safe-area insets, keyboard does not hide the focused field, and
+   vertically centered control content (Persian glyphs in Vazirmatn sit low,
+   so line-height 1.6 inside flex controls pushes text off-center).
+   ========================================================================== */
+
+/* --- 1. horizontal scroll guard -----------------------------------------
+   `clip` (not `hidden`) does not create a scroll container, so
+   position: sticky keeps working in every browser that ships clip. */
+html { overflow-x: clip; }
+
+/* Anchor jumps (checkout sections, review anchor, etc.) must clear the
+   sticky header, including when the on-screen keyboard reflows the page. */
+[id] { scroll-margin-top: calc(var(--header-height, 72px) + 16px); }
+
+/* --- 2. centering: controls ----------------------------------------------
+   Buttons/chips/pagination carry flex centering + a tight line-height so
+   Persian glyphs land on the visual middle of the control. */
+.btn { line-height: 1.2; }
+.chip,
+.pagination button,
+.account__nav a,
+.category-bar__inner a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.2;
+}
+.pagination button { min-height: 40px; }
+.chip { min-height: 36px; }
+.qty-picker button,
+.hero__arrow,
+.icon-btn,
+.merge-notice__close,
+.minicart__head button,
+.site-header__drawer-head button,
+.site-header__burger { display: inline-grid; place-items: center; }
+.site-header__burger { width: 44px; height: 44px; }
+.site-header__mega-btn { display: inline-flex; align-items: center; justify-content: center; }
+
+/* Tiny icon-only controls (dots, chip remove, drawer close) keep their
+   small visual size but grow their hit area to 44x44 via a pseudo element. */
+.hero__dots button,
+.dot,
+.shop__chip button,
+.merge-notice__close,
+.minicart__head button,
+.site-header__drawer-head button {
+  position: relative;
+}
+.hero__dots button::after,
+.dot::after,
+.shop__chip button::after,
+.merge-notice__close::after,
+.minicart__head button::after,
+.site-header__drawer-head button::after {
+  content: "";
+  position: absolute;
+  inset: -14px;
+}
+
+/* --- 3. safe-area + fixed-bar clearance ---------------------------------- */
+.product-detail__stickybar {
+  padding-bottom: calc(var(--space-2) + env(safe-area-inset-bottom, 0px));
+}
+.floating-contact { bottom: calc(18px + env(safe-area-inset-bottom, 0px)); }
+@media (max-width: 900px) {
+  /* the floating contact button must never cover page content near the
+     bottom of the page (footer / summary buttons) */
+  .site-footer { padding-bottom: 96px; }
+  .checkout, .cart-page { padding-bottom: 80px; }
+}
+
+/* PDP zoom-to-enlarge must not bleed past its frame on small screens */
+.product-detail__main-image { overflow: hidden; border-radius: var(--radius-md); }
+
+/* --- 4. touch / small-screen pass ---------------------------------------- */
+@media (max-width: 900px) {
+  .site-header__nav a { padding: 10px 4px; }
+  .user-menu__trigger { padding: 10px 14px; }
+  .user-menu__panel a, .user-menu__panel button { padding: 12px; }
+  .search-suggest a { padding: 12px; }
+  .mega-menu__roots button { padding: 12px 10px; }
+  .mega-menu__panel a { padding: 10px 8px; }
+  .site-header__drawer a { padding: 14px 4px; }
+  .account__nav a { padding: 12px; }
+  .link, .link-danger { padding-block: 10px; }
+  .category-bar__inner a { min-height: 44px; }
+}
+
+@media (pointer: coarse), (max-width: 900px) {
+  .icon-btn { width: 44px; height: 44px; }
+  .qty-picker button { width: 44px; min-height: 44px; }
+  .hero__arrow { width: 44px; height: 44px; }
+  .pagination button { min-height: 44px; padding-inline: 18px; }
+  .chip { min-height: 44px; padding-inline: 18px; }
+  .btn--sm { font-size: 0.875rem; padding: 10px 16px; }
+}
+
+/* Inputs need 16px under 640px or iOS Safari zooms the page on focus. */
+@media (max-width: 640px) {
+  input, select, textarea { font-size: 16px; }
+  body { font-size: 0.9375rem; } /* 15px base keeps everything >= 14px */
+}
+
+/* Inline field errors + required marker (AddressForm S1.3) */
+.field__error { color: var(--color-danger); font-size: var(--font-size-sm); margin-top: 2px; }
+.field__required { color: var(--color-danger); }
+.field--error input, .field--error select, .field--error textarea,
+input.is-invalid, select.is-invalid, textarea.is-invalid { border-color: var(--color-danger); }
+
+/* Guest cart skeleton rows (CartPage S1.2) */
+.cart-item--skeleton { display: flex; gap: var(--space-3); align-items: center; }
+.cart-item--skeleton .skeleton { flex: none; }

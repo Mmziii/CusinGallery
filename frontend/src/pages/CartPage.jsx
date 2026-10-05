@@ -1,10 +1,11 @@
 import { usePageMeta } from "../hooks/usePageMeta";
+import PropTypes from "prop-types";
 import { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import RecentlyViewed from "../components/RecentlyViewed";
 import SmartImage from "../components/SmartImage";
-import { EmptyState, ErrorState, Spinner, errorMessage } from "../components/ui";
+import { Alert, EmptyState, ErrorState, Spinner, errorMessage } from "../components/ui";
 import useAuthStore from "../store/useAuthStore";
 import useCartStore from "../store/useCartStore";
 import { formatPrice } from "../utils/formatPrice";
@@ -21,8 +22,29 @@ const UNAVAILABLE_REASONS = {
  * never trusted from storage. Checkout still requires an account -- on
  * login/register the store merges this cart server-side.
  */
+function GuestCartSkeleton({ count }) {
+  // Part S1 item 2: honest loading rows -- no fake names, no fake total.
+  return (
+    <div className="cart-page__items" aria-busy="true">
+      {Array.from({ length: count }, (_, i) => (
+        <div className="cart-item cart-item--skeleton" key={i}>
+          <div className="cart-item__skeleton-img" aria-hidden="true" />
+          <div className="cart-item__body">
+            <div className="skeleton-line skeleton-line--lg" aria-hidden="true" />
+            <div className="skeleton-line" aria-hidden="true" />
+          </div>
+        </div>
+      ))}
+      <p className="muted">در حال دریافت اطلاعات کالاها…</p>
+    </div>
+  );
+}
+
 function GuestCartView() {
-  const { guestLines, guestProducts, hydrateGuestProducts, updateGuestItem } = useCartStore();
+  const {
+    guestLines, guestProducts, guestHydration, guestHydrationError,
+    hydrateGuestProducts, updateGuestItem,
+  } = useCartStore();
 
   useEffect(() => {
     hydrateGuestProducts();
@@ -37,10 +59,27 @@ function GuestCartView() {
   }
 
   const rows = guestLines.map((line) => ({ line, product: guestProducts[line.product_id] }));
+  const missing = rows.filter((row) => !row.product).length;
+  const fullyHydrated = missing === 0;
   const total = rows.reduce(
     (sum, row) => sum + (row.product ? (row.product.price ?? 0) * row.line.quantity : 0),
     0
   );
+
+  // Part S1 item 2: while product data is still loading we show skeleton
+  // rows instead of half-rendered lines with a misleading 0 total.
+  if (guestLines.length > 0 && !fullyHydrated && guestHydration !== "error") {
+    return (
+      <div className="cart-page">
+        <h1>سبد خرید</h1>
+        <p className="muted cart-page__guest-note">
+          شما به‌صورت مهمان خرید می‌کنید؛ قیمت‌ها از سرور دریافت می‌شوند و با ورود یا ثبت‌نام،
+          همین سبد به حساب شما منتقل خواهد شد.
+        </p>
+        <GuestCartSkeleton count={guestLines.length} />
+      </div>
+    );
+  }
 
   return (
     <div className="cart-page">
@@ -49,12 +88,21 @@ function GuestCartView() {
         شما به‌صورت مهمان خرید می‌کنید؛ قیمت‌ها از سرور دریافت می‌شوند و با ورود یا ثبت‌نام،
         همین سبد به حساب شما منتقل خواهد شد.
       </p>
+
+      {guestHydrationError && missing > 0 ? (
+        <Alert>
+          دریافت اطلاعات کالاها با خطا مواجه شد.
+          <button type="button" className="btn btn--outline btn--sm" onClick={() => hydrateGuestProducts()}>
+            تلاش دوباره
+          </button>
+        </Alert>
+      ) : null}
       <div className="cart-page__items">
         {rows.map(({ line, product }) => (
           <div className="cart-item" key={`${line.product_id}-${line.variant_id ?? 0}`}>
             <SmartImage image={product?.primary_image || null} alt={product?.name || ""} />
             <div className="cart-item__body">
-              <div className="cart-item__name">{product ? product.name : "در حال بارگذاری…"}</div>
+              <div className="cart-item__name">{product ? product.name : "—"}</div>
               <div className="cart-item__unit">
                 {product ? `${formatPrice(product.price)} تومان` : ""}
               </div>
@@ -83,7 +131,10 @@ function GuestCartView() {
         ))}
       </div>
       <div className="cart-page__summary card">
-        <div className="cart-page__total">جمع: {formatPrice(total)} تومان</div>
+        {/* Never show a computed total while some lines are unhydrated. */}
+        <div className="cart-page__total">
+          {fullyHydrated ? `جمع: ${formatPrice(total)} تومان` : "جمع: در حال محاسبه…"}
+        </div>
         <p className="muted">
           برای پرداخت و ثبت سفارش وارد شوید یا ثبت‌نام کنید؛ سبد شما به‌صورت خودکار منتقل
           می‌شود.
@@ -213,5 +264,7 @@ function CartPage() {
     </div>
   );
 }
+
+GuestCartSkeleton.propTypes = { count: PropTypes.number.isRequired };
 
 export default CartPage;

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import AddressForm from "../components/AddressForm";
+import { validateAddressPayload } from "../utils/iranianFields";
 import { Alert, Spinner, errorMessage } from "../components/ui";
 import * as authApi from "../services/authApi";
 import { checkout, fetchShippingMethods } from "../services/orderApi";
@@ -54,6 +55,9 @@ function CheckoutPage() {
   const [showAddressForm, setShowAddressForm] = useState(false);
 
   const [inlineAddress, setInlineAddress] = useState({});
+  // Part S1 item 3: inline errors for the one-off checkout address,
+  // validated locally before submit and merged with any server 400s.
+  const [addressErrors, setAddressErrors] = useState({});
 
   // Shipping: the selectable methods and their costs/delivery windows all
   // come from the server (GET /orders/shipping-methods/) -- the shopper
@@ -116,6 +120,17 @@ function CheckoutPage() {
     try {
       const isPickupNow =
         (shippingData?.methods || []).find((m) => m.id === selectedMethod)?.requires_address === false;
+      if (!isPickupNow && addressMode === "inline") {
+        const errors = validateAddressPayload(inlineAddress);
+        if (Object.keys(errors).length > 0) {
+          setAddressErrors(errors);
+          const firstKey = ["recipient_name", "phone", "province", "city", "address", "postal_code"]
+            .find((key) => errors[key]);
+          document.getElementById(`addr-${firstKey}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+          document.getElementById(`addr-${firstKey}`)?.focus({ preventScroll: true });
+          return;
+        }
+      }
       const payload = isPickupNow
         ? { recipient_name: pickupContact.recipient_name, phone: pickupContact.phone }
         : addressMode === "saved"
@@ -128,7 +143,22 @@ function CheckoutPage() {
       // Cart is now empty server-side; refresh the badge.
       fetchCart();
     } catch (err) {
-      setCheckoutError(normalizeApiError(err));
+      const normalized = normalizeApiError(err);
+      // Server-side address rejections map straight onto the inline form
+      // fields so the customer sees WHICH value to fix.
+      const apiFieldErrors = normalized.fieldErrors || {};
+      const addressKeys = ["recipient_name", "phone", "province", "city", "address", "postal_code", "unit", "building_number"];
+      const mapped = Object.fromEntries(
+        Object.entries(apiFieldErrors).filter(([key]) => addressKeys.includes(key))
+      );
+      if (addressMode === "inline" && Object.keys(mapped).length > 0) {
+        const flat = {};
+        for (const [key, messages] of Object.entries(mapped)) {
+          flat[key] = Array.isArray(messages) ? messages.join(" ") : String(messages);
+        }
+        setAddressErrors(flat);
+      }
+      setCheckoutError(normalized);
     } finally {
       setPlacing(false);
     }
@@ -300,7 +330,15 @@ function CheckoutPage() {
             ) : null}
 
             {addressMode === "inline" ? (
-              <AddressForm value={inlineAddress} onChange={setInlineAddress} compact />
+              <AddressForm
+                value={inlineAddress}
+                onChange={(next) => {
+                  setInlineAddress(next);
+                  if (Object.keys(addressErrors).length) setAddressErrors({});
+                }}
+                fieldErrors={addressErrors}
+                compact
+              />
             ) : (
               <button type="button" className="link" onClick={() => setShowAddressForm((v) => !v)}>
                 {showAddressForm ? "بستن فرم آدرس جدید" : "+ ذخیره آدرس جدید"}

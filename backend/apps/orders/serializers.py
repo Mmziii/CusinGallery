@@ -4,7 +4,6 @@ Orders serializers.
 from rest_framework import serializers
 
 from apps.accounts import validators as account_validators
-from apps.accounts.models import phone_validator
 
 from .models import Order, OrderItem
 
@@ -119,15 +118,30 @@ class CheckoutSerializer(serializers.Serializer):
     # discount amount anywhere in this serializer.
     coupon_code = serializers.CharField(max_length=32, required=False, allow_blank=True)
     recipient_name = serializers.CharField(max_length=150, required=False)
-    phone = serializers.CharField(max_length=20, required=False, validators=[phone_validator])
+    # Part S1 (item 3): same normalizing rules as saved addresses --
+    # Persian digits accepted and normalized, Iranian mobile/landline only
+    # (validate_phone below; it also stores the normalized form).
+    phone = serializers.CharField(max_length=20, required=False)
     province = serializers.CharField(max_length=100, required=False)
     city = serializers.CharField(max_length=100, required=False)
     address = serializers.CharField(required=False)
     postal_code = serializers.CharField(max_length=20, required=False)
-    unit = serializers.CharField(max_length=20, required=False, allow_blank=True)
-    building_number = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    unit = serializers.CharField(max_length=20, required=False, allow_blank=True, allow_null=True)
+    building_number = serializers.CharField(
+        max_length=20, required=False, allow_blank=True, allow_null=True
+    )
 
     _REQUIRED_INLINE_FIELDS = ["recipient_name", "phone", "province", "city", "address", "postal_code"]
+
+    def to_internal_value(self, data):
+        # JSON clients may send null for the optional unit/building_number;
+        # downstream code (order snapshot, optional saved address) expects "".
+        if isinstance(data, dict):
+            data = dict(data)
+            for key in ("unit", "building_number"):
+                if data.get(key) is None and key in data:
+                    data[key] = ""
+        return super().to_internal_value(data)
 
     def validate_shipping_method(self, value):
         from . import shipping
@@ -141,6 +155,13 @@ class CheckoutSerializer(serializers.Serializer):
                 f"'{value}' is not an available shipping method. Choose one of: {valid}."
             )
         return value
+
+    def validate_phone(self, value):
+        # Same rule as saved addresses; blank phone stays blank (it is
+        # only required for address-bearing methods -- see validate()).
+        if not value:
+            return value
+        return account_validators.validate_address_phone(value)
 
     def validate_postal_code(self, value):
         # Only actually required when address_id isn't used (see
