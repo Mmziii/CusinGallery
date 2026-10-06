@@ -22,6 +22,20 @@ WORKDIR /app
 ARG VITE_API_BASE_URL=/api/v1
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 
+# VITE_SITE_ORIGIN (Phase E): the canonical public origin used by
+# src/hooks/usePageMeta.js to build <link rel=canonical> and og:url
+# values. Default matches the production domain; a staging deployment
+# overrides it via compose args / .env (see docker-compose.prod.yml).
+ARG VITE_SITE_ORIGIN=https://cusin.ir
+ENV VITE_SITE_ORIGIN=${VITE_SITE_ORIGIN}
+
+# VITE_SENTRY_DSN (Part S3 item 9): non-empty = the storefront's
+# ErrorBoundary posts crash reports to /api/v1/site/report-error/, which
+# forwards them into the backend's Sentry. Empty default = the browser
+# never sends anything.
+ARG VITE_SENTRY_DSN=
+ENV VITE_SENTRY_DSN=${VITE_SENTRY_DSN}
+
 COPY frontend/package.json frontend/package-lock.json* ./
 # Reproducibility: frontend/package-lock.json is committed, so this uses
 # `npm ci` (exact resolved versions + integrity hashes). If the lockfile

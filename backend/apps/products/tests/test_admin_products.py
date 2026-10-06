@@ -104,6 +104,22 @@ class BulkActionTests(ProductAdminBase):
         self.assertIn("ناموجود", html)
         self.assertIn("موجودی کم", html)
 
+    @override_settings(LOW_STOCK_THRESHOLD=3)
+    def test_low_stock_filter_uses_owner_threshold(self):
+        # Part R4 item 3: the admin list filter uses the SAME threshold
+        # the owner alert uses (env LOW_STOCK_THRESHOLD).
+        Product.objects.filter(pk=self.p1.pk).update(stock_quantity=3)   # at threshold
+        Product.objects.filter(pk=self.p2.pk).update(stock_quantity=50)  # healthy
+
+        url = reverse("admin:products_product_changelist")
+        html = self.client.get(url, {"low_stock": "1"}).content.decode()
+        self.assertIn("SKU-ONE", html)
+        self.assertNotIn("SKU-TWO", html)
+
+        html = self.client.get(url, {"low_stock": "0"}).content.decode()
+        self.assertIn("SKU-TWO", html)
+        self.assertNotIn("SKU-ONE", html)
+
 
 class ImageInlineTests(ProductAdminBase):
     def _add_payload(self, **overrides):

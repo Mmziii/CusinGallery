@@ -1,0 +1,56 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<h1>پیش‌نمایش به‌روزرسانی قیمت و موجودی</h1>
+<p>
+  تغییرهای زیر <strong>هنوز ذخیره نشده‌اند</strong>. پس از بررسی، روی «تأیید و ذخیره» بزنید.
+  عملیات «همه یا هیچ» است و در یک تراکنش واحد اعمال می‌شود.
+</p>
+
+<div style="border:1px solid #2b6e2b;background:#f2faf2;border-radius:6px;padding:10px 14px;margin:12px 0">
+  <strong>خلاصه:</strong>
+  {{ pending.updated }} محصول تغییر می‌کند،
+  {{ pending.skipped }} ردیف بدون تغییر می‌ماند،
+  {{ pending.changes_total }} تغییر فیلد.
+</div>
+
+<table style="border-collapse:collapse;font-size:13px;margin:10px 0">
+  <thead>
+    <tr>
+      <th style="padding:4px 10px;border:1px solid #ddd">ردیف</th>
+      <th style="padding:4px 10px;border:1px solid #ddd">کد کالا</th>
+      <th style="padding:4px 10px;border:1px solid #ddd">محصول</th>
+      <th style="padding:4px 10px;border:1px solid #ddd">فیلد</th>
+      <th style="padding:4px 10px;border:1px solid #ddd">مقدار فعلی</th>
+      <th style="padding:4px 10px;border:1px solid #ddd">مقدار جدید</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for change in pending.changes %}
+    <tr>
+      <td style="padding:4px 10px;border:1px solid #ddd">{{ change.row }}</td>
+      <td style="padding:4px 10px;border:1px solid #ddd">{{ change.sku }}</td>
+      <td style="padding:4px 10px;border:1px solid #ddd">{{ change.name }}</td>
+      <td style="padding:4px 10px;border:1px solid #ddd">{{ change.label }}</td>
+      <td style="padding:4px 10px;border:1px solid #ddd">{{ change.old|default:"—" }}</td>
+      <td style="padding:4px 10px;border:1px solid #ddd;color:#2b6e2b;font-weight:bold">{{ change.new }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% if pending.changes_more %}
+<p style="color:#666">… و {{ pending.changes_more }} تغییر دیگر (برای خوانایی، فقط ۲۰۰ مورد اول نمایش داده شده است).</p>
+{% endif %}
+
+<form method="post">
+  {% csrf_token %}
+  <input type="hidden" name="confirm" value="1">
+  <input type="submit" class="default" value="تأیید و ذخیره">
+</form>
+<form method="post" style="display:inline;margin-inline-start:10px">
+  {% csrf_token %}
+  <input type="hidden" name="cancel" value="1">
+  <input type="submit" value="انصراف (بدون ذخیره)">
+</form>
+{% endblock %}

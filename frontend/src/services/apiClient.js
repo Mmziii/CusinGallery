@@ -18,6 +18,9 @@ import axios from "axios";
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || "/api/v1",
   withCredentials: true,
+  // Part S3 item 10: a request may never hang forever -- 20 s and the
+  // caller gets the normal (Persian) error flow with a retry action.
+  timeout: 20000,
   headers: {
     "Content-Type": "application/json",
   },
@@ -43,9 +46,49 @@ apiClient.interceptors.request.use((config) => {
 
 // Normalizes rejections so calling code has one consistent shape to
 // catch (see utils/apiError.js); nothing is swallowed.
+//
+// Part R3: a 401 on a request that EXPECTED a session (anything except the
+// anonymous probes: /me/, login, register, csrf, password-reset) means the
+// session expired mid-use. We broadcast an event the auth store listens
+// to so the user lands on the login page with a clear Persian notice
+// instead of silently logged-out confusion.
+const ANONYMOUS_SAFE = /\/accounts\/(me|login|register|csrf|password-reset)/;
 apiClient.interceptors.response.use(
   (response) => response,
-  (error) => Promise.reject(error)
+  async (error) => {
+    const url = error?.config?.url || "";
+    const status = error?.response?.status;
+    const method = (error?.config?.method || "get").toLowerCase();
+
+    // Part S3 item 10: a 403 on an UNSAFE method is most often a CSRF
+    // failure (expired/rotated csrftoken cookie), NOT an authorization
+    // problem -- refresh the cookie once and retry the same request.
+    // The _csrfRetried flag guarantees a single retry (no loops).
+    if (status === 403 && UNSAFE_METHODS.has(method) && !error.config._csrfRetried) {
+      const detail = String(error?.response?.data?.detail || "");
+      if (detail.toUpperCase().includes("CSRF") || detail === "") {
+        error.config._csrfRetried = true;
+        await ensureCsrfCookie();
+        // transformRequest already ran once, so config.data is a JSON
+        // string; parse it back so the retry serializes it exactly once.
+        if (typeof error.config.data === "string") {
+          try {
+            error.config.data = JSON.parse(error.config.data);
+          } catch {
+            /* leave as-is; better a hard failure than mangled data */
+          }
+        }
+        return apiClient.request(error.config);
+      }
+    }
+
+    if (status === 401 && !ANONYMOUS_SAFE.test(url)) {
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("auth:session-expired"));
+      }
+    }
+    return Promise.reject(error);
+  }
 );
 
 /**

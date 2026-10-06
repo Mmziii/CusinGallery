@@ -9,6 +9,8 @@ Read/write split mirrors the rest of the API:
 """
 from rest_framework import serializers
 
+from apps.core.serializers import NullToBlankTextMixin
+
 from . import services
 from .models import Review
 
@@ -32,7 +34,7 @@ class ReviewSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-class ReviewCreateSerializer(serializers.Serializer):
+class ReviewCreateSerializer(NullToBlankTextMixin, serializers.Serializer):
     """
     Input for POST /reviews/. Carries NO is_verified_purchase and NO
     status field -- moderation state and purchase verification are both
@@ -51,7 +53,7 @@ class ReviewCreateSerializer(serializers.Serializer):
         user = self.context["request"].user
         product = Product.objects.filter(pk=validated_data["product_id"], is_active=True).first()
         if product is None:
-            raise serializers.ValidationError({"product_id": ["This product is unavailable."]})
+            raise serializers.ValidationError({"product_id": ["این محصول در دسترس نیست."]})
 
         return Review.objects.create(
             product=product,
@@ -64,7 +66,7 @@ class ReviewCreateSerializer(serializers.Serializer):
         )
 
 
-class ReviewUpdateSerializer(serializers.ModelSerializer):
+class ReviewUpdateSerializer(NullToBlankTextMixin, serializers.ModelSerializer):
     """Owner editing their own review. Status and is_verified_purchase
     are NOT writable here -- moderation stays with staff (admin), and
     verification stays computed. Editing re-submits the review for

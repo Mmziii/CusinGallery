@@ -7,9 +7,15 @@ config/api_urls.py -- see that file's comment for why.
 """
 from rest_framework.routers import DefaultRouter
 
-from .views import ProductViewSet
+from django.urls import path
+
+from .views import BackInStockView, ProductViewSet
 
 router = DefaultRouter()
 router.register("", ProductViewSet, basename="product")
 
-urlpatterns = router.urls
+# Explicit path BEFORE the router: "back-in-stock/" would otherwise be
+# swallowed by the router's <pk> detail pattern.
+urlpatterns = [
+    path("back-in-stock/", BackInStockView.as_view(), name="back-in-stock"),
+] + router.urls

@@ -21,7 +21,7 @@ class Category(TimeStampedModel, ActivableModel, OrderableModel):
     """A product category, optionally nested under a parent category."""
 
     name = models.CharField("نام دسته‌بندی", max_length=150)
-    slug = models.SlugField("شناسه (آدرس)", max_length=170, unique=True)
+    slug = models.SlugField("شناسه (آدرس)", max_length=170, unique=True, allow_unicode=True)
     parent = models.ForeignKey(
         "self",
         on_delete=models.PROTECT,
@@ -47,6 +47,21 @@ class Category(TimeStampedModel, ActivableModel, OrderableModel):
 
     def __str__(self):
         return self.name
+
+    def save(self, *args, **kwargs):
+        # Part R5 item 7: a category rename must propagate into the
+        # normalized search index of its products (the index embeds the
+        # category name).
+        old_name = None
+        if self.pk:
+            old_name = (
+                type(self).objects.filter(pk=self.pk).values_list("name", flat=True).first()
+            )
+        super().save(*args, **kwargs)
+        if old_name is not None and old_name != self.name:
+            from apps.products.search import refresh_search_fields
+
+            refresh_search_fields(self.products.all())
 
     def clean(self):
         """

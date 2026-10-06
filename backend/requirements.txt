@@ -8,6 +8,13 @@ django-environ==0.11.2
 # --- Database ----------------------------------------------------------------
 psycopg2-binary==2.9.9
 
+# --- Payment gateway HTTP client (Phase C) ------------------------------------
+# Used ONLY by apps/payments/gateways/zarinpal.py to talk to the ZarinPal
+# v4 REST API (payment request + server-side verify). The mock gateway
+# needs no HTTP at all; tests never hit the network (they patch this
+# layer -- see apps/payments/tests/test_zarinpal.py).
+requests==2.32.3
+
 # --- Images --------------------------------------------------------------------
 # Required by Django's ImageField at model/system-check time, not just at
 # actual upload time -- `python manage.py check` (and therefore `migrate`)
@@ -26,6 +33,12 @@ Pillow==10.4.0
 # stdlib-only; this adds the Excel half of "CSV/Excel import".
 openpyxl==3.1.5
 
+# --- Admin two-factor auth (Part R4 item 4) --------------------------------
+# TOTP + one-time backup-code devices for the admin login gate. qrcode
+# renders the enrollment QR PNG printed by manage.py enroll_admin_2fa.
+django-otp==1.7.3
+qrcode==8.2
+
 # --- Static & production server -----------------------------------------------
 gunicorn==22.0.0
 whitenoise==6.7.0
@@ -35,6 +48,12 @@ whitenoise==6.7.0
 # config/settings/production.py's CACHES). Django's built-in RedisCache
 # backend drives it -- django-redis is deliberately NOT needed.
 redis==5.0.8
+
+# --- Error monitoring (Phase E) -------------------------------------------------
+# Optional at RUNTIME (only initialized when SENTRY_DSN is set -- see
+# config/settings/base.py), but always installed so enabling monitoring is
+# an env change, not an image rebuild.
+sentry-sdk==2.19.2
 
 # NOTE: kept intentionally minimal. The following are deliberately NOT
 # installed, and this is a settled decision, not a placeholder:

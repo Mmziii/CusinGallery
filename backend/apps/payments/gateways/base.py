@@ -2,12 +2,14 @@
 Payment gateway abstraction (Phase 7 - Payment architecture).
 
 The rest of the codebase (services, views, admin, tests) depends ONLY on
-this module's interface -- never on any concrete gateway. Swapping the
-default sandbox gateway for a real Iranian PSP (ZarinPal, IDPay, ...)
-later means adding one new file that subclasses PaymentGateway, one line
-in the registry below, and setting PAYMENT_GATEWAY in the environment.
-Nothing else in the project changes -- same as the shipping abstraction
-in apps/orders/shipping.py, which this deliberately mirrors.
+this module's interface -- never on any concrete gateway. Implementations
+live one per file next to this one (mock.py for dev/test, zarinpal.py for
+the real ZarinPal PSP as of Phase C); adding another Iranian gateway
+(IDPay, NextPay, ...) means adding one new file that subclasses
+PaymentGateway, one line in the registry in gateways/__init__.py, and
+setting PAYMENT_GATEWAY in the environment. Nothing else in the project
+changes -- same as the shipping abstraction in apps/orders/shipping.py,
+which this deliberately mirrors.
 
 Security contract every implementation must uphold (and that the mock
 gateway honors too, so the flow is exercised for real):
@@ -43,11 +45,25 @@ class VerificationResult:
     pressing "cancel" at the gateway page is a normal, non-error outcome
     and is surfaced to the frontend differently from "the gateway
     rejected/failed this transaction" (see services.handle_callback).
+
+    On success, gateways should also pass through whatever receipt data
+    the PSP returns:
+        gateway_ref_id      the PSP's final reference/receipt id,
+        card_pan            the MASKED paying card number as the PSP
+                            returns it (e.g. 603770******4281) -- never
+                            a full PAN,
+        card_fingerprint    the PSP-provided hash of the card (ZarinPal's
+                            card_hash) -- a fingerprint for support and
+                            reconciliation, not card data.
+    All three are stored on the Payment row by services.handle_callback
+    (empty when the gateway doesn't provide them, as the mock doesn't).
     """
 
     success: bool
     cancelled: bool = False
     gateway_ref_id: str = ""
+    card_pan: str = ""
+    card_fingerprint: str = ""
     failure_reason: str = ""
     extra: dict = field(default_factory=dict)
 

@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 
-import { Alert, EmptyState, Spinner, errorMessage } from "../../components/ui";
+import StarRating from "../../components/StarRating";
+import { EmptyState, ErrorState, Spinner, errorMessage } from "../../components/ui";
 import { useAsync } from "../../hooks/useAsync";
 import * as reviewsApi from "../../services/reviewsApi";
 
@@ -14,7 +15,7 @@ function ReviewsPage() {
   const { data, isLoading, error, refetch } = useAsync(() => reviewsApi.fetchMyReviews(), []);
 
   if (isLoading) return <Spinner label="در حال دریافت نظرات…" />;
-  if (error) return <Alert>{errorMessage(error)}</Alert>;
+  if (error) return <ErrorState message={errorMessage(error)} onRetry={refetch} />;
 
   const reviews = data?.results || [];
   if (!reviews.length) {
@@ -41,7 +42,7 @@ function ReviewsPage() {
               <span className={`tag tag--review-${review.status}`}>
                 {STATUS_LABELS[review.status] || review.status}
               </span>
-              <span className="stars">{"★".repeat(review.rating)}</span>
+              <StarRating rating={review.rating} />
             </header>
             {review.title ? <h4>{review.title}</h4> : null}
             {review.body ? <p>{review.body}</p> : null}

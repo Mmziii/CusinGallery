@@ -24,6 +24,7 @@ server-side. The CouponUsage row, however, is written at payment success
 (not here) so an abandoned unpaid order never burns a coupon's quota --
 see apps.payments.services._record_coupon_usage.
 """
+from django.conf import settings
 from django.db import transaction
 
 from apps.accounts.models import Address
@@ -89,6 +90,23 @@ def _resolve_shipping_fields(user, validated_data):
     same "doesn't exist from this user's point of view" pattern used
     throughout this project (e.g. apps.accounts.views.AddressViewSet).
     """
+    from . import shipping
+
+    method = validated_data.get("shipping_method") or shipping.DEFAULT_METHOD
+    if not shipping.get_shipping_methods()[method].get("requires_address", True):
+        # Pickup (Part 1): the snapshot carries WHO collects the order;
+        # there is no delivery address to store.
+        return {
+            "shipping_recipient_name": validated_data["recipient_name"],
+            "shipping_phone": validated_data["phone"],
+            "shipping_province": "",
+            "shipping_city": "",
+            "shipping_address": "",
+            "shipping_postal_code": "",
+            "shipping_unit": "",
+            "shipping_building_number": "",
+        }
+
     address_id = validated_data.get("address_id")
 
     if address_id is not None:
@@ -185,7 +203,15 @@ def checkout(user, validated_data) -> Order:
         if coupon_code:
             coupon, discount_amount = _apply_coupon(user, coupon_code, cart_view)
 
-        total = subtotal + shipping_cost - discount_amount
+        # Gift wrapping (Part 2): opt-in, fee from env, snapshotted like
+        # every other monetary field. It is added AFTER shipping and
+        # AFTER the coupon -- by documented decision it neither counts
+        # toward the free-shipping threshold nor gets discounted.
+        gift_wrap = bool(validated_data.get("gift_wrap")) and settings.GIFT_WRAP_FEE > 0
+        gift_wrap_fee = settings.GIFT_WRAP_FEE if gift_wrap else 0
+        gift_message = (validated_data.get("gift_message") or "").strip()[:200] if gift_wrap else ""
+
+        total = subtotal + shipping_cost + gift_wrap_fee - discount_amount
 
         order = Order.objects.create(
             user=user,
@@ -197,6 +223,9 @@ def checkout(user, validated_data) -> Order:
             shipping_method=shipping_method,
             estimated_delivery_min=delivery_min,
             estimated_delivery_max=delivery_max,
+            gift_wrap=gift_wrap,
+            gift_message=gift_message,
+            gift_wrap_fee=gift_wrap_fee,
             **shipping_fields,
         )
 

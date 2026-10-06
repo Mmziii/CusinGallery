@@ -1,13 +1,17 @@
+import { usePageMeta } from "../hooks/usePageMeta";
+import PropTypes from "prop-types";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import AddressForm from "../components/AddressForm";
+import { normalizePhone, validateAddressPayload } from "../utils/iranianFields";
 import { Alert, Spinner, errorMessage } from "../components/ui";
 import * as authApi from "../services/authApi";
 import { checkout, fetchShippingMethods } from "../services/orderApi";
 import { validateCoupon } from "../services/couponsApi";
 import { initiatePayment } from "../services/paymentsApi";
 import useCartStore from "../store/useCartStore";
+import useSiteSettings from "../hooks/useSiteSettings";
 import { normalizeApiError } from "../utils/apiError";
 import { formatPrice } from "../utils/formatPrice";
 
@@ -19,14 +23,49 @@ import { formatPrice } from "../utils/formatPrice";
  * redirects the browser to the gateway.
  */
 const METHOD_LABELS = {
-  standard: "ارسال استاندارد",
+  standard: "ارسال عادی",
   express: "ارسال اکسپرس",
+  pickup: "دریافت حضوری",
 };
 
 /** Persian display name for a method id; unknown ids render as-is. */
 function methodLabel(id) {
   return METHOD_LABELS[id] || id;
 }
+
+/**
+ * Part S2 item 6: checkout progress indicator (address -> shipping ->
+ * review -> payment). `done` marks completed steps, `current` the active
+ * one; everything is visible on mobile too (horizontal wrap).
+ */
+function CheckoutSteps({ done, current }) {
+  const labels = ["آدرس", "روش ارسال", "بازبینی", "پرداخت"];
+  return (
+    <ol className="checkout__steps" aria-label="مراحل ثبت سفارش">
+      {labels.map((label, index) => {
+        const isDone = index < current || (done || []).includes(index);
+        const isCurrent = index === current;
+        return (
+          <li
+            key={label}
+            className={`checkout__step ${isDone ? "checkout__step--done" : ""} ${
+              isCurrent ? "checkout__step--current" : ""
+            }`}
+            aria-current={isCurrent ? "step" : undefined}
+          >
+            <span className="checkout__step-num" aria-hidden="true">{formatPrice(index + 1)}</span>
+            {label}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+CheckoutSteps.propTypes = {
+  current: PropTypes.number.isRequired,
+  done: PropTypes.arrayOf(PropTypes.number),
+};
 
 /** Server-configured cost of a method for a given subtotal -- the same
  *  free-threshold rule the backend applies (see apps/orders/shipping.py);
@@ -41,6 +80,7 @@ function formatDate(iso) {
 }
 
 function CheckoutPage() {
+  usePageMeta({ title: "تکمیل خرید", path: "/checkout/", noindex: true });
   const { cart, fetchCart } = useCartStore();
 
   const [addresses, setAddresses] = useState([]);
@@ -50,12 +90,17 @@ function CheckoutPage() {
   const [showAddressForm, setShowAddressForm] = useState(false);
 
   const [inlineAddress, setInlineAddress] = useState({});
+  // Part S1 item 3: inline errors for the one-off checkout address,
+  // validated locally before submit and merged with any server 400s.
+  const [addressErrors, setAddressErrors] = useState({});
 
   // Shipping: the selectable methods and their costs/delivery windows all
   // come from the server (GET /orders/shipping-methods/) -- the shopper
   // only picks one; checkout recomputes everything server-side.
   const [shippingData, setShippingData] = useState(null);
   const [selectedMethod, setSelectedMethod] = useState(null);
+  const [pickupContact, setPickupContact] = useState({});
+  const siteSettings = useSiteSettings();
 
   const [couponCode, setCouponCode] = useState("");
   const [couponPreview, setCouponPreview] = useState(null);
@@ -108,8 +153,24 @@ function CheckoutPage() {
     setCheckoutError(null);
     setPlacing(true);
     try {
-      const payload =
-        addressMode === "saved" ? { address_id: selectedAddressId } : { ...inlineAddress };
+      const isPickupNow =
+        (shippingData?.methods || []).find((m) => m.id === selectedMethod)?.requires_address === false;
+      if (!isPickupNow && addressMode === "inline") {
+        const errors = validateAddressPayload(inlineAddress);
+        if (Object.keys(errors).length > 0) {
+          setAddressErrors(errors);
+          const firstKey = ["recipient_name", "phone", "province", "city", "address", "postal_code"]
+            .find((key) => errors[key]);
+          document.getElementById(`addr-${firstKey}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+          document.getElementById(`addr-${firstKey}`)?.focus({ preventScroll: true });
+          return;
+        }
+      }
+      const payload = isPickupNow
+        ? { recipient_name: pickupContact.recipient_name, phone: pickupContact.phone }
+        : addressMode === "saved"
+          ? { address_id: selectedAddressId }
+          : { ...inlineAddress };
       if (couponPreview?.code) payload.coupon_code = couponPreview.code;
       if (selectedMethod) payload.shipping_method = selectedMethod;
       const order = await checkout(payload);
@@ -117,7 +178,22 @@ function CheckoutPage() {
       // Cart is now empty server-side; refresh the badge.
       fetchCart();
     } catch (err) {
-      setCheckoutError(normalizeApiError(err));
+      const normalized = normalizeApiError(err);
+      // Server-side address rejections map straight onto the inline form
+      // fields so the customer sees WHICH value to fix.
+      const apiFieldErrors = normalized.fieldErrors || {};
+      const addressKeys = ["recipient_name", "phone", "province", "city", "address", "postal_code", "unit", "building_number"];
+      const mapped = Object.fromEntries(
+        Object.entries(apiFieldErrors).filter(([key]) => addressKeys.includes(key))
+      );
+      if (addressMode === "inline" && Object.keys(mapped).length > 0) {
+        const flat = {};
+        for (const [key, messages] of Object.entries(mapped)) {
+          flat[key] = Array.isArray(messages) ? messages.join(" ") : String(messages);
+        }
+        setAddressErrors(flat);
+      }
+      setCheckoutError(normalized);
     } finally {
       setPlacing(false);
     }
@@ -139,6 +215,7 @@ function CheckoutPage() {
   if (placedOrder) {
     return (
       <div className="checkout-done">
+        <CheckoutSteps current={3} done={[0, 1, 2]} />
         <h1>سفارش شما ثبت شد</h1>
         <p>شماره سفارش: <strong>{placedOrder.order_number}</strong></p>
 
@@ -189,6 +266,19 @@ function CheckoutPage() {
 
   const methods = shippingData?.methods || [];
   const currentMethod = methods.find((m) => m.id === selectedMethod) || null;
+
+  // Part S2 item 6: which early steps already count as done, so the
+  // progress indicator reflects real completion (not just position).
+  const needsAddress = currentMethod ? currentMethod.requires_address !== false : true;
+  const addressDone = !needsAddress
+    ? Boolean((pickupContact.recipient_name || "").trim() && (pickupContact.phone || "").trim())
+    : addressMode === "saved"
+      ? Boolean(selectedAddressId)
+      : Object.keys(validateAddressPayload(inlineAddress)).length === 0;
+  const doneSteps = [
+    ...(addressDone ? [0] : []),
+    ...(addressDone && selectedMethod ? [1] : []),
+  ];
   const previewedShippingCost = currentMethod ? methodCostFor(currentMethod, cart.subtotal) : (cart.shipping_cost_preview || 0);
 
   const estimatedTotal =
@@ -200,8 +290,53 @@ function CheckoutPage() {
     <div className="checkout">
       <h1>ثبت سفارش</h1>
 
+      <CheckoutSteps current={2} done={doneSteps} />
+
       <div className="checkout__grid">
         <div className="checkout__main">
+          {currentMethod?.requires_address === false ? (
+            <section className="checkout__section">
+              <h2>دریافت حضوری</h2>
+              <p className="muted">
+                برای این روش، آدرس پستی لازم نیست؛ فقط نام و شمارهٔ تماس تحویل‌گیرنده:
+              </p>
+              <label className="field">
+                <span>نام تحویل‌گیرنده</span>
+                <input
+                  type="text"
+                  autoComplete="name"
+                  value={pickupContact.recipient_name || ""}
+                  onChange={(e) => setPickupContact((f) => ({ ...f, recipient_name: e.target.value }))}
+                  required
+                />
+              </label>
+              <label className="field">
+                <span>شماره تماس</span>
+                <input
+                  type="text"
+                  dir="ltr"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  value={pickupContact.phone || ""}
+                  onChange={(e) =>
+                    setPickupContact((f) => ({ ...f, phone: normalizePhone(e.target.value) }))
+                  }
+                  required
+                />
+              </label>
+              {siteSettings.pickup_address ? (
+                <p className="checkout__pickup-info">
+                  <strong>نشانی دریافت:</strong> {siteSettings.pickup_address}
+                  {siteSettings.pickup_hours ? (
+                    <>
+                      <br />
+                      <strong>ساعات دریافت:</strong> {siteSettings.pickup_hours}
+                    </>
+                  ) : null}
+                </p>
+              ) : null}
+            </section>
+          ) : (
           <section className="checkout__section">
             <h2>آدرس ارسال</h2>
 
@@ -251,7 +386,15 @@ function CheckoutPage() {
             ) : null}
 
             {addressMode === "inline" ? (
-              <AddressForm value={inlineAddress} onChange={setInlineAddress} compact />
+              <AddressForm
+                value={inlineAddress}
+                onChange={(next) => {
+                  setInlineAddress(next);
+                  if (Object.keys(addressErrors).length) setAddressErrors({});
+                }}
+                fieldErrors={addressErrors}
+                compact
+              />
             ) : (
               <button type="button" className="link" onClick={() => setShowAddressForm((v) => !v)}>
                 {showAddressForm ? "بستن فرم آدرس جدید" : "+ ذخیره آدرس جدید"}
@@ -268,6 +411,7 @@ function CheckoutPage() {
               />
             ) : null}
           </section>
+          )}
 
           {methods.length ? (
             <section className="checkout__section">
@@ -291,9 +435,13 @@ function CheckoutPage() {
                         onChange={() => setSelectedMethod(method.id)}
                       />
                       <span className="shipping-method__body">
-                        <strong>{methodLabel(method.id)}</strong>
+                        <strong>{method.label || methodLabel(method.id)}</strong>
                         <span className="muted">
-                          تحویل {method.min_days} تا {method.max_days} روز کاری
+                          {method.requires_address === false
+                            ? "آمادهٔ تحویل حضوری پس از پرداخت"
+                            : method.min_days === method.max_days
+                              ? `تحویل ${method.min_days} روزه`
+                              : `تحویل ${method.min_days} تا ${method.max_days} روز کاری`}
                         </span>
                       </span>
                       <span className="shipping-method__cost">
@@ -316,6 +464,7 @@ function CheckoutPage() {
             <div className="coupon-row">
               <input
                 type="text"
+                dir="ltr"
                 value={couponCode}
                 placeholder="مثلاً: WELCOME10"
                 onChange={(e) => setCouponCode(e.target.value)}

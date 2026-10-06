@@ -102,3 +102,27 @@ class OrderDetailOwnershipTests(CacheIsolatedAPITestCase):
         self.assertIn("items", response.data)
         self.assertIn("shipping_recipient_name", response.data)
         self.assertIn("order_number", response.data)
+
+    def test_order_items_expose_product_image_for_placeholder_rendering(self):
+        """Part R1: order lines carry product_image so the storefront can
+        show the shared brand placeholder when the product has no image."""
+        from apps.products.models import ProductImage
+
+        owner = make_user(phone="+989301000011")
+        product = make_product(stock_quantity=5)
+        add_to_cart(owner, product, quantity=1)
+        self.client.login(username="+989301000011", password="a-strong-passw0rd!")
+        response = self.client.post(reverse("checkout"), valid_checkout_payload(), format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        order_id = response.data["id"]
+
+        # imageless product -> explicit null (frontend shows placeholder)
+        response = self.client.get(reverse("order-detail", args=[order_id]))
+        self.assertIsNone(response.data["items"][0]["product_image"])
+
+        # once the product gains an image the URL is exposed
+        ProductImage.objects.create(product=product, image="products/r1.jpg", is_primary=True)
+        response = self.client.get(reverse("order-detail", args=[order_id]))
+        image = response.data["items"][0]["product_image"]
+        self.assertIsNotNone(image)
+        self.assertIn("r1.jpg", image["image"])

@@ -8,9 +8,25 @@ from .models import Brand, Product, ProductAttributeValue, ProductImage, Product
 
 
 class BrandSerializer(serializers.ModelSerializer):
+    # Part R2: tile_image is exposed like product images (original + WebP
+    # variants) so the home page brand tiles can use responsive sources.
+    tile_image = serializers.SerializerMethodField()
+
     class Meta:
         model = Brand
-        fields = ["id", "name", "slug", "logo"]
+        fields = ["id", "name", "slug", "logo", "is_featured", "display_order", "tile_image"]
+
+    def get_tile_image(self, obj):
+        from apps.core.image_files import media_url
+
+        if not obj.tile_image:
+            return None
+        return {
+            "image": obj.tile_image.url,
+            "webp_400": media_url(obj.webp_400),
+            "webp_800": media_url(obj.webp_800),
+            "webp_1200": media_url(obj.webp_1200),
+        }
 
 
 class CategoryMiniSerializer(serializers.Serializer):
@@ -31,7 +47,17 @@ class CategoryMiniSerializer(serializers.Serializer):
 class ProductImageSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductImage
-        fields = ["id", "image", "alt_text", "is_primary", "ordering"]
+        fields = ["id", "image", "alt_text", "is_primary", "ordering", "webp_400", "webp_800", "webp_1200"]
+
+    def to_representation(self, instance):
+        # webp_* columns hold storage-relative paths; clients need URLs
+        # (Part R1 media_url fix).
+        from apps.core.image_files import media_url
+
+        data = super().to_representation(instance)
+        for key in ("webp_400", "webp_800", "webp_1200"):
+            data[key] = media_url(data.get(key))
+        return data
 
 
 class ProductAttributeValueSerializer(serializers.ModelSerializer):
@@ -136,10 +162,12 @@ class ProductDetailSerializer(ProductListSerializer):
     variants = serializers.SerializerMethodField()
     specifications = serializers.SerializerMethodField()
     related_products = serializers.SerializerMethodField()
+    complements = serializers.SerializerMethodField()
 
     class Meta(ProductListSerializer.Meta):
         fields = ProductListSerializer.Meta.fields + [
-            "description", "sku", "images", "variants", "specifications", "related_products",
+            "description", "sku", "images", "variants", "specifications",
+            "related_products", "complements",
         ]
 
     def _active_variants(self, obj):
@@ -201,3 +229,35 @@ class ProductDetailSerializer(ProductListSerializer):
             .order_by("-is_best_seller", "-is_featured", "-created_at")[:6]
         )
         return ProductListSerializer(related, many=True, context=self.context).data
+
+    def get_complements(self, obj):
+        """Part R5 item 9: «پیشنهاد همراه» candidates for the product page.
+
+        Manual complements win when present; otherwise the mined
+        FrequentlyBoughtTogether pairs (best co_count first). In BOTH
+        cases only ACTIVE, IN-STOCK products are ever returned -- the
+        storefront never offers what it cannot sell. No bundle pricing
+        or stock logic: each item keeps its own price/stock.
+        """
+        from .models import FrequentlyBoughtTogether, purchasable_products
+
+        purchasable_ids = set(purchasable_products().values_list("id", flat=True))
+
+        manual = [p for p in obj.complements.all() if p.id in purchasable_ids]
+        if manual:
+            candidates = manual
+        else:
+            fbt = (
+                FrequentlyBoughtTogether.objects.filter(product=obj)
+                .select_related("complement")
+                .order_by("-co_count", "id")
+            )
+            candidates = [
+                row.complement for row in fbt if row.complement_id in purchasable_ids
+            ]
+        candidates = candidates[:8]
+        # Same lean payload shape as the product list so the storefront
+        # can reuse ProductCard directly.
+        return ProductListSerializer(
+            candidates, many=True, context=self.context
+        ).data

@@ -56,10 +56,10 @@ class AddressCrudTests(CacheIsolatedAPITestCase):
         address = Address.objects.create(user=self.user, **address_payload())
         detail_url = reverse("address-detail", args=[address.pk])
 
-        response = self.client.patch(detail_url, {"city": "Shiraz"}, format="json")
+        response = self.client.patch(detail_url, {"city": "شهریار"}, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         address.refresh_from_db()
-        self.assertEqual(address.city, "Shiraz")
+        self.assertEqual(address.city, "شهریار")
 
     def test_delete_own_address(self):
         address = Address.objects.create(user=self.user, **address_payload())

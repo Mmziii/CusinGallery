@@ -263,3 +263,142 @@ def build_cart_view(cart):
         "subtotal": subtotal,
         "total": subtotal,
     }
+
+
+# ---------------------------------------------------------------------------
+# Guest-cart merge (Part 1)
+# ---------------------------------------------------------------------------
+# Guests keep their cart in localStorage as {product_id, variant_id,
+# quantity} lines ONLY (never prices/names); on login/register the
+# frontend posts those lines here. Every line is re-validated against
+# the live catalog (active product, variant ownership, stock, a sane
+# per-line maximum), quantities are SUMMED onto matching server lines
+# capped by available stock, and invalid lines are skipped with a
+# per-line report the UI translates into a Persian notice.
+#
+# Idempotency: the client attaches a merge_token (a uuid generated per
+# guest-cart generation). A token is remembered per user for
+# MERGE_TOKEN_TTL seconds; re-POSTing the same token (double click,
+# retry after a lost response, StrictMode double effects) is a NO-OP
+# that just returns the current cart -- the same lines are never added
+# twice.
+MERGE_TOKEN_TTL = 600
+MERGE_MAX_LINES = 50
+MERGE_MAX_PER_LINE = 99
+
+
+class MergeLineError(Exception):
+    """Per-line rejection reason (machine-readable key)."""
+
+    def __init__(self, reason):
+        self.reason = reason
+        super().__init__(reason)
+
+
+def _validated_merge_line(line):
+    if not isinstance(line, dict):
+        raise MergeLineError("invalid")
+    product_id = line.get("product_id")
+    variant_id = line.get("variant_id")
+    quantity = line.get("quantity")
+    if not isinstance(product_id, int) or product_id < 1:
+        raise MergeLineError("invalid")
+    if variant_id is not None and not (isinstance(variant_id, int) and variant_id >= 1):
+        raise MergeLineError("invalid")
+    if not isinstance(quantity, int) or quantity < 1:
+        raise MergeLineError("invalid")
+    if quantity > MERGE_MAX_PER_LINE:
+        raise MergeLineError("too_many")
+    return product_id, variant_id, quantity
+
+
+def merge_guest_lines(user, lines, merge_token=""):
+    """
+    Merge guest-cart lines into `user`'s server cart. Returns
+    (cart_view, report) where report lists merged / adjusted / skipped
+    lines. Never raises CartError -- per-line problems are reported,
+    not fatal. A replayed merge_token is a no-op.
+    """
+    from django.core.cache import cache
+
+    report = {"merged": [], "adjusted": [], "skipped": [], "replayed": False}
+
+    token_key = None
+    if merge_token:
+        token_key = f"cart-merge:{user.pk}:{merge_token}"
+        if cache.get(token_key):
+            report["replayed"] = True
+            cart = get_or_create_cart(user)
+            return build_cart_view(cart), report
+
+    if not isinstance(lines, list):
+        lines = []
+    lines = lines[:MERGE_MAX_LINES]
+
+    with transaction.atomic():
+        cart = get_or_create_cart(user)
+        for line in lines:
+            try:
+                product_id, variant_id, quantity = _validated_merge_line(line)
+            except MergeLineError as exc:
+                entry = {}
+                if isinstance(line, dict):
+                    entry = {k: line.get(k) for k in ("product_id", "variant_id", "quantity")}
+                entry["reason"] = exc.reason
+                report["skipped"].append(entry)
+                continue
+
+            try:
+                product, variant = _resolve_product_and_variant(product_id, variant_id)
+            except CartError:
+                report["skipped"].append(
+                    {"product_id": product_id, "variant_id": variant_id,
+                     "quantity": quantity, "reason": "unavailable"}
+                )
+                continue
+
+            available = _available_stock(product, variant)
+            if available < 1:
+                report["skipped"].append(
+                    {"product_id": product_id, "variant_id": variant_id,
+                     "quantity": quantity, "reason": "out_of_stock"}
+                )
+                continue
+
+            existing = (
+                CartItem.objects.select_for_update()
+                .filter(cart=cart, product=product, variant=variant)
+                .first()
+            )
+            current = existing.quantity if existing else 0
+            target = min(current + quantity, available)
+            added = target - current
+
+            if added < 1:
+                report["skipped"].append(
+                    {"product_id": product_id, "variant_id": variant_id,
+                     "quantity": quantity, "reason": "stock_exhausted"}
+                )
+                continue
+
+            if existing:
+                existing.quantity = target
+                existing.save(update_fields=["quantity", "updated_at"])
+            else:
+                item = CartItem(cart=cart, product=product, variant=variant, quantity=target)
+                item.full_clean()
+                item.save()
+
+            entry = {
+                "product_id": product_id, "variant_id": variant_id,
+                "requested": quantity, "added": added,
+            }
+            if added < quantity:
+                entry["reason"] = "capped_by_stock"
+                report["adjusted"].append(entry)
+            else:
+                report["merged"].append(entry)
+
+    if token_key:
+        cache.set(token_key, True, MERGE_TOKEN_TTL)
+    return build_cart_view(cart), report

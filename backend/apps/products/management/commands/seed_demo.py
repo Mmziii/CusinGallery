@@ -62,11 +62,15 @@ CATEGORIES = [
     ("ست‌های آشپزخانه", "kitchen-sets", "cookware", "ست‌های کامل آشپزخانه"),
 ]
 
+# Part R2: a few brands double as the home page featured tiles
+# (is_featured + display_order), e.g. Unique per the owner's example.
 BRANDS = [
-    ("کوزین", "kuzin"),
+    ("کازین", "kuzin"),
     ("کریستال پارس", "crystal-pars"),
     ("زرین هوم", "zarrin-home"),
+    ("یونیک", "unique"),
 ]
+FEATURED_BRANDS = ["یونیک", "کریستال پارس", "زرین هوم"]
 
 PRODUCTS = [
     # dict: name, slug, sku, category, brand, price, compare_at_price,
@@ -80,11 +84,11 @@ PRODUCTS = [
          stock=8, featured=False, new=True, best_seller=False,
          colors=((70, 90, 110), (190, 205, 220))),
     dict(name="ماگ سرامیکی دسته‌دار ۳۰۰ میلی‌لیتر", slug="ceramic-mug-300", sku="MUG-300",
-         category="cups-mugs", brand="کوزین", price=180000, compare_at_price=220000,
+         category="cups-mugs", brand="کازین", price=180000, compare_at_price=220000,
          stock=40, featured=True, new=False, best_seller=True,
          colors=((150, 60, 40), (235, 190, 160))),
     dict(name="فنجان اسپرسو دوجداره", slug="espresso-cup-double", sku="MUG-ESP-02",
-         category="cups-mugs", brand="کوزین", price=240000, compare_at_price=None,
+         category="cups-mugs", brand="کازین", price=240000, compare_at_price=None,
          stock=3, featured=False, new=False, best_seller=False,
          colors=((90, 60, 45), (220, 200, 180))),
     dict(name="دیس سرو کریستال پایه‌دار", slug="crystal-serving-plate", sku="CRY-010",
@@ -104,7 +108,7 @@ PRODUCTS = [
          stock=6, featured=True, new=False, best_seller=True,
          colors=((50, 50, 55), (140, 130, 120))),
     dict(name="ست ماگ ۴ عددی رنگی", slug="mug-set-4", sku="SET-MUG-04",
-         category="kitchen-sets", brand="کوزین", price=690000, compare_at_price=None,
+         category="kitchen-sets", brand="کازین", price=690000, compare_at_price=None,
          stock=15, featured=False, new=True, best_seller=False,
          colors=((170, 90, 60), (245, 220, 200))),
 ]
@@ -141,6 +145,13 @@ class Command(BaseCommand):
             brand, _ = Brand.objects.get_or_create(
                 slug=slug, defaults={"name": name, "is_active": True}
             )
+            # Part R2 featured tiles: keep the seed idempotent by syncing the
+            # flags on every run.
+            featured = name in FEATURED_BRANDS
+            if brand.is_featured != featured or (featured and brand.display_order != FEATURED_BRANDS.index(name)):
+                brand.is_featured = featured
+                brand.display_order = FEATURED_BRANDS.index(name) if featured else 0
+                brand.save(update_fields=["is_featured", "display_order", "updated_at"])
             brands[name] = brand
         self.stdout.write(f"Brands: {Brand.objects.count()}")
 
@@ -212,7 +223,7 @@ class Command(BaseCommand):
         )
         self.stdout.write(f"Coupon WELCOME10: {'created' if created else 'already exists'}")
 
-        banner_title = "جشنوارهٔ پاییزی کوزین گالری"
+        banner_title = "جشنوارهٔ پاییزی کازین گالری"
         created = not Banner.objects.filter(title=banner_title).exists()
         if created:
             banner = Banner(

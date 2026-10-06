@@ -10,8 +10,17 @@
   باشد، چیزی ذخیره نمی‌شود و همهٔ خطاها با شمارهٔ ردیف نمایش داده می‌شوند.
 </p>
 <p>
-  <a href="{% url 'admin:products_product_import_template' %}">دانلود قالب نمونه</a>
-  (آن را باز کنید، محصولات خود را وارد کنید و همین‌جا بارگذاری کنید).
+  <a href="{% url 'admin:products_product_import_template' %}">دانلود قالب نمونهٔ کامل</a>
+  |
+  <a href="{% url 'admin:products_product_update_template' %}">دانلود قالبِ فقط قیمت/موجودی (ساده)</a>
+  |
+  <a href="{% url 'admin:products_product_export' %}">خروجی CSV از محصولات فعلی</a>
+  |
+  <a href="{% url 'admin:products_product_export' %}?format=xlsx">خروجی Excel</a>
+</p>
+<p style="color:#666;font-size:12px">
+  به‌روزرسانی قیمت و موجودی: فایل خروجی (یا قالب سادهٔ بالا) را در اکسل ویرایش کنید و
+  با تیک «فقط به‌روزرسانی» بارگذاری کنید؛ قبل از ذخیره، پیش‌نمایش تغییرها را می‌بینید.
 </p>
 
 {% if errors %}
@@ -30,7 +39,12 @@
   <div style="margin:14px 0">
     <input type="file" name="file" accept=".csv,.xlsx">
   </div>
-  <input type="submit" class="default" value="واردکردن">
+  <label style="display:block;margin:8px 0">
+    <input type="checkbox" name="update_only" value="1">
+    فقط به‌روزرسانی قیمت/موجودی — محصول جدید ساخته نشود و بقیهٔ فیلدها دست نخورند
+    (ستون‌ها: {{ update_columns }})
+  </label>
+  <input type="submit" class="default" value="ادامه">
   <a href="{% url 'admin:products_product_changelist' %}" style="margin-inline-start:12px">انصراف</a>
 </form>
 

@@ -51,6 +51,13 @@ THIRD_PARTY_APPS = [
     "rest_framework",
     "corsheaders",
     "django_filters",
+    # Part R4 item 4: admin two-factor auth (TOTP + one-time backup
+    # codes). Chosen over django-two-factor-auth: django-otp is the
+    # smaller, dependency-light core the larger package wraps itself,
+    # and all we need is admin enforcement + device models.
+    "django_otp",
+    "django_otp.plugins.otp_totp",
+    "django_otp.plugins.otp_static",
 ]
 
 # Local apps. Each is a clean foundation in Phase 1 -- business models and
@@ -65,6 +72,7 @@ LOCAL_APPS = [
     "apps.discounts",
     "apps.orders",
     "apps.payments",
+    "apps.notifications",
     "apps.reviews",
     "apps.banners",
 ]
@@ -79,6 +87,9 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    # Part R4 item 4: exposes request.user.is_verified() for the admin
+    # two-factor gate (inactive unless ADMIN_2FA_REQUIRED is on).
+    "django_otp.middleware.OTPMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -193,7 +204,7 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticatedOrReadOnly",
     ],
-    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "DEFAULT_PAGINATION_CLASS": "apps.core.pagination.ConfigurablePageNumberPagination",
     "PAGE_SIZE": 20,
     "DEFAULT_FILTER_BACKENDS": [
         "django_filters.rest_framework.DjangoFilterBackend",
@@ -218,9 +229,15 @@ REST_FRAMEWORK = {
         # PasswordResetConfirmView for why they must not share a quota.
         "password_reset_confirm": "10/hour",
         "checkout": "20/hour",
+        # Back-in-stock signups (Part 2): cheap endpoint, but it writes
+        # rows and can trigger SMS -- keep it bounded.
+        "back_in_stock": "5/hour",
         # Payment initiation creates a gateway attempt per call -- same
         # abuse shape as checkout (both turn intent into persisted rows).
         "payment_initiate": "20/hour",
+        # Frontend error reports (Part S3 item 9): a crashing page may
+        # retry, but the endpoint must not double as a log-flood pipe.
+        "error_report": "30/hour",
     },
 }
 
@@ -265,14 +282,124 @@ EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=True)
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="no-reply@cusin.ir")
 
 # ---------------------------------------------------------------------------
-# Payment gateway (architecture placeholders only -- see apps/payments)
+# Payment gateway (Phase C - real payments; see apps/payments + docs/PAYMENTS.md)
 # ---------------------------------------------------------------------------
-# No gateway integration exists yet (that's Phase 7). These are read here,
-# ahead of time, purely so the environment-variable contract is fixed from
-# the start and later phases don't need to touch settings again.
+# Gateway selection. "mock" (or empty) = the self-contained MockGateway
+# for development/tests -- config/settings/production.py REFUSES to start
+# with it, so it is impossible to enable in production. "zarinpal" = the
+# real ZarinPal PSP adapter. Unknown values fail loudly (ImproperlyConfigured)
+# the moment any payment flow runs. Adding another PSP = one new adapter
+# class + one registry line (docs/PAYMENTS.md explains how).
 PAYMENT_GATEWAY = env("PAYMENT_GATEWAY", default="")
+
+# ZarinPal: the 36-character merchant id from the ZarinPal merchant panel.
+# Required whenever PAYMENT_GATEWAY=zarinpal (production.py enforces).
+# The mock gateway reuses this slot as its HMAC callback-signing secret
+# (falling back to SECRET_KEY when empty) -- in both cases server-side
+# only, never sent to the browser.
 PAYMENT_MERCHANT_ID = env("PAYMENT_MERCHANT_ID", default="")
+
+# ZarinPal mode switch. True = sandbox.zarinpal.com (full test mode: any
+# 36-character merchant id is accepted, no real money moves). False =
+# production (api.zarinpal.com + www.zarinpal.com). Sandbox/production
+# differ ONLY by the hosts the adapter talks to.
+PAYMENT_ZARINPAL_SANDBOX = env.bool("PAYMENT_ZARINPAL_SANDBOX", default=False)
+
+# Absolute URL of this backend's callback endpoint -- where the gateway
+# sends the customer's browser back after payment. Served at BOTH
+# /payment/callback/ and /api/v1/payments/callback/ (same view). When
+# payments are initiated through the API view, the callback URL is built
+# from the incoming request instead (correct on any origin); this env
+# value is the fallback for programmatic initiation and the documented
+# value to register in the PSP's merchant panel.
 PAYMENT_CALLBACK_URL = env("PAYMENT_CALLBACK_URL", default="https://cusin.ir/payment/callback/")
+
+# Seconds to wait for a gateway HTTP call (payment request + verify)
+# before treating the gateway as unreachable (GatewayError).
+PAYMENT_GATEWAY_TIMEOUT = env.int("PAYMENT_GATEWAY_TIMEOUT", default=15)
+
+# Abandoned-payment cleanup: `manage.py expire_unpaid_orders` (run from
+# cron) cancels unpaid orders older than this many hours. No stock ever
+# moves for unpaid orders -- stock is only taken at payment verification
+# -- so this is purely hygiene: an order nobody paid for should not sit
+# "pending" forever. Safe to run as often as the cron schedule likes.
+ORDER_EXPIRY_HOURS = env.int("ORDER_EXPIRY_HOURS", default=24)
+
+# ---------------------------------------------------------------------------
+# Notifications / SMS (Phase D; see apps/notifications and both
+# .env.example files for the full variable documentation)
+# ---------------------------------------------------------------------------
+# Master switch for SMS sending. False = the system never sends SMS and
+# records why in the notification log; production may then legitimately
+# run without an SMS provider. True (default) with the console provider
+# is refused by config/settings/production.py (dev/test tool, exactly
+# like the mock payment gateway).
+SMS_ENABLED = env.bool("SMS_ENABLED", default=True)
+
+# Part R5 item 11: opt-in cart-reminder SMS. DISABLED by default -- the
+# owner must (a) confirm promotional-SMS rules with the provider and
+# (b) flip CART_REMINDER_ENABLED=True explicitly. See docs/DEPLOY.md.
+CART_REMINDER_ENABLED = env.bool("CART_REMINDER_ENABLED", default=False)
+CART_REMINDER_AFTER_HOURS = env.int("CART_REMINDER_AFTER_HOURS", default=24)
+CART_REMINDER_COOLDOWN_DAYS = env.int("CART_REMINDER_COOLDOWN_DAYS", default=7)
+
+# Provider selection: "console" (or empty) = log-only, development/tests
+# ONLY; "kavenegar" = the real Kavenegar adapter. Another provider later
+# is one new class + one registry line (apps/notifications/providers/).
+SMS_PROVIDER = env("SMS_PROVIDER", default="")
+
+# Kavenegar credentials & sender line (env-only, never hardcoded). The
+# API key is SECRET: it travels in request URLs, so the adapter never
+# logs or quotes them.
+KAVENEGAR_API_KEY = env("KAVENEGAR_API_KEY", default="")
+SMS_SENDER = env("SMS_SENDER", default="")
+
+# Pre-approved Kavenegar panel template names per event (verify-lookup).
+# Empty = fall back to a direct send with locally-composed Persian text
+# (which then requires SMS_SENDER).
+SMS_TEMPLATE_PASSWORD_RESET = env("SMS_TEMPLATE_PASSWORD_RESET", default="")
+SMS_TEMPLATE_ORDER_CONFIRMED = env("SMS_TEMPLATE_ORDER_CONFIRMED", default="")
+SMS_TEMPLATE_ORDER_SHIPPED = env("SMS_TEMPLATE_ORDER_SHIPPED", default="")
+
+# --- Owner alerts (Part R4 item 3) ----------------------------------------
+# The owner (not the customer) is told about important shop events:
+# a new PAID order, and stock crossing down to/through the low-stock
+# threshold. Recipients come ONLY from env, comma separated; an EMPTY
+# value turns that channel off entirely (the default -- nothing is sent
+# until the owner opts in by filling these in).
+OWNER_ALERT_PHONES = env("OWNER_ALERT_PHONES", default="")
+OWNER_ALERT_EMAILS = env("OWNER_ALERT_EMAILS", default="")
+
+# Messenger channels (disabled by default): when token AND chat id are
+# both set, owner alerts are ALSO pushed there. Telegram may be filtered
+# or unreliable from Iranian servers -- Bale is the domestic option.
+TELEGRAM_BOT_TOKEN = env("TELEGRAM_BOT_TOKEN", default="")
+TELEGRAM_CHAT_ID = env("TELEGRAM_CHAT_ID", default="")
+TELEGRAM_API_BASE = env("TELEGRAM_API_BASE", default="https://api.telegram.org")
+BALE_BOT_TOKEN = env("BALE_BOT_TOKEN", default="")
+BALE_CHAT_ID = env("BALE_CHAT_ID", default="")
+BALE_API_BASE = env("BALE_API_BASE", default="https://tapi.bale.ai/business")
+
+# Owner low-stock alert threshold: an alert fires ONCE when a variant's
+# (or a variant-less product's) stock crosses down to or below this
+# number after a sale, and re-arms when stock goes back above it.
+LOW_STOCK_THRESHOLD = env.int("LOW_STOCK_THRESHOLD", default=3)
+
+# Admin two-factor auth (Part R4 item 4): when on, staff/superusers can
+# only enter the admin with a verified TOTP device (+ one-time backup
+# codes). Default OFF here so development/tests behave as before;
+# config/settings/production.py defaults it ON, and check_production
+# FAILs if it is explicitly disabled there.
+ADMIN_2FA_REQUIRED = env.bool("ADMIN_2FA_REQUIRED", default=False)
+
+# Seconds to wait for an SMS provider HTTP call before treating it as
+# unreachable. Delivery failures never break the triggering flow.
+SMS_TIMEOUT = env.int("SMS_TIMEOUT", default=10)
+
+# One-time password-reset codes for phone-only accounts: validity window
+# in minutes (codes are single-use, hashed at rest, and the confirm
+# endpoint is throttled -- see apps/accounts/models.py PhoneResetCode).
+PASSWORD_RESET_CODE_TTL_MINUTES = env.int("PASSWORD_RESET_CODE_TTL_MINUTES", default=15)
 
 # ---------------------------------------------------------------------------
 # Frontend URL (Phase 3)
@@ -303,29 +430,51 @@ SHIPPING_MIN_DELIVERY_DAYS = env.int("SHIPPING_MIN_DELIVERY_DAYS", default=3)
 SHIPPING_MAX_DELIVERY_DAYS = env.int("SHIPPING_MAX_DELIVERY_DAYS", default=5)
 
 # Express method: fixed cost (never free -- the free-shipping threshold
-# is a standard-delivery promotion and deliberately does NOT apply here),
-# with its own faster window.
+# is a standard-delivery promotion and deliberately does NOT apply here).
 EXPRESS_SHIPPING_COST = env.int("EXPRESS_SHIPPING_COST", default=90000)
-EXPRESS_MIN_DELIVERY_DAYS = env.int("EXPRESS_MIN_DELIVERY_DAYS", default=1)
-EXPRESS_MAX_DELIVERY_DAYS = env.int("EXPRESS_MAX_DELIVERY_DAYS", default=2)
+
+# Gift wrapping (Part 2): whole-Toman fee added to the order total when
+# the shopper opts in at checkout. 0 (default) HIDES the option
+# entirely. Documented decision: the free-shipping threshold and coupon
+# discounts are computed on the PRODUCT subtotal only -- the gift-wrap
+# fee neither helps reach free shipping nor is reduced by coupons.
+GIFT_WRAP_FEE = env.int("GIFT_WRAP_FEE", default=0)
 
 # The selectable shipping methods offered at checkout. Cost and delivery
 # window per method are all env-configurable above. `free_threshold` is
-# None when the method is never free. New methods = a new entry here (plus
-# its settings); apps/orders/shipping.py and the checkout flow need no
-# change -- they only ever read this dict.
+# None when the method is never free. `requires_address` False means the
+# method needs no delivery address at checkout (name+phone still do).
+# Existing method keys ("standard", "express") are part of order
+# snapshots and must never be renamed; new methods are added additively
+# (Order.shipping_method is a plain CharField, so no migration is needed
+# to add a key).
 SHIPPING_METHODS = {
     "standard": {
+        "label": "عادی",
         "cost": STANDARD_SHIPPING_COST,
         "free_threshold": FREE_SHIPPING_THRESHOLD,
         "min_days": SHIPPING_MIN_DELIVERY_DAYS,
         "max_days": SHIPPING_MAX_DELIVERY_DAYS,
+        "requires_address": True,
     },
     "express": {
+        "label": "اکسپرس",
         "cost": EXPRESS_SHIPPING_COST,
         "free_threshold": None,
-        "min_days": EXPRESS_MIN_DELIVERY_DAYS,
-        "max_days": EXPRESS_MAX_DELIVERY_DAYS,
+        # Express is a next-day service by definition: exactly one day
+        # (min == max == 1), not env-tunable -- "faster express" is a
+        # different product, not a config tweak.
+        "min_days": 1,
+        "max_days": 1,
+        "requires_address": True,
+    },
+    "pickup": {
+        "label": "حضوری",
+        "cost": 0,
+        "free_threshold": None,
+        "min_days": 0,
+        "max_days": 0,
+        "requires_address": False,
     },
 }
 
@@ -333,6 +482,14 @@ SHIPPING_METHODS = {
 # Logging
 # ---------------------------------------------------------------------------
 LOG_LEVEL = env("DJANGO_LOG_LEVEL", default="INFO")
+
+# Output shape: "plain" (human-readable, development default) or "json"
+# (one JSON object per line on stdout -- structured logging for container
+# log collectors in production; see config/json_logging.py). The root
+# .env.example sets LOG_FORMAT=json for deployments.
+LOG_FORMAT = env("LOG_FORMAT", default="plain").strip().lower()
+if LOG_FORMAT not in {"plain", "json"}:
+    raise RuntimeError(f"LOG_FORMAT must be 'plain' or 'json', got '{LOG_FORMAT}'.")
 
 LOGGING = {
     "version": 1,
@@ -342,11 +499,14 @@ LOGGING = {
             "format": "[{asctime}] {levelname} {name}: {message}",
             "style": "{",
         },
+        "json": {
+            "()": "config.json_logging.JsonLogFormatter",
+        },
     },
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
-            "formatter": "verbose",
+            "formatter": "json" if LOG_FORMAT == "json" else "verbose",
         },
     },
     "root": {
@@ -367,5 +527,46 @@ LOGGING = {
             "level": "INFO",
             "propagate": False,
         },
+        # Notification delivery events (Phase D). Same secret policy:
+        # provider adapters must never put credentials into messages,
+        # and NotificationLog stores masked recipients only.
+        "notifications": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
     },
 }
+
+# ---------------------------------------------------------------------------
+# Error monitoring (Phase E) -- optional, env-driven Sentry
+# ---------------------------------------------------------------------------
+# Leave SENTRY_DSN empty and nothing is initialized (zero overhead). Set
+# it (plus optionally SENTRY_ENVIRONMENT / SENTRY_TRACES_SAMPLE_RATE) and
+# every unhandled exception and optionally performance traces are reported
+# to Sentry. Initialization happens here, at settings import time, so it
+# covers gunicorn workers, management commands and the scheduler alike.
+SENTRY_DSN = env("SENTRY_DSN", default="")
+SENTRY_ENVIRONMENT = env("SENTRY_ENVIRONMENT", default="production")
+SENTRY_TRACES_SAMPLE_RATE = env.float("SENTRY_TRACES_SAMPLE_RATE", default=0.1)
+
+if SENTRY_DSN:
+    try:
+        import sentry_sdk
+
+        sentry_sdk.init(
+            dsn=SENTRY_DSN,
+            environment=SENTRY_ENVIRONMENT,
+            traces_sample_rate=SENTRY_TRACES_SAMPLE_RATE,
+        )
+    except ImportError:
+        # Loud in the logs, but never a boot failure: monitoring is an
+        # optional add-on, and refusing to serve the shop because the
+        # error reporter is missing would be exactly backwards.
+        import logging as _logging
+
+        _logging.getLogger(__name__).error(
+            "SENTRY_DSN is set but the sentry-sdk package is not installed; "
+            "error monitoring stays OFF. (It is in requirements.txt -- rebuild "
+            "the backend image.)"
+        )

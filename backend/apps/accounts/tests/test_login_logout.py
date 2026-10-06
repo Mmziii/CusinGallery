@@ -36,7 +36,10 @@ class LoginLogoutTests(CacheIsolatedAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         # Must not have established a session.
         me = self.client.get(self.me_url)
-        self.assertEqual(me.status_code, status.HTTP_403_FORBIDDEN)
+        # Anonymous /me/ is a normal "not logged in" state (200 + null
+        # user), not an error -- see MeView's docstring.
+        self.assertEqual(me.status_code, status.HTTP_200_OK)
+        self.assertIsNone(me.data["user"])
 
     def test_login_with_unknown_identifier_fails_with_generic_message(self):
         response = self.client.post(
@@ -68,19 +71,17 @@ class LoginLogoutTests(CacheIsolatedAPITestCase):
         # The critical assertion: the *same client* (same cookies) can no
         # longer reach a protected endpoint after logout.
         after_logout = self.client.get(self.me_url)
-        self.assertEqual(after_logout.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(after_logout.status_code, status.HTTP_200_OK)
+        self.assertIsNone(after_logout.data["user"])
 
     def test_logout_requires_authentication(self):
         response = self.client.post(self.logout_url)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_anonymous_user_cannot_access_current_user_endpoint(self):
+    def test_anonymous_me_probe_is_a_normal_not_logged_in_state(self):
+        # GET /accounts/me/ answers 200 + {"user": null} for anonymous
+        # visitors (no red console noise on every page load); writing
+        # still requires authentication (see test_profile).
         response = self.client.get(self.me_url)
-        # 403, not 401: with SessionAuthentication as the only configured
-        # authenticator (no BasicAuthentication), DRF has no
-        # WWW-Authenticate challenge to offer, so it downgrades the
-        # NotAuthenticated exception to PermissionDenied (403) rather
-        # than issuing a 401 with no header -- see DRF's
-        # APIView.handle_exception. This is standard, expected behavior
-        # for a session-only API, not a bug.
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsNone(response.data["user"])

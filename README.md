@@ -16,19 +16,25 @@ deployment wiring. It was built phase by phase; this README describes the
 
 | Area | Status |
 |---|---|
-| Catalog (categories, brands, products, variants, images, specifications) | ✅ API + Django Admin |
-| Authentication (session + CSRF, phone/email login, password reset) | ✅ API + storefront pages |
-| Cart (authenticated, server-priced, server-validated stock) | ✅ API + storefront |
-| Wishlist | ✅ API + storefront |
-| Checkout (address snapshot, shipping-method choice, coupon, server totals) | ✅ API + storefront |
-| Shipping (standard/express, configurable costs + delivery windows, snapshotted on the order) | ✅ |
-| Coupons (active/window/limits/min-order, product+category targeting, server-side math) | ✅ API + storefront |
-| Orders (history, detail, ownership-scoped, immutable price snapshots) | ✅ API + storefront |
-| Payments (attempts, gateway abstraction, initiate/redirect/callback/verify, idempotent, exactly-once stock decrement) | ✅ Mock gateway included; real-PSP adapter slot ready |
-| Reviews (authenticated create, moderation, verified-purchase computed server-side) | ✅ API + storefront |
-| Banners & daily deals (active windows, ordering, server-provided timing) | ✅ API + storefront |
-| Storefront (home, shop w/ filters+search+pagination, product detail, cart, checkout, payment result, account area) | ✅ Persian/RTL, responsive |
-| Owner admin — Persian Django admin: catalog w/ images+variants, order fulfilment workflow + stock restore, print label, CSV export, bulk import (CSV/Excel), coupons/banners management, `seed_demo` | ✅ |
+| Catalog (categories, brands, products, variants, images, specifications) | API + Django Admin |
+| Authentication (session + CSRF, phone/email login, password reset) | API + storefront pages |
+| Cart (authenticated, server-priced, server-validated stock) | API + storefront |
+| Wishlist | API + storefront |
+| Checkout (address snapshot, shipping-method choice, coupon, server totals) | API + storefront |
+| Shipping (standard/express, configurable costs + delivery windows, snapshotted on the order) | |
+| Coupons (active/window/limits/min-order, product+category targeting, server-side math) | API + storefront |
+| Orders (history, detail, ownership-scoped, immutable price snapshots) | API + storefront |
+| Payments (attempts, gateway abstraction, initiate/redirect/callback/verify, idempotent, exactly-once stock decrement) | Real **ZarinPal** adapter (sandbox + production) + mock for dev/test |
+| Refund tracking (required/refunded ledger, admin workflow, manual PSP refunds) | Phase C |
+| Abandoned unpaid orders (`expire_unpaid_orders` cron command) | Phase C |
+| Customer notifications (order confirmation, shipped + tracking code, SMS password-reset codes; provider abstraction: Kavenegar + dev console; masked audit log) | Phase D |
+| Password reset end-to-end for phone-only accounts (hashed, expiring, single-use SMS codes, no enumeration) | Phase D |
+| Production readiness (`check_production` env audit, prod compose with TLS/certbot/scheduler/auto-migrate, backup+restore scripts, `/healthz`, JSON logs, optional Sentry) | Phase E |
+| SEO (dynamic `sitemap.xml` with percent-encoded Persian slugs, `robots.txt`, per-page titles/canonical/OG, `allow_unicode` slugs) + trust pages (about/contact/shipping-returns/terms/privacy, footer e-namad slot) | Phase E |
+| Reviews (authenticated create, moderation, verified-purchase computed server-side) | API + storefront |
+| Banners & daily deals (active windows, ordering, server-provided timing) | API + storefront |
+| Storefront (home, shop w/ filters+search+pagination, product detail, cart, checkout, payment result, account area) | Persian/RTL, responsive |
+| Owner admin — Persian Django admin: catalog w/ images+variants, order fulfilment workflow + stock restore, print label, CSV export, bulk import (CSV/Excel), coupons/banners management, `seed_demo` | |
 
 ---
 
@@ -50,11 +56,30 @@ deployment wiring. It was built phase by phase; this README describes the
 * **Inventory:** decremented **only after successful payment
   verification**, exactly once (row locks + partial unique constraint on
   successful payments). Checkout never reserves stock.
-* **Payments:** gateway abstraction (`apps/payments/gateways/`). The
-  mock gateway exercises the real redirect/callback/verify protocol with
-  HMAC-signed callbacks; a real PSP (Zarinpal, IDPay, …) is one new
-  `PaymentGateway` subclass + one registry line + env config. No
-  credentials are hardcoded anywhere.
+* **Payments:** gateway abstraction (`apps/payments/gateways/`) with a
+  real **ZarinPal** adapter (v4 API, sandbox + production, whole-Toman
+  `currency=IRT`) and an HMAC-signing mock for dev/test. Every callback
+  is verified server-side against the PSP, amounts are cross-checked
+  against the order snapshot, and callbacks are idempotent +
+  row-lock-serialized so stock decrements exactly once. Adding another
+  PSP (IDPay, NextPay, …) is one new `PaymentGateway` subclass + one
+  registry line + env config — see `docs/PAYMENTS.md`. No credentials
+  are hardcoded anywhere, and production settings refuse to boot with
+  the mock gateway.
+* **Refunds:** manual (PSP panel) by design, but never invisible —
+  cancelling/returning a paid order, or a verified capture that can no
+  longer be applied, flags the order *refund required* with an
+  accumulating amount and note journal (`apps/orders/refunds.py`); the
+  owner completes it in admin with a mandatory reference note.
+* **Notifications:** one service (`apps/notifications/services.py`)
+  composes and delivers order-confirmed / order-shipped / password-reset
+  messages over SMS (provider abstraction: Kavenegar adapter + dev-only
+  console, env-selected exactly like payment gateways) and optional
+  SMTP email. Delivery is registered with `transaction.on_commit`,
+  failures can never break checkout/payment/admin flows, every attempt
+  is recorded in a read-only `NotificationLog` with MASKED recipients,
+  and a database unique constraint makes double-sends of one order
+  event impossible.
 
 ---
 
@@ -79,13 +104,19 @@ cusin-gallery/
 │   │   ├── discounts/     # coupons + validation engine
 │   │   ├── orders/        # checkout, shipping, inventory, orders API
 │   │   ├── payments/      # payment attempts + gateway abstraction
+│   │   ├── notifications/ # SMS/email providers (Kavenegar) + audit log
 │   │   ├── reviews/
 │   │   └── banners/       # banners + daily deals
 │   └── media/, staticfiles/
 ├── frontend/              # React + Vite storefront (src/, tests: lint+build)
-├── docker/                # backend + frontend Dockerfiles
-├── nginx/                 # edge reverse-proxy config
-├── docker-compose.yml
+├── docs/                  # OWNER_GUIDE.fa.md (Persian owner manual),
+│                          # PAYMENTS.md (developer payment guide),
+│                          # DEPLOY.md (Persian VPS deployment guide)
+├── docker/                # backend + frontend Dockerfiles (+ prod entrypoint)
+├── nginx/                 # edge configs: conf.d (dev) + prod.d (TLS/HTTPS)
+├── scripts/               # backup.sh / restore.sh (never store output in git)
+├── docker-compose.yml     # development stack
+├── docker-compose.prod.yml# production stack (TLS, scheduler, auto-migrate)
 └── .env.example           # compose-level variables
 ```
 
@@ -114,8 +145,10 @@ Settings modules:
   console email backend, LocMem cache, optional preview-tunnel support
   (`CSRF_TRUSTED_ORIGINS`, `SECURE_PROXY_SSL_HEADER`).
 * `config.settings.production`: DEBUG off, refuses to start without a
-  real `SECRET_KEY` / non-empty `CORS_ALLOWED_ORIGINS`, secure cookies
-  and HSTS gated behind `HTTPS_ENABLED=True`, shared **Redis** cache
+  real `SECRET_KEY` / non-empty `CORS_ALLOWED_ORIGINS` / a real payment
+  gateway (the mock gateway and an empty `PAYMENT_GATEWAY` are rejected,
+  and `zarinpal` requires `PAYMENT_MERCHANT_ID`), secure cookies and
+  HSTS gated behind `HTTPS_ENABLED=True`, shared **Redis** cache
   (`REDIS_URL`) so DRF throttling is global across gunicorn workers.
 
 ## Frontend setup (development)
@@ -139,7 +172,7 @@ The API base URL defaults to the same-origin `/api/v1`. Set
 
 ## Tests
 
-Backend (365 tests, all green on PostgreSQL at the time of writing):
+Backend (552 tests, all green on PostgreSQL at the time of writing):
 
 ```bash
 cd backend
@@ -153,7 +186,25 @@ invalid + forged + duplicate callbacks, wrong amount, repeated
 verification, already-paid orders, **exactly-once inventory under
 concurrent callbacks** (threaded, PostgreSQL-only — skipped on SQLite
 with a documented reason), coupon rules end to end, review moderation +
-verified-purchase, banners active-window filtering.
+verified-purchase, banners active-window filtering. Phase C adds the
+**ZarinPal adapter behind a fake HTTP layer** (no network in tests:
+payloads/hosts sandbox-vs-production, verify codes 100/101, `errors`
+envelopes, timeouts, replayed + simultaneous callbacks, verify-timeout
+stays PENDING then completes on replay), the **refund ledger** (all
+automatic triggers, admin mark-refunded paths, late-capture and
+duplicate-capture money races), **`expire_unpaid_orders`** (boundaries,
+idempotency, dry-run, pay-after-expiry), and the **production boot
+guards** (mock gateway impossible in production). Phase D adds the
+**notification layer** (Kavenegar adapter behind a fake HTTP layer,
+including API-key-leak checks; registry selection; order-confirmed and
+shipped delivery driven through the REAL payment/workflow flows with
+`on_commit` semantics — a rolled-back transaction sends nothing,
+provider/SMTP failures never break the money path, replays never
+double-send, audit rows store masked recipients only) and the
+**phone-only password reset** end-to-end (hashed, expiring, single-use
+codes; re-issue invalidation; identical generic answers for unknown
+phone / wrong / expired / consumed code; request throttling; production
+SMS boot guards).
 
 Frontend: no unit-test framework is configured; verification is via
 `npm run lint` (0 problems) and `npm run build`, plus exercising the
@@ -166,30 +217,42 @@ System checks: `python manage.py check` and
 
 ## Payments configuration
 
-Gateway selection and credentials are **environment-only**:
+Full developer documentation — flow diagram, security invariants,
+sandbox→production runbook, how to add another gateway — lives in
+**[`docs/PAYMENTS.md`](docs/PAYMENTS.md)**. Gateway selection and
+credentials are **environment-only**:
 
 | Variable | Purpose |
 |---|---|
-| `PAYMENT_GATEWAY` | Gateway name. Empty or `mock` → the built-in MockGateway. |
-| `PAYMENT_MERCHANT_ID` | Merchant identifier for a real PSP (unused by the mock). |
-| `PAYMENT_CALLBACK_URL` | Fallback callback URL when one can't be derived from the request. |
+| `PAYMENT_GATEWAY` | `mock` (dev/test only — production refuses it) \| `zarinpal` (real PSP, sandbox + production). |
+| `PAYMENT_MERCHANT_ID` | ZarinPal 36-char merchant id (required in production; any 36-char value in sandbox). The mock uses this slot as its HMAC signing secret. |
+| `PAYMENT_ZARINPAL_SANDBOX` | `True` → sandbox.zarinpal.com (no real money); `False` → production hosts. |
+| `PAYMENT_CALLBACK_URL` | Callback base URL registered with the PSP (the API view derives it from the request when possible). |
+| `PAYMENT_GATEWAY_TIMEOUT` | Seconds to wait for gateway HTTP calls. |
+| `ORDER_EXPIRY_HOURS` | Age threshold for the `expire_unpaid_orders` cron command. |
 
-The **MockGateway** is a full protocol implementation (not a stub): it
-mints an authority, hosts a "gateway page", signs callbacks with an
-HMAC, and verification re-checks that signature server-side. It exists
-so the entire payment lifecycle is exercisable **without any external
-credentials** — no credentials have been invented for a real PSP.
+The **ZarinPal adapter** implements the v4 REST API end to end: payment
+request, StartPay redirect, server-side verify (honoring ZarinPal's
+code-101 repeat-verify semantics), `Status=NOK` cancellation, receipt
+capture (`ref_id`, masked `card_pan`, card fingerprint hash), and a
+strict split between "gateway unreachable" (attempt stays PENDING on
+verify — the money state is unknown) and "gateway said no" (FAILED).
 
-Adding a real gateway: subclass `apps/payments/gateways/base.py:
-PaymentGateway` (`initiate`, `verify`), register it in
-`gateways/__init__.py:_REGISTRY`, set `PAYMENT_GATEWAY`/credentials via
-env. Nothing else in the codebase changes.
+The **MockGateway** remains a full protocol implementation (not a
+stub): it mints an authority, hosts a "gateway page", signs callbacks
+with an HMAC, and verification re-checks that signature server-side —
+so the whole lifecycle stays exercisable in dev/tests **without any
+network access or credentials**.
+
+Abandoned unpaid orders are cleaned up by
+`python manage.py expire_unpaid_orders` (cron-safe, row-lock-checked,
+never moves stock — stock is only taken at payment).
 
 ---
 
 ## Docker / deployment wiring
 
-`docker-compose.yml` defines: `postgres` (persistent volume +
+`docker-compose.yml` (development) defines: `postgres` (persistent volume +
 healthcheck), `redis` (shared cache for throttling), `backend`
 (gunicorn, runs `collectstatic` on start; migrations are run explicitly
 by the operator: `docker compose run backend python manage.py migrate`),
@@ -198,12 +261,30 @@ single edge proxy: `/api/` and `/admin/` → backend, `/static/` and
 `/media/` served directly from shared volumes, everything else →
 frontend).
 
+**`docker-compose.prod.yml` (production, Phase E)** adds everything a
+real deployment needs on top: nginx terminates **TLS via a Let's
+Encrypt certbot companion** (`nginx/prod.d/`: HTTP→HTTPS redirect, ACME
+webroot, no redirect loops — Django trusts `X-Forwarded-Proto`), the
+backend runs **migrate + collectstatic automatically on deploy**
+(`docker/backend/entrypoint.sh`, single-replica assumption documented
+there), a **scheduler** service runs `expire_unpaid_orders` hourly,
+`db`/`redis` publish **no host ports**, and `LOG_FORMAT=json` structured
+logs plus optional **Sentry** (`SENTRY_DSN`) come from env. Backups:
+`scripts/backup.sh` (pg_dump + media tar + rotation, stored OUTSIDE the
+repo) and `scripts/restore.sh` (confirmation-gated restore). The
+`check_production` management command audits the whole env contract and
+prints a bilingual PASS/WARN/FAIL report (exit code 1 on any FAIL).
+`docs/DEPLOY.md` is the step-by-step Persian guide for a non-developer
+owner (fresh Ubuntu VPS → SSL → first order → daily ops → rollback),
+ending in a pre-launch checklist.
+
 **Honest status of the infra:** these images and configs are written and
-reviewed, but this repository's development environment has no Docker
-daemon or real domain, so the compose stack has not been booted here and
-HTTPS has not been exercised. The nginx config ships HTTP-only with a
-documented path to HTTPS (`HTTPS_ENABLED=True` + certificates + the
-commented 443 server block).
+reviewed, and the compose files parse and pass structural checks, but
+this repository's development environment has no Docker daemon or real
+domain, so the production stack has not been booted here, TLS has not
+been exercised against Let's Encrypt, and the backup/restore scripts are
+syntax-checked but unrehearsed. `docs/DEPLOY.md`'s checklist requires a
+full rehearsal (including one restore) on the real server before launch.
 
 ---
 
@@ -212,10 +293,20 @@ commented 443 server block).
 These cannot be provided by the code itself and must be supplied by the
 operator:
 
-* **Real payment-gateway credentials** (merchant id/secret) once a PSP
-  is chosen — until then the mock gateway runs the full flow.
+* **A real ZarinPal merchant id** for live payments — until then,
+  ZarinPal's **sandbox** (`PAYMENT_ZARINPAL_SANDBOX=True`, any
+  36-character merchant id) exercises the real flow, and local
+  development uses the mock gateway. Production settings refuse to
+  start with the mock gateway or without a merchant id, so this cannot
+  be forgotten silently.
+* **Kavenegar credentials** for real SMS (`KAVENEGAR_API_KEY`, a sender
+  line `SMS_SENDER` for direct sends, and optionally pre-approved panel
+  templates `SMS_TEMPLATE_*`) — until then development uses the
+  log-only console provider, and production must either configure
+  Kavenegar or explicitly set `SMS_ENABLED=False`.
 * **SMTP credentials** (`EMAIL_HOST`, …) for real password-reset
-  emails (development prints them to the console).
+  emails and order notification emails (development prints them to the
+  console).
 * **A domain + TLS certificate** for production HTTPS.
 * **Catalog content** — products/categories/banners are managed in
   Django Admin (`/admin/`); the application deliberately ships with no

@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
-import { Alert, Spinner, errorMessage } from "../../components/ui";
+import SmartImage from "../../components/SmartImage";
+import { Alert, ErrorState, Spinner, errorMessage } from "../../components/ui";
 import { useAsync } from "../../hooks/useAsync";
 import { fetchOrder } from "../../services/orderApi";
 import { initiatePayment } from "../../services/paymentsApi";
@@ -11,13 +12,13 @@ import { ORDER_STATUS_LABELS, PAYMENT_STATUS_LABELS } from "./OrdersPage";
 
 function OrderDetailPage() {
   const { orderId } = useParams();
-  const { data: order, isLoading, error } = useAsync(() => fetchOrder(orderId), [orderId]);
+  const { data: order, isLoading, error, refetch } = useAsync(() => fetchOrder(orderId), [orderId]);
 
   const [paying, setPaying] = useState(false);
   const [payError, setPayError] = useState(null);
 
   if (isLoading) return <Spinner label="در حال دریافت سفارش…" />;
-  if (error) return <Alert>{errorMessage(error)}</Alert>;
+  if (error) return <ErrorState message={errorMessage(error)} onRetry={refetch} />;
   if (!order) return null;
 
   // unpaid/failed are obviously retryable; "pending" means a previous
@@ -57,8 +58,32 @@ function OrderDetailPage() {
           </div>
           <div>
             <dt>روش ارسال</dt>
-            <dd>{order.shipping_method === "express" ? "ارسال اکسپرس" : "ارسال استاندارد"}</dd>
+            <dd>
+              {order.shipping_method === "express"
+                ? "ارسال اکسپرس"
+                : order.shipping_method === "pickup"
+                  ? "دریافت حضوری"
+                  : "ارسال عادی"}
+            </dd>
           </div>
+          {order.gift_wrap ? (
+            <div>
+              <dt>بسته‌بندی هدیه</dt>
+              <dd>
+                بله{order.gift_message ? ` — پیام: ${order.gift_message}` : ""}
+              </dd>
+            </div>
+          ) : null}
+          {order.payment_status === "paid" ? (
+            <div>
+              <dt>فاکتور</dt>
+              <dd>
+                <a href={`/api/v1/orders/${order.id}/invoice/`} target="_blank" rel="noopener noreferrer">
+                  مشاهده و چاپ فاکتور
+                </a>
+              </dd>
+            </div>
+          ) : null}
           {order.estimated_delivery_min && order.estimated_delivery_max ? (
             <div>
               <dt>تحویل تخمینی</dt>
@@ -90,12 +115,17 @@ function OrderDetailPage() {
             {order.items.map((item) => (
               <tr key={item.id}>
                 <td>
-                  {item.product_slug ? (
-                    <Link to={`/products/${item.product_slug}/`}>{item.product_name}</Link>
-                  ) : (
-                    item.product_name
-                  )}
-                  <div className="muted" dir="ltr">{item.sku}</div>
+                  <span className="order-detail__itemline">
+                    <SmartImage image={item.product_image || null} alt="" />
+                    <span>
+                      {item.product_slug ? (
+                        <Link to={`/products/${item.product_slug}/`}>{item.product_name}</Link>
+                      ) : (
+                        item.product_name
+                      )}
+                      <div className="muted" dir="ltr">{item.sku}</div>
+                    </span>
+                  </span>
                 </td>
                 <td>{formatPrice(item.unit_price)}</td>
                 <td>{item.quantity}</td>

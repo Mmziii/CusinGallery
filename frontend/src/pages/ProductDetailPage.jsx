@@ -1,28 +1,30 @@
+import { SITE_ORIGIN, usePageMeta } from "../hooks/usePageMeta";
 import PropTypes from "prop-types";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
+import Breadcrumbs from "../components/Breadcrumbs";
+import Icon from "../components/Icon";
+import StarRating from "../components/StarRating";
 import PriceTag from "../components/PriceTag";
+import SmartImage from "../components/SmartImage";
 import { productDetailShape } from "../utils/shapes";
-import { Alert, EmptyState, Spinner, errorMessage } from "../components/ui";
+import { Alert, EmptyState, ErrorState, Spinner, errorMessage } from "../components/ui";
 import { useAsync } from "../hooks/useAsync";
 import { getProduct } from "../services/catalogApi";
+import { subscribeBackInStock } from "../services/productsApi";
 import * as reviewsApi from "../services/reviewsApi";
 import * as wishlistApi from "../services/wishlistApi";
 import useAuthStore from "../store/useAuthStore";
 import useCartStore from "../store/useCartStore";
 import { normalizeApiError } from "../utils/apiError";
 import { formatPrice } from "../utils/formatPrice";
+import { recordView } from "../utils/recentlyViewed";
+import RecentlyViewed from "../components/RecentlyViewed";
 
 function Stars({ value, size = "md" }) {
-  const rounded = Math.round(value || 0);
-  return (
-    <span className={`stars stars--${size}`} aria-label={`امتیاز ${value || 0} از 5`}>
-      {[1, 2, 3, 4, 5].map((n) => (
-        <span key={n} className={n <= rounded ? "star star--on" : "star"}>★</span>
-      ))}
-    </span>
-  );
+  // Part R2: SVG stars (no text glyphs).
+  return <StarRating rating={Math.round(value || 0)} size={size === "lg" ? 20 : 16} />;
 }
 
 function RatingInput({ value, onChange }) {
@@ -37,7 +39,7 @@ function RatingInput({ value, onChange }) {
           className={n <= value ? "star star--on" : "star"}
           onClick={() => onChange(n)}
         >
-          ★
+          <Icon name="star" size={22} filled={n <= value} />
         </button>
       ))}
     </div>
@@ -112,7 +114,7 @@ function ReviewSection({ product }) {
       ) : null}
 
       {isLoading ? <Spinner /> : null}
-      {reviews && reviews.results.length === 0 ? (
+      {reviews && reviews.results?.length === 0 ? (
         <EmptyState title="هنوز نظری برای این محصول ثبت نشده است." />
       ) : null}
 
@@ -173,9 +175,87 @@ function ReviewSection({ product }) {
   );
 }
 
+/**
+ * Part R5 item 9: «پیشنهاد همراه» -- manual or mined complements with a
+ * bulk "add selected to cart" action. The API (see
+ * ProductDetailSerializer.get_complements) only ever returns ACTIVE,
+ * IN-STOCK products, so no unavailable-state UI is needed here. Each
+ * item keeps its own price/stock -- deliberately no bundle logic.
+ */
+function ComplementsSection({ complements }) {
+  const addItem = useCartStore((s) => s.addItem);
+  const [selected, setSelected] = useState(() => new Set(complements.map((c) => c.id)));
+  const [state, setState] = useState(null); // null | "busy" | "done" | error string
+
+  if (!complements?.length) return null;
+
+  const toggle = (id) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    setState(null);
+  };
+
+  const addSelected = async () => {
+    const items = complements.filter((c) => selected.has(c.id));
+    if (!items.length) return;
+    setState("busy");
+    const failed = [];
+    for (const item of items) {
+      const result = await addItem(item.id, null, 1);
+      if (!result.success) failed.push(item.name);
+    }
+    setState(
+      failed.length
+        ? `افزودن ${failed.join("، ")} به سبد ناموفق بود؛ موجودی آن‌ها را بررسی کنید.`
+        : "done"
+    );
+  };
+
+  return (
+    <section className="complements">
+      <h2>پیشنهاد همراه</h2>
+      <p className="complements__hint">
+        این کالاها را مشتریان همراه با این محصول می‌خرند؛ می‌توانید انتخاب‌شده‌ها را یک‌جا به سبد اضافه کنید.
+      </p>
+      <div className="complements__grid">
+        {complements.map((item) => (
+          <label className="complements__card" key={item.id}>
+            <input
+              type="checkbox"
+              checked={selected.has(item.id)}
+              onChange={() => toggle(item.id)}
+            />
+            <Link to={`/products/${item.slug}/`} className="complements__media">
+              <SmartImage image={item.primary_image || null} alt={item.name} />
+            </Link>
+            <Link to={`/products/${item.slug}/`} className="complements__name">{item.name}</Link>
+            <span className="complements__price">{formatPrice(item.price_info.price)} تومان</span>
+          </label>
+        ))}
+      </div>
+      <div className="complements__actions">
+        <button
+          type="button"
+          className="btn btn--primary"
+          onClick={addSelected}
+          disabled={state === "busy" || selected.size === 0}
+        >
+          {state === "busy" ? "در حال افزودن…" : "افزودن انتخاب‌شده‌ها به سبد"}
+        </button>
+        {state === "done" ? <Alert kind="success">کالاهای انتخاب‌شده به سبد خرید اضافه شدند.</Alert> : null}
+        {state && state !== "done" && state !== "busy" ? <Alert>{state}</Alert> : null}
+      </div>
+    </section>
+  );
+}
+
 function ProductDetailPage() {
   const { slug } = useParams();
-  const { data: product, isLoading, error } = useAsync(() => getProduct(slug), [slug]);
+  const { data: product, isLoading, error, refetch } = useAsync(() => getProduct(slug), [slug]);
 
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const addItem = useCartStore((s) => s.addItem);
@@ -185,8 +265,25 @@ function ProductDetailPage() {
   const [selected, setSelected] = useState({}); // attribute name -> value
   const [added, setAdded] = useState(null);
   const [wishlisted, setWishlisted] = useState(false);
+  const [bisPhone, setBisPhone] = useState("");
+  const [bisState, setBisState] = useState(null); // null | busy | done | error
 
   const images = product?.images || [];
+
+  // Part R5 item 10: record the view in browser-local storage only.
+  useEffect(() => {
+    if (product?.id) recordView(product.id);
+  }, [product?.id]);
+
+  // Per-product SEO/social metadata (Phase E). Values start undefined
+  // and settle once the product loads; the canonical always points at
+  // the slug URL (query strings like ?review=1 must not fork it).
+  usePageMeta({
+    title: product?.name,
+    description: product?.short_description || undefined,
+    path: `/products/${slug}/`,
+    image: product?.primary_image ? `${SITE_ORIGIN}${product.primary_image}` : undefined,
+  });
 
   // Group variants by attribute for the option buttons.
   const attributeOptions = useMemo(() => {
@@ -233,7 +330,7 @@ function ProductDetailPage() {
   }, [isAuthenticated, product]);
 
   if (isLoading) return <Spinner label="در حال دریافت محصول…" />;
-  if (error) return <Alert>{errorMessage(normalizeApiError(error))}</Alert>;
+  if (error) return <ErrorState message={errorMessage(normalizeApiError(error))} onRetry={refetch} />;
   if (!product) return null;
 
   const handleAdd = async () => {
@@ -258,13 +355,28 @@ function ProductDetailPage() {
 
   return (
     <div className="product-detail">
+      {/* Part S2 item 7: breadcrumbs on the product page */}
+      <Breadcrumbs
+        items={[
+          { label: "خانه", to: "/" },
+          { label: "فروشگاه", to: "/shop/" },
+          ...(product.category
+            ? [{ label: product.category.name, to: `/shop/?category=${encodeURIComponent(product.category.slug)}` }]
+            : []),
+          { label: product.name },
+        ]}
+      />
       <div className="product-detail__gallery">
-        <div className="product-detail__main-image">
-          {images[activeImage] ? (
-            <img src={images[activeImage].image} alt={images[activeImage].alt_text || product.name} />
-          ) : (
-            <div className="product-card__placeholder">تصویر ندارد</div>
-          )}
+        <div
+          className="product-detail__main-image"
+          onClick={(e) => e.currentTarget.querySelector("img")?.classList.toggle("is-zoomed")}
+        >
+          {/* SmartImage (Part R1): missing/broken gallery image -> shared placeholder */}
+          <SmartImage
+            image={images[activeImage] || null}
+            alt={images[activeImage]?.alt_text || product.name}
+            className="product-detail__main-img"
+          />
         </div>
         {images.length > 1 ? (
           <div className="product-detail__thumbs">
@@ -275,7 +387,7 @@ function ProductDetailPage() {
                 className={index === activeImage ? "thumb thumb--active" : "thumb"}
                 onClick={() => setActiveImage(index)}
               >
-                <img src={image.image} alt={image.alt_text || `${product.name} ${index + 1}`} />
+                <SmartImage image={image} alt={image.alt_text || `${product.name} ${index + 1}`} />
               </button>
             ))}
           </div>
@@ -331,9 +443,9 @@ function ProductDetailPage() {
 
         <div className="product-detail__buy">
           <div className="qty-picker">
-            <button type="button" onClick={() => setQuantity((q) => Math.max(1, q - 1))} aria-label="کاهش">−</button>
+            <button type="button" onClick={() => setQuantity((q) => Math.max(1, q - 1))} aria-label="کاهش"><Icon name="minus" size={16} /></button>
             <span>{quantity}</span>
-            <button type="button" onClick={() => setQuantity((q) => q + 1)} aria-label="افزایش">+</button>
+            <button type="button" onClick={() => setQuantity((q) => q + 1)} aria-label="افزایش"><Icon name="plus" size={16} /></button>
           </div>
 
           <button
@@ -344,6 +456,44 @@ function ProductDetailPage() {
           >
             {outOfStock ? "ناموجود" : hasVariants && !activeVariant ? "انتخاب گزینه‌ها" : "افزودن به سبد خرید"}
           </button>
+        {outOfStock ? (
+          <div className="back-in-stock">
+            <p className="muted">کیف را جا نگذارید: شمارهٔ موبایل بگذارید تا به محض موجودشدن پیامک بزنیم.</p>
+            <div className="back-in-stock__row">
+              <input
+                type="text"
+                dir="ltr"
+                inputMode="numeric"
+                placeholder="09xxxxxxxxx"
+                maxLength={11}
+                value={bisPhone}
+                onChange={(e) => setBisPhone(e.target.value)}
+                aria-label="شماره موبایل برای اطلاع‌رسانی موجودی"
+              />
+              <button
+                type="button"
+                className="btn btn--outline"
+                disabled={bisState === "busy"}
+                onClick={async () => {
+                  setBisState("busy");
+                  try {
+                    await subscribeBackInStock(product.id, activeVariant?.id ?? null, bisPhone.trim());
+                    setBisState("done");
+                  } catch (err) {
+                    setBisState(errorMessage(normalizeApiError(err)));
+                  }
+                }}
+              >
+                اطلاع به من
+              </button>
+            </div>
+            {bisState === "done" ? (
+              <p className="field-help">ثبت شد؛ به محض موجودشدن اطلاع‌رسانی می‌شود.</p>
+            ) : bisState && bisState !== "busy" ? (
+              <p className="field-help field-help--error">{bisState}</p>
+            ) : null}
+          </div>
+        ) : null}
 
           <button
             type="button"
@@ -352,7 +502,7 @@ function ProductDetailPage() {
             disabled={!isAuthenticated || wishlisted}
             title="علاقه‌مندی"
           >
-            {wishlisted ? "♥" : "♡"}
+            <Icon name="heart" filled={wishlisted} size={20} />
           </button>
         </div>
 
@@ -361,6 +511,11 @@ function ProductDetailPage() {
       </div>
 
       <div className="product-detail__extra">
+        <div className="product-detail__assurances">
+          <div><strong>ارسال:</strong> عادی ۳ تا ۵ روز / اکسپرس ۱ روزه / دریافت حضوری</div>
+          <div><strong>بسته‌بندی:</strong> ضدضربه برای ظروف شکستنی و بلور</div>
+          <div><strong>مرجوعی:</strong> تا ۷ روز با شرایط درج‌شده در «ارسال و مرجوعی»</div>
+        </div>
         <section>
           <h2>توضیحات</h2>
           <p className="product-detail__description">
@@ -390,9 +545,7 @@ function ProductDetailPage() {
             <div className="related-grid">
               {product.related_products.map((related) => (
                 <Link key={related.id} to={`/products/${related.slug}/`} className="related-card">
-                  {related.primary_image?.image ? (
-                    <img src={related.primary_image.image} alt={related.name} loading="lazy" />
-                  ) : null}
+                  <SmartImage image={related.primary_image || null} alt={related.name} />
                   <span>{related.name}</span>
                   <span className="related-card__price">{formatPrice(related.price_info.price)} تومان</span>
                 </Link>
@@ -400,9 +553,26 @@ function ProductDetailPage() {
             </div>
           </section>
         ) : null}
+
+        <ComplementsSection complements={product.complements || []} />
       </div>
 
       <ReviewSection product={product} />
+
+      {/* Part R5 item 10: browser-local, server knows nothing about it */}
+      <RecentlyViewed />
+
+      <div className="product-detail__stickybar">
+        <PriceTag priceInfo={displayPrice} size="md" />
+        <button
+          type="button"
+          className="btn btn--primary"
+          onClick={handleAdd}
+          disabled={outOfStock || (hasVariants && !activeVariant)}
+        >
+          {outOfStock ? "ناموجود" : "افزودن به سبد خرید"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -410,5 +580,10 @@ function ProductDetailPage() {
 Stars.propTypes = { value: PropTypes.number, size: PropTypes.oneOf(["sm", "md", "lg"]) };
 RatingInput.propTypes = { value: PropTypes.number.isRequired, onChange: PropTypes.func.isRequired };
 ReviewSection.propTypes = { product: productDetailShape.isRequired };
+ComplementsSection.propTypes = {
+  complements: PropTypes.arrayOf(
+    PropTypes.shape({ id: PropTypes.number.isRequired, name: PropTypes.string.isRequired })
+  ).isRequired,
+};
 
 export default ProductDetailPage;

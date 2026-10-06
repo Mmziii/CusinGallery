@@ -38,6 +38,13 @@ def is_valid_shipping_method(method) -> bool:
     return method in get_shipping_methods()
 
 
+def method_label(method: str) -> str:
+    """Persian display label for a method key (admin, print, CSV, UI).
+    Falls back to the raw key so historical snapshots of removed methods
+    never crash a render."""
+    return get_shipping_methods().get(method, {}).get("label", method)
+
+
 def _method_config(method: str) -> dict:
     methods = get_shipping_methods()
     if method not in methods:

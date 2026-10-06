@@ -24,6 +24,16 @@ The two entry points:
             PENDING -> FAILED     gateway declined / verification failed
             PENDING -> CANCELLED  customer cancelled at the gateway page
 
+There is deliberately NO transition when the gateway cannot be REACHED
+during verification (GatewayError from gateway.verify): the money state
+is genuinely unknown -- the customer may well have paid -- so the attempt
+stays PENDING and the customer lands on the result page's "در حال
+بررسی" state. A replayed callback later (ZarinPal answers a repeat
+verify of a captured payment with its documented code 101) can still
+complete it; nothing is ever marked FAILED just because OUR network
+call failed, and nothing is marked SUCCESS without the gateway's own
+verified answer.
+
 Idempotency: a callback for an attempt that already reached SUCCESS
 returns that payment unchanged -- no second inventory decrement, no
 duplicate usage records. The row lock (select_for_update) serializes
@@ -43,6 +53,30 @@ from .gateways import GatewayError, get_gateway
 from .models import Payment
 
 logger = logging.getLogger("payments")
+
+#: Query-string keys that may carry the gateway's own transaction
+#: reference, in priority order. ZarinPal sends "Authority" (PascalCase,
+#: per its docs), the mock gateway sends "authority"; "token"/"Token"
+#: are pre-registered for gateways like NextPay/IDPay so adding one
+#: never requires touching this security-critical function's callers.
+#: Whatever the key, the value is used ONLY to look the attempt up --
+#: every decision still comes from gateway.verify().
+GATEWAY_REFERENCE_KEYS = ("authority", "Authority", "token", "Token")
+
+
+def _extract_gateway_reference(callback_data: dict) -> str:
+    """First non-empty gateway transaction reference in the raw callback
+    parameters (see GATEWAY_REFERENCE_KEYS), flattened and stripped."""
+    for key in GATEWAY_REFERENCE_KEYS:
+        raw = callback_data.get(key)
+        if isinstance(raw, (list, tuple)):  # tolerate ?authority=a&authority=b
+            raw = raw[0] if raw else ""
+        if raw is None:
+            continue
+        value = str(raw).strip()
+        if value:
+            return value
+    return ""
 
 
 class PaymentError(Exception):
@@ -137,10 +171,7 @@ def handle_callback(callback_data: dict) -> Payment:
     # First, resolve which attempt this callback is for, WITHOUT holding
     # any lock -- verification may involve work we don't want to do under
     # a row lock, and an unknown callback must not block anything.
-    raw_authority = callback_data.get("authority") or ""
-    if isinstance(raw_authority, (list, tuple)):  # tolerate ?authority=a&authority=b
-        raw_authority = raw_authority[0] if raw_authority else ""
-    gateway_transaction_id = str(raw_authority).strip()
+    gateway_transaction_id = _extract_gateway_reference(callback_data)
     if not gateway_transaction_id:
         raise PaymentError({"callback": ["Missing gateway transaction reference."]}, http_status=400)
 
@@ -166,7 +197,24 @@ def handle_callback(callback_data: dict) -> Payment:
 
     # Ask the gateway itself whether this callback is genuine and what it
     # means -- never trust the raw parameters alone.
-    verification = gateway.verify(payment, callback_data)
+    try:
+        verification = gateway.verify(payment, callback_data)
+    except GatewayError as exc:
+        # The gateway could not be REACHED (timeout, DNS, HTTP 5xx,
+        # malformed answer) while verifying. The money state is genuinely
+        # unknown -- the customer may have paid at the gateway page --
+        # so the attempt deliberately stays PENDING: marking it FAILED
+        # could hide a real capture, and marking it SUCCESS would trust
+        # nothing. The customer sees the result page's "pending" state;
+        # a replayed callback (the customer refreshing, the gateway
+        # re-notifying, or a retry) can still complete verification,
+        # which ZarinPal explicitly supports via its code-101 answer.
+        logger.error(
+            "Gateway verification could not complete for payment %s: %s -- "
+            "leaving the attempt PENDING.",
+            payment.pk, exc,
+        )
+        return payment
 
     with transaction.atomic():
         # Re-read under the lock: another callback may have completed the
@@ -190,7 +238,28 @@ def handle_callback(callback_data: dict) -> Payment:
         locked.order = order
 
         if verification.success:
-            if order.payment_status == Order.PaymentStatus.PAID:
+            # The gateway has confirmed REAL money was captured for this
+            # attempt. What happens next depends on whether the order can
+            # still receive it. `prior_success` is checked explicitly (not
+            # only via order.payment_status) because a terminal order may
+            # already carry its one allowed SUCCESS payment -- see the
+            # unique_successful_payment_per_order constraint.
+            prior_success = (
+                Payment.objects.filter(order=order, status=Payment.Status.SUCCESS)
+                .exclude(pk=locked.pk)
+                .exists()
+            )
+
+            if not prior_success and order.status in (
+                Order.Status.CANCELLED, Order.Status.RETURNED
+            ):
+                # Verified capture for an order that will NOT be fulfilled
+                # (typically: the customer finished paying at the exact
+                # moment `expire_unpaid_orders` auto-cancelled the stale
+                # order). The money is real and must stay visible.
+                return _record_capture_on_unfulfillable_order(locked, order, verification)
+
+            if prior_success or order.payment_status == Order.PaymentStatus.PAID:
                 logger.info(
                     "Rejecting late success callback for payment %s: order %s "
                     "already paid by another attempt.",
@@ -199,13 +268,16 @@ def handle_callback(callback_data: dict) -> Payment:
                 locked.status = Payment.Status.FAILED
                 locked.failure_reason = "Order already paid via another payment attempt."
                 locked.save(update_fields=["status", "failure_reason", "updated_at"])
+                # The customer was charged TWICE (both attempts verified)
+                # -- the duplicate is real money owed back; flag it.
+                _flag_duplicate_capture(order, locked)
                 return locked
             try:
                 # Savepoint: if the unique-success constraint fires
                 # anyway (exotic race), roll back only the completion,
                 # never crash the callback with a 500.
                 with transaction.atomic():
-                    return _complete_successful_payment(locked, verification.gateway_ref_id)
+                    return _complete_successful_payment(locked, verification)
             except IntegrityError:
                 logger.error(
                     "unique_successful_payment_per_order fired for payment %s "
@@ -216,6 +288,8 @@ def handle_callback(callback_data: dict) -> Payment:
                 locked.status = Payment.Status.FAILED
                 locked.failure_reason = "Order already paid via another payment attempt."
                 locked.save(update_fields=["status", "failure_reason", "updated_at"])
+                # Same duplicate-capture money story as the branch above.
+                _flag_duplicate_capture(order, locked)
                 return locked
 
         if verification.cancelled:
@@ -239,16 +313,21 @@ def handle_callback(callback_data: dict) -> Payment:
         return locked
 
 
-def _complete_successful_payment(payment: Payment, gateway_ref_id: str = "") -> Payment:
+def _complete_successful_payment(payment: Payment, verification) -> Payment:
     """
     The single code path in which an order becomes paid. Everything that
     must happen exactly once per paid order lives inside the caller's
     atomic block, under the caller's row lock:
 
-        payment  PENDING -> SUCCESS (+ ref id, paid_at)
+        payment  PENDING -> SUCCESS (+ ref id, card receipt data, paid_at)
         order    payment_status -> PAID, status -> CONFIRMED
         stock    decremented via apps.orders.inventory
         coupon   usage recorded (if the order used one)
+
+    `verification` is the gateway's VerificationResult; beyond the
+    boolean outcome it carries the PSP's receipt data (reference id,
+    masked card PAN, card fingerprint), all of which come FROM THE
+    GATEWAY'S OWN VERIFY ANSWER -- never from the callback query string.
 
     The partial unique constraint on successful payments is the final
     guard: if some exotic race ever got two attempts here for one order,
@@ -260,6 +339,10 @@ def _complete_successful_payment(payment: Payment, gateway_ref_id: str = "") -> 
     # Amount integrity: the payment was initiated for order.total; if the
     # order row no longer matches that snapshot, something is very wrong
     # (the order was edited post-checkout) -- refuse to mark it paid.
+    # This is the SECOND amount check: the gateway's verify call itself
+    # also sent payment.amount (the amount the customer was actually
+    # charged), so the PSP has already confirmed the money matches the
+    # snapshot; this compares the snapshot against the order.
     if payment.amount != order.total:
         payment.status = Payment.Status.FAILED
         payment.failure_reason = "Amount mismatch between payment and order."
@@ -273,8 +356,15 @@ def _complete_successful_payment(payment: Payment, gateway_ref_id: str = "") -> 
 
     payment.status = Payment.Status.SUCCESS
     payment.paid_at = timezone.now()
-    payment.gateway_ref_id = gateway_ref_id
-    payment.save(update_fields=["status", "paid_at", "gateway_ref_id", "updated_at"])
+    payment.gateway_ref_id = verification.gateway_ref_id[:128]
+    payment.card_pan = verification.card_pan[:32]
+    payment.card_pan_hash = verification.card_fingerprint[:64]
+    payment.save(
+        update_fields=[
+            "status", "paid_at", "gateway_ref_id",
+            "card_pan", "card_pan_hash", "updated_at",
+        ]
+    )
 
     order.payment_status = Order.PaymentStatus.PAID
     order.status = Order.Status.CONFIRMED
@@ -288,11 +378,98 @@ def _complete_successful_payment(payment: Payment, gateway_ref_id: str = "") -> 
 
     _record_coupon_usage(order)
 
+    # Customer notification (Phase D): order confirmation over SMS and/or
+    # email. Registered via transaction.on_commit inside apps/notifications
+    # -- nothing is sent unless this whole transition actually commits,
+    # the delivery never holds this transaction open, provider failures
+    # can never break the payment, and the NotificationLog unique
+    # constraint keeps replayed callbacks from notifying twice.
+    from apps.notifications.services import (
+        Events,
+        notify_order_event,
+        notify_owner_new_paid_order,
+    )
+
+    notify_order_event(order, Events.ORDER_CONFIRMED)
+    # Part R4 item 3: tell the OWNER a paid order arrived (on_commit,
+    # idempotent, provider failures can never break this transition).
+    notify_owner_new_paid_order(order)
+
     logger.info(
         "Payment %s verified: order %s paid (%s Toman).",
         payment.pk, order.order_number, payment.amount,
     )
     return payment
+
+
+def _record_capture_on_unfulfillable_order(payment: Payment, order, verification) -> Payment:
+    """
+    The gateway VERIFIED a real capture, but the order is already in a
+    terminal status (cancelled/returned) and will not be fulfilled --
+    typically the customer completed payment at the exact moment the
+    `expire_unpaid_orders` cron cancelled the stale order.
+
+    The money moved, so the payment record tells the truth: SUCCESS with
+    the full receipt data (ref id, masked PAN, fingerprint). The ORDER is
+    not fulfilled: no status change (it can't leave a terminal status),
+    NO stock decrement (nothing ships) and no coupon usage. It shows
+    payment_status=PAID -- the customer genuinely paid -- and is flagged
+    REFUND REQUIRED so the captured amount appears in the owner's refund
+    queue instead of vanishing. See apps/orders/workflow.py's docstring
+    for why this is the one documented exception to the
+    "PAID == stock decremented" equivalence (restore can never fire:
+    the order is already terminal).
+
+    Runs inside handle_callback's locked transaction (payment and order
+    rows are already select_for_update-locked by the caller).
+    """
+    payment.status = Payment.Status.SUCCESS
+    payment.paid_at = timezone.now()
+    payment.gateway_ref_id = verification.gateway_ref_id[:128]
+    payment.card_pan = verification.card_pan[:32]
+    payment.card_pan_hash = verification.card_fingerprint[:64]
+    payment.save(update_fields=[
+        "status", "paid_at", "gateway_ref_id", "card_pan", "card_pan_hash", "updated_at",
+    ])
+
+    order.payment_status = Order.PaymentStatus.PAID
+    order.save(update_fields=["payment_status", "updated_at"])
+
+    from apps.orders.refunds import flag_refund_required
+
+    flag_refund_required(
+        order,
+        amount=payment.amount,
+        note="پرداخت پس از لغو/مرجوعی سفارش توسط درگاه تأیید شد — مبلغ دریافتی باید به مشتری بازگردانده شود.",
+    )
+    logger.error(
+        "Payment %s verified (%s Toman) but order %s is already '%s' -- capture "
+        "recorded, order flagged REFUND REQUIRED, nothing fulfilled.",
+        payment.pk, payment.amount, order.order_number, order.status,
+    )
+    return payment
+
+
+def _flag_duplicate_capture(order, payment: Payment) -> None:
+    """
+    A second gateway-verified capture on one order (the customer paid two
+    attempts -- e.g. two open browser tabs). The first capture paid the
+    order; this one is real money the shop owes back. The payment row is
+    FAILED (the unique-success constraint allows exactly one SUCCESS per
+    order), but the money is never invisible: the order's refund ledger
+    accumulates the amount and the journal records which transaction to
+    refund, surfacing it in the owner's "needs refund" admin filter.
+    """
+    from apps.orders.refunds import flag_refund_required
+
+    flag_refund_required(
+        order,
+        amount=payment.amount,
+        note=(
+            f"پرداخت تکراری تأییدشده (تراکنش #{payment.pk}) برای سفارشی که پیش‌تر "
+            f"پرداخت شده بود — این مبلغ باید به مشتری بازگردانده شود."
+        ),
+    )
 
 
 def _record_coupon_usage(order) -> None:

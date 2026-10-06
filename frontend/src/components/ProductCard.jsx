@@ -5,12 +5,17 @@ import useAuthStore from "../store/useAuthStore";
 import { productShape } from "../utils/shapes";
 import useCartStore from "../store/useCartStore";
 import * as wishlistApi from "../services/wishlistApi";
+import { toast } from "../utils/toast";
+import Icon from "./Icon";
 import PriceTag from "./PriceTag";
+import SmartImage from "./SmartImage";
 
 /**
- * One catalog row as a card: image, name, price block, stock status,
- * add-to-cart and wishlist actions. All data comes from the product
- * object the catalog API returned -- nothing is fabricated here.
+ * Catalog card (Part 3 redesign): badges (new / discount % / low stock /
+ * out of stock), second-image crossfade on hover when a gallery exists,
+ * quick add-to-cart with toast feedback, wishlist heart, crossed-out
+ * compare-at price, Persian-digit Toman -- all from the catalog payload,
+ * nothing fabricated.
  */
 function ProductCard({ product }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -19,33 +24,75 @@ function ProductCard({ product }) {
   const [addedToWishlist, setAddedToWishlist] = useState(false);
 
   const outOfStock = product.stock_status === "out_of_stock";
-  const imageUrl = product.primary_image?.image;
+  const lowStock = product.stock_status === "low_stock";
+  const images = product.images || [];
+  const primary = product.primary_image?.image || images[0]?.image || null;
+  const secondary = images.find((img) => img.image !== primary)?.image || null;
 
   const handleAdd = async () => {
     setAdding(true);
-    await addItem(product.id, null, 1);
+    const result = await addItem(product.id, null, 1);
     setAdding(false);
+    // Part S2 item 6: toast feedback with a direct view-cart action.
+    if (result?.success) {
+      toast("به سبد خرید اضافه شد", "success", { label: "مشاهده سبد", to: "/cart/" });
+    } else if (result?.error) {
+      toast(result.error.message || "افزودن به سبد انجام نشد.", "error");
+    }
   };
 
-  // Card-level wishlist action is add-only (the true filled-state lives
-  // on the product page and the wishlist page, which have the item ids
-  // removal requires). Adding twice is gracefully idempotent server-side.
+  // Card-level wishlist action is add-only (the filled state lives on
+  // the product page and the wishlist page, which hold the item ids
+  // removal requires). Adding twice is idempotent server-side.
   const handleWishlist = async () => {
     if (!isAuthenticated || addedToWishlist) return;
     await wishlistApi.addWishlistItem(product.id);
     setAddedToWishlist(true);
+    toast("به علاقه‌مندی‌ها اضافه شد");
   };
 
   return (
-    <div className="product-card">
+    <div className={`product-card ${outOfStock ? "product-card--oos" : ""}`}>
       <Link to={`/products/${product.slug}/`} className="product-card__media">
-        {imageUrl ? (
-          <img src={imageUrl} alt={product.primary_image?.alt_text || product.name} loading="lazy" />
-        ) : (
-          <div className="product-card__placeholder">تصویر ندارد</div>
-        )}
-        {product.price_info?.is_on_sale ? (
-          <span className="product-card__sale">فروش ویژه</span>
+        {/* SmartImage (Part R1) renders the shared brand placeholder when the
+            product has no image or the file 404s (onError). */}
+        <SmartImage
+          image={product.primary_image || { image: primary }}
+          alt={product.primary_image?.alt_text || product.name}
+          className="product-card__img product-card__img--main"
+        />
+        {secondary ? (
+          <img
+            src={secondary}
+            alt=""
+            aria-hidden="true"
+            loading="lazy"
+            className="product-card__img product-card__img--alt"
+          />
+        ) : null}
+
+        <span className="product-card__badges">
+          {product.is_new ? <span className="badge badge--new">جدید</span> : null}
+          {product.price_info?.discount_percentage > 0 ? (
+            <span className="badge badge--sale">{product.price_info.discount_percentage}٪</span>
+          ) : null}
+          {lowStock ? <span className="badge badge--low">تعداد محدود</span> : null}
+          {outOfStock ? <span className="badge badge--oos">ناموجود</span> : null}
+        </span>
+
+        {!outOfStock ? (
+          <button
+            type="button"
+            className="product-card__quick-add"
+            aria-label="افزودن سریع به سبد"
+            disabled={adding}
+            onClick={(event) => {
+              event.preventDefault();
+              handleAdd();
+            }}
+          >
+            <Icon name="plus" size={18} />
+          </button>
         ) : null}
       </Link>
 
@@ -58,29 +105,24 @@ function ProductCard({ product }) {
         <PriceTag priceInfo={product.price_info} size="sm" />
 
         <div className="product-card__footer">
-          <span className={`stock stock--${product.stock_status}`}>
-            {outOfStock ? "ناموجود" : product.stock_status === "low_stock" ? "تعداد محدود" : "موجود"}
-          </span>
-
-          <div className="product-card__actions">
-            <button
-              type="button"
-              className={`icon-btn ${addedToWishlist ? "icon-btn--active" : ""}`}
-              title="افزودن به علاقه‌مندی‌ها"
-              onClick={handleWishlist}
-              disabled={!isAuthenticated || addedToWishlist}
-            >
-              {addedToWishlist ? "♥" : "♡"}
-            </button>
-            <button
-              type="button"
-              className="btn btn--primary btn--sm"
-              onClick={handleAdd}
-              disabled={outOfStock || adding}
-            >
-              {outOfStock ? "ناموجود" : adding ? "…" : "افزودن به سبد"}
-            </button>
-          </div>
+          <button
+            type="button"
+            className={`icon-btn ${addedToWishlist ? "icon-btn--active" : ""}`}
+            title="افزودن به علاقه‌مندی‌ها"
+            aria-label="افزودن به علاقه‌مندی‌ها"
+            onClick={handleWishlist}
+            disabled={!isAuthenticated || addedToWishlist}
+          >
+            <Icon name="heart" filled={addedToWishlist} size={18} />
+          </button>
+          <button
+            type="button"
+            className="btn btn--primary btn--sm"
+            onClick={handleAdd}
+            disabled={outOfStock || adding}
+          >
+            {outOfStock ? "ناموجود" : adding ? "…" : "افزودن به سبد"}
+          </button>
         </div>
       </div>
     </div>

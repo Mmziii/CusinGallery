@@ -1,13 +1,16 @@
+import { usePageMeta } from "../hooks/usePageMeta";
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import { Alert, errorMessage } from "../components/ui";
 import useAuthStore from "../store/useAuthStore";
+import { toAsciiDigits } from "../utils/iranianFields";
 
 function LoginPage() {
+  usePageMeta({ title: "ورود به حساب کاربری", path: "/login/" });
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, isLoading } = useAuthStore();
+  const { login, isLoading, sessionExpired } = useAuthStore();
 
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
@@ -29,14 +32,16 @@ function LoginPage() {
   return (
     <div className="auth-page">
       <form className="auth-card" onSubmit={submit}>
-        <h1>ورود به کوزین گالری</h1>
+        <h1>ورود به کازین گالری</h1>
         <label className="field">
           <span>شماره موبایل یا ایمیل</span>
           <input
             type="text"
+            dir="ltr"
             value={identifier}
             autoComplete="username"
-            onChange={(e) => setIdentifier(e.target.value)}
+            inputMode="tel"
+            onChange={(e) => setIdentifier(toAsciiDigits(e.target.value))}
             required
           />
         </label>
@@ -50,6 +55,12 @@ function LoginPage() {
             required
           />
         </label>
+
+        {sessionExpired ? (
+          <Alert>نشست شما به پایان رسیده است؛ برای ادامه دوباره وارد شوید.</Alert>
+        ) : location.state?.from ? (
+          <Alert>برای ادامه، ابتدا وارد شوید.</Alert>
+        ) : null}
 
         {error ? <Alert>{error}</Alert> : null}
 

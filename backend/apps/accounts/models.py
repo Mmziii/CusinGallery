@@ -99,6 +99,16 @@ class User(AbstractUser):
         "rather than a plain unique CharField.",
     )
 
+    # Part R5 item 11: opt-in marketing consent. Default OFF, never
+    # pre-ticked; the customer toggles it themselves on the account page
+    # (ProfileUpdateSerializer). The cart-reminder command refuses to
+    # send without it.
+    marketing_sms_consent = models.BooleanField(
+        "رضایت دریافت پیامک تبلیغاتی",
+        default=False,
+        help_text="فقط با روشن‌کردن توسط خود مشتری در صفحهٔ حساب کاربری؛ برای پیامک یادآور سبد خرید.",
+    )
+
     class Meta:
         verbose_name = "کاربر"
         verbose_name_plural = "کاربران"
@@ -166,3 +176,90 @@ class Address(TimeStampedModel):
 
     def __str__(self):
         return f"{self.recipient_name} - {self.city}"
+
+
+class PhoneResetCode(models.Model):
+    """
+    One-time SMS code for password reset of PHONE-ONLY accounts (Phase D).
+
+    Accounts with an email keep using Django's uid+token reset link; a
+    phone-only account has no channel for a link, so it gets a 6-digit
+    code by SMS instead (delivered through apps/notifications -- the
+    code itself is generated, hashed and validated ONLY here; that split
+    keeps this model the single mechanism for reset-code security).
+
+    Security properties, all enforced by this model + the confirm
+    serializer/throttle together:
+      * only the HASH of the code is stored (Django's password hashers),
+        so a database leak never reveals usable codes;
+      * codes EXPIRE after settings.PASSWORD_RESET_CODE_TTL_MINUTES
+        (default 15);
+      * codes are SINGLE-USE (consumed_at is stamped when a reset
+        succeeds; a consumed code never validates again);
+      * issuing a new code DELETES the user's previous open codes -- one
+        open code per user at any time, so requesting repeatedly cannot
+        widen the guessing window;
+      * the confirm endpoint is throttled (password_reset_confirm scope,
+        10/hour) and answers with the same generic error for unknown
+        phone / wrong code / expired code, so there is neither
+        brute-force headroom nor user enumeration.
+    """
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="phone_reset_codes",
+        verbose_name="کاربر",
+    )
+    code_hash = models.CharField(max_length=128)
+    expires_at = models.DateTimeField("انقضا")
+    consumed_at = models.DateTimeField("زمان مصرف", null=True, blank=True)
+    created_at = models.DateTimeField("تاریخ ایجاد", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "کد بازیابی رمز (پیامکی)"
+        verbose_name_plural = "کدهای بازیابی رمز (پیامکی)"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "created_at"]),
+        ]
+
+    def __str__(self):
+        state = "consumed" if self.consumed_at else ("expired" if not self.is_valid() else "open")
+        return f"Reset code for {self.user_id} ({state})"
+
+    @classmethod
+    def issue(cls, user):
+        """
+        Invalidate every previous open code for `user`, create a fresh
+        one and return (instance, plaintext_code). The plaintext exists
+        only in this return value -- the row stores just the hash.
+        """
+        import secrets
+        from datetime import timedelta
+
+        from django.contrib.auth.hashers import make_password
+        from django.utils import timezone
+
+        code = f"{secrets.randbelow(1_000_000):06d}"
+        cls.objects.filter(user=user, consumed_at__isnull=True).delete()
+        instance = cls.objects.create(
+            user=user,
+            code_hash=make_password(code),
+            expires_at=timezone.now() + timedelta(minutes=settings.PASSWORD_RESET_CODE_TTL_MINUTES),
+        )
+        return instance, code
+
+    def is_valid(self) -> bool:
+        from django.utils import timezone
+
+        return self.consumed_at is None and self.expires_at > timezone.now()
+
+    def matches(self, code: str) -> bool:
+        from django.contrib.auth.hashers import check_password
+
+        return bool(code) and check_password(str(code), self.code_hash)
+
+    def consume(self) -> None:
+        from django.utils import timezone
+
+        self.consumed_at = timezone.now()
+        self.save(update_fields=["consumed_at"])

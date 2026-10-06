@@ -14,8 +14,9 @@ formatPrice() utility (Phase 1, src/utils/formatPrice.js), which already
 assumes and formats plain integer amounts.
 """
 from django.core.exceptions import ValidationError
-from django.core.validators import MaxValueValidator, MinValueValidator
+from django.core.validators import MaxValueValidator, MinValueValidator, RegexValidator
 from django.db import models
+from django.db.models import Q
 
 from apps.categories.models import Category
 from apps.core.image_files import validate_image_file
@@ -24,8 +25,21 @@ from apps.core.models import ActivableModel, OrderableModel, TimeStampedModel
 
 class Brand(TimeStampedModel, ActivableModel):
     name = models.CharField("نام", max_length=120, unique=True)
-    slug = models.SlugField("شناسه (آدرس)", max_length=140, unique=True)
+    slug = models.SlugField("شناسه (آدرس)", max_length=140, unique=True, allow_unicode=True)
     logo = models.ImageField("لوگو", upload_to="brands/", blank=True, null=True, validators=[validate_image_file])
+    # Featured brand tiles on the homepage (Part R2). is_featured brands are
+    # shown ordered by display_order; tile_image optionally overrides the
+    # logo inside the tile.
+    is_featured = models.BooleanField("برند ویژه (کاشی صفحه اصلی)", default=False)
+    display_order = models.PositiveIntegerField("ترتیب نمایش", default=0)
+    tile_image = models.ImageField(
+        "تصویر کاشی", upload_to="brands/tiles/", blank=True, null=True, validators=[validate_image_file]
+    )
+    # Responsive WebP re-encodes for tile_image (Part R2) -- same pattern as
+    # Banner/ProductImage; empty means "serve the original".
+    webp_400 = models.CharField(max_length=255, blank=True, default="")
+    webp_800 = models.CharField(max_length=255, blank=True, default="")
+    webp_1200 = models.CharField(max_length=255, blank=True, default="")
 
     class Meta:
         verbose_name = "برند"
@@ -35,10 +49,36 @@ class Brand(TimeStampedModel, ActivableModel):
     def __str__(self):
         return self.name
 
+    def save(self, *args, **kwargs):
+        # Part R5 item 7: detect a rename so the products' normalized
+        # search index can be refreshed after the save.
+        old_name = None
+        if self.pk:
+            old_name = (
+                type(self).objects.filter(pk=self.pk).values_list("name", flat=True).first()
+            )
+        super().save(*args, **kwargs)
+        if self.tile_image and not self.webp_400:
+            from apps.core.image_files import make_responsive_variants
+
+            variants = make_responsive_variants(self.tile_image)
+            if variants:
+                self.webp_400 = variants.get(400, "")
+                self.webp_800 = variants.get(800, "")
+                self.webp_1200 = variants.get(1200, "")
+                super().save(update_fields=["webp_400", "webp_800", "webp_1200", "updated_at"])
+        if old_name is not None and old_name != self.name:
+            from .search import refresh_search_fields
+
+            refresh_search_fields(self.products.all())
+
 
 class Product(TimeStampedModel, ActivableModel):
+    # NOTE: save() below fires back-in-stock notifications when stock
+    # goes 0 -> N (Part 2) -- admin edits, CSV import and order-cancel
+    # restores all funnel through it.
     name = models.CharField("نام محصول", max_length=255)
-    slug = models.SlugField("شناسه (آدرس)", max_length=280, unique=True)
+    slug = models.SlugField("شناسه (آدرس)", max_length=280, unique=True, allow_unicode=True)
     sku = models.CharField("کد کالا (SKU)", max_length=64, unique=True)
 
     category = models.ForeignKey(
@@ -51,6 +91,13 @@ class Product(TimeStampedModel, ActivableModel):
 
     short_description = models.CharField("توضیح کوتاه", max_length=500, blank=True)
     description = models.TextField("توضیحات کامل", blank=True)
+
+    # Part R5 item 7: normalized Persian search index -- ONE shared
+    # normalizer (apps/products/search.py) fills these on save from
+    # name+sku+brand name+category name+short description; the query side
+    # of the same module reads them. Never hand-edited (editable=False).
+    search_text = models.TextField("متن جستجوی نرمال‌شده", blank=True, default="", editable=False)
+    search_name = models.TextField("نام نرمال‌شده (رتبه‌بندی جستجو)", blank=True, default="", editable=False)
 
     price = models.PositiveBigIntegerField("قیمت (تومان)")
     compare_at_price = models.PositiveBigIntegerField(
@@ -74,6 +121,17 @@ class Product(TimeStampedModel, ActivableModel):
     )
     is_new = models.BooleanField("محصول جدید", default=False)
     is_best_seller = models.BooleanField("محصول پرفروش", default=False)
+
+    # Part R5 item 9: MANUAL complementary products («پیشنهاد همراه» on the
+    # product page). Asymmetric: picking B for A does not pick A for B.
+    # When a product has none, the storefront falls back to the mined
+    # FrequentlyBoughtTogether table (see below).
+    complements = models.ManyToManyField(
+        "self", symmetrical=False, blank=True,
+        related_name="complemented_by",
+        verbose_name="پیشنهادهای همراه (دستی)",
+        help_text="کالاهایی که در صفحهٔ این محصول به‌عنوان «پیشنهاد همراه» نمایش داده می‌شوند.",
+    )
 
     class Meta:
         verbose_name = "محصول"
@@ -106,6 +164,53 @@ class Product(TimeStampedModel, ActivableModel):
     def is_in_stock(self):
         return self.stock_quantity > 0
 
+    def refresh_search_fields(self):
+        """Recompute the normalized search index (Part R5 item 7)."""
+        from .search import build_product_search_fields
+
+        self.search_text, self.search_name = build_product_search_fields(self)
+
+
+    def save(self, *args, **kwargs):
+        # Part R5 item 7: keep the normalized search index fresh on every
+        # save (admin edit, import upsert, order-cancel stock restore...).
+        self.refresh_search_fields()
+        old_stock = None
+        if self.pk:
+            old_stock = (
+                type(self)
+                .objects.filter(pk=self.pk)
+                .values_list("stock_quantity", flat=True)
+                .first()
+            )
+        super().save(*args, **kwargs)
+        if old_stock is not None:
+            # 0 -> N transitions queue back-in-stock SMS (Part 2); the
+            # delivery itself runs on commit and can never break this
+            # save (admin edit, CSV import, cancel-restore).
+            from .back_in_stock import queue_restock_notifications
+
+            queue_restock_notifications(self, old_stock)
+
+
+    def save(self, *args, **kwargs):
+        # Part R5 item 7: keep the normalized search index fresh on every
+        # save (admin edit, import upsert, order-cancel stock restore...).
+        self.refresh_search_fields()
+        old_stock = None
+        if self.pk:
+            old_stock = (
+                type(self)
+                .objects.filter(pk=self.pk)
+                .values_list("stock_quantity", flat=True)
+                .first()
+            )
+        super().save(*args, **kwargs)
+        if old_stock is not None:
+            from .back_in_stock import queue_restock_notifications
+
+            queue_restock_notifications(self, old_stock)
+
 
 class ProductImage(TimeStampedModel, OrderableModel):
     product = models.ForeignKey(
@@ -119,6 +224,12 @@ class ProductImage(TimeStampedModel, OrderableModel):
     # Downscaled JPEG generated once at upload time (save() below) and
     # used by admin list views; never re-encoded at render time.
     thumbnail = models.ImageField("پیش‌نمایش", upload_to="products/thumbnails/", blank=True)
+    # Responsive WebP re-encodes of the ORIGINAL (Part 3). Paths only --
+    # empty string means "variant unavailable, fall back to the
+    # original"; they are a progressive enhancement, never required.
+    webp_400 = models.CharField(max_length=255, blank=True, default="")
+    webp_800 = models.CharField(max_length=255, blank=True, default="")
+    webp_1200 = models.CharField(max_length=255, blank=True, default="")
 
     class Meta:
         verbose_name = "تصویر محصول"
@@ -145,6 +256,18 @@ class ProductImage(TimeStampedModel, OrderableModel):
             if saved:
                 self.thumbnail = saved
                 super().save(update_fields=["thumbnail", "updated_at"])
+        # Responsive WebP variants (Part 3), generated once; the
+        # backfill_variants command covers rows created before/without
+        # this hook. Missing/undecodable files degrade to "no variants".
+        if self.image and not self.webp_400:
+            from apps.core.image_files import make_responsive_variants
+
+            variants = make_responsive_variants(self.image)
+            if variants:
+                self.webp_400 = variants.get(400, "")
+                self.webp_800 = variants.get(800, "")
+                self.webp_1200 = variants.get(1200, "")
+                super().save(update_fields=["webp_400", "webp_800", "webp_1200", "updated_at"])
 
     def __str__(self):
         return f"{self.product.name} image #{self.pk or '?'}"
@@ -154,7 +277,7 @@ class ProductAttribute(models.Model):
     """e.g. 'Color', 'Size', 'Capacity' -- see master spec section 12."""
 
     name = models.CharField("نام ویژگی", max_length=100, unique=True)
-    slug = models.SlugField("شناسه (آدرس)", max_length=120, unique=True)
+    slug = models.SlugField("شناسه (آدرس)", max_length=120, unique=True, allow_unicode=True)
 
     class Meta:
         verbose_name = "ویژگی محصول"
@@ -224,3 +347,98 @@ class ProductVariant(TimeStampedModel, ActivableModel):
     @property
     def effective_price(self):
         return self.price if self.price is not None else self.product.price
+
+
+iranian_mobile_validator = RegexValidator(
+    regex=r"^09\d{9}$",
+    message="شمارهٔ موبایل باید به شکل 09xxxxxxxxx (۱۱ رقم) باشد.",
+)
+
+
+class BackInStockSubscription(TimeStampedModel):
+    """
+    "Tell me when it's back" (Part 2): a shopper (logged in or not)
+    leaves an Iranian mobile number on an OUT-OF-STOCK product/variant.
+    When stock goes 0 -> N (admin edit, import, order-cancel restore),
+    ONE SMS is sent through the existing provider abstraction and
+    notified_at is stamped. A provider failure leaves the subscription
+    ACTIVE (notified_at NULL) so a later restock still reaches the
+    shopper; the failure is recorded in NotificationLog either way.
+    """
+
+    product = models.ForeignKey(
+        Product, on_delete=models.CASCADE, related_name="back_in_stock_subscriptions",
+        verbose_name="محصول",
+    )
+    variant = models.ForeignKey(
+        ProductVariant, on_delete=models.CASCADE, null=True, blank=True,
+        related_name="back_in_stock_subscriptions", verbose_name="تنوع",
+    )
+    phone = models.CharField(
+        "شمارهٔ موبایل", max_length=11, validators=[iranian_mobile_validator],
+    )
+    notified_at = models.DateTimeField("زمان اطلاع‌رسانی", null=True, blank=True)
+
+    class Meta:
+        verbose_name = "اطلاع‌رسانی موجودی"
+        verbose_name_plural = "اطلاع‌رسانی‌های موجودی"
+        ordering = ["-created_at"]
+        constraints = [
+            # One ACTIVE subscription per (phone, product, variant);
+            # once notified, the row is historical and a fresh
+            # subscription is allowed again.
+            models.UniqueConstraint(
+                fields=["phone", "product", "variant"],
+                condition=models.Q(notified_at__isnull=True),
+                name="one_active_back_in_stock_per_phone_and_item",
+            ),
+        ]
+
+    def __str__(self):
+        target = f"{self.product_id}/{self.variant_id or '-'}"
+        return f"{self.phone} -> {target} ({'notified' if self.notified_at else 'waiting'})"
+
+
+def purchasable_products():
+    """Part R5 item 9: products that can actually be added to the cart
+    RIGHT NOW -- active, with product-level stock or at least one active
+    variant in stock. Used to keep «پیشنهاد همراه» free of inactive or
+    out-of-stock items (the storefront never offers what it cannot sell).
+    """
+    return Product.objects.filter(is_active=True).filter(
+        Q(stock_quantity__gt=0)
+        | Q(variants__is_active=True, variants__stock_quantity__gt=0)
+    ).distinct()
+
+
+class FrequentlyBoughtTogether(TimeStampedModel):
+    """Part R5 item 9: AUTOMATIC complementary pairs, mined from PAID
+    orders by ``manage.py rebuild_frequently_bought_together`` (run
+    daily by the production scheduler). Deliberately a dumb denormalized
+    table: full idempotent rebuild each run, no incremental state.
+
+    Used ONLY for products that have no manual complements, and only
+    rows pointing at purchasable products are ever shown. No bundle
+    pricing/stock logic exists anywhere -- each product keeps its own
+    price and stock, per the task spec.
+    """
+
+    product = models.ForeignKey(
+        Product, on_delete=models.CASCADE, related_name="fbt_pairs", verbose_name="محصول"
+    )
+    complement = models.ForeignKey(
+        Product, on_delete=models.CASCADE, related_name="fbt_as_complement",
+        verbose_name="کالای همراه",
+    )
+    co_count = models.PositiveIntegerField("تعداد خرید همراه", default=0)
+
+    class Meta:
+        verbose_name = "خرید همراه (خودکار)"
+        verbose_name_plural = "خریدهای همراه (خودکار)"
+        ordering = ["-co_count"]
+        constraints = [
+            models.UniqueConstraint(fields=["product", "complement"], name="unique_fbt_pair"),
+        ]
+
+    def __str__(self):
+        return f"{self.product_id} + {self.complement_id} ({self.co_count})"

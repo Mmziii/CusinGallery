@@ -3,13 +3,45 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#ffffff" />
-    <title>کوزین گالری | Cusin Gallery</title>
+    <link rel="alternate icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/brand/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/brand/favicon-16.png" />
+    <!-- Part R2: preload the critical (Persian) variable-weight font file;
+         fonts.css sets font-display: swap and per-subset unicode-range. -->
+    <link
+      rel="preload"
+      href="/fonts/vazirmatn-arabic-wght-normal.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <meta name="theme-color" content="#2F3A18" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>کازین گالری | فروشگاه لوازم آشپزخانه، بلور و کریستال</title>
     <meta
       name="description"
-      content="کوزین گالری - فروشگاه آنلاین ظروف آشپزخانه، بلور و کریستال و لوازم خانه"
+      content="کازین گالری - فروشگاه آنلاین ظروف آشپزخانه، پخت‌وپز، بلور و کریستال و لوازم خانه. ارسال به سراسر ایران، پرداخت امن اینترنتی."
     />
+    <!-- SEO / social sharing defaults (Phase E + Part 3). Per-page titles,
+         descriptions, canonical URLs and og:* values are updated at
+         runtime by src/hooks/usePageMeta.js. Honest limitation: crawlers
+         that do not execute JavaScript only see these site-wide defaults
+         (see docs/DEPLOY.md); sitemap.xml and robots.txt are served by
+         the backend. -->
+    <link rel="canonical" href="https://cusin.ir/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="کازین گالری" />
+    <meta property="og:locale" content="fa_IR" />
+    <meta property="og:url" content="https://cusin.ir/" />
+    <meta property="og:title" content="کازین گالری | فروشگاه لوازم آشپزخانه، بلور و کریستال" />
+    <meta
+      property="og:description"
+      content="فروشگاه آنلاین ظروف آشپزخانه، پخت‌وپز، بلور و کریستال و لوازم خانه. ارسال به سراسر ایران، پرداخت امن اینترنتی."
+    />
+    <meta property="og:image" content="https://cusin.ir/brand/og.png" />
+    <meta name="twitter:card" content="summary_large_image" />
   </head>
   <body>
     <div id="root"></div>

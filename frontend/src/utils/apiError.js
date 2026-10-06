@@ -14,9 +14,14 @@
  */
 export function normalizeApiError(error) {
   if (!error?.response) {
+    // Part S3 item 10: a timeout (axios code ECONNABORTED) deserves its
+    // own wording -- the network may be fine, the server was just slow.
+    const isTimeout = error?.code === "ECONNABORTED";
     return {
       status: null,
-      message: "اتصال به سرور برقرار نشد. لطفاً اتصال اینترنت خود را بررسی کنید.",
+      message: isTimeout
+        ? "پاسخ سرور طول کشید. لطفاً چند لحظه دیگر دوباره تلاش کنید."
+        : "اتصال به سرور برقرار نشد. لطفاً اتصال اینترنت خود را بررسی کنید.",
       fieldErrors: {},
       isAuthError: false,
       isNetworkError: true,
@@ -24,6 +29,28 @@ export function normalizeApiError(error) {
   }
 
   const { status, data } = error.response;
+
+  // Part S3 item 10: dedicated, friendly wording for rate limits and
+  // server failures -- the shopper can act on both ("wait", "retry").
+  if (status === 429) {
+    return {
+      status,
+      message: "تعداد درخواست‌ها در مدت کوتاه زیاد بوده است. چند لحظه صبر کنید و دوباره تلاش کنید.",
+      fieldErrors: {},
+      isAuthError: false,
+      isNetworkError: false,
+    };
+  }
+  if (status >= 500) {
+    return {
+      status,
+      message: "خطایی در سرور رخ داد. چند لحظه دیگر دوباره تلاش کنید؛ اگر ادامه داشت با ما تماس بگیرید.",
+      fieldErrors: {},
+      isAuthError: false,
+      isNetworkError: false,
+    };
+  }
+
   const isAuthError = status === 401 || status === 403;
 
   if (isAuthError) {
@@ -39,7 +66,9 @@ export function normalizeApiError(error) {
   if (status === 404) {
     return {
       status,
-      message: data?.detail || "مورد درخواستی پیدا نشد.",
+      // detail must be a STRING to be shown -- anything else would
+      // render as [object Object]/comma-joined garbage.
+      message: typeof data?.detail === "string" && data.detail ? data.detail : "مورد درخواستی پیدا نشد.",
       fieldErrors: {},
       isAuthError: false,
       isNetworkError: false,
