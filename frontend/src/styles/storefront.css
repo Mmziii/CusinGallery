@@ -542,6 +542,17 @@ input:focus, textarea:focus, select:focus {
 
 .checkout__grid { display: grid; grid-template-columns: 1fr 340px; gap: var(--space-4); align-items: start; }
 .checkout__section { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-4); margin-bottom: var(--space-4); }
+/* Part S5 item 4: a section holding an unfixed problem gets a visible
+   (but calm) accent, and sections are programmatically focusable so the
+   first problem can be scrolled to and focused. */
+.checkout__section:focus-visible, .checkout__summary:focus-visible { outline: 2px solid var(--brand-green-dark); outline-offset: 2px; }
+.checkout__section--attention { border-color: var(--color-error, #b42318); }
+.checkout__issue { color: var(--color-error, #b42318); font-size: var(--font-size-sm); font-weight: 600; margin: var(--space-2) 0 0; }
+.checkout__notice { background: var(--brand-green-tint); border-radius: var(--radius-md); padding: var(--space-3); margin: var(--space-2) 0 var(--space-3); display: flex; flex-direction: column; gap: var(--space-2); align-items: flex-start; }
+.checkout__notice p { margin: 0; font-size: var(--font-size-sm); }
+.checkout__checklist { list-style: none; padding: var(--space-2) 0 0; margin: var(--space-2) 0 0; border-top: 1px dashed var(--color-border); display: flex; flex-direction: column; gap: 4px; }
+.checkout__checklist li { font-size: var(--font-size-sm); }
+.checkout__checklist .link { text-align: start; }
 .checkout__mode-switch { display: flex; gap: var(--space-4); margin-bottom: var(--space-3); flex-wrap: wrap; }
 .checkout__mode-switch label { display: flex; gap: var(--space-2); align-items: center; }
 .checkout__items { list-style: none; padding: 0; margin: 0 0 var(--space-3); font-size: var(--font-size-sm); }
