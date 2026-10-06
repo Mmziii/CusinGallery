@@ -1,0 +1,88 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% comment %}
+Part S5 item 8: unknown columns -> one dropdown per column (with an
+"ignore" choice) plus a preview of the real values, so the owner can say
+what each column means without editing the file again.
+{% endcomment %}
+{% block content %}
+<h1>معنی ستون‌های ناشناخته</h1>
+<p>
+  این ستون‌ها در فایل شما شناخته نشدند. برای هر کدام از لیست کشویی انتخاب کنید که
+  مربوط به کدام فیلد است، یا «نادیده بگیر» را انتخاب کنید. ستون‌های نادیده هیچ تغییری
+  در محصولات ایجاد نمی‌کنند.
+</p>
+
+{% if errors %}
+<div style="border:1px solid #b30000;background:#fff2f2;border-radius:6px;padding:10px 14px;margin:12px 0">
+  {% for error in errors %}<div style="color:#8a1f1f">{{ error }}</div>{% endfor %}
+</div>
+{% endif %}
+
+<form method="post">
+  {% csrf_token %}
+  <input type="hidden" name="token" value="{{ token }}">
+  <input type="hidden" name="mode" value="{{ mode }}">
+  <input type="hidden" name="stock_mode" value="{{ stock_mode }}">
+  <input type="hidden" name="sheet" value="{{ sheet }}">
+  <input type="hidden" name="step" value="mapping">
+
+  <table style="border-collapse:collapse;font-size:13px;margin:10px 0">
+    <thead>
+      <tr>
+        <th style="padding:6px 10px;border:1px solid #ddd">ستون فایل</th>
+        <th style="padding:6px 10px;border:1px solid #ddd">معنی آن</th>
+        <th style="padding:6px 10px;border:1px solid #ddd">نمونهٔ مقدارها</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for column in unknown_columns %}
+      <tr>
+        <td style="padding:6px 10px;border:1px solid #ddd;font-weight:bold">
+          {{ column.name }}
+          <input type="hidden" name="unknown_columns" value="{{ column.name }}">
+        </td>
+        <td style="padding:6px 10px;border:1px solid #ddd">
+          <select name="map">
+            {% for value, label in mapping_options %}
+              <option value="{{ value }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </td>
+        <td style="padding:6px 10px;border:1px solid #ddd;color:#666">{{ column.samples }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <p style="font-weight:bold">پیش‌نمایش فایل (۵ ردیف اول):</p>
+  <div style="overflow-x:auto">
+    <table style="border-collapse:collapse;font-size:12px">
+      <thead>
+        <tr>
+          {% for column in preview_columns %}
+            <th style="padding:4px 8px;border:1px solid #ddd;background:#f4f4f4">{{ column }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in preview_rows %}
+          <tr>
+            {% for cell in row %}
+              <td style="padding:4px 8px;border:1px solid #ddd">{{ cell|default_if_none:"" }}</td>
+            {% endfor %}
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <p style="margin-top:14px">
+    <input type="submit" class="default" value="ادامه">
+    <a href="{% url 'admin:products_product_import' %}?mode={{ mode }}" style="margin-inline-start:12px">
+      انصراف
+    </a>
+  </p>
+</form>
+{% endblock %}

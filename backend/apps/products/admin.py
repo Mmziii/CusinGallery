@@ -9,20 +9,32 @@ thumbnail, price and an at-a-glance stock warning.
 from django import forms
 from django.contrib import admin, messages
 from django.db.models import Prefetch
-from django.http import FileResponse, HttpResponseRedirect
+from django.http import FileResponse, HttpResponse, HttpResponseRedirect
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
 from django.utils.html import format_html
 
+import glob
 import io
+import os
+import re
+import tempfile
+import uuid
 
 from .importing import (
-    UPDATE_TEMPLATE_COLUMNS,
+    STOCK_MODES,
+    UPDATE_ALL_COLUMNS,
+    _template_xlsx,
     _update_template_csv,
+    _update_template_xlsx,
+    canonical_rows,
+    errors_csv,
     export_products_csv,
     export_products_xlsx,
     import_products_from_rows,
     read_rows,
+    resolve_headers,
+    sheet_names,
     template_csv,
     update_products_from_rows,
 )
@@ -304,13 +316,25 @@ class ProductAdmin(admin.ModelAdmin):
     def import_template_download(self, request):
         """The documented sample template, generated from the same column
         list the importer validates against."""
+        if request.GET.get("format") == "xlsx":
+            return FileResponse(
+                io.BytesIO(_template_xlsx()),
+                as_attachment=True,
+                filename="product_import_template.xlsx",
+            )
         buffer = io.BytesIO(template_csv().encode("utf-8-sig"))
         return FileResponse(
             buffer, as_attachment=True, filename="product_import_template.csv"
         )
 
     def update_template_download(self, request):
-        """Part R4 item 6: minimal price/stock update template."""
+        """Part R4 item 6 / S5 item 8: minimal price/stock update template."""
+        if request.GET.get("format") == "xlsx":
+            return FileResponse(
+                io.BytesIO(_update_template_xlsx()),
+                as_attachment=True,
+                filename="product_price_stock_template.xlsx",
+            )
         buffer = io.BytesIO(_update_template_csv().encode("utf-8-sig"))
         return FileResponse(
             buffer, as_attachment=True, filename="product_price_stock_template.csv"
@@ -331,75 +355,201 @@ class ProductAdmin(admin.ModelAdmin):
             buffer, as_attachment=True, filename="cusin_products_export.csv"
         )
 
-    def import_view(self, request):
+    # --- Import / update / export (Part R4 item 6 + Part S5 item 8) -----------
+
+    _ERRORS_KEY = "cusin_product_import_errors"
+
+    @staticmethod
+    def _stash_dir():
+        return os.path.join(tempfile.gettempdir(), "cusin-product-imports")
+
+    def _stash_upload(self, upload):
+        """Keep the uploaded workbook on disk while the owner completes the
+        sheet / column-mapping steps (a browser cannot re-send a file it
+        already sent), and hand back a short token instead."""
+        os.makedirs(self._stash_dir(), exist_ok=True)
+        suffix = os.path.splitext(getattr(upload, "name", "") or "")[1].lower() or ".csv"
+        token = uuid.uuid4().hex
+        with open(os.path.join(self._stash_dir(), token + suffix), "wb") as handle:
+            for chunk in upload.chunks():
+                handle.write(chunk)
+        return token
+
+    def _stashed_path(self, token):
+        if not token or not re.fullmatch(r"[0-9a-f]{32}", str(token)):
+            return None
+        matches = glob.glob(os.path.join(self._stash_dir(), str(token) + ".*"))
+        return matches[0] if matches else None
+
+    @staticmethod
+    def _drop_stashed(path):
+        if path:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+
+    def _import_context(self, request, *, mode="full", **extra):
+        stock_mode = request.POST.get("stock_mode") or request.GET.get("stock_mode") or "replace"
+        if stock_mode not in STOCK_MODES:
+            stock_mode = "replace"
         context = {
             "opts": self.model._meta,
-            "title": "Import products from a file",
+            "title": "ورود محصولات از اکسل",
             "errors": [],
             "result": None,
-            "update_columns": ", ".join(UPDATE_TEMPLATE_COLUMNS),
+            "mode": mode,
+            "stock_mode": stock_mode,
+            "update_columns": "، ".join(UPDATE_ALL_COLUMNS),
+            "all_columns": ", ".join(UPDATE_ALL_COLUMNS),
+            "stock_modes": STOCK_MODES,
         }
+        context.update(extra)
+        return context
+
+    def _render_import(self, request, context, template="admin/products/product_import_form.html"):
+        # Every error page offers the per-row error report as a download.
+        errors = context.get("errors") or []
+        request.session[self._ERRORS_KEY] = errors
+        return TemplateResponse(request, template, context)
+
+    def _errors_response(self, request):
+        text = errors_csv(request.session.get(self._ERRORS_KEY) or [])
+        return HttpResponse(
+            text.encode("utf-8-sig"),
+            content_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": 'attachment; filename="import-errors.csv"'},
+        )
+
+    def import_view(self, request):
+        """One page, four steps: choose the file, choose the sheet (only
+        when the workbook has several), map the columns nobody recognizes,
+        then preview and confirm. Nothing is written before the confirm."""
+        mode = request.POST.get("mode") or request.GET.get("mode") or "full"
+        if mode not in ("full", "update"):
+            mode = "full"
+        # A plain HTML checkbox cannot set the mode by itself.
+        if request.POST.get("update_only") == "1":
+            mode = "update"
+        context = self._import_context(request, mode=mode)
+
+        if request.GET.get("errors") == "csv":
+            return self._errors_response(request)
+
         if request.method == "POST":
-            # Step 2: the owner confirmed the pending update-only preview.
+            # Step: the owner confirmed a pending preview.
             if request.POST.get("confirm") == "1":
-                return self._confirm_pending_update(request)
+                return self._confirm_pending(request, context, mode=mode)
             if request.POST.get("cancel") == "1":
                 request.session.pop(self._PENDING_KEY, None)
+                self.message_user(request, "عملیات لغو شد؛ چیزی ذخیره نشد.", messages.INFO)
                 return HttpResponseRedirect(reverse("admin:products_product_changelist"))
 
+            # Locate the file: a fresh upload, or the stashed copy from a
+            # previous step of the same flow.
+            token = request.POST.get("token") or ""
+            stashed = self._stashed_path(token)
             upload = request.FILES.get("file")
-            if upload is None:
-                context["errors"] = ["Choose a .csv or .xlsx file to import."]
-                return TemplateResponse(
-                    request, "admin/products/product_import_form.html", context
-                )
+            source = upload or stashed
+            if source is None:
+                context["errors"] = ["فایلی انتخاب نشده است. یک فایل .csv یا .xlsx بارگذاری کنید."]
+                return self._render_import(request, context)
+
             try:
-                rows, header = read_rows(upload)
-            except ValueError as exc:
-                context["errors"] = [str(exc)]
-                return TemplateResponse(
-                    request, "admin/products/product_import_form.html", context
+                sheets = sheet_names(source) if upload is not None or stashed else []
+            except Exception:  # pragma: no cover - corrupt workbook
+                sheets = []
+
+            sheet = request.POST.get("sheet") or ""
+            if len(sheets) > 1 and not sheet:
+                # Ask which worksheet to read before touching the data.
+                if upload is not None:
+                    token = self._stash_upload(upload)
+                return self._render_import(
+                    request,
+                    self._import_context(
+                        request, mode=mode, step="sheet", sheets=sheets, token=token
+                    ),
+                    template="admin/products/product_import_sheet.html",
                 )
 
-            # Update-only mode: preview first, apply on explicit confirm.
-            if request.POST.get("update_only") == "1":
-                result = update_products_from_rows(rows, header, dry_run=True)
+            try:
+                rows, header = read_rows(source, sheet=sheet or None)
+            except (ValueError, OSError) as exc:
+                context["errors"] = [str(exc)]
+                self._drop_stashed(stashed)
+                return self._render_import(request, context)
+
+            mapping, unknown = resolve_headers(header, mode=mode)
+
+            if unknown and request.POST.get("step") != "mapping":
+                # Columns we do not recognize: ask the owner what they are
+                # (dropdown per column) and show a preview of the values.
+                if upload is not None:
+                    token = self._stash_upload(upload)
+                preview_columns = list(header)
+                preview_rows = [
+                    [row.get(key) for key in preview_columns] for row in rows[:5]
+                ]
+                unknown_columns = [
+                    {
+                        "name": column,
+                        # A few real values so the owner recognizes the column.
+                        "samples": "، ".join(
+                            str(row.get(column))
+                            for row in rows
+                            if row.get(column) not in (None, "") 
+                        )[:60] or "—",
+                    }
+                    for column in unknown
+                ]
+                return self._render_import(
+                    request,
+                    self._import_context(
+                        request,
+                        mode=mode,
+                        step="mapping",
+                        token=token,
+                        sheet=sheet,
+                        unknown_columns=unknown_columns,
+                        preview_columns=preview_columns,
+                        preview_rows=preview_rows,
+                        mapping_options=self._mapping_options(mode),
+                    ),
+                    template="admin/products/product_import_mapping.html",
+                )
+
+            if request.POST.get("step") == "mapping":
+                # Apply the owner's choices ("" = ignore this column).
+                unknown_columns = request.POST.getlist("unknown_columns")
+                choices = request.POST.getlist("map")
+                for index, column in enumerate(unknown_columns):
+                    choice = choices[index] if index < len(choices) else ""
+                    mapping[column] = choice or None
+
+            rows, header = canonical_rows(rows, mapping, mode=mode)
+            self._drop_stashed(stashed)
+
+            if mode == "update":
+                return self._start_update(request, context, rows, header)
+
+            if request.POST.get("dry_run") == "1":
+                result = import_products_from_rows(rows, header, dry_run=True)
                 if not result.ok:
                     context["errors"] = result.errors
-                    return TemplateResponse(
-                        request, "admin/products/product_import_form.html", context
-                    )
-                if result.updated == 0:
-                    self.message_user(
-                        request,
-                        "هیچ تغییری لازم نیست؛ همهٔ مقدارهای فایل با وضعیت فعلی یکسان است.",
-                        messages.INFO,
-                    )
-                    return HttpResponseRedirect(
-                        reverse("admin:products_product_changelist")
-                    )
-                request.session[self._PENDING_KEY] = {
-                    "rows": rows,
-                    "header": header,
-                    "updated": result.updated,
-                    "skipped": result.skipped,
-                    "changes": result.changes[:200],
-                    "changes_total": len(result.changes),
-                    "changes_more": max(0, len(result.changes) - 200),
-                }
-                return HttpResponseRedirect(
-                    reverse("admin:products_product_import") + "?pending=1"
+                    return self._render_import(request, context)
+                return self._render_import(
+                    request, {**context, "result": result, "dry_run": True}
                 )
 
             result = import_products_from_rows(rows, header)
             if not result.ok:
                 context["errors"] = result.errors
-                return TemplateResponse(
-                    request, "admin/products/product_import_form.html", context
-                )
+                return self._render_import(request, context)
             self.message_user(
                 request,
-                f"Import complete: {result.created} created, {result.updated} updated.",
+                f"ورود انجام شد: {result.created} کالای جدید ساخته شد، "
+                f"{result.updated} کالا به‌روزرسانی شد.",
                 messages.SUCCESS,
             )
             return HttpResponseRedirect(reverse("admin:products_product_changelist"))
@@ -408,32 +558,93 @@ class ProductAdmin(admin.ModelAdmin):
             pending = request.session[self._PENDING_KEY]
             context.update({
                 "pending": pending,
-                "columns": ", ".join(UPDATE_TEMPLATE_COLUMNS),
+                "columns": ", ".join(UPDATE_ALL_COLUMNS),
+                "mode": pending.get("mode", mode),
             })
             return TemplateResponse(
                 request, "admin/products/product_import_preview.html", context
             )
-        return TemplateResponse(request, "admin/products/product_import_form.html", context)
+        return TemplateResponse(
+            request, "admin/products/product_import_form.html", context
+        )
 
-    def _confirm_pending_update(self, request):
+    @staticmethod
+    def _mapping_options(mode):
+        """What an unrecognized column can be mapped to."""
+        if mode == "update":
+            return [
+                ("", "— نادیده بگیر (بدون تغییر) —"),
+                ("sku", "کد کالا (sku)"),
+                ("name", "نام کالا"),
+                ("price", "قیمت فروش"),
+                ("compare_at_price", "قیمت حراج / قیمت با تخفیف"),
+                ("stock_quantity", "موجودی"),
+                ("category_slug", "دسته‌بندی"),
+                ("brand_name", "برند"),
+                ("is_active", "فعال / وضعیت"),
+            ]
+        return [
+            ("", "— نادیده بگیر —"),
+            ("name", "نام کالا (name)"),
+            ("slug", "شناسه (slug)"),
+            ("sku", "کد کالا (sku)"),
+            ("category_slug", "دسته‌بندی (category_slug)"),
+            ("brand_name", "برند (brand_name)"),
+            ("price", "قیمت (price)"),
+            ("compare_at_price", "قیمت حراج / قبل از تخفیف"),
+            ("discount_percentage", "درصد تخفیف"),
+            ("stock_quantity", "موجودی (stock_quantity)"),
+            ("low_stock_threshold", "آستانهٔ کمبودی"),
+            ("short_description", "توضیح کوتاه"),
+            ("description", "توضیحات"),
+            ("is_active", "فعال (is_active)"),
+            ("is_featured", "ویژه (is_featured)"),
+        ]
+
+    def _start_update(self, request, context, rows, header):
+        """Price/stock update: always preview first, then confirm."""
+        stock_mode = context["stock_mode"]
+        result = update_products_from_rows(
+            rows, header, dry_run=True, stock_mode=stock_mode
+        )
+        if not result.ok:
+            context["errors"] = result.errors
+            return self._render_import(request, context)
+        if result.updated == 0:
+            self.message_user(
+                request,
+                "هیچ تغییری لازم نیست؛ همهٔ مقدارهای فایل با وضعیت فعلی یکسان است.",
+                messages.INFO,
+            )
+            return HttpResponseRedirect(reverse("admin:products_product_changelist"))
+        request.session[self._PENDING_KEY] = {
+            "mode": "update",
+            "rows": rows,
+            "header": header,
+            "stock_mode": stock_mode,
+            "updated": result.updated,
+            "skipped": result.skipped,
+            "changes": result.changes[:200],
+            "changes_total": len(result.changes),
+            "changes_more": max(0, len(result.changes) - 200),
+        }
+        return HttpResponseRedirect(
+            reverse("admin:products_product_import") + "?pending=1"
+        )
+
+    def _confirm_pending(self, request, context, mode="full"):
         pending = request.session.pop(self._PENDING_KEY, None)
         if pending is None:
             self.message_user(request, "پیش‌نمایشی برای تأیید وجود ندارد.", messages.WARNING)
             return HttpResponseRedirect(reverse("admin:products_product_import"))
-        result = update_products_from_rows(pending["rows"], pending["header"])
+        result = update_products_from_rows(
+            pending["rows"], pending["header"], stock_mode=pending.get("stock_mode", "replace")
+        )
         if not result.ok:
             # Data changed between preview and confirm -- be honest, write
             # nothing, show the new errors.
-            context = {
-                "opts": self.model._meta,
-                "title": "Import products from a file",
-                "errors": result.errors,
-                "result": None,
-                "update_columns": ", ".join(UPDATE_TEMPLATE_COLUMNS),
-            }
-            return TemplateResponse(
-                request, "admin/products/product_import_form.html", context
-            )
+            context["errors"] = result.errors
+            return self._render_import(request, context)
         self.message_user(
             request,
             f"به‌روزرسانی انجام شد: {result.updated} محصول تغییر کرد، "
@@ -441,6 +652,7 @@ class ProductAdmin(admin.ModelAdmin):
             messages.SUCCESS,
         )
         return HttpResponseRedirect(reverse("admin:products_product_changelist"))
+
     fieldsets = (
         (None, {"fields": ("name", "slug", "sku", "category", "brand")}),
         ("Description", {"fields": ("short_description", "description")}),

@@ -1,21 +1,71 @@
 {% extends "admin/change_list.html" %}
 {% load i18n %}
 
+{% comment %}
+Part S5 item 8: the three daily Excel actions, right at the top of the
+product list, each with its own downloadable template so the owner never
+has to guess the column names.
+{% endcomment %}
+{% block content_title %}
+  {{ block.super }}
+  <div class="cusin-excel-actions" dir="rtl">
+    <div class="cusin-excel-actions__item">
+      <a class="cusin-excel-actions__button" href="{% url 'admin:products_product_import' %}?mode=full">
+        ورود محصولات از اکسل
+      </a>
+      <span class="cusin-excel-actions__templates">
+        قالب:
+        <a href="{% url 'admin:products_product_import_template' %}?format=xlsx">Excel</a>
+        |
+        <a href="{% url 'admin:products_product_import_template' %}">CSV</a>
+      </span>
+    </div>
+    <div class="cusin-excel-actions__item">
+      <a class="cusin-excel-actions__button" href="{% url 'admin:products_product_import' %}?mode=update">
+        به‌روزرسانی قیمت و موجودی
+      </a>
+      <span class="cusin-excel-actions__templates">
+        قالب:
+        <a href="{% url 'admin:products_product_update_template' %}?format=xlsx">Excel</a>
+        |
+        <a href="{% url 'admin:products_product_update_template' %}">CSV</a>
+      </span>
+    </div>
+    <div class="cusin-excel-actions__item">
+      <a class="cusin-excel-actions__button" href="{% url 'admin:products_product_export' %}?format=xlsx">
+        خروجی اکسل
+      </a>
+      <span class="cusin-excel-actions__templates">
+        <a href="{% url 'admin:products_product_export' %}">خروجی CSV</a>
+      </span>
+    </div>
+  </div>
+  <style>
+    .cusin-excel-actions {
+      display: flex; flex-wrap: wrap; gap: 10px 22px; margin: 10px 0 16px;
+      padding: 12px 14px; background: #f8f8f8; border: 1px solid #e0e0e0;
+      border-radius: 8px;
+    }
+    .cusin-excel-actions__item { display: flex; flex-direction: column; gap: 4px; }
+    .cusin-excel-actions__button {
+      display: inline-block; padding: 8px 16px; border-radius: 6px;
+      background: #417690; color: #fff !important; font-weight: bold;
+      text-decoration: none; white-space: nowrap;
+    }
+    .cusin-excel-actions__button:hover { background: #205067; }
+    .cusin-excel-actions__templates { font-size: 12px; color: #666; }
+  </style>
+{% endblock %}
+
 {% block object-tools-items %}
   <li>
-    <a href="{% url 'admin:products_product_import' %}" class="addlink">
-      واردکردن / به‌روزرسانی از فایل
-    </a>
+    <a href="{% url 'admin:products_product_import' %}">واردکردن / به‌روزرسانی از فایل</a>
   </li>
   <li>
-    <a href="{% url 'admin:products_product_export' %}?format=xlsx">
-      خروجی Excel محصولات
-    </a>
+    <a href="{% url 'admin:products_product_export' %}?format=xlsx">خروجی Excel محصولات</a>
   </li>
   <li>
-    <a href="{% url 'admin:products_product_export' %}">
-      خروجی CSV محصولات
-    </a>
+    <a href="{% url 'admin:products_product_export' %}">خروجی CSV محصولات</a>
   </li>
   {{ block.super }}
 {% endblock %}

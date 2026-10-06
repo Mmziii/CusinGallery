@@ -1,64 +1,127 @@
 {% extends "admin/base_site.html" %}
 {% load i18n %}
 
+{% comment %}Part S5 item 8: choose the file, the mode and the stock mode.{% endcomment %}
 {% block content %}
-<h1>واردکردن محصولات از فایل</h1>
+<h1>ورود محصولات از اکسل</h1>
 <p>
-  یک فایل <strong>CSV</strong> (با کدگذاری UTF-8) یا <strong>Excel (.xlsx)</strong> بارگذاری کنید.
-  ردیف‌ها بر اساس <strong>کد کالا (SKU)</strong> تطبیق داده می‌شوند: کالای موجود به‌روزرسانی و
-  کالای جدید ساخته می‌شود. واردکرد «همه یا هیچ» است؛ یعنی اگر حتی یک ردیف خطا داشته
-  باشد، چیزی ذخیره نمی‌شود و همهٔ خطاها با شمارهٔ ردیف نمایش داده می‌شوند.
+  یک فایل <strong>اکسل (.xlsx)</strong> یا <strong>CSV</strong> (کدگذاری UTF-8) بارگذاری کنید.
+  ردیف‌ها بر اساس <strong>کد کالا (SKU)</strong> تطبیق داده می‌شوند. عملیات «همه یا هیچ» است:
+  اگر یک ردیف خطا داشته باشد، هیچ‌چیز ذخیره نمی‌شود و همهٔ خطاها با شمارهٔ ردیف نمایش داده می‌شوند.
 </p>
-<p>
-  <a href="{% url 'admin:products_product_import_template' %}">دانلود قالب نمونهٔ کامل</a>
+<p style="font-size:13px">
+  قالب‌های آماده:
+  <a href="{% url 'admin:products_product_import_template' %}?format=xlsx">قالب کامل (Excel)</a>
   |
-  <a href="{% url 'admin:products_product_update_template' %}">دانلود قالبِ فقط قیمت/موجودی (ساده)</a>
+  <a href="{% url 'admin:products_product_import_template' %}">قالب کامل (CSV)</a>
   |
-  <a href="{% url 'admin:products_product_export' %}">خروجی CSV از محصولات فعلی</a>
+  <a href="{% url 'admin:products_product_update_template' %}?format=xlsx">قالب قیمت/موجودی (Excel)</a>
   |
-  <a href="{% url 'admin:products_product_export' %}?format=xlsx">خروجی Excel</a>
+  <a href="{% url 'admin:products_product_update_template' %}">قالب قیمت/موجودی (CSV)</a>
+  |
+  <a href="{% url 'admin:products_product_export' %}">خروجی CSV محصولات</a>
+  |
+  <a href="{% url 'admin:products_product_export' %}?format=xlsx">خروجی Excel محصولات</a>
 </p>
 <p style="color:#666;font-size:12px">
-  به‌روزرسانی قیمت و موجودی: فایل خروجی (یا قالب سادهٔ بالا) را در اکسل ویرایش کنید و
-  با تیک «فقط به‌روزرسانی» بارگذاری کنید؛ قبل از ذخیره، پیش‌نمایش تغییرها را می‌بینید.
+  ستون‌ها لازم نیست دقیقاً همین نام‌ها را داشته باشند: «کد کالا»، «نام کالا»، «قیمت»،
+  «قیمت حراج»، «موجودی»، «دسته‌بندی»، «برند» و «وضعیت» هم شناخته می‌شوند (بزرگی/کوچکی
+  حروف، فاصله، نیم‌فاصله و اعداد فارسی اهمیتی ندارند). ستون‌های ناشناخته در مرحلهٔ بعد
+  با لیست کشویی از شما پرسیده می‌شوند.
 </p>
 
 {% if errors %}
 <div style="border:1px solid #b30000;background:#fff2f2;border-radius:6px;padding:10px 14px;margin:12px 0">
-  <strong style="color:#b30000">واردکرد انجام نشد — چیزی ذخیره نشد:</strong>
+  <strong style="color:#b30000">واردکرد انجام نشد — هیچ‌چیز ذخیره نشد:</strong>
   <ul style="margin:8px 0 0;padding-inline-start:20px">
     {% for error in errors %}
       <li style="color:#8a1f1f">{{ error }}</li>
     {% endfor %}
   </ul>
+  <p style="margin:10px 0 0">
+    <a href="{% url 'admin:products_product_import' %}?errors=csv">دانلود فایل خطاها (CSV)</a>
+  </p>
+</div>
+{% endif %}
+
+{% if result %}
+<div style="border:1px solid #2b6e2b;background:#f2faf2;border-radius:6px;padding:10px 14px;margin:12px 0">
+  <strong>بررسی انجام شد — هنوز چیزی ذخیره نشده است:</strong>
+  {{ result.created }} کالای جدید ساخته می‌شود، {{ result.updated }} کالا به‌روزرسانی می‌شود.
+  برای اعمال، همین فایل را بدون تیک «فقط بررسی کن» دوباره بارگذاری کنید.
 </div>
 {% endif %}
 
 <form method="post" enctype="multipart/form-data">
   {% csrf_token %}
-  <div style="margin:14px 0">
+  <fieldset style="margin:14px 0;padding:10px 14px;border:1px solid #ddd;border-radius:6px">
+    <legend style="font-weight:bold">۱) چه کاری انجام شود؟</legend>
+    <label style="display:block;margin:6px 0">
+      <input type="radio" name="mode" value="update" {% if mode == 'update' %}checked{% endif %}>
+      به‌روزرسانی قیمت و موجودی — فقط کالاهای موجود؛ محصول جدید ساخته نمی‌شود و
+      فیلدهای خارج از فایل دست نمی‌خورند (ستون‌ها: {{ update_columns }}).
+    </label>
+    <label style="display:block;margin:6px 0">
+      <input type="radio" name="mode" value="full" {% if mode != 'update' %}checked{% endif %}>
+      ورود کامل — کالای موجود به‌روزرسانی و کالای جدید ساخته می‌شود (ستون‌های لازم:
+      name، slug، sku، category_slug و price).
+    </label>
+  </fieldset>
+
+  <fieldset style="margin:14px 0;padding:10px 14px;border:1px solid #ddd;border-radius:6px">
+    <legend style="font-weight:bold">۲) فایل</legend>
     <input type="file" name="file" accept=".csv,.xlsx">
-  </div>
-  <label style="display:block;margin:8px 0">
-    <input type="checkbox" name="update_only" value="1">
-    فقط به‌روزرسانی قیمت/موجودی — محصول جدید ساخته نشود و بقیهٔ فیلدها دست نخورند
-    (ستون‌ها: {{ update_columns }})
-  </label>
+    <p style="color:#666;font-size:12px;margin:8px 0 0">
+      اگر فایل اکسل چند شیت داشته باشد، در مرحلهٔ بعد شیت موردنظر را انتخاب می‌کنید.
+    </p>
+  </fieldset>
+
+  <fieldset style="margin:14px 0;padding:10px 14px;border:1px solid #ddd;border-radius:6px">
+    <legend style="font-weight:bold">۳) تنظیم‌ها</legend>
+    <div style="margin:6px 0">
+      عدد ستون «موجودی»:
+      <label style="margin-inline-start:10px">
+        <input type="radio" name="stock_mode" value="replace"
+               {% if stock_mode != 'add' %}checked{% endif %}>
+        جایگزین موجودی فعلی شود
+      </label>
+      <label style="margin-inline-start:10px">
+        <input type="radio" name="stock_mode" value="add" {% if stock_mode == 'add' %}checked{% endif %}>
+        به موجودی فعلی اضافه شود (کاهش با عدد منفی)
+      </label>
+    </div>
+    <label style="display:block;margin:6px 0">
+      <input type="checkbox" name="dry_run" value="1">
+      فقط بررسی کن و نتیجه را نشان بده (بدون ذخیره) — برای ورود کامل
+    </label>
+  </fieldset>
+
   <input type="submit" class="default" value="ادامه">
   <a href="{% url 'admin:products_product_changelist' %}" style="margin-inline-start:12px">انصراف</a>
 </form>
 
-<h2 style="margin-top:24px">ستون‌های فایل</h2>
+<h2 style="margin-top:24px">ستون‌های شناخته‌شده</h2>
 <table style="border-collapse:collapse;font-size:13px">
-  <thead><tr><th style="padding:4px 10px;border:1px solid #ddd">ستون</th><th style="padding:4px 10px;border:1px solid #ddd">الزامی</th><th style="padding:4px 10px;border:1px solid #ddd">توضیح</th></tr></thead>
+  <thead>
+    <tr>
+      <th style="padding:4px 10px;border:1px solid #ddd">ستون فایل</th>
+      <th style="padding:4px 10px;border:1px solid #ddd">نام‌های پذیرفته‌شده</th>
+      <th style="padding:4px 10px;border:1px solid #ddd">توضیح</th>
+    </tr>
+  </thead>
   <tbody>
-    <tr><td style="padding:4px 10px;border:1px solid #ddd">name, slug, sku, category_slug, price</td><td style="padding:4px 10px;border:1px solid #ddd">بله</td><td style="padding:4px 10px;border:1px solid #ddd">price مبلغ صحیح به تومان است</td></tr>
-    <tr><td style="padding:4px 10px;border:1px solid #ddd">category_slug</td><td style="padding:4px 10px;border:1px solid #ddd">بله</td><td style="padding:4px 10px;border:1px solid #ddd">باید از قبل وجود داشته باشد (ساخت در بخش دسته‌بندی‌ها)</td></tr>
-    <tr><td style="padding:4px 10px;border:1px solid #ddd">brand_name</td><td style="padding:4px 10px;border:1px solid #ddd">خیر</td><td style="padding:4px 10px;border:1px solid #ddd">در صورت درج، باید از قبل وجود داشته باشد</td></tr>
-    <tr><td style="padding:4px 10px;border:1px solid #ddd">compare_at_price, discount_percentage, stock_quantity, low_stock_threshold</td><td style="padding:4px 10px;border:1px solid #ddd">خیر</td><td style="padding:4px 10px;border:1px solid #ddd">اعداد صحیح؛ ارقام فارسی هم پذیرفته می‌شود</td></tr>
-    <tr><td style="padding:4px 10px;border:1px solid #ddd">short_description, description</td><td style="padding:4px 10px;border:1px solid #ddd">خیر</td><td style="padding:4px 10px;border:1px solid #ddd"></td></tr>
-    <tr><td style="padding:4px 10px;border:1px solid #ddd">is_active, is_featured</td><td style="padding:4px 10px;border:1px solid #ddd">خیر</td><td style="padding:4px 10px;border:1px solid #ddd">true/false؛ پیش‌فرض: فعال، غیروژه</td></tr>
+    <tr><td style="padding:4px 10px;border:1px solid #ddd">sku</td><td style="padding:4px 10px;border:1px solid #ddd">کد کالا، کد، کد محصول، SKU</td><td style="padding:4px 10px;border:1px solid #ddd">متن در نظر گرفته می‌شود؛ صفر ابتدایی حفظ و «1234.0» به «1234» تبدیل می‌شود. تکراری = خطای ردیف</td></tr>
+    <tr><td style="padding:4px 10px;border:1px solid #ddd">name</td><td style="padding:4px 10px;border:1px solid #ddd">نام، نام کالا، نام محصول</td><td style="padding:4px 10px;border:1px solid #ddd">در حالت ورود کامل الزامی است</td></tr>
+    <tr><td style="padding:4px 10px;border:1px solid #ddd">price</td><td style="padding:4px 10px;border:1px solid #ddd">قیمت، قیمت فروش</td><td style="padding:4px 10px;border:1px solid #ddd">مبلغ صحیح به تومان؛ جداکنندهٔ هزار و ارقام فارسی پذیرفته می‌شود</td></tr>
+    <tr><td style="padding:4px 10px;border:1px solid #ddd">sale_price</td><td style="padding:4px 10px;border:1px solid #ddd">قیمت حراج، قیمت با تخفیف، قیمت قبل از تخفیف</td><td style="padding:4px 10px;border:1px solid #ddd">قیمت خط‌خوردهٔ قبل از تخفیف؛ نباید کمتر از قیمت فروش باشد</td></tr>
+    <tr><td style="padding:4px 10px;border:1px solid #ddd">stock</td><td style="padding:4px 10px;border:1px solid #ddd">موجودی، تعداد، موجودی انبار</td><td style="padding:4px 10px;border:1px solid #ddd">با تنظیم «جایگزینی» یا «افزودن» اعمال می‌شود</td></tr>
+    <tr><td style="padding:4px 10px;border:1px solid #ddd">category</td><td style="padding:4px 10px;border:1px solid #ddd">دسته، دسته‌بندی</td><td style="padding:4px 10px;border:1px solid #ddd">نام یا شناسهٔ دستهٔ موجود</td></tr>
+    <tr><td style="padding:4px 10px;border:1px solid #ddd">brand</td><td style="padding:4px 10px;border:1px solid #ddd">برند</td><td style="padding:4px 10px;border:1px solid #ddd">نام برند موجود</td></tr>
+    <tr><td style="padding:4px 10px;border:1px solid #ddd">active</td><td style="padding:4px 10px;border:1px solid #ddd">فعال، وضعیت</td><td style="padding:4px 10px;border:1px solid #ddd">بله/خیر، true/false، فعال/غیرفعال</td></tr>
   </tbody>
 </table>
-<p style="color:#666;font-size:12px">تصاویر بخشی از فایل نیستند؛ پس از واردکردن، در صفحهٔ هر محصول آن‌ها را اضافه کنید.</p>
+<p style="color:#666;font-size:12px">
+  ستون‌های دیگر قالب کامل (slug، discount_percentage، low_stock_threshold، توضیح کوتاه،
+  توضیحات، ویژه) فقط در «ورود کامل» استفاده می‌شوند. تصاویر بخشی از فایل نیستند.
+</p>
 {% endblock %}
