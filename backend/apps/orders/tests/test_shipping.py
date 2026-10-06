@@ -14,9 +14,8 @@ import datetime
 from django.conf import settings
 from django.test import TestCase, override_settings
 from django.urls import reverse
-from django.utils import timezone
 from rest_framework import status
-from apps.core.testing import CacheIsolatedAPITestCase
+from apps.core.testing import CacheIsolatedAPITestCase, ClockFrozenTestCaseMixin, frozen_clock
 
 from .. import shipping
 from ..models import Order
@@ -64,6 +63,15 @@ class ShippingCostTests(TestCase):
             shipping.calculate_shipping_cost(100000, "express")
 
 
+#: A fixed "today" (12:00 UTC = 15:30 Tehran, far from any date boundary)
+#: so the delivery-window assertions below never depend on the wall clock
+#: the suite happens to run at -- `timezone.localdate()` inside the code
+#: under test reads the faked clock, and pinning it also removes the
+#: midnight race between the code's "today" and the test's own.
+FROZEN_DAY = datetime.date(2026, 10, 1)
+FROZEN_NOW = datetime.datetime(2026, 10, 1, 12, 0, tzinfo=datetime.timezone.utc)
+
+
 class EstimatedDeliveryTests(TestCase):
     def test_window_from_explicit_date(self):
         day = datetime.date(2026, 10, 1)
@@ -82,10 +90,14 @@ class EstimatedDeliveryTests(TestCase):
         )
 
     def test_window_defaults_to_today(self):
-        today = timezone.localdate()
-        min_date, max_date = shipping.calculate_estimated_delivery("standard")
-        self.assertEqual(min_date, today + datetime.timedelta(days=settings.SHIPPING_MIN_DELIVERY_DAYS))
-        self.assertEqual(max_date, today + datetime.timedelta(days=settings.SHIPPING_MAX_DELIVERY_DAYS))
+        with frozen_clock(FROZEN_NOW):
+            min_date, max_date = shipping.calculate_estimated_delivery("standard")
+        self.assertEqual(
+            min_date, FROZEN_DAY + datetime.timedelta(days=settings.SHIPPING_MIN_DELIVERY_DAYS)
+        )
+        self.assertEqual(
+            max_date, FROZEN_DAY + datetime.timedelta(days=settings.SHIPPING_MAX_DELIVERY_DAYS)
+        )
 
     def test_unknown_method_raises(self):
         with self.assertRaises(ValueError):
@@ -122,7 +134,14 @@ class ShippingMethodsEndpointTests(CacheIsolatedAPITestCase):
         self.assertEqual(response.data["methods"][0]["cost"], 1234)
 
 
-class CheckoutShippingMethodTests(CacheIsolatedAPITestCase):
+class CheckoutShippingMethodTests(ClockFrozenTestCaseMixin, CacheIsolatedAPITestCase):
+    # The whole scenario -- login session, cart, checkout, snapshot -- runs
+    # at one fixed moment (see ClockFrozenTestCaseMixin): the session cookie
+    # Django signs here carries that moment's expiry, so freezing only the
+    # checkout call would make the session look expired (403, no order) as
+    # soon as the suite ran with a clock far from this date.
+    FROZEN_NOW = FROZEN_NOW
+
     def setUp(self):
         self.user = make_user(phone="+989500000001")
         self.client.login(username="+989500000001", password="a-strong-passw0rd!")
@@ -160,14 +179,17 @@ class CheckoutShippingMethodTests(CacheIsolatedAPITestCase):
         product = make_product(stock_quantity=5)
         add_to_cart(self.user, product, quantity=1)
 
+        # The clock is pinned by the class (FROZEN_NOW), so the snapshot
+        # below names a fixed calendar date instead of whatever "today"
+        # the suite runs on.
         self._checkout(valid_checkout_payload(shipping_method="express"))
 
         order = Order.objects.get(user=self.user)
-        today = timezone.localdate()
         # Express is a next-day service by definition (Part 1): exactly
         # one day, min == max == 1, no longer env-tunable.
-        self.assertEqual(order.estimated_delivery_min, today + datetime.timedelta(days=1))
-        self.assertEqual(order.estimated_delivery_max, today + datetime.timedelta(days=1))
+        next_day = FROZEN_DAY + datetime.timedelta(days=1)
+        self.assertEqual(order.estimated_delivery_min, next_day)
+        self.assertEqual(order.estimated_delivery_max, next_day)
         # The API exposes the snapshot too.
         detail = self.client.get(reverse("order-detail", args=[order.id]))
         self.assertEqual(detail.data["shipping_method"], "express")

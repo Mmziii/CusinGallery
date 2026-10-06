@@ -8,7 +8,6 @@ audit logging) runs for real against a real database.
 """
 from contextlib import contextmanager
 from datetime import datetime, timedelta
-from unittest import mock
 from zoneinfo import ZoneInfo
 
 from django.core.management import call_command
@@ -16,6 +15,7 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from apps.cart.models import Cart, CartItem
+from apps.core.testing import frozen_clock
 from apps.notifications.models import NotificationLog
 from apps.notifications.tests.helpers import install_fake_provider, provider_error
 from apps.orders.models import Order
@@ -33,12 +33,17 @@ PATCH_TARGET = "apps.notifications.management.commands.send_cart_reminders"
 
 @contextmanager
 def at(moment):
-    """Patch the clock the command itself reads (django.utils.timezone
-    stays real everywhere else -- only the command's own `timezone`
-    binding is swapped)."""
-    with mock.patch(f"{PATCH_TARGET}.timezone") as fake_tz:
-        fake_tz.now.return_value = moment
-        yield fake_tz
+    """Run the block at `moment`.
+
+    The shared Django clock is faked, not just the command's own module
+    binding: NotificationLog.created_at is auto_now_add, so a run that
+    patched only the command would still stamp its audit rows with the
+    real time and the NEXT run's cooldown check would compare that real
+    timestamp against the fake "now" (see apps.core.testing.frozen_clock
+    for the full post-mortem).
+    """
+    with frozen_clock(moment) as fake_now:
+        yield fake_now
 
 
 class CartReminderTestBase(TestCase):
@@ -150,12 +155,23 @@ class CartReminderRuleTests(CartReminderTestBase):
         self.age_cart(now=NOON)
         with at(NOON):
             self.run_command()
+        # The audit row carries the FAKED moment, not the real clock. This
+        # assertion is the regression guard for the time bomb: with a real
+        # created_at the cooldown comparison below silently measured
+        # wall-clock time, so the test started failing the moment the real
+        # date passed the fake "eight days later" (2026-10-06 12:00
+        # Tehran).
+        self.assertEqual(self.logs().get().created_at, NOON)
+
         eight_days_later = NOON + timedelta(days=8)
         self.change_cart_state(eight_days_later - timedelta(hours=30))
         with at(eight_days_later):
             self.run_command()
         self.assertEqual(len(self.fake.sent), 2)
         self.assertEqual(self.logs().count(), 2)
+        self.assertEqual(
+            self.logs().order_by("created_at").last().created_at, eight_days_later
+        )
 
     def test_quiet_hours_send_nothing_and_consume_nothing(self):
         self.age_cart(now=NIGHT)

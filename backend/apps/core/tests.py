@@ -28,6 +28,22 @@ class CacheIsolationMechanismTests(SimpleTestCase):
         harness._pre_setup()
         self.assertIsNone(cache.get("sentinel"))
 
+    def test_pre_setup_works_when_django_calls_it_on_the_class(self):
+        """
+        Django 5.2's TransactionTestCase.setUpClass() calls `cls._pre_setup()`
+        (the hook became a classmethod). An instance-method override here
+        made both concurrency test classes fail in setUpClass with
+        "missing 1 required positional argument: 'self'"; this asserts the
+        class-level call path still clears the cache.
+        """
+
+        class Harness(CacheIsolationMixin, SimpleTestCase):
+            pass
+
+        cache.set("sentinel", 42)
+        Harness._pre_setup()
+        self.assertIsNone(cache.get("sentinel"))
+
     def test_clear_survives_subclass_setup_that_skips_super(self):
         """
         The exact bypass that caused the 429: a subclass defines setUp()
