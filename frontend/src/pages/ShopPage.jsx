@@ -1,5 +1,6 @@
+import PropTypes from "prop-types";
 import { usePageMeta } from "../hooks/usePageMeta";
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigationType, useSearchParams } from "react-router-dom";
 
 import Breadcrumbs from "../components/Breadcrumbs";
@@ -12,6 +13,61 @@ import { errorMessage } from "../components/ui";
 import { normalizeApiError } from "../utils/apiError";
 import { formatPrice } from "../utils/formatPrice";
 import { shareImageUrl } from "../utils/shareImage";
+
+/** Part S5 item 7: price inputs wait ~300ms after the last keystroke. */
+const PRICE_DEBOUNCE_MS = 300;
+
+/** Small debounce hook for the price range inputs. */
+function useDebouncedCallback(callback, delay) {
+  const timer = useRef(null);
+  const latest = useRef(callback);
+  latest.current = callback;
+  useEffect(() => () => clearTimeout(timer.current), []);
+  return useCallback(
+    (...args) => {
+      clearTimeout(timer.current);
+      timer.current = setTimeout(() => latest.current(...args), delay);
+    },
+    [delay]
+  );
+}
+
+/** Part S5 item 7: max stagger steps (20ms each) for the card entrance. */
+const MAX_STAGGER_STEPS = 10;
+
+/**
+ * Part S5 item 7: one collapsible filter group. The body animates with a
+ * grid-template-rows 0fr -> 1fr transition (no max-height guesswork, so
+ * any content height animates correctly) and stays in the DOM the whole
+ * time -- inputs keep their state and the group stays keyboard-navigable.
+ */
+function FilterGroup({ title, children, defaultOpen = true }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className={`filter-group${open ? "" : " filter-group--collapsed"}`}>
+      <h3>
+        <button
+          type="button"
+          className="filter-group__toggle"
+          aria-expanded={open}
+          onClick={() => setOpen((value) => !value)}
+        >
+          <span>{title}</span>
+          <Icon name="chevron-down" size={14} />
+        </button>
+      </h3>
+      <div className="filter-group__body">
+        <div className="filter-group__body-inner">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+FilterGroup.propTypes = {
+  title: PropTypes.string.isRequired,
+  children: PropTypes.node,
+  defaultOpen: PropTypes.bool,
+};
 
 const SORT_OPTIONS = [
   { value: "newest", label: "جدیدترین" },
@@ -28,6 +84,10 @@ const SORT_OPTIONS = [
  */
 function ShopPage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  // Part S5 item 7: on small screens the whole filter column collapses
+  // into a drawer; the open/close transition is a grid-template-rows
+  // 0fr -> 1fr animation (same technique as the filter groups).
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const params = useMemo(() => {
     const p = {};
@@ -128,9 +188,31 @@ function ShopPage() {
     };
   }, [searchParams, navigationType]);
 
+  // Part S5 item 7: a new result set re-triggers the staggered entrance
+  // (the key remounts the cards -- their boxes are aspect-ratio sized, so
+  // remounting cannot shift the layout).
+  const [resultsKey, setResultsKey] = useState(0);
+  useEffect(() => {
+    if (productsState.data) setResultsKey((value) => value + 1);
+  }, [productsState.data]);
+
+  // Part S5 item 7: the price inputs keep their own text state and push
+  // the value into the URL ~300ms after the last keystroke (and at once on
+  // blur), so typing never triggers a request per character.
+  const [priceText, setPriceText] = useState({
+    min_price: searchParams.get("min_price") || "",
+    max_price: searchParams.get("max_price") || "",
+  });
+  const debouncedSetParam = useDebouncedCallback((key, value) => setParam(key, value), PRICE_DEBOUNCE_MS);
+  const applyPrice = (key, value) => {
+    setPriceText((current) => ({ ...current, [key]: value }));
+    debouncedSetParam(key, value);
+  };
+
   const clearAllFilters = () => {
     const next = new URLSearchParams(searchParams);
     ["category", "brand", "min_price", "max_price", "in_stock", "page", ...attrKeys].forEach((k) => next.delete(k));
+    setPriceText({ min_price: "", max_price: "" });
     setSearchParams(next);
   };
 
@@ -142,92 +224,114 @@ function ShopPage() {
   return (
     <div className="shop">
       <aside className="shop__sidebar">
-        <h2>فیلترها</h2>
+        {/* Part S5 item 7: on small screens the filter column folds into a
+            drawer; the open/close motion is the same grid-template-rows
+            0fr -> 1fr transition the groups use. The panel stays in the
+            DOM, so nothing is lost when it is closed. */}
+        <button
+          type="button"
+          className="shop__filters-toggle"
+          aria-expanded={filtersOpen}
+          aria-controls="shop-filters"
+          onClick={() => setFiltersOpen((value) => !value)}
+        >
+          <span>فیلترها</span>
+          <Icon name="chevron-down" size={16} />
+        </button>
 
-        <div className="filter-group">
-          <h3>دسته‌بندی</h3>
-          <select
-            value={searchParams.get("category") || ""}
-            onChange={(e) => setParam("category", e.target.value)}
-          >
-            <option value="">همه دسته‌ها</option>
-            {(categoriesState.data?.results || []).map((category) => (
-              <option key={category.id} value={category.slug}>{category.name}</option>
-            ))}
-          </select>
-        </div>
+        <div
+          className={`shop__filters${filtersOpen ? " shop__filters--open" : ""}`}
+          id="shop-filters"
+        >
+          <div className="shop__filters-inner">
+            <h2>فیلترها</h2>
 
-        <div className="filter-group">
-          <h3>برند</h3>
-          <select
-            value={searchParams.get("brand") || ""}
-            onChange={(e) => setParam("brand", e.target.value)}
-          >
-            <option value="">همه برندها</option>
-            {(brandsState.data?.results || []).map((brand) => (
-              <option key={brand.id} value={brand.slug}>{brand.name}</option>
-            ))}
-          </select>
-        </div>
+            <FilterGroup title="دسته‌بندی">
+              <select
+                value={searchParams.get("category") || ""}
+                onChange={(e) => setParam("category", e.target.value)}
+              >
+                <option value="">همه دسته‌ها</option>
+                {(categoriesState.data?.results || []).map((category) => (
+                  <option key={category.id} value={category.slug}>{category.name}</option>
+                ))}
+              </select>
+            </FilterGroup>
 
-        {/* Part R5 item 8: dynamic attribute facets, one checkbox group
-            per attribute that exists on active products (re-scoped to
-            the selected category). */}
-        {(facetsState.data?.results || []).map((attribute) => {
-          const selected = selectedAttrValues(attribute.slug);
-          return (
-            <div className="filter-group" key={attribute.slug}>
-              <h3>{attribute.name}</h3>
-              {attribute.values.map((entry) => (
-                <label className="checkbox" key={entry.value}>
-                  <input
-                    type="checkbox"
-                    checked={selected.includes(entry.value)}
-                    onChange={() => toggleAttrValue(attribute.slug, entry.value)}
-                  />
-                  {entry.value} <span className="filter-group__count">({entry.count})</span>
-                </label>
-              ))}
-            </div>
-          );
-        })}
+            <FilterGroup title="برند">
+              <select
+                value={searchParams.get("brand") || ""}
+                onChange={(e) => setParam("brand", e.target.value)}
+              >
+                <option value="">همه برندها</option>
+                {(brandsState.data?.results || []).map((brand) => (
+                  <option key={brand.id} value={brand.slug}>{brand.name}</option>
+                ))}
+              </select>
+            </FilterGroup>
 
-        <div className="filter-group">
-          <h3>محدوده قیمت (تومان)</h3>
-          <div className="filter-group__row">
-            <input
-              type="number"
-              min="0"
-              placeholder="از"
-              defaultValue={searchParams.get("min_price") || ""}
-              onBlur={(e) => setParam("min_price", e.target.value)}
-            />
-            <input
-              type="number"
-              min="0"
-              placeholder="تا"
-              defaultValue={searchParams.get("max_price") || ""}
-              onBlur={(e) => setParam("max_price", e.target.value)}
-            />
+            {/* Part R5 item 8: dynamic attribute facets, one checkbox group
+                per attribute that exists on active products (re-scoped to
+                the selected category). */}
+            {(facetsState.data?.results || []).map((attribute) => {
+              const selected = selectedAttrValues(attribute.slug);
+              return (
+                <FilterGroup key={attribute.slug} title={attribute.name}>
+                  {attribute.values.map((entry) => (
+                    <label className="checkbox" key={entry.value}>
+                      <input
+                        type="checkbox"
+                        checked={selected.includes(entry.value)}
+                        onChange={() => toggleAttrValue(attribute.slug, entry.value)}
+                      />
+                      {entry.value} <span className="filter-group__count">({entry.count})</span>
+                    </label>
+                  ))}
+                </FilterGroup>
+              );
+            })}
+
+            <FilterGroup title="محدوده قیمت (تومان)">
+              <div className="filter-group__row">
+                <input
+                  type="number"
+                  min="0"
+                  placeholder="از"
+                  aria-label="کمترین قیمت"
+                  value={priceText.min_price}
+                  onChange={(e) => applyPrice("min_price", e.target.value)}
+                  onBlur={(e) => setParam("min_price", e.target.value)}
+                />
+                <input
+                  type="number"
+                  min="0"
+                  placeholder="تا"
+                  aria-label="بیشترین قیمت"
+                  value={priceText.max_price}
+                  onChange={(e) => applyPrice("max_price", e.target.value)}
+                  onBlur={(e) => setParam("max_price", e.target.value)}
+                />
+              </div>
+            </FilterGroup>
+
+            <FilterGroup title="موجودی">
+              <label className="checkbox">
+                <input
+                  type="checkbox"
+                  checked={searchParams.get("in_stock") === "true"}
+                  onChange={(e) => setParam("in_stock", e.target.checked ? "true" : "")}
+                />
+                فقط کالاهای موجود
+              </label>
+            </FilterGroup>
+
+            {(searchParams.get("category") || searchParams.get("brand") || searchParams.get("min_price") || searchParams.get("max_price") || searchParams.get("in_stock") || attrKeys.length > 0) ? (
+              <button type="button" className="btn btn--outline btn--sm" onClick={clearAllFilters}>
+                حذف همه فیلترها
+              </button>
+            ) : null}
           </div>
         </div>
-
-        <div className="filter-group">
-          <label className="checkbox">
-            <input
-              type="checkbox"
-              checked={searchParams.get("in_stock") === "true"}
-              onChange={(e) => setParam("in_stock", e.target.checked ? "true" : "")}
-            />
-            فقط کالاهای موجود
-          </label>
-        </div>
-
-        {(searchParams.get("category") || searchParams.get("brand") || searchParams.get("min_price") || searchParams.get("max_price") || searchParams.get("in_stock") || attrKeys.length > 0) ? (
-          <button type="button" className="btn btn--outline btn--sm" onClick={clearAllFilters}>
-            حذف همه فیلترها
-          </button>
-        ) : null}
       </aside>
 
       <div className="shop__main">
@@ -321,23 +425,41 @@ function ShopPage() {
           );
         })()}
 
-        {productsState.isLoading ? <Spinner label="در حال دریافت محصولات…" /> : null}
+        {/* Part S5 item 7: filtering is a transition, not a page reload. The
+            spinner only covers the very first load; from then on the previous
+            results stay on screen -- dimmed and aria-busy -- until the new
+            page replaces them, so the layout never jumps. */}
+        {!products && productsState.isLoading ? <Spinner label="در حال دریافت محصولات…" /> : null}
         {productsState.error ? <ErrorState message={errorMessage(normalizeApiError(productsState.error))} onRetry={productsState.refetch} /> : null}
 
-        {products && products.results.length === 0 ? (
-          <EmptyState title="محصولی با این مشخصات پیدا نشد.">
-            <p className="muted">فیلترها یا عبارت جستجو را تغییر دهید، یا همه فیلترها را حذف کنید.</p>
-            <button type="button" className="btn btn--outline" onClick={clearAllFilters}>
-              حذف همه فیلترها
-            </button>
-          </EmptyState>
-        ) : null}
-
-        {products?.results?.length ? (
-          <div className="product-grid">
-            {products.results.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
+        {products ? (
+          <div
+            className={`shop__results${productsState.isLoading ? " shop__results--loading" : ""}`}
+            aria-busy={productsState.isLoading || undefined}
+          >
+            {products.results.length === 0 ? (
+              <EmptyState title="محصولی با این مشخصات پیدا نشد.">
+                <p className="muted">فیلترها یا عبارت جستجو را تغییر دهید، یا همه فیلترها را حذف کنید.</p>
+                <button type="button" className="btn btn--outline" onClick={clearAllFilters}>
+                  حذف همه فیلترها
+                </button>
+              </EmptyState>
+            ) : (
+              <div className="product-grid">
+                {products.results.map((product, index) => (
+                  <div
+                    className="product-grid__cell"
+                    // A fresh page re-keys the cells so every card replays its
+                    // fade+rise; the media boxes are aspect-ratio sized, so
+                    // remounting cannot shift the layout.
+                    key={`${resultsKey}-${product.id}`}
+                    style={{ animationDelay: `${Math.min(index, MAX_STAGGER_STEPS) * 20}ms` }}
+                  >
+                    <ProductCard product={product} />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ) : null}
 
