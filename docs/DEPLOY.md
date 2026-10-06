@@ -268,6 +268,43 @@ curl https://cusin.ir/robots.txt
 curl https://cusin.ir/sitemap.xml | head
 ```
 
+### پیش‌نمایش لینک در واتس‌اپ/تلگرام/اینستاگرام (متادیتای مخصوص خزنده‌ها)
+
+خزنده‌های شبکه‌های اجتماعی و پیام‌رسان‌ها (واتس‌اپ، تلگرام، اینستاگرام، ایتا،
+توییتر/ایکس، اسلک، لینکدین، دیسکورد و…) جاوااسکریپت اجرا **نمی‌کنند**؛ پس
+متادیتایی که برنامهٔ React در مرورگر می‌نویسد را هرگز نمی‌بینند. به همین دلیل
+پیکربندی nginx (هم `nginx/conf.d/cusin.conf` و هم `nginx/prod.d/cusin.conf`)
+بر اساس User-Agent تشخیص می‌دهد که درخواست از یک خزنده است و برای دو دسته آدرس
+آن را به بک‌اند (Django) می‌فرستد:
+
+| آدرس سایت | پاسخ به خزنده |
+|---|---|
+| `/products/<slug>/` | `/seo/product/<slug>/` |
+| `/shop/?category=<slug>` | `/seo/shop/?category=<slug>` |
+
+این دو نقطهٔ پایانی یک سند HTML کوچک برمی‌گردانند: عنوان، توضیح، canonical،
+تگ‌های `og:type/title/description/url/image`، کارت توییتر، دادهٔ ساخت‌یافتهٔ
+JSON-LD محصول (قیمت و موجودی) و یک لینک به صفحهٔ واقعی. تصویر با بزرگ‌ترین
+نسخهٔ WebP موجود (۱۲۰۰ ← ۸۰۰ ← ۴۰۰) و در نبود تصویر با
+`/brand/og-placeholder.png` پر می‌شود. محصول یا دستهٔ **غیرفعال/ناموجود** همیشه
+۴۰۴ می‌گیرد تا هیچ‌وقت پیش‌نمایش کالای منتشرنشده بیرون نرود. پاسخ‌ها ۵ دقیقه
+(`Cache-Control: public, max-age=300`) کش می‌شوند.
+
+بازدیدکنندهٔ عادی هیچ تغییری نمی‌بیند: همان اپلیکیشن React سرو می‌شود.
+
+آزمایش دستی (با User-Agent یک خزنده):
+
+```bash
+curl -A "WhatsApp/2.23" https://cusin.ir/products/<slug>/ | head -30
+curl -A "TelegramBot (like TwitterBot)" "https://cusin.ir/shop/?category=<slug>" | head -30
+curl -A "Mozilla/5.0" https://cusin.ir/products/<slug>/ | head -5   # همان SPA
+```
+
+نکتهٔ استقرار: این بلوک‌ها به `map $http_user_agent` نیاز دارند که در همان
+فایل‌های `conf.d` تعریف شده است؛ اگر فایل را جای دیگری کپی می‌کنید، بلوک
+`map` را هم با خودش ببرید. پس از تغییر، `docker compose -f
+docker-compose.prod.yml restart nginx` و بعد همان `curl`های بالا را اجرا کنید.
+
 ---
 
 ## ۱۱. اضافه‌کردن محصولات
