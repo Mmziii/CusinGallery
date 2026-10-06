@@ -29,11 +29,95 @@ from .importing import (
 from .models import Brand, Product, ProductAttribute, ProductAttributeValue, ProductImage, ProductVariant
 
 
+class MultipleImageInput(forms.ClearableFileInput):
+    """File input that accepts several images at once (Part S5 item 3).
+    Django's FileInput returns `files.getlist(name)` for it, so it needs a
+    matching field (below)."""
+
+    allow_multiple_selected = True
+
+
+class MultipleImageField(forms.FileField):
+    """
+    A FileField that accepts SEVERAL uploads and validates each one.
+
+    (The Django version installed here -- 5.0 -- has no bundled
+    MultipleFileField, so this is the small equivalent: one FileField
+    check per selected file.)
+    """
+
+    widget = MultipleImageInput
+
+    def clean(self, data, initial=None):
+        if not data:
+            return []
+        files = data if isinstance(data, (list, tuple)) else [data]
+        return [super(MultipleImageField, self).clean(item, initial) for item in files]
+
+
+class ProductImageInlineForm(forms.ModelForm):
+    """
+    Part S5 item 3: the inline accepts SEVERAL files in one go.
+
+    `image` (the model's single file) stays for replacing one row; the
+    extra `add_images` field takes any number of files and the formset
+    turns each of them into its own row (see
+    ProductImageInlineFormSet.save_new). One of the two must be filled in.
+    """
+
+    add_images = MultipleImageField(
+        label="افزودن چند تصویر با هم",
+        required=False,
+        widget=MultipleImageInput(attrs={"accept": "image/*", "multiple": True}),
+        help_text="می‌توانید چند فایل را هم‌زمان انتخاب کنید؛ برای هر فایل یک ردیف ساخته می‌شود.",
+    )
+
+    class Meta:
+        model = ProductImage
+        fields = ["image", "alt_text", "is_primary", "ordering", "add_images"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # A brand-new row may be filled through `add_images` alone, so the
+        # single-file field cannot be unconditionally required -- and the
+        # position gets a sensible default (the formset appends extra files
+        # after the existing rows either way).
+        if not self.instance.pk:
+            self.fields["image"].required = False
+            self.fields["ordering"].required = False
+
+    def clean(self):
+        cleaned = super().clean()
+        # Each extra file gets the same content check a normal upload gets
+        # (real image, allowed format, size limit) -- with a Persian
+        # message naming the offending file.
+        from apps.core.image_files import validate_image_file
+
+        for upload in cleaned.get("add_images") or []:
+            try:
+                validate_image_file(upload)
+            except forms.ValidationError:
+                raise forms.ValidationError(
+                    f"فایل «{upload.name}» تصویر معتبری نیست؛ فقط JPEG، PNG، WEBP یا GIF "
+                    "با حجم حداکثر ۵ مگابایت."
+                )
+        if self.instance.pk or self.errors:
+            return cleaned
+        has_single = bool(cleaned.get("image"))
+        has_many = bool(cleaned.get("add_images"))
+        if not has_single and not has_many and self.has_changed():
+            raise forms.ValidationError("یک تصویر انتخاب کنید (یا چند تصویر با هم).")
+        return cleaned
+
+
 class ProductImageInlineFormSet(forms.BaseInlineFormSet):
     """
     Friendly handling of the 'one primary image' rule on top of the
     database's partial unique constraint: two checked boxes become a
     readable form error instead of an IntegrityError page.
+
+    Part S5 item 3: `save_new` also turns every file picked in the
+    multi-image field into its own row (never an empty image row).
     """
 
     def clean(self):
@@ -49,13 +133,65 @@ class ProductImageInlineFormSet(forms.BaseInlineFormSet):
                 "برای هر محصول فقط یک تصویر را به‌عنوان تصویر اصلی علامت بزنید."
             )
 
+    def save_new(self, form, commit=True):
+        extras = form.cleaned_data.get("add_images") or []
+        has_single = bool(form.cleaned_data.get("image"))
+        if not has_single and not extras:
+            # Nothing to store for this row (an untouched extra row).
+            return ProductImage(product=self.instance)
+        if not has_single and not form.instance.pk:
+            # Only the multi-file picker was used: no empty row, just the
+            # rows created below (an ImageField cannot be blank).
+            instance = ProductImage(product=self.instance)
+        else:
+            instance = super().save_new(form, commit=commit)
+
+        if extras:
+            product = self.instance
+            last = (
+                ProductImage.objects.filter(product=product)
+                .order_by("-ordering")
+                .values_list("ordering", flat=True)
+                .first()
+            )
+            ordering = (last or 0) + 1
+            has_primary = ProductImage.objects.filter(product=product, is_primary=True).exists()
+            alt_text = form.cleaned_data.get("alt_text") or ""
+            for offset, upload in enumerate(extras):
+                row = ProductImage(
+                    product=product,
+                    alt_text=alt_text,
+                    ordering=ordering + offset,
+                )
+                # The first image of a product with none becomes the primary
+                # one, so a freshly uploaded gallery always has a valid
+                # "main" image (the DB allows exactly one per product).
+                if not has_primary:
+                    row.is_primary = True
+                    has_primary = True
+                row.image = upload
+                row.save()
+        return instance
+
 
 class ProductImageInline(admin.TabularInline):
     model = ProductImage
+    form = ProductImageInlineForm
     formset = ProductImageInlineFormSet
     extra = 1
-    fields = ("image", "thumbnail_preview", "alt_text", "is_primary", "ordering")
+    fields = (
+        "image",
+        "add_images",
+        "thumbnail_preview",
+        "alt_text",
+        "is_primary",
+        "ordering",
+    )
     readonly_fields = ("thumbnail_preview",)
+    # Part S5 item 3: `ordering` is the gallery position -- the storefront
+    # orders images by (primary first, then ordering) everywhere.
+    verbose_name = "تصویر"
+    verbose_name_plural = "تصاویر (ترتیب نمایش با ستون «ترتیب» تعیین می‌شود؛ عدد کوچک‌تر = جلوتر)"
 
     def thumbnail_preview(self, obj):
         # Part S4 item 1: the shared placeholder (brand mark on the warm-grey

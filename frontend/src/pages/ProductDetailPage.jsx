@@ -7,6 +7,7 @@ import Breadcrumbs from "../components/Breadcrumbs";
 import Icon from "../components/Icon";
 import StarRating from "../components/StarRating";
 import PriceTag from "../components/PriceTag";
+import ProductGallery from "../components/ProductGallery";
 import SmartImage from "../components/SmartImage";
 import { productDetailShape } from "../utils/shapes";
 import { Alert, EmptyState, ErrorState, Spinner, errorMessage } from "../components/ui";
@@ -261,7 +262,6 @@ function ProductDetailPage() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const addItem = useCartStore((s) => s.addItem);
 
-  const [activeImage, setActiveImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [selected, setSelected] = useState({}); // attribute name -> value
   const [added, setAdded] = useState(null);
@@ -359,7 +359,6 @@ function ProductDetailPage() {
   const outOfStock = stockStatus === "out_of_stock";
 
   useEffect(() => {
-    setActiveImage(0);
     setSelected({});
     setQuantity(1);
     setAdded(null);
@@ -408,31 +407,10 @@ function ProductDetailPage() {
         ]}
       />
       <div className="product-detail__gallery">
-        <div
-          className="product-detail__main-image"
-          onClick={(e) => e.currentTarget.querySelector("img")?.classList.toggle("is-zoomed")}
-        >
-          {/* SmartImage (Part R1): missing/broken gallery image -> shared placeholder */}
-          <SmartImage
-            image={images[activeImage] || null}
-            alt={images[activeImage]?.alt_text || product.name}
-            className="product-detail__main-img"
-          />
-        </div>
-        {images.length > 1 ? (
-          <div className="product-detail__thumbs">
-            {images.map((image, index) => (
-              <button
-                key={image.id}
-                type="button"
-                className={index === activeImage ? "thumb thumb--active" : "thumb"}
-                onClick={() => setActiveImage(index)}
-              >
-                <SmartImage image={image} alt={image.alt_text || `${product.name} ${index + 1}`} />
-              </button>
-            ))}
-          </div>
-        ) : null}
+        {/* Part S5 item 3: main image + thumbnail row (cross-fade, keyboard,
+            swipe, scroll-snap) -- every image still goes through the shared
+            SmartImage, so a broken one shows the placeholder. */}
+        <ProductGallery images={images} name={product.name} />
       </div>
 
       <div className="product-detail__info">
