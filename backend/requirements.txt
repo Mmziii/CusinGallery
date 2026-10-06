@@ -1,6 +1,6 @@
 # --- Core framework ---------------------------------------------------------
-Django==5.0.9
-djangorestframework==3.15.2
+Django==5.2.18
+djangorestframework==3.17.2
 django-cors-headers==4.4.0
 django-filter==24.3
 django-environ==0.11.2
@@ -13,7 +13,7 @@ psycopg2-binary==2.9.9
 # v4 REST API (payment request + server-side verify). The mock gateway
 # needs no HTTP at all; tests never hit the network (they patch this
 # layer -- see apps/payments/tests/test_zarinpal.py).
-requests==2.32.3
+requests==2.33.0
 
 # --- Images --------------------------------------------------------------------
 # Required by Django's ImageField at model/system-check time, not just at
@@ -25,6 +25,13 @@ requests==2.32.3
 #   - apps.banners.Banner.image
 # Pinned to a version with published Python 3.12 wheels, matching the
 # python:3.12-slim base image in docker/backend/Dockerfile.
+#
+# Deliberately still on the 10.x line (see the dependency-audit report):
+# the 2026 Pillow advisories are fixed only in 12.x, i.e. behind two MAJOR
+# bumps, and this update round was explicitly scoped to patch/minor
+# security fixes. Bumping Pillow is a separate, testable change -- it is
+# the library that parses every uploaded image, so it deserves its own
+# round rather than riding along here.
 Pillow==10.4.0
 
 # --- Bulk catalog import (Phase B) -------------------------------------------------

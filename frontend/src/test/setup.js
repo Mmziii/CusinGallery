@@ -48,7 +48,16 @@ if (!window.ResizeObserver) {
   window.ResizeObserver = ResizeObserverStub;
 }
 
-window.scrollTo = window.scrollTo || (() => {});
+// jsdom implements neither scrolling API. AddressForm/CheckoutPage call
+// scrollIntoView() to bring the first invalid field into view and the
+// shop page saves/restores the listing scroll position, so both are
+// stubbed here (same policy as matchMedia/IntersectionObserver above)
+// instead of leaving the production code to throw "not a function" --
+// vitest 4 reports such a rejection as an unhandled error.
+window.scrollTo = () => {};
+if (!Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = () => {};
+}
 
 // --- fake API ----------------------------------------------------------------
 const EMPTY = {
