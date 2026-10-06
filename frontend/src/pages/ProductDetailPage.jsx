@@ -530,11 +530,10 @@ function ProductDetailPage() {
       </div>
 
       <div className="product-detail__extra">
-        <div className="product-detail__assurances">
-          <div><strong>ارسال:</strong> عادی ۳ تا ۵ روز / اکسپرس ۱ روزه / دریافت حضوری</div>
-          <div><strong>بسته‌بندی:</strong> ضدضربه برای ظروف شکستنی و بلور</div>
-          <div><strong>مرجوعی:</strong> تا ۷ روز با شرایط درج‌شده در «ارسال و مرجوعی»</div>
-        </div>
+        {/* Part S5 item 5: NO shipping/return/packaging content on the
+            product page. Delivery, cost and method are shown where the
+            order is actually priced (cart/checkout), and the policy lives
+            on the «ارسال و مرجوعی» page linked from the footer. */}
         <section>
           <h2>توضیحات</h2>
           <p className="product-detail__description">

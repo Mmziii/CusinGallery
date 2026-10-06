@@ -1205,12 +1205,6 @@ html.js-reveal .reveal.is-revealed, .reveal.is-revealed { opacity: 1; transform:
 /* --- product page Part 3 --- */
 .product-detail__main-img { cursor: zoom-in; transition: transform .35s ease; }
 .product-detail__main-img.is-zoomed { transform: scale(1.6); cursor: zoom-out; }
-.product-detail__assurances {
-  display: grid; gap: 6px; background: var(--brand-green-tint);
-  border: var(--hairline); border-radius: var(--radius-md);
-  padding: var(--space-3); margin-bottom: var(--space-4); font-size: var(--font-size-sm);
-}
-.product-detail__assurances strong { color: var(--brand-gold-deep); }
 .product-detail__stickybar {
   position: fixed; bottom: 0; inset-inline: 0; z-index: 80;
   display: none; gap: var(--space-3); align-items: center; justify-content: space-between;
