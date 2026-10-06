@@ -1,4 +1,4 @@
-import { SITE_ORIGIN, usePageMeta } from "../hooks/usePageMeta";
+import { usePageMeta } from "../hooks/usePageMeta";
 import PropTypes from "prop-types";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
@@ -20,6 +20,7 @@ import useCartStore from "../store/useCartStore";
 import { normalizeApiError } from "../utils/apiError";
 import { formatPrice } from "../utils/formatPrice";
 import { recordView } from "../utils/recentlyViewed";
+import { shareImageUrl } from "../utils/shareImage";
 import RecentlyViewed from "../components/RecentlyViewed";
 
 function Stars({ value, size = "md" }) {
@@ -278,12 +279,52 @@ function ProductDetailPage() {
   // Per-product SEO/social metadata (Phase E). Values start undefined
   // and settle once the product loads; the canonical always points at
   // the slug URL (query strings like ?review=1 must not fork it).
+  //
+  // Part S4 item 2: the share image is the product's FIRST image as an
+  // ABSOLUTE url, preferring the largest WebP variant of at least 600 px
+  // wide, and the shared brand placeholder when the product has no image.
+  // (Before: `${SITE_ORIGIN}${product.primary_image}` -- primary_image is
+  // an object and may be absent, so the tag was never a real image.)
+  const shareSource = product ? product.primary_image || product.images?.[0] || null : null;
+  const ogImage = product ? shareImageUrl(shareSource) : undefined;
   usePageMeta({
     title: product?.name,
     description: product?.short_description || undefined,
     path: `/products/${slug}/`,
-    image: product?.primary_image ? `${SITE_ORIGIN}${product.primary_image}` : undefined,
+    image: ogImage,
   });
+
+  // Part S4 item 2: JSON-LD Product for search engines that DO run
+  // JavaScript (Google). It uses the same image as og:image, so a product
+  // preview is never imageless. Replaced per product, removed on unmount.
+  useEffect(() => {
+    if (!product) return undefined;
+    const script = document.createElement("script");
+    script.type = "application/ld+json";
+    script.id = "product-jsonld";
+    script.textContent = JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "Product",
+      name: product.name,
+      image: [ogImage],
+      description: product.short_description || undefined,
+      sku: product.sku,
+      brand: product.brand ? { "@type": "Brand", name: product.brand.name } : undefined,
+      url: `${window.location.origin}/products/${slug}/`,
+      offers: {
+        "@type": "Offer",
+        price: String(product.price_info?.price ?? ""),
+        // Whole-Toman prices (see README).
+        priceCurrency: "IRT",
+        availability:
+          product.stock_status === "out_of_stock"
+            ? "https://schema.org/OutOfStock"
+            : "https://schema.org/InStock",
+      },
+    });
+    document.head.appendChild(script);
+    return () => script.remove();
+  }, [product, ogImage, slug]);
 
   // Group variants by attribute for the option buttons.
   const attributeOptions = useMemo(() => {

@@ -11,6 +11,7 @@ import { listBrands, listCategories, listFacets, listProducts } from "../service
 import { errorMessage } from "../components/ui";
 import { normalizeApiError } from "../utils/apiError";
 import { formatPrice } from "../utils/formatPrice";
+import { shareImageUrl } from "../utils/shareImage";
 
 const SORT_OPTIONS = [
   { value: "newest", label: "جدیدترین" },
@@ -26,11 +27,6 @@ const SORT_OPTIONS = [
  * contract (apps/products/filters.py).
  */
 function ShopPage() {
-  usePageMeta({
-    title: "فروشگاه",
-    path: "/shop/",
-    description: "خرید آنلاین ظروف آشپزخانه، پخت‌وپز، بلور و کریستال و لوازم خانه با ارسال به سراسر ایران.",
-  });
   const [searchParams, setSearchParams] = useSearchParams();
 
   const params = useMemo(() => {
@@ -57,6 +53,29 @@ function ShopPage() {
     () => listFacets(params.category ? { category: params.category } : {}),
     [params.category || ""]
   );
+
+  // Part S4 item 2: a category or brand page shares ITS OWN image (the
+  // category image, or the brand tile with the brand logo as fallback) as
+  // an absolute URL, and falls back to the shared brand placeholder when
+  // that item has no image at all. An unfiltered /shop/ keeps the
+  // site-wide og:image from index.html.
+  const categories = categoriesState.data?.results || [];
+  const brands = brandsState.data?.results || [];
+  const selectedCategory = categories.find((c) => c.slug === params.category) || null;
+  const selectedBrand = brands.find((b) => b.slug === params.brand) || null;
+  const filtered = selectedCategory || selectedBrand;
+  usePageMeta({
+    title: filtered ? filtered.name : "فروشگاه",
+    path: "/shop/",
+    description:
+      (selectedCategory && selectedCategory.description) ||
+      (filtered
+        ? `خرید آنلاین ${filtered.name} از کازین گالری؛ ارسال به سراسر ایران.`
+        : "خرید آنلاین ظروف آشپزخانه، پخت‌وپز، بلور و کریستال و لوازم خانه با ارسال به سراسر ایران."),
+    image: filtered
+      ? shareImageUrl(selectedCategory ? selectedCategory.image : selectedBrand.tile_image || selectedBrand.logo)
+      : undefined,
+  });
 
   const setParam = (key, value) => {
     const next = new URLSearchParams(searchParams);
