@@ -69,11 +69,14 @@ function HeroSlider({ banners, isLoading }) {
             className={`hero__slide ${i === index ? "is-active" : ""}`}
             aria-hidden={i !== index}
           >
-            {banner.image ? (
-              <SmartImage image={banner} alt={banner.title || ""} eager sizes="100vw" />
-            ) : (
-              <div className="hero__slide-fallback" />
-            )}
+            {/* Part S4 item 1: a slide with no image (or a broken one)
+                shows the shared brand placeholder in the same area. */}
+            <SmartImage
+              image={banner.image ? banner : null}
+              alt={banner.title || ""}
+              eager
+              sizes="100vw"
+            />
             <div className="hero__overlay">
               <div className="hero__copy container">
                 <h1>{banner.title}</h1>
@@ -303,11 +306,11 @@ function Home() {
                 to={`/shop/?category=${encodeURIComponent(category.slug)}`}
                 className="category-card"
               >
-                {category.image ? (
-                  <img src={category.image} alt={category.name} loading="lazy" />
-                ) : (
-                  <span className="category-card__fallback" aria-hidden="true" />
-                )}
+                {/* Part S4 item 1: category tiles go through the shared
+                    image component -- a category without an image (or with
+                    a broken file) shows our logo placeholder, never an
+                    empty span or a broken-image icon. */}
+                <SmartImage image={category.image} alt={category.name} />
                 <span className="category-card__name">{category.name}</span>
               </Link>
             ))}

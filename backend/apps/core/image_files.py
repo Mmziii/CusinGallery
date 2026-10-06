@@ -163,3 +163,68 @@ def make_responsive_variants(source_field):
         except (OSError, ValueError):
             continue  # one bad width must not kill the others
     return produced
+
+
+# ---------------------------------------------------------------------------
+# Part S4 item 1: ONE placeholder markup for Django-rendered surfaces.
+# ---------------------------------------------------------------------------
+# Every storefront surface renders images through the shared SmartImage
+# component (frontend/src/components/SmartImage.jsx), which falls back to
+# the brand mark on the warm-grey field. The Django-rendered surfaces --
+# the admin product list/inline thumbnails and the printable invoice --
+# use the markup below instead, with the SAME field colour (#efece4), the
+# SAME mark (/brand/mark.svg), the SAME olive (#637037 = --brand-green)
+# and the SAME .35 opacity, so a missing or broken image looks identical
+# everywhere. Everything is inline (no extra admin stylesheet to load) and
+# the `onerror` swap means a file that exists in the database but is gone
+# from storage degrades exactly like a missing one.
+PLACEHOLDER_FIELD_COLOR = "#efece4"
+PLACEHOLDER_MARK_COLOR = "#637037"
+PLACEHOLDER_MARK_OPACITY = "0.35"
+PLACEHOLDER_MARK_URL = "/brand/mark.svg"
+
+
+def placeholder_html(width=40, height=40, css_class="", radius=6, hidden=False):
+    """The shared 'no image' placeholder markup (warm-grey field + brand
+    mark in olive at .35 opacity), sized to the image area it replaces."""
+    return (
+        f'<span class="cusin-img-ph {css_class}" role="img" aria-label="بدون تصویر" '
+        f'style="width:{width}px;height:{height}px;border-radius:{radius}px;'
+        f"background:{PLACEHOLDER_FIELD_COLOR};display:{'none' if hidden else 'inline-block'};"
+        'text-align:center;line-height:0">'
+        f'<span style="display:inline-block;width:46%;height:46%;vertical-align:middle;'
+        f"background:{PLACEHOLDER_MARK_COLOR};opacity:{PLACEHOLDER_MARK_OPACITY};"
+        f"-webkit-mask:url('{PLACEHOLDER_MARK_URL}') no-repeat center/contain;"
+        f"mask:url('{PLACEHOLDER_MARK_URL}') no-repeat center/contain\"></span></span>"
+    )
+
+
+def image_or_placeholder_html(image, width=48, height=48, css_class="", radius=6):
+    """
+    An <img> for a stored image file WITH the shared placeholder behind it:
+    a missing image renders the placeholder directly, and a broken file
+    swaps itself for the placeholder on error (never a broken-image icon).
+    """
+    from django.utils.html import format_html
+    from django.utils.safestring import mark_safe
+
+    # Accepts a FieldFile (.url), a model instance whose ImageField is
+    # .image (ProductImage, Category), or a plain URL/path string.
+    url = getattr(image, "url", None)
+    if not url:
+        inner = getattr(image, "image", None)
+        url = getattr(inner, "url", None)
+    if not url and isinstance(image, str):
+        url = image
+    if not url:
+        return mark_safe(placeholder_html(width, height, css_class, radius))
+    return format_html(
+        '<img src="{}" alt="" style="width:{}px;height:{}px;object-fit:cover;'
+        'border-radius:{}px" onerror="this.style.display=\'none\';'
+        'this.nextElementSibling.style.display=\'inline-block\';">{}',
+        url,
+        width,
+        height,
+        radius,
+        mark_safe(placeholder_html(width, height, css_class, radius, hidden=True)),
+    )

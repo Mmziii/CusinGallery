@@ -64,6 +64,11 @@ function ShopPage() {
   const selectedCategory = categories.find((c) => c.slug === params.category) || null;
   const selectedBrand = brands.find((b) => b.slug === params.brand) || null;
   const filtered = selectedCategory || selectedBrand;
+  // Built by the shared helper (never by string concatenation): the
+  // category image, the brand tile (or its logo), the placeholder.
+  const listingShareImage = filtered
+    ? shareImageUrl(selectedCategory ? selectedCategory.image : selectedBrand.tile_image || selectedBrand.logo)
+    : undefined;
   usePageMeta({
     title: filtered ? filtered.name : "فروشگاه",
     path: "/shop/",
@@ -72,9 +77,7 @@ function ShopPage() {
       (filtered
         ? `خرید آنلاین ${filtered.name} از کازین گالری؛ ارسال به سراسر ایران.`
         : "خرید آنلاین ظروف آشپزخانه، پخت‌وپز، بلور و کریستال و لوازم خانه با ارسال به سراسر ایران."),
-    image: filtered
-      ? shareImageUrl(selectedCategory ? selectedCategory.image : selectedBrand.tile_image || selectedBrand.logo)
-      : undefined,
+    image: listingShareImage,
   });
 
   const setParam = (key, value) => {

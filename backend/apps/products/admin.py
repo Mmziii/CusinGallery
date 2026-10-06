@@ -58,11 +58,14 @@ class ProductImageInline(admin.TabularInline):
     readonly_fields = ("thumbnail_preview",)
 
     def thumbnail_preview(self, obj):
-        if obj.pk and obj.thumbnail:
-            return format_html('<img src="{}" alt="" style="max-height:48px">', obj.thumbnail.url)
-        if obj.image:
-            return format_html('<img src="{}" alt="" style="max-height:48px">', obj.image.url)
-        return "—"
+        # Part S4 item 1: the shared placeholder (brand mark on the warm-grey
+        # field) when there is no image -- and when the stored file is gone,
+        # an onerror swap shows the same thing instead of a broken icon.
+        from apps.core.image_files import image_or_placeholder_html
+
+        return image_or_placeholder_html(
+            (obj.thumbnail or obj.image) if obj.pk else None
+        )
 
     thumbnail_preview.short_description = "پیش‌نمایش"
 
@@ -324,12 +327,13 @@ class ProductAdmin(admin.ModelAdmin):
         )
 
     def thumbnail_column(self, obj):
+        # Part S4 item 1: same shared placeholder markup as the inline
+        # preview -- a product with no image (or a broken file) never shows
+        # a broken-image icon or an empty cell.
+        from apps.core.image_files import image_or_placeholder_html
+
         primary = next(iter(getattr(obj, "primary_images", [])), None)
-        if primary is None:
-            return "—"
-        if primary.thumbnail:
-            return format_html('<img src="{}" alt="" style="max-height:48px">', primary.thumbnail.url)
-        return format_html('<img src="{}" alt="" style="max-height:48px">', primary.image.url)
+        return image_or_placeholder_html(primary and (primary.thumbnail or primary.image))
 
     thumbnail_column.short_description = ""
 
