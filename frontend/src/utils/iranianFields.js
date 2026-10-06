@@ -9,6 +9,11 @@
 const FA_DIGITS = "۰۱۲۳۴۵۶۷۸۹";
 const AR_DIGITS = "٠١٢٣٤٥٦٧٨٩";
 
+/** ASCII digits to Persian, for messages shown to the customer. */
+export function toPersianDigits(value) {
+  return String(value ?? "").replace(/\d/g, (d) => FA_DIGITS[Number(d)]);
+}
+
 /** Map Persian/Arabic digits to ASCII; everything else passes through. */
 export function toAsciiDigits(value) {
   return String(value ?? "").replace(/[۰-۹٠-٩]/g, (ch) => {
@@ -45,12 +50,42 @@ export function digitInput(value) {
   return toAsciiDigits(value).replace(/[^\d]/g, "");
 }
 
+/** Part S5 item 6: how long a plot number / unit may be. */
+export const MAX_PLOT_UNIT_LENGTH = 20;
+
+/** Normalize a plot/unit input: Persian digits to ASCII, no spaces/dashes. */
+export function normalizePlotUnit(value) {
+  return toAsciiDigits(value).replace(/[\s-]/g, "");
+}
+
+/**
+ * Part S5 item 6: the plot number (پلاک) and the unit (واحد) are required
+ * and numeric. A customer with no unit enters «۰» -- the helper text says
+ * so, and the server enforces the same rule.
+ */
+export function validatePlotUnit(value, { label, noUnitHint = false }) {
+  const cleaned = normalizePlotUnit(value).trim();
+  if (!cleaned) {
+    return noUnitHint
+      ? `${label} را وارد کنید. اگر واحد ندارید عدد ۰ را وارد کنید.`
+      : `${label} را وارد کنید.`;
+  }
+  if (cleaned.length > MAX_PLOT_UNIT_LENGTH) {
+    return `${label} حداکثر ${toPersianDigits(MAX_PLOT_UNIT_LENGTH)} رقم می‌تواند باشد.`;
+  }
+  if (!/^\d+$/.test(cleaned)) return `${label} باید فقط عدد باشد (مثلاً ۱۲).`;
+  return "";
+}
+
 /**
  * Validate an address-shaped payload (account addresses AND the inline
  * checkout address). Returns { field: message } -- empty object = valid.
  * Messages match the backend's Persian wording closely.
  */
-export function validateAddressPayload(payload, { requirePhone = true } = {}) {
+export function validateAddressPayload(
+  payload,
+  { requirePhone = true, requirePlotAndUnit = true } = {}
+) {
   const errors = {};
   const get = (key) => String(payload?.[key] ?? "").trim();
 
@@ -68,6 +103,15 @@ export function validateAddressPayload(payload, { requirePhone = true } = {}) {
   if (!get("postal_code")) errors.postal_code = "کد پستی را وارد کنید.";
   else if (!isValidPostalCode(get("postal_code"))) {
     errors.postal_code = "کد پستی باید دقیقاً ۱۰ رقم باشد.";
+  }
+  // Part S5 item 6: the courier needs the plot number and the unit.
+  // Older saved addresses keep working (the server only requires them for
+  // NEW addresses and for a one-off checkout address).
+  if (requirePlotAndUnit) {
+    const buildingError = validatePlotUnit(get("building_number"), { label: "پلاک" });
+    if (buildingError) errors.building_number = buildingError;
+    const unitError = validatePlotUnit(get("unit"), { label: "واحد", noUnitHint: true });
+    if (unitError) errors.unit = unitError;
   }
   return errors;
 }

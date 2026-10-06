@@ -50,6 +50,9 @@ class AnalyticsScopingTests(TestCase):
         serializer = CheckoutSerializer(data={
             "recipient_name": "A", "phone": "+989121112233",
             "province": "T", "city": "T", "address": "X", "postal_code": "1234567890",
+            # Part S5 item 6: the plot and the unit are required on a
+            # one-off checkout address.
+            "building_number": "10", "unit": "3",
         })
         serializer.is_valid(raise_exception=True)
         order = checkout(user, serializer.validated_data)

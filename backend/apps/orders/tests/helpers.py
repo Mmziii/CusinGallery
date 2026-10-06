@@ -60,6 +60,9 @@ def make_address(user, **overrides):
         "city": "Tehran",
         "address": "Valiasr St, No. 10",
         "postal_code": "1234567890",
+        # Part S5 item 6: a saved address has a plot and a unit now.
+        "building_number": "10",
+        "unit": "3",
     }
     defaults.update(overrides)
     return Address.objects.create(user=user, **defaults)
@@ -78,7 +81,7 @@ def valid_checkout_payload(**overrides):
         "city": "Tehran",
         "address": "Valiasr St, No. 10",
         "postal_code": "1234567890",
-        "unit": "",
+        "unit": "3",  # Part S5 item 6: plot/unit are required
         "building_number": "10",
     }
     payload.update(overrides)

@@ -164,6 +164,7 @@ class BackInStockDeliveryTests(CacheIsolatedAPITestCase):
         serializer = CheckoutSerializer(data={
             "recipient_name": "B", "phone": "+989121112233",
             "province": "T", "city": "T", "address": "X", "postal_code": "1234567890",
+            "building_number": "10", "unit": "3",
         })
         serializer.is_valid(raise_exception=True)
         order = checkout(user, serializer.validated_data)

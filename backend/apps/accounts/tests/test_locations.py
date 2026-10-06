@@ -16,7 +16,8 @@ def payload(**overrides):
         "city": "تهران",
         "address": "Valiasr St, No. 10",
         "postal_code": "1234567890",
-        "unit": "",
+        "unit": "3",
+        "building_number": "12",
         "building_number": "10",
         "is_default": False,
     }

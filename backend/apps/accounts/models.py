@@ -46,6 +46,7 @@ from django.core.validators import RegexValidator
 from django.db import models
 from django.db.models import Q
 
+from apps.accounts import validators
 from apps.core.models import TimeStampedModel
 
 phone_validator = RegexValidator(
@@ -153,8 +154,22 @@ class Address(TimeStampedModel):
     city = models.CharField(max_length=100)
     address = models.TextField()
     postal_code = models.CharField(max_length=20)
-    unit = models.CharField(max_length=20, blank=True)
-    building_number = models.CharField(max_length=20, blank=True)
+    # Part S5 item 6: the plot number and the unit are required so a
+    # courier can find the door (a customer with no unit enters «۰»).
+    # Addresses saved before this rule keep their empty values -- they are
+    # never rewritten, and both serializers below let them be edited
+    # without inventing a number (see apps.accounts.serializers).
+    unit = models.CharField(
+        "واحد",
+        max_length=20,
+        validators=[validators.validate_unit],
+        help_text="اگر واحد ندارید عدد ۰ را وارد کنید.",
+    )
+    building_number = models.CharField(
+        "پلاک",
+        max_length=20,
+        validators=[validators.validate_building_number],
+    )
     is_default = models.BooleanField(default=False)
 
     class Meta:

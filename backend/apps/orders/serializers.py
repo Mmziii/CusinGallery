@@ -174,6 +174,15 @@ class CheckoutSerializer(NullToBlankTextMixin, serializers.Serializer):
         # copy of it.
         return account_validators.validate_postal_code(value)
 
+    def validate_unit(self, value):
+        # Part S5 item 6: «۰» is valid, letters are not. Emptiness is
+        # judged in validate() (a saved address may legitimately have
+        # none -- those orders are snapshots and stay valid).
+        return account_validators.validate_unit(value) if value else ""
+
+    def validate_building_number(self, value):
+        return account_validators.validate_building_number(value) if value else ""
+
     def validate(self, attrs):
         if attrs.get("address_id") is not None:
             return attrs
@@ -207,4 +216,15 @@ class CheckoutSerializer(NullToBlankTextMixin, serializers.Serializer):
                     ]
                 }
             )
+        # Part S5 item 6: a one-off checkout address needs the plot number
+        # and the unit too (field-keyed Persian messages, so the storefront
+        # can show them inline). The `address_id` path above is untouched,
+        # which is what keeps saved legacy addresses orderable.
+        plot_unit_errors = {
+            field: [account_validators.PLOT_UNIT_MESSAGES[field]]
+            for field in ("building_number", "unit")
+            if not (attrs.get(field) or "").strip()
+        }
+        if plot_unit_errors:
+            raise serializers.ValidationError(plot_unit_errors)
         return attrs

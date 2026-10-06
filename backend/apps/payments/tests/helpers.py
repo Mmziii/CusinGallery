@@ -62,6 +62,7 @@ def checkout_payload(**overrides):
         "city": "Tehran",
         "address": "Valiasr St, No. 10",
         "postal_code": "1234567890",
+        "building_number": "10", "unit": "3",
     }
     payload.update(overrides)
     return payload

@@ -14,7 +14,8 @@ def address_payload(**overrides):
         "city": "Tehran",
         "address": "Valiasr St, No. 10",
         "postal_code": "1234567890",
-        "unit": "",
+        # Part S5 item 6: a new address needs a plot and a unit.
+        "unit": "3",
         "building_number": "10",
         "is_default": False,
     }

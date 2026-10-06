@@ -272,10 +272,14 @@ class AddressSerializer(serializers.ModelSerializer):
     here first atomically clears any other default address for the same
     user, so the create/update below never collides with that constraint.
 
-    Part S1 (item 3): explicit field overrides so (a) `unit` and
-    `building_number` accept JSON null and store it as an empty string
-    (blank=True, null=False CharFields), and (b) phone/postal-code use
+    Part S1 (item 3): explicit field overrides so phone/postal-code use
     the normalizing validators (Persian digits -> ASCII, exact formats).
+
+    Part S5 item 6: `unit` and `building_number` are REQUIRED for a new
+    address (the courier must find the door; «۰» is the documented value
+    for "no unit"). Addresses saved before that rule survive untouched:
+    a PATCH that leaves an already-empty value empty is accepted, so an
+    old address stays editable -- see `validate()` below.
     """
 
     # Declared explicitly so the model field's generic RegexValidator is
@@ -283,9 +287,23 @@ class AddressSerializer(serializers.ModelSerializer):
     # in validate_phone, which -- unlike `validators=` -- can also
     # TRANSFORM the stored value into the normalized form).
     phone = serializers.CharField(max_length=20)
-    unit = serializers.CharField(max_length=20, required=False, allow_blank=True, allow_null=True)
+    unit = serializers.CharField(
+        max_length=20,
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        error_messages={
+            "max_length": "واحد حداکثر ۲۰ رقم می‌تواند باشد.",
+        },
+    )
     building_number = serializers.CharField(
-        max_length=20, required=False, allow_blank=True, allow_null=True
+        max_length=20,
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        error_messages={
+            "max_length": "پلاک ساختمان حداکثر ۲۰ رقم می‌تواند باشد.",
+        },
     )
 
     class Meta:
@@ -298,8 +316,8 @@ class AddressSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "created_at", "updated_at"]
 
     def to_internal_value(self, data):
-        # JSON clients (the storefront among them) may send null for the
-        # optional unit/building_number; the model stores "" for those.
+        # JSON clients (the storefront among them) may send null for a
+        # plot/unit they do not have; the model stores "".
         if isinstance(data, dict):
             data = dict(data)
             for key in ("unit", "building_number"):
@@ -313,11 +331,54 @@ class AddressSerializer(serializers.ModelSerializer):
     def validate_postal_code(self, value):
         return validators.validate_postal_code(value)
 
+    def validate_unit(self, value):
+        # An empty value is judged in validate(): it is only acceptable
+        # for a legacy address that already had none.
+        return validators.validate_unit(value) if value else ""
+
+    def validate_building_number(self, value):
+        return validators.validate_building_number(value) if value else ""
+
+    def _require_plot_and_unit(self, attrs):
+        """Part S5 item 6: a new address must carry a plot number and a
+        unit; an address saved before this rule may keep its empty ones."""
+        errors = {}
+        for field in ("building_number", "unit"):
+            stored = ""
+            if self.instance is not None:
+                stored = (getattr(self.instance, field) or "").strip()
+            if field not in attrs:
+                # PATCH: untouched. A required field only matters when it
+                # was never filled in.
+                if self.instance is None and not self.partial:
+                    errors[field] = [validators.PLOT_UNIT_MESSAGES[field]]
+                continue
+            value = (attrs.get(field) or "").strip()
+            if value:
+                attrs[field] = value  # normalized by validate_<field>
+                continue
+            if stored:
+                errors[field] = [
+                    f"{validators.PLOT_UNIT_MESSAGES[field]}" if self.instance is None
+                    else "این مقدار قبلاً ثبت شده است؛ آن را خالی نگذارید."
+                ]
+            elif self.instance is None:
+                errors[field] = [validators.PLOT_UNIT_MESSAGES[field]]
+            # else: a legacy empty value left empty -- nothing to do.
+        if errors:
+            raise serializers.ValidationError(errors)
+        return attrs
+
     def validate(self, attrs):
         """Part R3: province must be one of the 31 known provinces and a
         known city must belong to its province; free-text cities are still
         allowed. Unchanged values on update skip validation so addresses
-        created before this rule stay editable."""
+        created before this rule stay editable.
+
+        Part S5 item 6: plot/unit required for new addresses -- see
+        _require_plot_and_unit above (legacy empty values are tolerated).
+        """
+        attrs = self._require_plot_and_unit(attrs)
         instance = self.instance
         province = attrs.get("province", getattr(instance, "province", None))
         city = attrs.get("city", getattr(instance, "city", None))
