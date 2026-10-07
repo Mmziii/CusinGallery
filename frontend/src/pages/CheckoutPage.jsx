@@ -476,7 +476,11 @@ function CheckoutPage() {
 
       <CheckoutSteps current={2} done={doneSteps} />
 
-      <div className="checkout__grid">
+      {/* Part S5 follow-up 4 item 4: dedicated wrapper for the sticky summary
+          (own stacking context; the grid is the last thing in the page, so the
+          sticky box can never travel over a following section). */}
+      <div className="checkout__body">
+        <div className="checkout__grid">
         <div className="checkout__main">
           {isPickup ? (
             <section
@@ -803,6 +807,7 @@ function CheckoutPage() {
             پس از ثبت سفارش توسط سرور تأیید و پیش از انتقال به درگاه نمایش داده می‌شود.
           </p>
         </aside>
+        </div>
       </div>
     </div>
   );

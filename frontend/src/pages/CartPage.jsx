@@ -36,6 +36,8 @@ const UNAVAILABLE_REASONS = {
  *    `product.price`) through the shared utils/cartPricing rule, and a line
  *    with a `variant_id` is priced from that variant's own price_info;
  *    the summary shows ONLY the products subtotal.
+ *  - item 4: the items+summary grid is wrapped in `.cart-page__body` so the
+ *    sticky summary can never travel over «اخیراً دیده‌اید».
  */
 function GuestCartSkeleton({ count }) {
   // Part S1 item 2: honest loading rows -- no fake names, no fake total.
@@ -129,73 +131,81 @@ function GuestCartView() {
         </Alert>
       ) : null}
 
-      <div className="cart-page__items">
-        {rows.map(({ line, product, variant, priceInfo, lineTotal }) => (
-          <div className="cart-item" key={`${line.product_id}-${line.variant_id ?? 0}`}>
-            <SmartImage
-              image={product?.primary_image || variant?.image?.image || null}
-              alt={product?.name || ""}
-            />
-            <div className="cart-item__body">
-              <div className="cart-item__name">{product ? product.name : "—"}</div>
-              {variantLabel(variant) ? (
-                <div className="cart-item__variant">{variantLabel(variant)}</div>
-              ) : null}
-              <div className="cart-item__unit">
-                {priceInfo ? <PriceTag priceInfo={priceInfo} size="sm" /> : "—"}
+      {/* Part S5 follow-up 4 item 4: the sticky summary is confined to this
+          wrapper, which ends BEFORE «اخیراً دیده‌اید» -- otherwise the sticky
+          box could travel down over that section (the owner's overlap). */}
+      <div className="cart-page__body">
+        <div className="cart-page__grid">
+          <div className="cart-page__items">
+            {rows.map(({ line, product, variant, priceInfo, lineTotal }) => (
+              <div className="cart-item" key={`${line.product_id}-${line.variant_id ?? 0}`}>
+                <SmartImage
+                  image={product?.primary_image || variant?.image?.image || null}
+                  alt={product?.name || ""}
+                />
+                <div className="cart-item__body">
+                  <div className="cart-item__name">{product ? product.name : "—"}</div>
+                  {variantLabel(variant) ? (
+                    <div className="cart-item__variant">{variantLabel(variant)}</div>
+                  ) : null}
+                  <div className="cart-item__unit">
+                    {priceInfo ? <PriceTag priceInfo={priceInfo} size="sm" /> : "—"}
+                  </div>
+                  <div className="cart-item__qty">
+                    <button
+                      type="button"
+                      aria-label="افزایش تعداد"
+                      onClick={() => updateGuestItem(line.product_id, line.variant_id, line.quantity + 1)}
+                    >
+                      +
+                    </button>
+                    <span>{formatPrice(line.quantity)}</span>
+                    <button
+                      type="button"
+                      aria-label="کاهش تعداد"
+                      onClick={() => {
+                        // Part S2 item 6: dropping the last item removes the
+                        // line -- confirm that destructive step.
+                        if (line.quantity - 1 <= 0 && !window.confirm("این کالا از سبد خرید حذف شود؟")) return;
+                        updateGuestItem(line.product_id, line.variant_id, line.quantity - 1);
+                      }}
+                    >
+                      −
+                    </button>
+                  </div>
+                </div>
+                <div className="cart-item__total">
+                  {lineTotal === null ? "" : `${formatPrice(lineTotal)} تومان`}
+                </div>
               </div>
-              <div className="cart-item__qty">
-                <button
-                  type="button"
-                  aria-label="افزایش تعداد"
-                  onClick={() => updateGuestItem(line.product_id, line.variant_id, line.quantity + 1)}
-                >
-                  +
-                </button>
-                <span>{formatPrice(line.quantity)}</span>
-                <button
-                  type="button"
-                  aria-label="کاهش تعداد"
-                  onClick={() => {
-                    // Part S2 item 6: dropping the last item removes the
-                    // line -- confirm that destructive step.
-                    if (line.quantity - 1 <= 0 && !window.confirm("این کالا از سبد خرید حذف شود؟")) return;
-                    updateGuestItem(line.product_id, line.variant_id, line.quantity - 1);
-                  }}
-                >
-                  −
-                </button>
-              </div>
-            </div>
-            <div className="cart-item__total">
-              {lineTotal === null ? "" : `${formatPrice(lineTotal)} تومان`}
-            </div>
+            ))}
           </div>
-        ))}
-      </div>
 
-      <div className="cart-page__summary card">
-        {/* Part S5 follow-up 4 item 3: the cart page shows the PRODUCTS
-            subtotal and nothing else -- shipping, gift wrapping and the
-            final amount belong to the checkout page. */}
-        <h2>خلاصه سفارش</h2>
-        <dl>
-          <div>
-            <dt>جمع کالاها ({formatPrice(itemCount)})</dt>
-            {/* Never show a computed subtotal while some lines are unpriced. */}
-            <dd>{subtotal === null ? "در حال محاسبه…" : `${formatPrice(subtotal)} تومان`}</dd>
+          <div className="cart-page__summary card">
+            {/* Part S5 follow-up 4 item 3: the cart page shows the PRODUCTS
+                subtotal and nothing else -- shipping, gift wrapping and the
+                final amount belong to the checkout page. */}
+            <h2>خلاصه سفارش</h2>
+            <dl>
+              <div>
+                <dt>جمع کالاها ({formatPrice(itemCount)})</dt>
+                {/* Never show a computed subtotal while some lines are unpriced. */}
+                <dd>{subtotal === null ? "در حال محاسبه…" : `${formatPrice(subtotal)} تومان`}</dd>
+              </div>
+            </dl>
+            <p className="muted">
+              برای پرداخت و ثبت سفارش وارد شوید یا ثبت‌نام کنید؛ سبد شما به‌صورت خودکار منتقل
+              می‌شود.
+            </p>
+            <div className="cart-page__actions">
+              <Link className="btn btn--primary" to="/login/">ورود به حساب</Link>
+              <Link className="btn btn--outline" to="/register/">ثبت‌نام</Link>
+            </div>
           </div>
-        </dl>
-        <p className="muted">
-          برای پرداخت و ثبت سفارش وارد شوید یا ثبت‌نام کنید؛ سبد شما به‌صورت خودکار منتقل
-          می‌شود.
-        </p>
-        <div className="cart-page__actions">
-          <Link className="btn btn--primary" to="/login/">ورود به حساب</Link>
-          <Link className="btn btn--outline" to="/register/">ثبت‌نام</Link>
         </div>
       </div>
-      {/* Part R5 item 10 */}
+
+      {/* Part R5 item 10 -- outside the sticky wrapper (item 4) */}
       <RecentlyViewed />
     </div>
   );
@@ -232,104 +242,111 @@ function CartPage() {
     <div className="cart-page">
       <h1 className="page-title">سبد خرید</h1>
 
-      <div className="cart-page__items">
-        {cart.items.map((item) => (
-          <div key={item.id} className={`cart-item ${item.is_available ? "" : "cart-item--unavailable"}`}>
-            <SmartImage image={item.product?.primary_image || null} alt={item.product?.name || ""} />
+      {/* Part S5 follow-up 4 item 4: dedicated sticky wrapper (see the guest
+          view); the grid holds only the items + summary columns. */}
+      <div className="cart-page__body">
+        <div className="cart-page__grid">
+          <div className="cart-page__items">
+            {cart.items.map((item) => (
+              <div key={item.id} className={`cart-item ${item.is_available ? "" : "cart-item--unavailable"}`}>
+                <SmartImage image={item.product?.primary_image || null} alt={item.product?.name || ""} />
 
-            <div className="cart-item__info">
-              <Link to={`/products/${item.product.slug}/`} className="cart-item__name">
-                {item.product.name}
-              </Link>
-              {item.variant ? (
-                <div className="cart-item__variant">
-                  {item.variant.attribute_values.map((av) => `${av.attribute}: ${av.value}`).join("، ")}
+                <div className="cart-item__info">
+                  <Link to={`/products/${item.product.slug}/`} className="cart-item__name">
+                    {item.product.name}
+                  </Link>
+                  {item.variant ? (
+                    <div className="cart-item__variant">
+                      {item.variant.attribute_values.map((av) => `${av.attribute}: ${av.value}`).join("، ")}
+                    </div>
+                  ) : null}
+                  <div className="cart-item__unit">
+                    <PriceTag priceInfo={item.price_info} size="sm" />
+                  </div>
+                  {!item.is_available ? (
+                    <div className="cart-item__reason">
+                      {UNAVAILABLE_REASONS[item.unavailable_reason] || "در دسترس نیست."}
+                    </div>
+                  ) : null}
                 </div>
-              ) : null}
-              <div className="cart-item__unit">
-                <PriceTag priceInfo={item.price_info} size="sm" />
-              </div>
-              {!item.is_available ? (
-                <div className="cart-item__reason">
-                  {UNAVAILABLE_REASONS[item.unavailable_reason] || "در دسترس نیست."}
-                </div>
-              ) : null}
-            </div>
 
-            <div className="cart-item__controls">
-              <div className="qty-picker">
-                <button
-                  type="button"
-                  aria-label="کاهش تعداد"
-                  onClick={() => {
-                    if (item.quantity - 1 <= 0) {
+                <div className="cart-item__controls">
+                  <div className="qty-picker">
+                    <button
+                      type="button"
+                      aria-label="کاهش تعداد"
+                      onClick={() => {
+                        if (item.quantity - 1 <= 0) {
+                          if (!window.confirm("این کالا از سبد خرید حذف شود؟")) return;
+                        }
+                        updateItem(item.id, item.quantity - 1).then((result) => {
+                          if (result && !result.success) {
+                            toast(errorMessage(result.error) || "تغییر تعداد انجام نشد.", "error");
+                          }
+                        });
+                      }}
+                    >
+                      −
+                    </button>
+                    <span>{item.quantity}</span>
+                    <button
+                      type="button"
+                      aria-label="افزایش تعداد"
+                      onClick={() => {
+                        updateItem(item.id, item.quantity + 1).then((result) => {
+                          if (result && !result.success) {
+                            toast(errorMessage(result.error) || "تغییر تعداد انجام نشد.", "error");
+                          }
+                        });
+                      }}
+                    >
+                      +
+                    </button>
+                  </div>
+                  <div className="cart-item__total">{formatPrice(item.line_total)} تومان</div>
+                  <button
+                    type="button"
+                    className="link-danger"
+                    onClick={() => {
+                      // Part S2 item 6: destructive action needs confirmation.
                       if (!window.confirm("این کالا از سبد خرید حذف شود؟")) return;
-                    }
-                    updateItem(item.id, item.quantity - 1).then((result) => {
-                      if (result && !result.success) {
-                        toast(errorMessage(result.error) || "تغییر تعداد انجام نشد.", "error");
-                      }
-                    });
-                  }}
-                >
-                  −
-                </button>
-                <span>{item.quantity}</span>
-                <button
-                  type="button"
-                  aria-label="افزایش تعداد"
-                  onClick={() => {
-                    updateItem(item.id, item.quantity + 1).then((result) => {
-                      if (result && !result.success) {
-                        toast(errorMessage(result.error) || "تغییر تعداد انجام نشد.", "error");
-                      }
-                    });
-                  }}
-                >
-                  +
-                </button>
+                      removeItem(item.id).then((result) => {
+                        if (result && !result.success) {
+                          toast(errorMessage(result.error) || "حذف انجام نشد.", "error");
+                        }
+                      });
+                    }}
+                  >
+                    حذف
+                  </button>
+                </div>
               </div>
-              <div className="cart-item__total">{formatPrice(item.line_total)} تومان</div>
-              <button
-                type="button"
-                className="link-danger"
-                onClick={() => {
-                  // Part S2 item 6: destructive action needs confirmation.
-                  if (!window.confirm("این کالا از سبد خرید حذف شود؟")) return;
-                  removeItem(item.id).then((result) => {
-                    if (result && !result.success) {
-                      toast(errorMessage(result.error) || "حذف انجام نشد.", "error");
-                    }
-                  });
-                }}
-              >
-                حذف
-              </button>
-            </div>
+            ))}
           </div>
-        ))}
+
+          {/* Part S5 follow-up 4 item 3: unit price + line total per row, and
+              below the rows ONLY the products subtotal -- no shipping, no gift
+              wrapping, no final total (those are computed by the server on the
+              checkout page, right before payment). */}
+          <aside className="cart-page__summary">
+            <h2>خلاصه سفارش</h2>
+            <dl>
+              <div>
+                <dt>جمع کالاها ({cart.item_count})</dt>
+                <dd>{formatPrice(cart.subtotal)} تومان</dd>
+              </div>
+            </dl>
+            <button type="button" className="btn btn--primary btn--block" onClick={() => navigate("/checkout/")}>
+              ادامه و ثبت سفارش
+            </button>
+            <p className="cart-page__note">
+              مبلغ نهایی در مرحله ثبت سفارش توسط سرور محاسبه می‌شود.
+            </p>
+          </aside>
+        </div>
       </div>
 
-      {/* Part S5 follow-up 4 item 3: unit price + line total per row, and
-          below the rows ONLY the products subtotal -- no shipping, no gift
-          wrapping, no final total (those are computed by the server on the
-          checkout page, right before payment). */}
-      <aside className="cart-page__summary">
-        <h2>خلاصه سفارش</h2>
-        <dl>
-          <div>
-            <dt>جمع کالاها ({cart.item_count})</dt>
-            <dd>{formatPrice(cart.subtotal)} تومان</dd>
-          </div>
-        </dl>
-        <button type="button" className="btn btn--primary btn--block" onClick={() => navigate("/checkout/")}>
-          ادامه و ثبت سفارش
-        </button>
-        <p className="cart-page__note">
-          مبلغ نهایی در مرحله ثبت سفارش توسط سرور محاسبه می‌شود.
-        </p>
-      </aside>
-      {/* Part R5 item 10 */}
+      {/* Part R5 item 10 -- outside the sticky wrapper (item 4) */}
       <RecentlyViewed />
     </div>
   );
