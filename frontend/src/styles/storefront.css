@@ -1051,8 +1051,14 @@ h1, h2, h3, .section__head h2 {
 .site-header__burger { display: none; background: none; border: none; cursor: pointer; padding: 8px; }
 .site-header__burger span { display: block; width: 22px; height: 2px; background: var(--brand-gold); margin: 5px 0; border-radius: 2px; }
 
+/* Part S5 follow-up 4: the full-viewport drawers are portaled to <body>
+   (see components/Portal.jsx) and sit ABOVE the floating contact cluster
+   (z-index 110) so the contact/back-to-top buttons can never cover a
+   drawer's own action button, and BELOW the toaster (120) so a toast stays
+   readable. The z-index ladder is pinned by a test
+   (src/components/Overlays.portal.test.jsx). */
 .site-header__drawer {
-  position: fixed; inset: 0; z-index: 90; background: var(--brand-green-dark);
+  position: fixed; inset: 0; z-index: 115; background: var(--brand-green-dark);
   padding: var(--space-4); display: flex; flex-direction: column; gap: 6px; overflow: auto;
 }
 .site-header__drawer a { color: var(--brand-ivory); padding: 10px 4px; border-bottom: 1px solid rgba(206,180,100,.18); font-size: var(--font-size-md); }
@@ -1063,7 +1069,7 @@ h1, h2, h3, .section__head h2 {
 .category-bar { display: none; }
 
 /* --- Mini cart drawer --- */
-.minicart { position: fixed; inset: 0; z-index: 95; pointer-events: none; }
+.minicart { position: fixed; inset: 0; z-index: 116; pointer-events: none; }
 .minicart__backdrop { position: absolute; inset: 0; background: rgba(20,26,10,.5); pointer-events: auto; }
 .minicart__panel {
   position: absolute; top: 0; bottom: 0; inset-inline-start: auto; inset-inline-end: 0;

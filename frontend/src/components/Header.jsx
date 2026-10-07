@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 
 import Icon from "./Icon";
+import Portal from "./Portal";
 import SmartImage from "./SmartImage";
 import useFocusTrap from "../hooks/useFocusTrap";
 import useAuthStore from "../store/useAuthStore";
@@ -345,68 +346,78 @@ function Header() {
         </div>
       </div>
 
+      {/* Part S5 follow-up 4: portal -- a position: fixed drawer must not live
+          inside the header, because the scrolled header's backdrop-filter makes
+          it the containing block and shrinks the drawer to the header's box. */}
       {menuOpen ? (
-        <div className="site-header__drawer" role="dialog" aria-modal="true" aria-label="منوی اصلی" ref={drawerRef}>
-          <div className="site-header__drawer-head">
-            <span className="site-header__brand-name">کازین گالری</span>
-            <button type="button" aria-label="بستن منو" onClick={() => setMenuOpen(false)}>
-              <Icon name="close" size={22} />
-            </button>
-          </div>
-          <NavLink to="/" onClick={() => setMenuOpen(false)}>خانه</NavLink>
-          <NavLink to="/shop/" onClick={() => setMenuOpen(false)}>فروشگاه</NavLink>
-          {categories.map((category) => (
-            <NavLink
-              key={category.id}
-              to={`/shop/?category=${encodeURIComponent(category.slug)}`}
-              onClick={() => setMenuOpen(false)}
-            >
-              {category.name}
-            </NavLink>
-          ))}
-          {isAuthenticated ? (
-            <NavLink to="/wishlist/" onClick={() => setMenuOpen(false)}>علاقه‌مندی‌ها</NavLink>
-          ) : (
-            <NavLink to="/login/" onClick={() => setMenuOpen(false)}>ورود | ثبت‌نام</NavLink>
-          )}
-        </div>
-      ) : null}
-
-      {cartOpen ? (
-        <div className="minicart" role="dialog" aria-modal="true" aria-label="سبد خرید">
-          <div className="minicart__backdrop" onClick={() => setCartOpen(false)} />
-          <div className="minicart__panel" ref={minicartRef}>
-            <div className="minicart__head">
-              <strong>سبد خرید</strong>
-              <button type="button" aria-label="بستن سبد" onClick={() => setCartOpen(false)}>
-                <Icon name="close" size={20} />
+        <Portal>
+          <div className="site-header__drawer" role="dialog" aria-modal="true" aria-label="منوی اصلی" ref={drawerRef}>
+            <div className="site-header__drawer-head">
+              <span className="site-header__brand-name">کازین گالری</span>
+              <button type="button" aria-label="بستن منو" onClick={() => setMenuOpen(false)}>
+                <Icon name="close" size={22} />
               </button>
             </div>
-            {cartLines.length === 0 ? (
-              <p className="minicart__empty">سبد شما خالی است.</p>
+            <NavLink to="/" onClick={() => setMenuOpen(false)}>خانه</NavLink>
+            <NavLink to="/shop/" onClick={() => setMenuOpen(false)}>فروشگاه</NavLink>
+            {categories.map((category) => (
+              <NavLink
+                key={category.id}
+                to={`/shop/?category=${encodeURIComponent(category.slug)}`}
+                onClick={() => setMenuOpen(false)}
+              >
+                {category.name}
+              </NavLink>
+            ))}
+            {isAuthenticated ? (
+              <NavLink to="/wishlist/" onClick={() => setMenuOpen(false)}>علاقه‌مندی‌ها</NavLink>
             ) : (
-              <>
-                <ul className="minicart__items">
-                  {cartLines.map((line) => (
-                    <li key={line.key}>
-                      <SmartImage image={{ image: line.image }} alt="" />
-                      <span className="minicart__name">{line.name}</span>
-                      <span className="minicart__qty">{formatPrice(line.quantity)} عدد</span>
-                      <span className="minicart__price">
-                        {formatPrice(line.price * line.quantity)} تومان
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-                <div className="minicart__foot">
-                  <Link className="btn btn--primary" to="/cart/" onClick={() => setCartOpen(false)}>
-                    مشاهدهٔ سبد و ثبت سفارش
-                  </Link>
-                </div>
-              </>
+              <NavLink to="/login/" onClick={() => setMenuOpen(false)}>ورود | ثبت‌نام</NavLink>
             )}
           </div>
-        </div>
+        </Portal>
+      ) : null}
+
+      {/* Part S5 follow-up 4: portal (see the mobile drawer above) -- this is
+          the drawer the owner saw truncated to the header's height while the
+          page was scrolled. */}
+      {cartOpen ? (
+        <Portal>
+          <div className="minicart" role="dialog" aria-modal="true" aria-label="سبد خرید">
+            <div className="minicart__backdrop" onClick={() => setCartOpen(false)} />
+            <div className="minicart__panel" ref={minicartRef}>
+              <div className="minicart__head">
+                <strong>سبد خرید</strong>
+                <button type="button" aria-label="بستن سبد" onClick={() => setCartOpen(false)}>
+                  <Icon name="close" size={20} />
+                </button>
+              </div>
+              {cartLines.length === 0 ? (
+                <p className="minicart__empty">سبد شما خالی است.</p>
+              ) : (
+                <>
+                  <ul className="minicart__items">
+                    {cartLines.map((line) => (
+                      <li key={line.key}>
+                        <SmartImage image={{ image: line.image }} alt="" />
+                        <span className="minicart__name">{line.name}</span>
+                        <span className="minicart__qty">{formatPrice(line.quantity)} عدد</span>
+                        <span className="minicart__price">
+                          {formatPrice(line.price * line.quantity)} تومان
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="minicart__foot">
+                    <Link className="btn btn--primary" to="/cart/" onClick={() => setCartOpen(false)}>
+                      مشاهدهٔ سبد و ثبت سفارش
+                    </Link>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </Portal>
       ) : null}
     </header>
   );
