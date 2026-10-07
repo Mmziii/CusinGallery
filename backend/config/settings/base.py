@@ -118,10 +118,18 @@ ASGI_APPLICATION = "config.asgi.application"
 # ---------------------------------------------------------------------------
 # Database
 # ---------------------------------------------------------------------------
-# PostgreSQL only -- SQLite is intentionally not supported, including for
-# local development, so that behaviour never silently diverges between
-# environments. DATABASE_URL takes priority; if it's not set, we fall back
-# to the discrete POSTGRES_* variables (handy for docker-compose).
+# PostgreSQL is the only supported engine for a real deployment, and the
+# one the test suite runs against -- so behaviour never silently diverges
+# between environments. DATABASE_URL takes priority; if it's not set, we
+# fall back to the discrete POSTGRES_* variables (handy for docker-compose).
+#
+# DATABASE_URL=sqlite:///db.sqlite3 is accepted for a QUICK LOCAL RUN on a
+# machine without Docker/PostgreSQL (documented in docs/DEPLOY.md, section
+# 24 for Windows). It is a convenience, not a second supported target: the
+# two payment-concurrency tests skip themselves on SQLite (SQLite locks the
+# whole database file, so row-level locking cannot be exercised) -- see
+# apps/payments/tests/test_api.py.
+
 if env("DATABASE_URL", default=""):
     DATABASES = {"default": env.db("DATABASE_URL")}
 else:

@@ -37,14 +37,28 @@ ARG VITE_SENTRY_DSN=
 ENV VITE_SENTRY_DSN=${VITE_SENTRY_DSN}
 
 COPY frontend/package.json frontend/package-lock.json* ./
+
+# Optional: a local/enterprise npm registry for networks where
+# registry.npmjs.org is slow or blocked. Empty by default -- no mirror is
+# assumed or hard-coded (npm's own NPM_CONFIG_REGISTRY env var works the
+# same way, but a build arg is what Compose can pass per machine):
+#   docker build --build-arg NPM_CONFIG_REGISTRY=https://<your-mirror>/ ...
+ARG NPM_CONFIG_REGISTRY
+
 # Reproducibility: frontend/package-lock.json is committed, so this uses
 # `npm ci` (exact resolved versions + integrity hashes). If the lockfile
 # is ever missing (e.g. a partial checkout), it falls back to
 # `npm install`.
+#
+# This is the ONLY step in either Dockerfile that talks to a package
+# registry at build time (the backend image installs wheels from PyPI and
+# nothing else does network I/O), so it is also the only one a mirror can
+# matter for. Build-time network still needed regardless of mirror: the
+# base images below, which can be pre-pulled -- see docs/DEPLOY.md.
 RUN if [ -f package-lock.json ]; then \
-        echo "package-lock.json found -- using npm ci" && npm ci --no-audit --no-fund; \
+        echo "package-lock.json found -- using npm ci" && npm ci --no-audit --no-fund ${NPM_CONFIG_REGISTRY:+--registry=${NPM_CONFIG_REGISTRY}}; \
     else \
-        echo "No package-lock.json -- falling back to npm install" && npm install --no-audit --no-fund; \
+        echo "No package-lock.json -- falling back to npm install" && npm install --no-audit --no-fund ${NPM_CONFIG_REGISTRY:+--registry=${NPM_CONFIG_REGISTRY}}; \
     fi
 
 COPY frontend/ .

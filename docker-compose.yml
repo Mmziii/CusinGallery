@@ -45,6 +45,11 @@ services:
     build:
       context: ./backend
       dockerfile: ../docker/backend/Dockerfile
+      args:
+        # Optional PyPI mirror for networks where pypi.org is slow or
+        # blocked (see docs/DEPLOY.md, section 23). Empty = the default
+        # index; no mirror is assumed or hard-coded anywhere.
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-}
     restart: unless-stopped
     env_file:
       - .env
@@ -68,6 +73,8 @@ services:
       dockerfile: docker/frontend/Dockerfile
       args:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL}
+        # Optional npm registry mirror (same idea as PIP_INDEX_URL above).
+        NPM_CONFIG_REGISTRY: ${NPM_CONFIG_REGISTRY:-}
     restart: unless-stopped
     depends_on:
       - backend
