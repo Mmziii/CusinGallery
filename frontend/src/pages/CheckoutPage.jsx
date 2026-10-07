@@ -406,6 +406,15 @@ function CheckoutPage() {
             <dt>هزینه ارسال ({methodLabel(placedOrder.shipping_method)})</dt>
             <dd>{placedOrder.shipping_cost === 0 ? "رایگان" : `${formatPrice(placedOrder.shipping_cost)} تومان`}</dd>
           </div>
+          {/* Part S5 follow-up 4 item 3: the gift-wrap fee is part of the
+              server's `total`; show it explicitly so the amount the customer
+              is about to pay is fully accounted for before the gateway. */}
+          {placedOrder.gift_wrap_fee > 0 ? (
+            <div>
+              <dt>بسته‌بندی هدیه</dt>
+              <dd>{formatPrice(placedOrder.gift_wrap_fee)} تومان</dd>
+            </div>
+          ) : null}
           <div className="checkout-done__grand"><dt>مبلغ قابل پرداخت</dt><dd>{formatPrice(placedOrder.total)} تومان</dd></div>
         </dl>
 
@@ -764,7 +773,7 @@ function CheckoutPage() {
             {couponPreview ? (
               <div><dt>تخفیف</dt><dd>− {formatPrice(couponPreview.discount_amount)} تومان</dd></div>
             ) : null}
-            <div className="checkout__grand"><dt>مبلغ نهایی</dt><dd>{formatPrice(estimatedTotal)} تومان</dd></div>
+            <div className="checkout__grand"><dt>مبلغ قابل پرداخت</dt><dd>{formatPrice(estimatedTotal)} تومان</dd></div>
           </dl>
           {checkoutError ? <Alert>{errorMessage(checkoutError)}</Alert> : null}
           <button
@@ -789,7 +798,10 @@ function CheckoutPage() {
               ))}
             </ul>
           ) : null}
-          <p className="checkout__note">مبلغ نهایی توسط سرور محاسبه و در صفحه بعد تأیید می‌شود.</p>
+          <p className="checkout__note">
+            مبلغ قابل پرداخت از جمع کالاها، هزینه ارسال و تخفیف محاسبه شده است؛ مبلغ نهایی
+            پس از ثبت سفارش توسط سرور تأیید و پیش از انتقال به درگاه نمایش داده می‌شود.
+          </p>
         </aside>
       </div>
     </div>

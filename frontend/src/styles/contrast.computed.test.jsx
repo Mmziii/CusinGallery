@@ -201,7 +201,14 @@ describe("computed contrast on the cart surfaces (item 2)", () => {
     // The old cascade painted the product name in the header's ivory
     // (rgb(250,247,240)) on the white panel -- 1.07:1 -- because the drawer
     // was a child of <header>. Measured now, every text cell of the drawer:
-    for (const cls of ["minicart__panel", "minicart__name", "minicart__qty", "minicart__price"]) {
+    for (const cls of [
+      "minicart__name",
+      "minicart__variant",
+      "minicart__qty",
+      "minicart__unit",
+      "minicart__line-total",
+      "minicart__subtotal",
+    ]) {
       const node = drawer.querySelector(`.${cls}`);
       expect(node, cls).toBeTruthy();
       const { foreground, backdrop, ratio } = measure(node);

@@ -61,6 +61,10 @@ const useCartStore = create((set, get) => ({
   cart: null,
   guestLines: loadGuestLines(),
   guestProducts: {}, // product_id -> product payload (display-only)
+  // Part S5 follow-up 4 item 3: variant_id -> variant payload. The products
+  // LIST endpoint is deliberately variant-free, so a guest line that
+  // points at a variant needs the product DETAIL to know its own price.
+  guestVariants: {},
   // Part S1 item 2: explicit hydration lifecycle so the cart page never
   // shows half-rendered rows with a fake 0 total: "idle" before the
   // first attempt, "loading" in flight, "ready" once hydrated, "error"
@@ -115,9 +119,10 @@ const useCartStore = create((set, get) => ({
   },
 
   async hydrateGuestProducts() {
-    const ids = [...new Set(get().guestLines.map((l) => l.product_id))];
+    const lines = get().guestLines;
+    const ids = [...new Set(lines.map((l) => l.product_id))];
     if (ids.length === 0) {
-      set({ guestProducts: {}, guestHydration: "ready", guestHydrationError: null });
+      set({ guestProducts: {}, guestVariants: {}, guestHydration: "ready", guestHydrationError: null });
       return;
     }
     const seq = ++hydrationSeq;
@@ -127,7 +132,23 @@ const useCartStore = create((set, get) => ({
       if (seq !== hydrationSeq) return; // a newer request owns the result
       const byId = {};
       for (const product of data.results || []) byId[product.id] = product;
-      set({ guestProducts: byId, guestHydration: "ready", guestHydrationError: null });
+
+      // Variant lines need each product's DETAIL (the list endpoint has no
+      // variants): fetch exactly those products once, cache variant_id ->
+      // variant, and let a failure surface through the same friendly
+      // error + retry path as the list request.
+      const variantProductIds = [...new Set(lines.filter((l) => l.variant_id).map((l) => l.product_id))];
+      const slugs = variantProductIds.map((productId) => byId[productId]?.slug).filter(Boolean);
+      const details = await Promise.all(slugs.map((slug) => catalogApi.getProduct(slug)));
+      if (seq !== hydrationSeq) return; // a newer request owns the result
+      const variants = {};
+      for (const detail of details) {
+        for (const variant of detail?.variants || []) variants[variant.id] = variant;
+      }
+      set({
+        guestProducts: byId, guestVariants: variants,
+        guestHydration: "ready", guestHydrationError: null,
+      });
     } catch (err) {
       if (seq !== hydrationSeq) return; // a newer request owns the state
       // Never swallow: the cart page shows a friendly error + retry, and
@@ -234,7 +255,7 @@ const useCartStore = create((set, get) => ({
    * user, and can never contain another user's server cart).
    */
   reset() {
-    set({ cart: null, error: null, guestProducts: {} });
+    set({ cart: null, error: null, guestProducts: {}, guestVariants: {} });
     const lines = get().guestLines;
     if (lines.length > 0) set({ cart: get()._guestCartView(lines) });
   },

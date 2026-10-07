@@ -3,11 +3,19 @@ import { Link, NavLink, useNavigate } from "react-router-dom";
 
 import Icon from "./Icon";
 import Portal from "./Portal";
+import PriceTag from "./PriceTag";
 import SmartImage from "./SmartImage";
 import useFocusTrap from "../hooks/useFocusTrap";
 import useAuthStore from "../store/useAuthStore";
 import useCartStore from "../store/useCartStore";
 import { getCategoryTree, listProducts } from "../services/catalogApi";
+import {
+  lineTotalForLine,
+  priceInfoForLine,
+  sumLineTotals,
+  unitPriceForLine,
+  variantLabel,
+} from "../utils/cartPricing";
 import { formatPrice } from "../utils/formatPrice";
 
 /**
@@ -23,6 +31,7 @@ function Header() {
   const cart = useCartStore((s) => s.cart);
   const guestLines = useCartStore((s) => s.guestLines);
   const guestProducts = useCartStore((s) => s.guestProducts);
+  const guestVariants = useCartStore((s) => s.guestVariants);
   const fetchCart = useCartStore((s) => s.fetchCart);
   const hydrateGuestProducts = useCartStore((s) => s.hydrateGuestProducts);
 
@@ -170,21 +179,36 @@ function Header() {
   };
 
   const itemCount = cart?.item_count ?? 0;
+  // Part S5 follow-up 4 item 3: the same pricing rule as the cart page
+  // (utils/cartPricing) -- `product.price` does not exist in the API, so
+  // guest lines used to render an empty price and a 0 line total here too.
   const cartLines = isAuthenticated
     ? (cart?.items || []).map((item) => ({
         key: item.id,
         name: item.product?.name || "",
         image: item.product?.primary_image?.image || null,
+        variant: variantLabel(item.variant),
         quantity: item.quantity,
-        price: item.price_info?.price ?? 0,
+        priceInfo: item.price_info || null,
+        lineTotal: item.line_total,
       }))
-    : guestLines.map((line) => ({
-        key: `${line.product_id}-${line.variant_id ?? 0}`,
-        name: guestProducts[line.product_id]?.name || "…",
-        image: guestProducts[line.product_id]?.primary_image?.image || null,
-        quantity: line.quantity,
-        price: guestProducts[line.product_id]?.price ?? 0,
-      }));
+    : guestLines.map((line) => {
+        const product = guestProducts[line.product_id];
+        const variant = line.variant_id ? guestVariants[line.variant_id] : null;
+        return {
+          key: `${line.product_id}-${line.variant_id ?? 0}`,
+          name: product?.name || "…",
+          image: product?.primary_image?.image || variant?.image?.image || null,
+          variant: variantLabel(variant),
+          quantity: line.quantity,
+          unitPrice: unitPriceForLine(line, product, variant),
+          priceInfo: priceInfoForLine(line, product, variant),
+          lineTotal: lineTotalForLine(line, product, variant),
+        };
+      });
+  const cartSubtotal = isAuthenticated
+    ? (cart?.subtotal ?? null)
+    : sumLineTotals(cartLines.map((line) => line.lineTotal));
 
   return (
     <header className={`site-header ${compact ? "site-header--compact" : ""}`}>
@@ -232,7 +256,9 @@ function Header() {
                     <SmartImage image={product.primary_image} alt="" />
                     <span className="search-suggest__name">{product.name}</span>
                     <span className="search-suggest__price">
-                      {formatPrice(product.price)} تومان
+                      {product.price_info ? (
+                        <PriceTag priceInfo={product.price_info} size="sm" />
+                      ) : null}
                     </span>
                   </Link>
                 </li>
@@ -400,14 +426,39 @@ function Header() {
                     {cartLines.map((line) => (
                       <li key={line.key}>
                         <SmartImage image={{ image: line.image }} alt="" />
-                        <span className="minicart__name">{line.name}</span>
-                        <span className="minicart__qty">{formatPrice(line.quantity)} عدد</span>
-                        <span className="minicart__price">
-                          {formatPrice(line.price * line.quantity)} تومان
-                        </span>
+                        <div className="minicart__line-body">
+                          <span className="minicart__name">{line.name}</span>
+                          {line.variant ? (
+                            <span className="minicart__variant">{line.variant}</span>
+                          ) : null}
+                          <span className="minicart__unit">
+                            {line.priceInfo ? (
+                              <PriceTag priceInfo={line.priceInfo} size="sm" />
+                            ) : (
+                              "—"
+                            )}
+                          </span>
+                        </div>
+                        <div className="minicart__line-side">
+                          <span className="minicart__qty">{formatPrice(line.quantity)} عدد</span>
+                          <span className="minicart__line-total">
+                            {line.lineTotal === null || line.lineTotal === undefined
+                              ? ""
+                              : `${formatPrice(line.lineTotal)} تومان`}
+                          </span>
+                        </div>
                       </li>
                     ))}
                   </ul>
+                  {/* Same rule as the cart page: the mini-cart shows the
+                      products subtotal only -- shipping/gift wrap/final
+                      amounts exist on the checkout page, not here. */}
+                  <div className="minicart__subtotal">
+                    <span>جمع کالاها</span>
+                    <strong className="minicart__total-value">
+                      {cartSubtotal === null ? "در حال محاسبه…" : `${formatPrice(cartSubtotal)} تومان`}
+                    </strong>
+                  </div>
                   <div className="minicart__foot">
                     <Link className="btn btn--primary" to="/cart/" onClick={() => setCartOpen(false)}>
                       مشاهدهٔ سبد و ثبت سفارش

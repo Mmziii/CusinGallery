@@ -98,15 +98,15 @@ describe("guest cart hydration (S1 item 2)", () => {
     // While in flight: skeleton + explicit loading note, no misleading total.
     expect(await screen.findByText("در حال دریافت اطلاعات کالاها…")).toBeTruthy();
     expect(document.querySelector(".cart-item--skeleton")).toBeTruthy();
-    expect(screen.queryByText(/جمع: 0/)).toBeNull();
-    expect(screen.queryByText(/جمع: ۰/)).toBeNull();
+    expect(screen.queryByText(/جمع کالاها/)).toBeNull();
 
     await waitFor(() => expect(slowReleases.length).toBe(1));
     slowReleases[0]();
     expect(await screen.findByText("کالای 101")).toBeTruthy();
     expect(await screen.findByText("کالای 102")).toBeTruthy();
-    // Now that every line is hydrated, a real total is shown.
-    expect(await screen.findByText(/جمع:/)).toBeTruthy();
+    // Part S5 follow-up 4 item 3: once every line is hydrated the summary
+    // shows the products subtotal (and nothing else) with a real number.
+    expect(await screen.findByText(/جمع کالاها/)).toBeTruthy();
     expect(screen.queryByText("در حال محاسبه")).toBeNull();
   });
 

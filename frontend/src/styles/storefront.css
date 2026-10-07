@@ -649,7 +649,7 @@ input:focus, textarea:focus, select:focus {
   justify-content: space-between;
   padding-block: 6px;
 }
-.cart-page__grand, .checkout__grand, .checkout-done__grand, .order-detail__grand {
+.checkout__grand, .checkout-done__grand, .order-detail__grand {
   border-top: 1px solid var(--color-border);
   margin-top: var(--space-2);
   padding-top: var(--space-2) !important;
@@ -899,8 +899,7 @@ input:focus, textarea:focus, select:focus {
 
 /* ============================ Guest cart + merge notice (Part 1) */
 .cart-page__guest-note { margin-bottom: var(--space-3); }
-.cart-page__summary { margin-top: var(--space-4); padding: var(--space-4); }
-.cart-page__total { font-weight: 800; margin-bottom: var(--space-2); }
+.cart-page__summary { padding: var(--space-4); }
 .cart-page__actions { display: flex; gap: var(--space-2); margin-top: var(--space-3); }
 .merge-notice {
   display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
@@ -1104,16 +1103,21 @@ h1, h2, h3, .section__head h2 {
 .minicart__items li { display: flex; align-items: center; gap: var(--space-2); border-bottom: 1px dashed var(--color-border); padding-bottom: var(--space-2); }
 .minicart__items img { width: 52px; height: 52px; object-fit: cover; border-radius: 10px; }
 .minicart__noimg { width: 52px; height: 52px; border-radius: 10px; background: var(--brand-green-tint); }
+/* Part S5 follow-up 4 item 3: each row is (image) (name/variant/unit price)
+   (quantity/line total) so the drawer shows the SAME numbers as the cart
+   page: unit price, line total, and a products subtotal below. */
+.minicart__line-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.minicart__line-side { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
 .minicart__name { flex: 1; font-size: var(--font-size-sm); color: var(--brand-ink); }
+.minicart__unit .price { margin: 0; }
 .minicart__variant { color: var(--color-text-muted); font-size: var(--font-size-xs); }
+.minicart__qty { color: var(--color-text-muted); font-size: var(--font-size-sm); }
 .minicart__unit { color: var(--color-text-muted); font-size: var(--font-size-xs); }
 .minicart__line-total, .minicart__total-value { color: var(--brand-ink); font-weight: 700; }
 .minicart__subtotal {
   display: flex; justify-content: space-between; align-items: center;
   padding: var(--space-3) var(--space-3) 0; color: var(--brand-ink); font-size: var(--font-size-sm);
 }
-.minicart__qty { color: var(--color-text-muted); font-size: var(--font-size-sm); }
-.minicart__price { color: var(--brand-gold-deep); font-size: var(--font-size-sm); }
 .minicart__empty { padding: var(--space-5); text-align: center; color: var(--color-text-muted); }
 .minicart__foot { padding: var(--space-3); border-top: 1px solid var(--color-border); }
 .minicart__foot .btn { width: 100%; }

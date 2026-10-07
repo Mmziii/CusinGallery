@@ -3,11 +3,19 @@ import PropTypes from "prop-types";
 import { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
+import PriceTag from "../components/PriceTag";
 import RecentlyViewed from "../components/RecentlyViewed";
 import SmartImage from "../components/SmartImage";
 import { Alert, EmptyState, ErrorState, Spinner, errorMessage } from "../components/ui";
 import useAuthStore from "../store/useAuthStore";
 import useCartStore from "../store/useCartStore";
+import {
+  lineTotalForLine,
+  priceInfoForLine,
+  sumLineTotals,
+  unitPriceForLine,
+  variantLabel,
+} from "../utils/cartPricing";
 import { formatPrice } from "../utils/formatPrice";
 import { toast } from "../utils/toast";
 
@@ -22,6 +30,12 @@ const UNAVAILABLE_REASONS = {
  * only); names/prices/images are hydrated from the products API and
  * never trusted from storage. Checkout still requires an account -- on
  * login/register the store merges this cart server-side.
+ *
+ * Part S5 follow-up 4:
+ *  - item 3: prices come from `price_info` (never the nonexistent
+ *    `product.price`) through the shared utils/cartPricing rule, and a line
+ *    with a `variant_id` is priced from that variant's own price_info;
+ *    the summary shows ONLY the products subtotal.
  */
 function GuestCartSkeleton({ count }) {
   // Part S1 item 2: honest loading rows -- no fake names, no fake total.
@@ -41,9 +55,13 @@ function GuestCartSkeleton({ count }) {
   );
 }
 
+GuestCartSkeleton.propTypes = {
+  count: PropTypes.number.isRequired,
+};
+
 function GuestCartView() {
   const {
-    guestLines, guestProducts, guestHydration, guestHydrationError,
+    guestLines, guestProducts, guestVariants, guestHydration, guestHydrationError,
     hydrateGuestProducts, updateGuestItem,
   } = useCartStore();
 
@@ -59,13 +77,25 @@ function GuestCartView() {
     );
   }
 
-  const rows = guestLines.map((line) => ({ line, product: guestProducts[line.product_id] }));
+  // Part S5 follow-up 4 item 3: prices come from price_info (the variant's
+  // own when the line has one) -- the old `product.price` never existed in
+  // the API, which is why every guest price rendered empty.
+  const rows = guestLines.map((line) => {
+    const product = guestProducts[line.product_id];
+    const variant = line.variant_id ? guestVariants[line.variant_id] : null;
+    return {
+      line,
+      product,
+      variant,
+      priceInfo: priceInfoForLine(line, product, variant),
+      unitPrice: unitPriceForLine(line, product, variant),
+      lineTotal: lineTotalForLine(line, product, variant),
+    };
+  });
   const missing = rows.filter((row) => !row.product).length;
   const fullyHydrated = missing === 0;
-  const total = rows.reduce(
-    (sum, row) => sum + (row.product ? (row.product.price ?? 0) * row.line.quantity : 0),
-    0
-  );
+  const subtotal = sumLineTotals(rows.map((row) => row.lineTotal));
+  const itemCount = guestLines.reduce((count, line) => count + line.quantity, 0);
 
   // Part S1 item 2: while product data is still loading we show skeleton
   // rows instead of half-rendered lines with a misleading 0 total.
@@ -98,16 +128,23 @@ function GuestCartView() {
           </button>
         </Alert>
       ) : null}
+
       <div className="cart-page__items">
-        {rows.map(({ line, product }) => (
+        {rows.map(({ line, product, variant, priceInfo, lineTotal }) => (
           <div className="cart-item" key={`${line.product_id}-${line.variant_id ?? 0}`}>
-            <SmartImage image={product?.primary_image || null} alt={product?.name || ""} />
+            <SmartImage
+              image={product?.primary_image || variant?.image?.image || null}
+              alt={product?.name || ""}
+            />
             <div className="cart-item__body">
               <div className="cart-item__name">{product ? product.name : "—"}</div>
+              {variantLabel(variant) ? (
+                <div className="cart-item__variant">{variantLabel(variant)}</div>
+              ) : null}
               <div className="cart-item__unit">
-                {product ? `${formatPrice(product.price)} تومان` : ""}
+                {priceInfo ? <PriceTag priceInfo={priceInfo} size="sm" /> : "—"}
               </div>
-                <div className="cart-item__qty">
+              <div className="cart-item__qty">
                 <button
                   type="button"
                   aria-label="افزایش تعداد"
@@ -131,16 +168,24 @@ function GuestCartView() {
               </div>
             </div>
             <div className="cart-item__total">
-              {product ? `${formatPrice((product.price ?? 0) * line.quantity)} تومان` : ""}
+              {lineTotal === null ? "" : `${formatPrice(lineTotal)} تومان`}
             </div>
           </div>
         ))}
       </div>
+
       <div className="cart-page__summary card">
-        {/* Never show a computed total while some lines are unhydrated. */}
-        <div className="cart-page__total">
-          {fullyHydrated ? `جمع: ${formatPrice(total)} تومان` : "جمع: در حال محاسبه…"}
-        </div>
+        {/* Part S5 follow-up 4 item 3: the cart page shows the PRODUCTS
+            subtotal and nothing else -- shipping, gift wrapping and the
+            final amount belong to the checkout page. */}
+        <h2>خلاصه سفارش</h2>
+        <dl>
+          <div>
+            <dt>جمع کالاها ({formatPrice(itemCount)})</dt>
+            {/* Never show a computed subtotal while some lines are unpriced. */}
+            <dd>{subtotal === null ? "در حال محاسبه…" : `${formatPrice(subtotal)} تومان`}</dd>
+          </div>
+        </dl>
         <p className="muted">
           برای پرداخت و ثبت سفارش وارد شوید یا ثبت‌نام کنید؛ سبد شما به‌صورت خودکار منتقل
           می‌شود.
@@ -150,7 +195,6 @@ function GuestCartView() {
           <Link className="btn btn--outline" to="/register/">ثبت‌نام</Link>
         </div>
       </div>
-
       {/* Part R5 item 10 */}
       <RecentlyViewed />
     </div>
@@ -188,116 +232,107 @@ function CartPage() {
     <div className="cart-page">
       <h1 className="page-title">سبد خرید</h1>
 
-      <div className="cart-page__grid">
-        <div className="cart-page__items">
-          {cart.items.map((item) => (
-            <div key={item.id} className={`cart-item ${item.is_available ? "" : "cart-item--unavailable"}`}>
-              <SmartImage image={item.product?.primary_image || null} alt={item.product?.name || ""} />
+      <div className="cart-page__items">
+        {cart.items.map((item) => (
+          <div key={item.id} className={`cart-item ${item.is_available ? "" : "cart-item--unavailable"}`}>
+            <SmartImage image={item.product?.primary_image || null} alt={item.product?.name || ""} />
 
-              <div className="cart-item__info">
-                <Link to={`/products/${item.product.slug}/`} className="cart-item__name">
-                  {item.product.name}
-                </Link>
-                {item.variant ? (
-                  <div className="cart-item__variant">
-                    {item.variant.attribute_values.map((av) => `${av.attribute}: ${av.value}`).join("، ")}
-                  </div>
-                ) : null}
-                <div className="cart-item__unit">{formatPrice(item.price_info.price)} تومان</div>
-                {!item.is_available ? (
-                  <div className="cart-item__reason">
-                    {UNAVAILABLE_REASONS[item.unavailable_reason] || "در دسترس نیست."}
-                  </div>
-                ) : null}
-              </div>
-
-              <div className="cart-item__controls">
-                <div className="qty-picker">
-                  <button
-                    type="button"
-                    aria-label="کاهش تعداد"
-                    onClick={() => {
-                      if (item.quantity - 1 <= 0) {
-                        if (!window.confirm("این کالا از سبد خرید حذف شود؟")) return;
-                      }
-                      updateItem(item.id, item.quantity - 1).then((result) => {
-                        if (result && !result.success) {
-                          toast(errorMessage(result.error) || "تغییر تعداد انجام نشد.", "error");
-                        }
-                      });
-                    }}
-                  >
-                    −
-                  </button>
-                  <span>{item.quantity}</span>
-                  <button
-                    type="button"
-                    aria-label="افزایش تعداد"
-                    onClick={() => {
-                      updateItem(item.id, item.quantity + 1).then((result) => {
-                        if (result && !result.success) {
-                          toast(errorMessage(result.error) || "تغییر تعداد انجام نشد.", "error");
-                        }
-                      });
-                    }}
-                  >
-                    +
-                  </button>
+            <div className="cart-item__info">
+              <Link to={`/products/${item.product.slug}/`} className="cart-item__name">
+                {item.product.name}
+              </Link>
+              {item.variant ? (
+                <div className="cart-item__variant">
+                  {item.variant.attribute_values.map((av) => `${av.attribute}: ${av.value}`).join("، ")}
                 </div>
-                <div className="cart-item__total">{formatPrice(item.line_total)} تومان</div>
+              ) : null}
+              <div className="cart-item__unit">
+                <PriceTag priceInfo={item.price_info} size="sm" />
+              </div>
+              {!item.is_available ? (
+                <div className="cart-item__reason">
+                  {UNAVAILABLE_REASONS[item.unavailable_reason] || "در دسترس نیست."}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="cart-item__controls">
+              <div className="qty-picker">
                 <button
                   type="button"
-                  className="link-danger"
+                  aria-label="کاهش تعداد"
                   onClick={() => {
-                    // Part S2 item 6: destructive action needs confirmation.
-                    if (!window.confirm("این کالا از سبد خرید حذف شود؟")) return;
-                    removeItem(item.id).then((result) => {
+                    if (item.quantity - 1 <= 0) {
+                      if (!window.confirm("این کالا از سبد خرید حذف شود؟")) return;
+                    }
+                    updateItem(item.id, item.quantity - 1).then((result) => {
                       if (result && !result.success) {
-                        toast(errorMessage(result.error) || "حذف انجام نشد.", "error");
+                        toast(errorMessage(result.error) || "تغییر تعداد انجام نشد.", "error");
                       }
                     });
                   }}
                 >
-                  حذف
+                  −
+                </button>
+                <span>{item.quantity}</span>
+                <button
+                  type="button"
+                  aria-label="افزایش تعداد"
+                  onClick={() => {
+                    updateItem(item.id, item.quantity + 1).then((result) => {
+                      if (result && !result.success) {
+                        toast(errorMessage(result.error) || "تغییر تعداد انجام نشد.", "error");
+                      }
+                    });
+                  }}
+                >
+                  +
                 </button>
               </div>
+              <div className="cart-item__total">{formatPrice(item.line_total)} تومان</div>
+              <button
+                type="button"
+                className="link-danger"
+                onClick={() => {
+                  // Part S2 item 6: destructive action needs confirmation.
+                  if (!window.confirm("این کالا از سبد خرید حذف شود؟")) return;
+                  removeItem(item.id).then((result) => {
+                    if (result && !result.success) {
+                      toast(errorMessage(result.error) || "حذف انجام نشد.", "error");
+                    }
+                  });
+                }}
+              >
+                حذف
+              </button>
             </div>
-          ))}
-        </div>
-
-        <aside className="cart-page__summary">
-          <h2>خلاصه سفارش</h2>
-          <dl>
-            <div>
-              <dt>جمع کالاها ({cart.item_count})</dt>
-              <dd>{formatPrice(cart.subtotal)} تومان</dd>
-            </div>
-            <div>
-              <dt>هزینه ارسال</dt>
-              <dd>
-                {cart.shipping_cost_preview === 0 ? "رایگان" : `${formatPrice(cart.shipping_cost_preview)} تومان`}
-              </dd>
-            </div>
-            <div className="cart-page__grand">
-              <dt>مبلغ قابل پرداخت</dt>
-              <dd>{formatPrice(cart.subtotal + (cart.shipping_cost_preview || 0))} تومان</dd>
-            </div>
-          </dl>
-          <button type="button" className="btn btn--primary btn--block" onClick={() => navigate("/checkout/")}>
-            ادامه و ثبت سفارش
-          </button>
-          <p className="cart-page__note">
-            هزینه ارسال و تخفیف نهایی در مرحله ثبت سفارش توسط سرور محاسبه می‌شود.
-          </p>
-        </aside>
+          </div>
+        ))}
       </div>
 
+      {/* Part S5 follow-up 4 item 3: unit price + line total per row, and
+          below the rows ONLY the products subtotal -- no shipping, no gift
+          wrapping, no final total (those are computed by the server on the
+          checkout page, right before payment). */}
+      <aside className="cart-page__summary">
+        <h2>خلاصه سفارش</h2>
+        <dl>
+          <div>
+            <dt>جمع کالاها ({cart.item_count})</dt>
+            <dd>{formatPrice(cart.subtotal)} تومان</dd>
+          </div>
+        </dl>
+        <button type="button" className="btn btn--primary btn--block" onClick={() => navigate("/checkout/")}>
+          ادامه و ثبت سفارش
+        </button>
+        <p className="cart-page__note">
+          مبلغ نهایی در مرحله ثبت سفارش توسط سرور محاسبه می‌شود.
+        </p>
+      </aside>
       {/* Part R5 item 10 */}
       <RecentlyViewed />
     </div>
   );
 }
-
-GuestCartSkeleton.propTypes = { count: PropTypes.number.isRequired };
 
 export default CartPage;
