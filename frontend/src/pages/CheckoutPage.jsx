@@ -463,7 +463,7 @@ function CheckoutPage() {
 
   return (
     <div className="checkout">
-      <h1>ثبت سفارش</h1>
+      <h1 className="page-title">ثبت سفارش</h1>
 
       <CheckoutSteps current={2} done={doneSteps} />
 

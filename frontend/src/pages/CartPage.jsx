@@ -72,7 +72,7 @@ function GuestCartView() {
   if (guestLines.length > 0 && !fullyHydrated && guestHydration !== "error") {
     return (
       <div className="cart-page">
-        <h1>سبد خرید</h1>
+        <h1 className="page-title">سبد خرید</h1>
         <p className="muted cart-page__guest-note">
           شما به‌صورت مهمان خرید می‌کنید؛ قیمت‌ها از سرور دریافت می‌شوند و با ورود یا ثبت‌نام،
           همین سبد به حساب شما منتقل خواهد شد.
@@ -84,7 +84,7 @@ function GuestCartView() {
 
   return (
     <div className="cart-page">
-      <h1>سبد خرید</h1>
+      <h1 className="page-title">سبد خرید</h1>
       <p className="muted cart-page__guest-note">
         شما به‌صورت مهمان خرید می‌کنید؛ قیمت‌ها از سرور دریافت می‌شوند و با ورود یا ثبت‌نام،
         همین سبد به حساب شما منتقل خواهد شد.
@@ -186,7 +186,7 @@ function CartPage() {
 
   return (
     <div className="cart-page">
-      <h1>سبد خرید</h1>
+      <h1 className="page-title">سبد خرید</h1>
 
       <div className="cart-page__grid">
         <div className="cart-page__items">
