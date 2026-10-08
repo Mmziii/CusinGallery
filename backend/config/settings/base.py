@@ -547,6 +547,56 @@ LOGGING = {
 }
 
 # ---------------------------------------------------------------------------
+# Bulk product image import (ZIP by SKU) -- upload + safety limits
+# ---------------------------------------------------------------------------
+# The owner's ZIP is attacker-shaped input in the worst case, so every
+# limit is explicit and configurable; the defaults are safe for the real
+# job (~100 products) and still refuse a hostile file.
+#
+# MySQL/nginx note: nginx limits the request body per location. The admin
+# location allows 200m (see nginx/conf.d/cusin.conf and nginx/prod.d/cusin.conf);
+# these Django settings are the second half of "large uploads actually work".
+#
+# FILE_UPLOAD_MAX_MEMORY_SIZE is deliberately SMALL: an upload larger than
+# this spools to a temporary FILE instead of RAM (Django's default is the
+# same 2.5 MB), and the importer streams it to its own temp file anyway.
+FILE_UPLOAD_MAX_MEMORY_SIZE = env.int(
+    "FILE_UPLOAD_MAX_MEMORY_SIZE", default=2_500_000
+)
+# Optional: where those spooled uploads live (point it at a disk with room
+# when /tmp is small). Empty means the system temp directory.
+FILE_UPLOAD_TEMP_DIR = env("FILE_UPLOAD_TEMP_DIR", default="") or None
+
+# DATA_UPLOAD_MAX_MEMORY_SIZE counts only the NON-file parts of a multipart
+# request (Django's MultiPartParser skips file fields), so the ZIP itself
+# is never measured against it -- it bounds how much ordinary field data a
+# request may carry, which is exactly what it is for.
+DATA_UPLOAD_MAX_MEMORY_SIZE = env.int(
+    "DATA_UPLOAD_MAX_MEMORY_SIZE", default=2_500_000
+)
+
+# Product image import limits (see apps/products/image_import.py).
+PRODUCT_IMAGE_IMPORT_MAX_FILES = env.int("PRODUCT_IMAGE_IMPORT_MAX_FILES", default=2000)
+PRODUCT_IMAGE_IMPORT_MAX_TOTAL_UNCOMPRESSED = env.int(
+    "PRODUCT_IMAGE_IMPORT_MAX_TOTAL_UNCOMPRESSED", default=500 * 1024 * 1024
+)
+PRODUCT_IMAGE_IMPORT_MAX_ZIP_SIZE = env.int(
+    "PRODUCT_IMAGE_IMPORT_MAX_ZIP_SIZE", default=200 * 1024 * 1024
+)
+# Compression ratio above which a member (or the whole ZIP) is treated as a
+# probable zip bomb. Real JPEG/PNG photos compress by well under 2x.
+PRODUCT_IMAGE_IMPORT_MAX_RATIO = env.int("PRODUCT_IMAGE_IMPORT_MAX_RATIO", default=120)
+# Per-file limit -- defaults to the shared image validator's 5 MB.
+PRODUCT_IMAGE_IMPORT_MAX_FILE_SIZE = env.int(
+    "PRODUCT_IMAGE_IMPORT_MAX_FILE_SIZE", default=5 * 1024 * 1024
+)
+
+# Optional hyperlink to the owner guide shown on the image-import page
+# (the admin always shows the naming rules inline). Leave empty to show
+# the plain reference to docs/OWNER_GUIDE.fa.md.
+OWNER_GUIDE_URL = env("OWNER_GUIDE_URL", default="")
+
+# ---------------------------------------------------------------------------
 # Error monitoring (Phase E) -- optional, env-driven Sentry
 # ---------------------------------------------------------------------------
 # Leave SENTRY_DSN empty and nothing is initialized (zero overhead). Set
