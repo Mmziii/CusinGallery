@@ -13,6 +13,15 @@ def fa_digits(value):
 
 
 @register.filter
+def mb_digits(value):
+    """5242880 -> ۵ (megabytes, Persian digits) for help texts."""
+    try:
+        return fa_digits(int(value) // (1024 * 1024))
+    except (TypeError, ValueError):
+        return str(value)
+
+
+@register.filter
 def fa_toman(value):
     """1234567 -> ۱۲۳۴٬۵۶ (thousands grouping, Persian digits)."""
     try:

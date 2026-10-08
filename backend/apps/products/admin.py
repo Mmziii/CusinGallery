@@ -44,6 +44,7 @@ from .image_import import (
     ZipImageSource,
     apply_plan,
     build_plan,
+    fa_digits,
     report_csv as image_report_csv,
 )
 from .models import Brand, Product, ProductAttribute, ProductAttributeValue, ProductImage, ProductVariant
@@ -552,9 +553,13 @@ class ProductAdmin(admin.ModelAdmin):
         request.session[self._IMAGE_REPORT_KEY] = plan.report_rows()
         self.message_user(
             request,
-            f"تصاویر ذخیره شد: {result['created']} تصویر برای "
-            f"{result['products']} محصول"
-            + (f" (و {result['replaced']} تصویر قبلی جایگزین شد)." if result["replaced"] else "."),
+            f"تصاویر ذخیره شد: {fa_digits(result['created'])} تصویر برای "
+            f"{fa_digits(result['products'])} محصول"
+            + (
+                f" (و {fa_digits(result['replaced'])} تصویر قبلی جایگزین شد)."
+                if result["replaced"]
+                else "."
+            ),
             messages.SUCCESS,
         )
         return HttpResponseRedirect(reverse("admin:products_product_changelist"))

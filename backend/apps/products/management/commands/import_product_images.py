@@ -25,6 +25,7 @@ from apps.products.image_import import (
     ZipImageSource,
     apply_plan,
     build_plan,
+    fa_digits,
 )
 
 
@@ -90,19 +91,23 @@ class Command(BaseCommand):
             counts = plan.counts()
             self.stdout.write(
                 "پیش‌نمایش: "
-                f"{counts['add']} تصویر برای {counts['products']} محصول، "
-                f"{counts['duplicate']} تکراری، {counts['skip']} رد‌شده (تصویر دارد)، "
-                f"{counts['unmatched']} کد کالای ناشناخته، {counts['invalid']} نامعتبر، "
-                f"{counts['ignored']} نادیده‌گرفته‌شده، {counts['unsafe']} ناامن."
+                f"{fa_digits(counts['add'])} تصویر برای {fa_digits(counts['products'])} محصول، "
+                f"{fa_digits(counts['duplicate'])} تکراری، "
+                f"{fa_digits(counts['skip'])} رد‌شده (تصویر دارد)، "
+                f"{fa_digits(counts['unmatched'])} کد کالای ناشناخته، "
+                f"{fa_digits(counts['invalid'])} نامعتبر، "
+                f"{fa_digits(counts['ignored'])} نادیده‌گرفته‌شده، "
+                f"{fa_digits(counts['unsafe'])} ناامن."
             )
             for group in plan.writing_groups:
                 self.stdout.write(
                     f"  {group.product.sku} | {group.product.name}: "
-                    f"{group.new_count} تصویر"
+                    f"{fa_digits(group.new_count)} تصویر"
                     + (
-                        f" (جایگزین {group.existing_count} تصویر فعلی)"
+                        f" (جایگزین {fa_digits(group.existing_count)} تصویر فعلی)"
                         if group.effect == "replace"
-                        else f" (مجموع پس از این: {group.existing_count + group.new_count})"
+                        else " (مجموع پس از این: "
+                        f"{fa_digits(group.existing_count + group.new_count)})"
                     )
                 )
             for item in plan.unmatched[:20]:
@@ -128,8 +133,13 @@ class Command(BaseCommand):
                 raise CommandError(f"ذخیره انجام نشد و هیچ تغییری اعمال نشد: {exc}")
             self.stdout.write(
                 self.style.SUCCESS(
-                    f"ذخیره شد: {result['created']} تصویر برای {result['products']} محصول"
-                    + (f" ({result['replaced']} تصویر قبلی جایگزین شد)." if result["replaced"] else ".")
+                    f"ذخیره شد: {fa_digits(result['created'])} تصویر برای "
+                    f"{fa_digits(result['products'])} محصول"
+                    + (
+                        f" ({fa_digits(result['replaced'])} تصویر قبلی جایگزین شد)."
+                        if result["replaced"]
+                        else "."
+                    )
                 )
             )
         finally:

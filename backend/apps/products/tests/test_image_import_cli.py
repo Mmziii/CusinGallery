@@ -56,8 +56,8 @@ class ImageImportCommandTests(TestCase):
             ("NOPE-1.jpg", png_bytes((3, 3, 3))),
         ])
         out, _err = self.run_command(self.zip_path, "--dry-run")
-        self.assertIn("2 تصویر برای 1 محصول", out)
-        self.assertIn("1 کد کالای ناشناخته", out)
+        self.assertIn("۲ تصویر برای ۱ محصول", out)
+        self.assertIn("۱ کد کالای ناشناخته", out)
         self.assertIn("CLI-1 | کاسه", out)
         self.assertIn("هیچ‌چیزی ذخیره نشد", out)
         self.assertEqual(product.images.count(), 0)
@@ -70,7 +70,7 @@ class ImageImportCommandTests(TestCase):
             ("CLI-2.jpg", png_bytes((1, 1, 1))),
         ])
         out, _err = self.run_command(self.zip_path)
-        self.assertIn("ذخیره شد: 2 تصویر برای 1 محصول", out)
+        self.assertIn("ذخیره شد: ۲ تصویر برای ۱ محصول", out)
         images = list(product.images.order_by("ordering"))
         self.assertEqual(len(images), 2)
         self.assertTrue(images[0].is_primary)
@@ -81,7 +81,7 @@ class ImageImportCommandTests(TestCase):
         product.images.create(image="products/old-cli.jpg", ordering=0, is_primary=True)
         self.write_zip([("CLI-3.jpg", png_bytes((9, 9, 9)))])
         out, _err = self.run_command(self.zip_path, "--mode", "replace")
-        self.assertIn("1 تصویر قبلی جایگزین شد", out)
+        self.assertIn("۱ تصویر قبلی جایگزین شد", out)
         self.assertEqual(product.images.count(), 1)
         self.assertNotIn("old-cli", product.images.get().image.name)
 
@@ -94,7 +94,7 @@ class ImageImportCommandTests(TestCase):
             ("CLI-5.jpg", png_bytes((5, 5, 5))),
         ])
         out, _err = self.run_command(self.zip_path, "--skip-existing")
-        self.assertIn("1 رد‌شده (تصویر دارد)", out)
+        self.assertIn("۱ رد‌شده (تصویر دارد)", out)
         self.assertEqual(with_image.images.count(), 1)
         self.assertEqual(without.images.count(), 1)
 
@@ -136,7 +136,7 @@ class ImageImportCommandTests(TestCase):
         with open(os.path.join(root, "CLI-10.jpg"), "wb") as handle:
             handle.write(png_bytes((33, 33, 33)))
         out, _err = self.run_command(root)
-        self.assertIn("ذخیره شد: 3 تصویر", out)
+        self.assertIn("ذخیره شد: ۳ تصویر", out)
         self.assertEqual(nested.images.count(), 2)
         self.assertTrue(nested.images.order_by("ordering").first().is_primary)
         self.assertEqual(direct.images.count(), 1)
@@ -148,6 +148,6 @@ class ImageImportCommandTests(TestCase):
             ("CLI-9-2.jpg", png_bytes((12, 12, 12))),
         ])
         out, err = self.run_command(self.zip_path)
-        self.assertIn("1 تصویر برای 1 محصول", out)
+        self.assertIn("۱ تصویر برای ۱ محصول", out)
         self.assertIn("[نامعتبر]", out)
         self.assertEqual(product.images.count(), 1)

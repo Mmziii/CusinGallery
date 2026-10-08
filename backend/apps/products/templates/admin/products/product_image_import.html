@@ -1,5 +1,5 @@
 {% extends "admin/base_site.html" %}
-{% load i18n %}
+{% load i18n order_extras %}
 
 {% comment %}
 Bulk product image import from a ZIP, matched by SKU.
@@ -70,9 +70,9 @@ shows a dry-run preview and only the confirm button writes.
     <legend style="font-weight:bold">۱) فایل زیپ تصاویر</legend>
     <input type="file" name="zip" accept=".zip,application/zip" required>
     <p style="color:#666;font-size:12px;margin:6px 0 0">
-      حداکثر {{ limits.max_files }} فایل در هر زیپ، حجم باز‌شدهٔ کل حداکثر
-      {{ limits.max_total_uncompressed|filesizeformat }} و هر تصویر حداکثر
-      {{ limits.max_file_size|filesizeformat }}.
+      حداکثر {{ limits.max_files|fa_digits }} فایل در هر زیپ، حجم باز‌شدهٔ کل حداکثر
+      {{ limits.max_total_uncompressed|mb_digits }} مگابایت و هر تصویر حداکثر
+      {{ limits.max_file_size|mb_digits }} مگابایت.
     </p>
   </fieldset>
 

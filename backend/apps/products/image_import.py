@@ -119,6 +119,24 @@ class ImageImportLimits:
         )
 
 
+# ------------------------------------------------------------ Small helpers
+
+_FA_DIGITS = str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹")
+
+
+def fa_digits(value):
+    """1234 -> ۱۲۳۴ for owner-facing Persian sentences.
+
+    Data a machine must read back (the CSV report's numeric columns, API
+    payloads) stays ASCII on purpose.
+    """
+    return str(value).translate(_FA_DIGITS)
+
+
+def _fa_mb(byte_count):
+    return fa_digits(byte_count // (1024 * 1024))
+
+
 # ------------------------------------------------------------ SKU matching
 
 
@@ -256,8 +274,8 @@ class ZipImageSource:
         if size > self.limits.max_compressed_size:
             raise ValueError(
                 "حجم فایل زیپ بیش از حد مجاز است "
-                f"({size // (1024 * 1024)} مگابایت؛ حداکثر "
-                f"{self.limits.max_compressed_size // (1024 * 1024)} مگابایت)."
+                f"({_fa_mb(size)} مگابایت؛ حداکثر "
+                f"{_fa_mb(self.limits.max_compressed_size)} مگابایت)."
             )
 
     def members(self):
@@ -268,14 +286,14 @@ class ZipImageSource:
             if len(infos) > self.limits.max_files:
                 raise ValueError(
                     f"تعداد فایل‌های داخل زیپ بیش از حد مجاز است "
-                    f"({len(infos)} فایل؛ حداکثر {self.limits.max_files})."
+                    f"({fa_digits(len(infos))} فایل؛ حداکثر {fa_digits(self.limits.max_files)})."
                 )
             total = sum(info.file_size for info in infos)
             if total > self.limits.max_total_uncompressed:
                 raise ValueError(
                     "حجم باز‌شدهٔ زیپ بیش از حد مجاز است "
-                    f"({total // (1024 * 1024)} مگابایت؛ حداکثر "
-                    f"{self.limits.max_total_uncompressed // (1024 * 1024)} مگابایت)."
+                    f"({_fa_mb(total)} مگابایت؛ حداکثر "
+                    f"{_fa_mb(self.limits.max_total_uncompressed)} مگابایت)."
                 )
             compressed = sum(max(info.compress_size, 1) for info in infos)
             if total / max(compressed, 1) > self.limits.max_ratio:
@@ -382,13 +400,13 @@ class FolderImageSource:
         if len(listed) > self.limits.max_files:
             raise ValueError(
                 f"تعداد فایل‌های پوشه بیش از حد مجاز است "
-                f"({len(listed)} فایل؛ حداکثر {self.limits.max_files})."
+                f"({fa_digits(len(listed))} فایل؛ حداکثر {fa_digits(self.limits.max_files)})."
             )
         if total > self.limits.max_total_uncompressed:
             raise ValueError(
                 "حجم کل پوشه بیش از حد مجاز است "
-                f"({total // (1024 * 1024)} مگابایت؛ حداکثر "
-                f"{self.limits.max_total_uncompressed // (1024 * 1024)} مگابایت)."
+                f"({_fa_mb(total)} مگابایت؛ حداکثر "
+                f"{_fa_mb(self.limits.max_total_uncompressed)} مگابایت)."
             )
         return listed
 
@@ -587,7 +605,7 @@ def _validate_extracted(path):
     with open(path, "rb") as handle:
         payload = handle.read()
     if len(payload) > MAX_IMAGE_UPLOAD_SIZE:
-        return False, f"حجم فایل بیش از {MAX_IMAGE_UPLOAD_SIZE // (1024 * 1024)} مگابایت است"
+        return False, f"حجم فایل بیش از {_fa_mb(MAX_IMAGE_UPLOAD_SIZE)} مگابایت است"
     upload = SimpleUploadedFile("check", payload, content_type="application/octet-stream")
     try:
         validate_image_file(upload)
@@ -682,7 +700,7 @@ def build_plan(source, *, mode="add", skip_existing=False, extract_dir, thumbs=F
 
         if member["size"] > limits.max_file_size:
             outcome.status = "invalid"
-            outcome.reason = f"حجم فایل بیش از {limits.max_file_size // (1024 * 1024)} مگابایت است"
+            outcome.reason = f"حجم فایل بیش از {_fa_mb(limits.max_file_size)} مگابایت است"
             outcome.size = member["size"]
             plan.files.append(outcome)
             continue
@@ -728,7 +746,7 @@ def build_plan(source, *, mode="add", skip_existing=False, extract_dir, thumbs=F
         except ValueError as exc:
             if str(exc) == "too-large":
                 outcome.status = "invalid"
-                outcome.reason = f"حجم فایل بیش از {limits.max_file_size // (1024 * 1024)} مگابایت است"
+                outcome.reason = f"حجم فایل بیش از {_fa_mb(limits.max_file_size)} مگابایت است"
             else:
                 outcome.status = "invalid"
                 outcome.reason = f"خواندن فایل ممکن نشد: {exc}"
@@ -804,7 +822,8 @@ def build_plan(source, *, mode="add", skip_existing=False, extract_dir, thumbs=F
         plan.ok = False
         plan.errors.append(
             "فایل زیپ رد شد: "
-            + f"{len(plan.unsafe)} مسیر ناامن در آن پیدا شد (فرار از پوشه، مسیر مطلق یا symlink)."
+            + fa_digits(len(plan.unsafe))
+            + " مسیر ناامن در آن پیدا شد (فرار از پوشه، مسیر مطلق یا symlink)."
         )
     return plan
 

@@ -1,5 +1,5 @@
 {% extends "admin/base_site.html" %}
-{% load i18n %}
+{% load i18n order_extras %}
 
 {% comment %}
 Step 2 of 2: the dry-run preview. Nothing has been written yet; the confirm
@@ -16,36 +16,36 @@ button below is the only thing that writes (one transaction, all-or-nothing).
 <table style="margin:10px 0;border-collapse:collapse;font-size:13px">
   <tr>
     <td style="padding:3px 10px">تصویرهایی که اضافه می‌شوند:</td>
-    <td style="padding:3px 10px"><strong>{{ plan.counts.add }}</strong></td>
+    <td style="padding:3px 10px"><strong>{{ plan.counts.add|fa_digits }}</strong></td>
   </tr>
   <tr>
     <td style="padding:3px 10px">کالاهایی که تصویر می‌گیرند:</td>
-    <td style="padding:3px 10px"><strong>{{ plan.counts.products }}</strong></td>
+    <td style="padding:3px 10px"><strong>{{ plan.counts.products|fa_digits }}</strong></td>
   </tr>
   <tr>
     <td style="padding:3px 10px">رد‌شده (کالا از قبل تصویر دارد):</td>
-    <td style="padding:3px 10px">{{ plan.counts.skip }}</td>
+    <td style="padding:3px 10px">{{ plan.counts.skip|fa_digits }}</td>
   </tr>
   <tr>
     <td style="padding:3px 10px">تصویرهای تکراری (ثبت نمی‌شوند):</td>
-    <td style="padding:3px 10px">{{ plan.counts.duplicate }}</td>
+    <td style="padding:3px 10px">{{ plan.counts.duplicate|fa_digits }}</td>
   </tr>
   <tr>
     <td style="padding:3px 10px">کد کالا پیدا نشد:</td>
-    <td style="padding:3px 10px">{{ plan.counts.unmatched }}</td>
+    <td style="padding:3px 10px">{{ plan.counts.unmatched|fa_digits }}</td>
   </tr>
   <tr>
     <td style="padding:3px 10px">تصویر نامعتبر:</td>
-    <td style="padding:3px 10px">{{ plan.counts.invalid }}</td>
+    <td style="padding:3px 10px">{{ plan.counts.invalid|fa_digits }}</td>
   </tr>
   <tr>
     <td style="padding:3px 10px">نادیده گرفته‌شده (پوشه/سیستمی/غیرتصویری):</td>
-    <td style="padding:3px 10px">{{ plan.counts.ignored }}</td>
+    <td style="padding:3px 10px">{{ plan.counts.ignored|fa_digits }}</td>
   </tr>
   {% if plan.counts.unsafe %}
   <tr>
     <td style="padding:3px 10px;color:#b30000">رد‌شده به‌دلیل نام ناامن:</td>
-    <td style="padding:3px 10px;color:#b30000">{{ plan.counts.unsafe }}</td>
+    <td style="padding:3px 10px;color:#b30000">{{ plan.counts.unsafe|fa_digits }}</td>
   </tr>
   {% endif %}
 </table>
@@ -62,8 +62,8 @@ button below is the only thing that writes (one transaction, all-or-nothing).
         <div style="font-weight:bold">{{ group.product.name }}</div>
         <div style="color:#666;font-size:12px">کد کالا: {{ group.product.sku }}</div>
         <div style="font-size:12px">
-          {{ group.new_count }} تصویر جدید
-          {% if group.effect == 'replace' %}(جایگزین {{ group.existing_count }} تصویر فعلی){% else %}(مجموع پس از این: {{ group.existing_count|add:group.new_count }}){% endif %}
+          {{ group.new_count|fa_digits }} تصویر جدید
+          {% if group.effect == 'replace' %}(جایگزین {{ group.existing_count|fa_digits }} تصویر فعلی){% else %}(مجموع پس از این: {{ group.existing_count|add:group.new_count|fa_digits }}){% endif %}
         </div>
         <div style="margin-top:6px;line-height:0">
           {% for item in group.files %}
@@ -89,40 +89,40 @@ button below is the only thing that writes (one transaction, all-or-nothing).
 {% endif %}
 
 <p style="font-size:13px;color:#666">
-  در کل فروشگاه، {{ plan.catalog_without_images }} کالا در حال حاضر هیچ تصویری ندارد
+  در کل فروشگاه، {{ plan.catalog_without_images|fa_digits }} کالا در حال حاضر هیچ تصویری ندارد
   (فهرست کامل: فهرست محصولات، ستون تصویر).
 </p>
 
 {% if plan.unmatched %}
-  <h2>فایل‌هایی که کد کالایشان پیدا نشد ({{ plan.unmatched|length }})</h2>
+  <h2>فایل‌هایی که کد کالایشان پیدا نشد ({{ plan.unmatched|length|fa_digits }})</h2>
   <ul style="font-size:13px;max-height:220px;overflow:auto">
     {% for item in plan.unmatched %}<li>{{ item.member }}</li>{% endfor %}
   </ul>
 {% endif %}
 
 {% if plan.invalid %}
-  <h2>فایل‌های نامعتبر ({{ plan.invalid|length }})</h2>
+  <h2>فایل‌های نامعتبر ({{ plan.invalid|length|fa_digits }})</h2>
   <ul style="font-size:13px;max-height:220px;overflow:auto">
     {% for item in plan.invalid %}<li>{{ item.member }} — <span style="color:#b30000">{{ item.reason }}</span></li>{% endfor %}
   </ul>
 {% endif %}
 
 {% if plan.unsafe %}
-  <h2>فایل‌های ناامن که رد شدند ({{ plan.unsafe|length }})</h2>
+  <h2>فایل‌های ناامن که رد شدند ({{ plan.unsafe|length|fa_digits }})</h2>
   <ul style="font-size:13px;max-height:220px;overflow:auto">
     {% for item in plan.unsafe %}<li>{{ item.member }} — <span style="color:#b30000">{{ item.reason }}</span></li>{% endfor %}
   </ul>
 {% endif %}
 
 {% if plan.duplicates %}
-  <h2>تصویرهای تکراری (ثبت نمی‌شوند؛ {{ plan.duplicates|length }})</h2>
+  <h2>تصویرهای تکراری (ثبت نمی‌شوند؛ {{ plan.duplicates|length|fa_digits }})</h2>
   <ul style="font-size:13px;max-height:220px;overflow:auto">
     {% for item in plan.duplicates %}<li>{{ item.member }} — {{ item.reason }}</li>{% endfor %}
   </ul>
 {% endif %}
 
 {% if plan.ignored %}
-  <h2>فایل‌های نادیده‌گرفته‌شده ({{ plan.ignored|length }})</h2>
+  <h2>فایل‌های نادیده‌گرفته‌شده ({{ plan.ignored|length|fa_digits }})</h2>
   <ul style="font-size:13px;max-height:220px;overflow:auto">
     {% for item in plan.ignored %}<li>{{ item.member }} — {{ item.reason }}</li>{% endfor %}
   </ul>
