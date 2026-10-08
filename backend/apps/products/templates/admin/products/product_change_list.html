@@ -39,6 +39,16 @@ has to guess the column names.
         <a href="{% url 'admin:products_product_export' %}">خروجی CSV</a>
       </span>
     </div>
+    <div class="cusin-excel-actions__item">
+      <a class="cusin-excel-actions__button" href="{% url 'admin:products_product_image_import' %}">
+        ورود گروهی تصاویر (فایل زیپ)
+      </a>
+      <span class="cusin-excel-actions__templates">
+        نام فایل = کد کالا؛ مثل <code dir="ltr">SOOLE-001.jpg</code> و
+        <code dir="ltr">SOOLE-001-2.jpg</code> — توضیح کامل:
+        <a href="{% url 'admin:products_product_image_import' %}#cusin-image-import-help">راهنمای نام‌گذاری</a>
+      </span>
+    </div>
   </div>
   <style>
     .cusin-excel-actions {
@@ -66,6 +76,9 @@ has to guess the column names.
   </li>
   <li>
     <a href="{% url 'admin:products_product_export' %}">خروجی CSV محصولات</a>
+  </li>
+  <li>
+    <a href="{% url 'admin:products_product_image_import' %}">ورود گروهی تصاویر از فایل زیپ</a>
   </li>
   {{ block.super }}
 {% endblock %}

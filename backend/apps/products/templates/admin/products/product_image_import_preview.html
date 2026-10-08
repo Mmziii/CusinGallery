@@ -1,0 +1,145 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% comment %}
+Step 2 of 2: the dry-run preview. Nothing has been written yet; the confirm
+button below is the only thing that writes (one transaction, all-or-nothing).
+{% endcomment %}
+{% block content %}
+<h1>پیش‌نمایش ورود گروهی تصاویر</h1>
+
+<p style="border:1px solid #2b6e2b;background:#f2faf2;border-radius:6px;padding:10px 14px">
+  <strong>بررسی انجام شد — هنوز چیزی ذخیره نشده است.</strong>
+  حالت: <strong>{% if plan.mode == 'replace' %}جایگزینی تصاویر موجود{% else %}افزودن به تصاویر موجود{% endif %}</strong>{% if plan.skip_existing %} — کالاهایی که تصویر دارند نادیده گرفته می‌شوند{% endif %}.
+</p>
+
+<table style="margin:10px 0;border-collapse:collapse;font-size:13px">
+  <tr>
+    <td style="padding:3px 10px">تصویرهایی که اضافه می‌شوند:</td>
+    <td style="padding:3px 10px"><strong>{{ plan.counts.add }}</strong></td>
+  </tr>
+  <tr>
+    <td style="padding:3px 10px">کالاهایی که تصویر می‌گیرند:</td>
+    <td style="padding:3px 10px"><strong>{{ plan.counts.products }}</strong></td>
+  </tr>
+  <tr>
+    <td style="padding:3px 10px">رد‌شده (کالا از قبل تصویر دارد):</td>
+    <td style="padding:3px 10px">{{ plan.counts.skip }}</td>
+  </tr>
+  <tr>
+    <td style="padding:3px 10px">تصویرهای تکراری (ثبت نمی‌شوند):</td>
+    <td style="padding:3px 10px">{{ plan.counts.duplicate }}</td>
+  </tr>
+  <tr>
+    <td style="padding:3px 10px">کد کالا پیدا نشد:</td>
+    <td style="padding:3px 10px">{{ plan.counts.unmatched }}</td>
+  </tr>
+  <tr>
+    <td style="padding:3px 10px">تصویر نامعتبر:</td>
+    <td style="padding:3px 10px">{{ plan.counts.invalid }}</td>
+  </tr>
+  <tr>
+    <td style="padding:3px 10px">نادیده گرفته‌شده (پوشه/سیستمی/غیرتصویری):</td>
+    <td style="padding:3px 10px">{{ plan.counts.ignored }}</td>
+  </tr>
+  {% if plan.counts.unsafe %}
+  <tr>
+    <td style="padding:3px 10px;color:#b30000">رد‌شده به‌دلیل نام ناامن:</td>
+    <td style="padding:3px 10px;color:#b30000">{{ plan.counts.unsafe }}</td>
+  </tr>
+  {% endif %}
+</table>
+
+<p style="font-size:13px">
+  <a href="{% url 'admin:products_product_image_import' %}?report=csv">دانلود گزارش این بررسی (CSV)</a>
+</p>
+
+<h2>کالاهایی که تصویر می‌گیرند</h2>
+{% if plan.writing_groups %}
+  <div style="display:flex;flex-wrap:wrap;gap:12px">
+    {% for group in plan.writing_groups %}
+      <div style="border:1px solid #ddd;border-radius:8px;padding:8px 10px;min-width:220px">
+        <div style="font-weight:bold">{{ group.product.name }}</div>
+        <div style="color:#666;font-size:12px">کد کالا: {{ group.product.sku }}</div>
+        <div style="font-size:12px">
+          {{ group.new_count }} تصویر جدید
+          {% if group.effect == 'replace' %}(جایگزین {{ group.existing_count }} تصویر فعلی){% else %}(مجموع پس از این: {{ group.existing_count|add:group.new_count }}){% endif %}
+        </div>
+        <div style="margin-top:6px;line-height:0">
+          {% for item in group.files %}
+            {% if item.thumb %}
+              <img src="{{ item.thumb }}" alt="" style="width:56px;height:56px;object-fit:cover;border-radius:6px;margin:2px">
+            {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <p style="color:#666">هیچ کالایی تصویر جدید نمی‌گیرد.</p>
+{% endif %}
+
+{% if plan.products_still_without_image %}
+  <h2>کالاهای این زیپ که پس از عملیات هم تصویر ندارند</h2>
+  <ul style="font-size:13px">
+    {% for group in plan.products_still_without_image %}
+      <li>{{ group.product.name }} — کد کالا: {{ group.product.sku }}</li>
+    {% endfor %}
+  </ul>
+{% endif %}
+
+<p style="font-size:13px;color:#666">
+  در کل فروشگاه، {{ plan.catalog_without_images }} کالا در حال حاضر هیچ تصویری ندارد
+  (فهرست کامل: فهرست محصولات، ستون تصویر).
+</p>
+
+{% if plan.unmatched %}
+  <h2>فایل‌هایی که کد کالایشان پیدا نشد ({{ plan.unmatched|length }})</h2>
+  <ul style="font-size:13px;max-height:220px;overflow:auto">
+    {% for item in plan.unmatched %}<li>{{ item.member }}</li>{% endfor %}
+  </ul>
+{% endif %}
+
+{% if plan.invalid %}
+  <h2>فایل‌های نامعتبر ({{ plan.invalid|length }})</h2>
+  <ul style="font-size:13px;max-height:220px;overflow:auto">
+    {% for item in plan.invalid %}<li>{{ item.member }} — <span style="color:#b30000">{{ item.reason }}</span></li>{% endfor %}
+  </ul>
+{% endif %}
+
+{% if plan.unsafe %}
+  <h2>فایل‌های ناامن که رد شدند ({{ plan.unsafe|length }})</h2>
+  <ul style="font-size:13px;max-height:220px;overflow:auto">
+    {% for item in plan.unsafe %}<li>{{ item.member }} — <span style="color:#b30000">{{ item.reason }}</span></li>{% endfor %}
+  </ul>
+{% endif %}
+
+{% if plan.duplicates %}
+  <h2>تصویرهای تکراری (ثبت نمی‌شوند؛ {{ plan.duplicates|length }})</h2>
+  <ul style="font-size:13px;max-height:220px;overflow:auto">
+    {% for item in plan.duplicates %}<li>{{ item.member }} — {{ item.reason }}</li>{% endfor %}
+  </ul>
+{% endif %}
+
+{% if plan.ignored %}
+  <h2>فایل‌های نادیده‌گرفته‌شده ({{ plan.ignored|length }})</h2>
+  <ul style="font-size:13px;max-height:220px;overflow:auto">
+    {% for item in plan.ignored %}<li>{{ item.member }} — {{ item.reason }}</li>{% endfor %}
+  </ul>
+{% endif %}
+
+<form method="post" style="margin-top:18px">
+  {% csrf_token %}
+  <input type="hidden" name="token" value="{{ token }}">
+  <input type="hidden" name="mode" value="{{ plan.mode }}">
+  {% if plan.skip_existing %}<input type="hidden" name="skip_existing" value="1">{% endif %}
+  <div class="submit-row">
+    <input type="submit" name="confirm" value="تأیید و ذخیره" class="default">
+    <input type="submit" name="cancel" value="انصراف (بدون تغییر)">
+  </div>
+  <p style="color:#666;font-size:12px">
+    ذخیره در یک تراکنش انجام می‌شود: اگر هر تصویری ذخیره نشود، هیچ‌کدام ذخیره نمی‌شود و
+    فایل‌های نوشته‌شده هم پاک می‌شوند.
+  </p>
+</form>
+{% endblock %}

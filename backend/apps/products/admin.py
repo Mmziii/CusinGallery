@@ -18,6 +18,7 @@ import glob
 import io
 import os
 import re
+import shutil
 import tempfile
 import uuid
 
@@ -37,6 +38,13 @@ from .importing import (
     sheet_names,
     template_csv,
     update_products_from_rows,
+)
+from .image_import import (
+    ImageImportLimits,
+    ZipImageSource,
+    apply_plan,
+    build_plan,
+    report_csv as image_report_csv,
 )
 from .models import Brand, Product, ProductAttribute, ProductAttributeValue, ProductImage, ProductVariant
 
@@ -308,6 +316,11 @@ class ProductAdmin(admin.ModelAdmin):
                 self.admin_site.admin_view(self.export_view),
                 name="products_product_export",
             ),
+            path(
+                "image-import/",
+                self.admin_site.admin_view(self.image_import_view),
+                name="products_product_image_import",
+            ),
         ]
         return custom + super().get_urls()
 
@@ -354,6 +367,197 @@ class ProductAdmin(admin.ModelAdmin):
         return FileResponse(
             buffer, as_attachment=True, filename="cusin_products_export.csv"
         )
+
+    # --- Bulk image import from a ZIP (matched by SKU) -------------------------
+
+    _IMAGE_PENDING_KEY = "cusin_product_image_import_pending"
+    _IMAGE_REPORT_KEY = "cusin_product_image_import_report"
+
+    @staticmethod
+    def _image_stash_dir():
+        return os.path.join(tempfile.gettempdir(), "cusin-product-image-imports")
+
+    def _stash_image_upload(self, upload):
+        """Stream the uploaded ZIP to a temp file (never into memory) and
+        hand back a short token. The previous stashed ZIP is dropped, so
+        abandoned uploads cannot pile up on disk."""
+        os.makedirs(self._image_stash_dir(), exist_ok=True)
+        for old in glob.glob(os.path.join(self._image_stash_dir(), "*")):
+            try:
+                os.remove(old)
+            except OSError:
+                pass
+        token = uuid.uuid4().hex
+        path = os.path.join(self._image_stash_dir(), token + ".zip")
+        with open(path, "wb") as handle:
+            for chunk in upload.chunks():
+                handle.write(chunk)
+        return token
+
+    def _stashed_image_path(self, token):
+        if not token or not re.fullmatch(r"[0-9a-f]{32}", str(token)):
+            return None
+        path = os.path.join(self._image_stash_dir(), str(token) + ".zip")
+        return path if os.path.exists(path) else None
+
+    def _image_context(self, request, **extra):
+        from django.conf import settings as django_settings
+
+        context = {
+            "opts": self.model._meta,
+            "title": "ورود گروهی تصاویر (فایل زیپ)",
+            "errors": [],
+            "plan": None,
+            "token": "",
+            "mode": "add",
+            "skip_existing": False,
+            "limits": ImageImportLimits.from_settings(),
+            "owner_guide_url": getattr(django_settings, "OWNER_GUIDE_URL", ""),
+        }
+        context.update(extra)
+        return context
+
+    def _build_image_plan(self, request, source_path, *, extract_dir, thumbs):
+        """Plan against a private temp directory.
+
+        The caller owns `extract_dir`: the confirm step must keep it alive
+        until apply_plan() has finished reading (and ProductImage.save()
+        has copied) the extracted files.
+        """
+        source = ZipImageSource(source_path, limits=ImageImportLimits.from_settings())
+        return build_plan(
+            source,
+            mode=request.POST.get("mode") or request.GET.get("mode") or "add",
+            skip_existing=(request.POST.get("skip_existing") == "1"),
+            extract_dir=extract_dir,
+            thumbs=thumbs,
+        )
+
+    def image_import_view(self, request):
+        """One page, two steps: upload the ZIP and see exactly what would
+        happen (dry run, nothing written), then confirm to write it.
+
+        All-or-nothing, one transaction; the ZIP is streamed to a temp file
+        and removed afterwards either way.
+        """
+        context = self._image_context(
+            request,
+            mode=request.POST.get("mode") or request.GET.get("mode") or "add",
+            skip_existing=(request.POST.get("skip_existing") == "1"),
+        )
+
+        if request.GET.get("report") == "csv":
+            rows = request.session.get(self._IMAGE_REPORT_KEY) or []
+            text = image_report_csv(rows)
+            return HttpResponse(
+                text.encode("utf-8-sig"),
+                content_type="text/csv; charset=utf-8",
+                headers={
+                    "Content-Disposition": 'attachment; filename="image-import-report.csv"'
+                },
+            )
+
+        if request.method == "POST":
+            if request.POST.get("cancel") == "1":
+                self._drop_stashed(self._stashed_image_path(request.POST.get("token")))
+                request.session.pop(self._IMAGE_PENDING_KEY, None)
+                self.message_user(request, "عملیات لغو شد؛ چیزی ذخیره نشد.", messages.INFO)
+                return HttpResponseRedirect(reverse("admin:products_product_changelist"))
+
+            if request.POST.get("confirm") == "1":
+                return self._confirm_image_import(request, context)
+
+            upload = request.FILES.get("zip")
+            if upload is None:
+                context["errors"] = [
+                    "فایلی انتخاب نشده است. یک فایل زیپ (.zip) شامل تصاویر بارگذاری کنید."
+                ]
+                return TemplateResponse(
+                    request, "admin/products/product_image_import.html", context
+                )
+
+            token = self._stash_image_upload(upload)
+            extract_dir = tempfile.mkdtemp(prefix="cusin-image-import-")
+            try:
+                try:
+                    plan = self._build_image_plan(
+                        request,
+                        self._stashed_image_path(token),
+                        extract_dir=extract_dir,
+                        thumbs=True,
+                    )
+                except (ValueError, OSError) as exc:
+                    self._drop_stashed(self._stashed_image_path(token))
+                    context["errors"] = [str(exc)]
+                    return TemplateResponse(
+                        request, "admin/products/product_image_import.html", context
+                    )
+            finally:
+                # The preview carries its thumbnails inline (data URIs), so
+                # the extracted files are not needed once the plan exists.
+                shutil.rmtree(extract_dir, ignore_errors=True)
+            if not plan.ok:
+                self._drop_stashed(self._stashed_image_path(token))
+                context["errors"] = plan.errors
+                return TemplateResponse(
+                    request, "admin/products/product_image_import.html", context
+                )
+
+            request.session[self._IMAGE_PENDING_KEY] = {
+                "token": token,
+                "mode": plan.mode,
+                "skip_existing": plan.skip_existing,
+            }
+            request.session[self._IMAGE_REPORT_KEY] = plan.report_rows()
+            context.update({"plan": plan, "token": token, "step": "preview"})
+            return TemplateResponse(
+                request, "admin/products/product_image_import_preview.html", context
+            )
+
+        return TemplateResponse(request, "admin/products/product_image_import.html", context)
+
+    def _confirm_image_import(self, request, context):
+        pending = request.session.get(self._IMAGE_PENDING_KEY)
+        path = self._stashed_image_path(pending and pending.get("token"))
+        if not pending or path is None:
+            self.message_user(
+                request,
+                "پیش‌نمایشی برای تأیید وجود ندارد؛ فایل را دوباره بارگذاری کنید.",
+                messages.WARNING,
+            )
+            return HttpResponseRedirect(reverse("admin:products_product_image_import"))
+
+        request.POST = request.POST.copy()
+        request.POST["mode"] = pending.get("mode") or "add"
+        if pending.get("skip_existing"):
+            request.POST["skip_existing"] = "1"
+        extract_dir = tempfile.mkdtemp(prefix="cusin-image-import-")
+        try:
+            plan = self._build_image_plan(request, path, extract_dir=extract_dir, thumbs=False)
+            try:
+                result = apply_plan(plan)
+            except Exception as exc:  # rollback already cleaned the files up
+                self._drop_stashed(path)
+                request.session.pop(self._IMAGE_PENDING_KEY, None)
+                context["errors"] = [f"ذخیره انجام نشد و هیچ تغییری اعمال نشد: {exc}"]
+                return TemplateResponse(
+                    request, "admin/products/product_image_import.html", context
+                )
+        finally:
+            shutil.rmtree(extract_dir, ignore_errors=True)
+
+        self._drop_stashed(path)
+        request.session.pop(self._IMAGE_PENDING_KEY, None)
+        # The report describes what really happened (applied rows included).
+        request.session[self._IMAGE_REPORT_KEY] = plan.report_rows()
+        self.message_user(
+            request,
+            f"تصاویر ذخیره شد: {result['created']} تصویر برای "
+            f"{result['products']} محصول"
+            + (f" (و {result['replaced']} تصویر قبلی جایگزین شد)." if result["replaced"] else "."),
+            messages.SUCCESS,
+        )
+        return HttpResponseRedirect(reverse("admin:products_product_changelist"))
 
     # --- Import / update / export (Part R4 item 6 + Part S5 item 8) -----------
 
