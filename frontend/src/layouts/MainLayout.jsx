@@ -68,9 +68,11 @@ function MainLayout() {
 
       <main className="app-shell__main" ref={mainRef}>
         <div className="container">
-          {/* Part R3: per-route boundary keeps header/footer alive when a
-              single page crashes. */}
-          <ErrorBoundary>
+          {/* A route crash leaves header/footer usable. `resetKey` clears
+              this persistent class boundary after pathname OR search
+              navigation, so recovery navigation cannot remain stuck on the
+              previous route's fallback. */}
+          <ErrorBoundary resetKey={`${location.pathname}${location.search}`}>
             <Outlet />
           </ErrorBoundary>
         </div>
