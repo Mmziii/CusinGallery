@@ -167,7 +167,11 @@ function CheckoutPage() {
   const addressesRef = useRef(addresses);
   addressesRef.current = addresses;
 
-  const loadAddresses = useCallback(() => {
+  // `preferredId` lets a just-created/edited address become the selected
+  // server-backed item after the full list refresh. authApi normalizes DRF's
+  // paginated response before it reaches this page; the guard prevents a
+  // bad integration response from ever becoming an array-method crash.
+  const loadAddresses = useCallback((preferredId = null) => {
     setAddressesStatus("loading");
     setAddressLoadError(null);
     return authApi
@@ -177,11 +181,19 @@ function CheckoutPage() {
         setAddresses(list);
         setAddressesStatus("ready");
         if (list.length === 0) {
+          setSelectedAddressId(null);
           setAddressMode("inline");
           return;
         }
-        const preferred = list.find((a) => a.is_default) || list[0];
-        setSelectedAddressId((current) => current ?? preferred.id);
+        const preferred =
+          list.find((address) => address.id === preferredId) ||
+          list.find((address) => address.is_default) ||
+          list[0];
+        setSelectedAddressId((current) =>
+          current && list.some((address) => address.id === current) && !preferredId
+            ? current
+            : preferred.id
+        );
         if (forcedInlineRef.current) {
           forcedInlineRef.current = false;
           setAddressMode("saved");
@@ -628,9 +640,9 @@ function CheckoutPage() {
               <AddressForm
                 initial={completingAddress}
                 compact
-                onSaved={(saved) => {
-                  setAddresses((list) => list.map((a) => (a.id === saved.id ? saved : a)));
+                onSaved={async (saved) => {
                   setCompletingAddress(null);
+                  await loadAddresses(saved.id);
                 }}
               />
             ) : null}
@@ -652,10 +664,9 @@ function CheckoutPage() {
             )}
             {showAddressForm && addressMode === "saved" ? (
               <AddressForm
-                onSaved={(address) => {
-                  setAddresses((list) => [...list, address]);
-                  setSelectedAddressId(address.id);
+                onSaved={async (address) => {
                   setShowAddressForm(false);
+                  await loadAddresses(address.id);
                 }}
                 compact
               />

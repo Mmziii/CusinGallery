@@ -161,17 +161,22 @@ describe("Home page hero and category tiles (gap a + d)", () => {
       const url = config.url || "";
       if (url.startsWith("/categories/tree")) {
         return {
-          data: [
-            { id: 1, name: "قابلمه", slug: "pots", image: null, ordering: 0, product_count: 1, children: [] },
-            { id: 2, name: "بلور", slug: "glass", image: "/media/categories/glass.jpg", ordering: 1, product_count: 1, children: [] },
-          ],
+          data: {
+            count: 2,
+            next: null,
+            previous: null,
+            results: [
+              { id: 1, name: "قابلمه", slug: "pots", image: null, ordering: 0, product_count: 1, children: [] },
+              { id: 2, name: "بلور", slug: "glass", image: "/media/categories/glass.jpg", ordering: 1, product_count: 1, children: [] },
+            ],
+          },
           status: 200, statusText: "OK", headers: {}, config,
         };
       }
       if (/^\/banners\//.test(url)) {
-        return { data: [], status: 200, statusText: "OK", headers: {}, config };
+        return { data: { count: 0, next: null, previous: null, results: [] }, status: 200, statusText: "OK", headers: {}, config };
       }
-      return { data: { count: 0, results: [] }, status: 200, statusText: "OK", headers: {}, config };
+      return { data: { count: 0, next: null, previous: null, results: [] }, status: 200, statusText: "OK", headers: {}, config };
     };
 
     const { container } = render(
@@ -193,18 +198,23 @@ describe("Home page hero and category tiles (gap a + d)", () => {
     apiClient.defaults.adapter = async (config) => {
       const url = config.url || "";
       if (/^\/banners\/daily-deals/.test(url)) {
-        return { data: { server_now: new Date().toISOString(), results: [] }, status: 200, statusText: "OK", headers: {}, config };
+        return { data: { count: 0, next: null, previous: null, server_now: new Date().toISOString(), results: [] }, status: 200, statusText: "OK", headers: {}, config };
       }
       if (/^\/banners\//.test(url)) {
         return {
-          data: [
-            { id: 1, title: "بدون تصویر", subtitle: "", image: null, cta_text: "", cta_url: "" },
-            { id: 2, title: "تصویر شکسته", subtitle: "", image: "/media/gone.jpg", cta_text: "", cta_url: "" },
-          ],
+          data: {
+            count: 2,
+            next: null,
+            previous: null,
+            results: [
+              { id: 1, title: "بدون تصویر", subtitle: "", image: null, cta_text: "", cta_url: "" },
+              { id: 2, title: "تصویر شکسته", subtitle: "", image: "/media/gone.jpg", cta_text: "", cta_url: "" },
+            ],
+          },
           status: 200, statusText: "OK", headers: {}, config,
         };
       }
-      return { data: { count: 0, results: [] }, status: 200, statusText: "OK", headers: {}, config };
+      return { data: { count: 0, next: null, previous: null, results: [] }, status: 200, statusText: "OK", headers: {}, config };
     };
 
     const { container } = render(
@@ -230,7 +240,12 @@ describe("Wishlist page without images (gap d)", () => {
     apiClient.defaults.adapter = async (config) => {
       if (/^\/wishlist\//.test(config.url || "")) {
         return {
-          data: [{ id: 5, product: product({ primary_image: null }), is_available: true }],
+          data: {
+            count: 1,
+            next: null,
+            previous: null,
+            results: [{ id: 5, product: product({ primary_image: null }), is_available: true }],
+          },
           status: 200, statusText: "OK", headers: {}, config,
         };
       }

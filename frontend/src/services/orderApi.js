@@ -41,9 +41,10 @@ export function fetchShippingMethods() {
 
 /**
  * @param {Object} params - optional, e.g. {page: 2} for pagination
- * @returns {Promise<{count, next, previous, results}>} -- paginated,
- *   unlike wishlist's bare-array response; see OrderListView (a
- *   generics.ListAPIView, using the project's default PageNumberPagination).
+ * @returns {Promise<{count, next, previous, results}>} -- one server page,
+ *   used directly by the order-history pager. Wishlist intentionally exposes
+ *   a complete plain array through its own service because its UI has no
+ *   pager; both endpoints use the same DRF response envelope on the wire.
  */
 export function fetchOrders(params = {}) {
   return apiClient.get("/orders/", { params }).then((res) => res.data);

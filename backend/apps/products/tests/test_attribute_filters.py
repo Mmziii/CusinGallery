@@ -118,6 +118,8 @@ class FacetsEndpointTests(APITestCase):
     def get_facets(self, params=None):
         response = self.client.get("/api/v1/products/facets/", params or {})
         self.assertEqual(response.status_code, 200)
+        for key in ("count", "next", "previous", "results"):
+            self.assertIn(key, response.data)
         return response.json()["results"]
 
     def test_facets_lists_attributes_with_values_and_counts(self):

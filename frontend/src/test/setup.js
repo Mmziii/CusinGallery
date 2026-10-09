@@ -60,18 +60,28 @@ if (!Element.prototype.scrollIntoView) {
 }
 
 // --- fake API ----------------------------------------------------------------
+const PAGINATED_EMPTY = { count: 0, next: null, previous: null, results: [] };
+
+// List endpoints deliberately use Django REST Framework's real envelope.
+// Tests that need a collection must not accidentally teach a component that
+// a production list is a bare array again.
 const EMPTY = {
   "^/accounts/me/$": { user: null, detail: "Not logged in." },
   "^/accounts/csrf/$": { detail: "CSRF cookie set." },
+  "^/accounts/locations/": { provinces: [] },
+  "^/accounts/addresses/": PAGINATED_EMPTY,
   "^/site/settings/": {},
-  "^/banners/daily-deals/": { server_now: new Date().toISOString(), results: [] },
-  "^/banners/": [],
-  "^/categories/tree": [],
-  "^/categories/": [],
-  "^/products/": { count: 0, next: null, previous: null, results: [] },
+  "^/banners/daily-deals/": { ...PAGINATED_EMPTY, server_now: new Date().toISOString() },
+  "^/banners/": PAGINATED_EMPTY,
+  "^/categories/tree": PAGINATED_EMPTY,
+  "^/categories/": PAGINATED_EMPTY,
+  "^/brands/": PAGINATED_EMPTY,
+  "^/products/": PAGINATED_EMPTY,
   "^/cart/": { items: [], subtotal: 0, total: 0, quantity: 0 },
-  "^/orders/": { count: 0, next: null, previous: null, results: [] },
-  "^/shipping-methods/": [],
+  "^/orders/shipping-methods/": { default: "standard", methods: [] },
+  "^/orders/": PAGINATED_EMPTY,
+  "^/wishlist/": PAGINATED_EMPTY,
+  "^/reviews/(product/.+|mine/)$": PAGINATED_EMPTY,
 };
 
 // Tiny in-memory "server cart" for the merge endpoint so store tests

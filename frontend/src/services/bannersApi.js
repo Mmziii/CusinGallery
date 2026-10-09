@@ -1,16 +1,17 @@
 import apiClient from "./apiClient";
+import { fetchAllPages, fetchAllPagesAsEnvelope } from "./pagination";
 
 /**
  * Banners / daily-deals API service layer (homepage content).
  */
 
 export function fetchBanners() {
-  // Returns a bare array (unpaginated) of active banners.
-  return apiClient.get("/banners/").then((res) => res.data);
+  // Home renders all active slides, not an arbitrary first API page.
+  return fetchAllPages(() => apiClient.get("/banners/"));
 }
 
 export function fetchDailyDeals() {
-  // Returns { server_now, results: [...] } -- server_now drives the
-  // countdown so it doesn't depend on the client's clock.
-  return apiClient.get("/banners/daily-deals/").then((res) => res.data);
+  // `server_now` drives the countdown. The normalized envelope retains it
+  // while loading every page of active deals.
+  return fetchAllPagesAsEnvelope(() => apiClient.get("/banners/daily-deals/"));
 }

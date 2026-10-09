@@ -48,9 +48,9 @@ class AddressCrudTests(CacheIsolatedAPITestCase):
 
         response = self.client.get(self.list_url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        names = [a["recipient_name"] for a in response.data["results"]] if "results" in response.data else [
-            a["recipient_name"] for a in response.data
-        ]
+        for key in ("count", "next", "previous", "results"):
+            self.assertIn(key, response.data)
+        names = [a["recipient_name"] for a in response.data["results"]]
         self.assertEqual(names, ["Sara Ahmadi"])
 
     def test_update_own_address(self):
@@ -111,8 +111,9 @@ class AddressIsolationTests(CacheIsolatedAPITestCase):
     def test_other_user_addresses_not_in_intruders_list(self):
         self.client.login(username="+989134444444", password="a-strong-passw0rd!")
         response = self.client.get(reverse("address-list"))
-        results = response.data["results"] if "results" in response.data else response.data
-        self.assertEqual(len(results), 0)
+        for key in ("count", "next", "previous", "results"):
+            self.assertIn(key, response.data)
+        self.assertEqual(len(response.data["results"]), 0)
 
 
 class DefaultAddressBehaviorTests(CacheIsolatedAPITestCase):

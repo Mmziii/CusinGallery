@@ -1,4 +1,5 @@
 import apiClient from "./apiClient";
+import { fetchAllPages } from "./pagination";
 
 /**
  * Accounts/auth API service layer. Session-based (no JWT): login/register
@@ -44,8 +45,13 @@ export function confirmPasswordReset(payload) {
 
 // --- Addresses ---------------------------------------------------------------
 
+/**
+ * All saved addresses as a plain array. The API is paginated, and this
+ * follows every `next` page so address selection never silently omits an
+ * older address.
+ */
 export function listAddresses() {
-  return apiClient.get("/accounts/addresses/").then((res) => res.data);
+  return fetchAllPages(() => apiClient.get("/accounts/addresses/"));
 }
 
 export function createAddress(payload) {

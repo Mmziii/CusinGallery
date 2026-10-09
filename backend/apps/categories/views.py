@@ -31,7 +31,7 @@ TREE_PREFETCH_DEPTH = 4
 def _build_children_prefetch(depth):
     active_children = Category.objects.filter(is_active=True).annotate(
         product_count=Count("products", filter=Q(products__is_active=True), distinct=True)
-    ).order_by("ordering", "name")
+    ).order_by("ordering", "name", "pk")
     if depth > 1:
         active_children = active_children.prefetch_related(
             Prefetch("children", queryset=_build_children_prefetch(depth - 1))
@@ -58,6 +58,10 @@ class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
                     "products", filter=Q(products__is_active=True), distinct=True
                 )
             )
+            # annotate() clears Meta.ordering. A deterministic order is
+            # essential now that this frontend-consumed list is paginated:
+            # fetching page 2 must never shuffle or repeat a category.
+            .order_by("ordering", "name", "pk")
         )
 
     @action(detail=False, methods=["get"])
@@ -69,7 +73,7 @@ class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
                     "products", filter=Q(products__is_active=True), distinct=True
                 )
             )
-            .order_by("ordering", "name")
+            .order_by("ordering", "name", "pk")
             .prefetch_related(
                 Prefetch("children", queryset=_build_children_prefetch(TREE_PREFETCH_DEPTH))
             )
@@ -80,9 +84,15 @@ class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
         # prefetched levels would reintroduce the N+1 this is built to
         # prevent (and why the docstring above says deeper children are
         # excluded from this endpoint).
-        serializer = CategoryTreeSerializer(
-            roots,
-            many=True,
-            context={"request": request, "tree_depth": 0, "tree_max_depth": TREE_PREFETCH_DEPTH},
+        context = {"request": request, "tree_depth": 0, "tree_max_depth": TREE_PREFETCH_DEPTH}
+        page = self.paginate_queryset(roots)
+        if page is not None:
+            serializer = CategoryTreeSerializer(page, many=True, context=context)
+            return self.get_paginated_response(serializer.data)
+
+        # The project paginator is enabled globally. Keep the fallback in
+        # the same envelope for an intentional future opt-out.
+        serializer = CategoryTreeSerializer(roots, many=True, context=context)
+        return Response(
+            {"count": len(serializer.data), "next": None, "previous": None, "results": serializer.data}
         )
-        return Response(serializer.data)

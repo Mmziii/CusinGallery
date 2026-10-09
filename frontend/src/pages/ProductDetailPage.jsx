@@ -63,8 +63,8 @@ function ReviewSection({ product }) {
   );
 
   const myReview = useMemo(() => {
-    if (!myReviews?.results) return null;
-    return myReviews.results.find((review) => review.product === product.id) || null;
+    if (!Array.isArray(myReviews)) return null;
+    return myReviews.find((review) => review.product === product.id) || null;
   }, [myReviews, product.id]);
 
   const [form, setForm] = useState({ rating: 0, title: "", body: "" });

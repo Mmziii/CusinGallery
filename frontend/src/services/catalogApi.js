@@ -1,4 +1,5 @@
 import apiClient from "./apiClient";
+import { fetchAllPages, fetchAllPagesAsEnvelope } from "./pagination";
 
 /**
  * Catalog API service layer (Phase 4). Every catalog-related HTTP call
@@ -16,7 +17,7 @@ import apiClient from "./apiClient";
 // --- Categories ---------------------------------------------------------------
 
 export function listCategories(params = {}) {
-  return apiClient.get("/categories/", { params }).then((res) => res.data);
+  return fetchAllPagesAsEnvelope(() => apiClient.get("/categories/", { params }));
 }
 
 export function getCategory(slug) {
@@ -24,13 +25,15 @@ export function getCategory(slug) {
 }
 
 export function getCategoryTree() {
-  return apiClient.get("/categories/tree/").then((res) => res.data);
+  // The nested tree is still a collection endpoint: load every root page so
+  // Header and Home never omit a category when the catalog grows.
+  return fetchAllPages(() => apiClient.get("/categories/tree/"));
 }
 
 // --- Brands --------------------------------------------------------------------
 
 export function listBrands(params = {}) {
-  return apiClient.get("/brands/", { params }).then((res) => res.data);
+  return fetchAllPagesAsEnvelope(() => apiClient.get("/brands/", { params }));
 }
 
 export function getBrand(slug) {
@@ -46,7 +49,18 @@ export function getBrand(slug) {
  *   is_new, is_best_seller, search, ordering (newest|oldest|price_asc|price_desc), page
  */
 export function listProducts(params = {}) {
+  // Shop, search and review surfaces intentionally control one page at a
+  // time, so they retain DRF's pagination metadata.
   return apiClient.get("/products/", { params }).then((res) => res.data);
+}
+
+/**
+ * Fetch every matching product page while retaining the familiar envelope.
+ * This is for consumers that must resolve a complete finite id set (the
+ * guest cart), rather than a visual pager or deliberately limited search.
+ */
+export function listAllProducts(params = {}) {
+  return fetchAllPagesAsEnvelope(() => apiClient.get("/products/", { params }));
 }
 
 /**
@@ -55,7 +69,7 @@ export function listProducts(params = {}) {
  * { results: [{ slug, name, values: [{ value, count }] }] }.
  */
 export function listFacets(params = {}) {
-  return apiClient.get("/products/facets/", { params }).then((res) => res.data);
+  return fetchAllPagesAsEnvelope(() => apiClient.get("/products/facets/", { params }));
 }
 
 export function getProduct(slug) {

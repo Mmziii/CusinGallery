@@ -128,7 +128,9 @@ const useCartStore = create((set, get) => ({
     const seq = ++hydrationSeq;
     set({ guestHydration: "loading", guestHydrationError: null });
     try {
-      const data = await catalogApi.listProducts({ ids: ids.join(","), page_size: ids.length });
+      // The server caps page_size at 100. Follow `next` rather than
+      // assuming one response can contain every browser-local cart line.
+      const data = await catalogApi.listAllProducts({ ids: ids.join(","), page_size: ids.length });
       if (seq !== hydrationSeq) return; // a newer request owns the result
       const byId = {};
       for (const product of data.results || []) byId[product.id] = product;

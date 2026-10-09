@@ -118,11 +118,11 @@ beforeAll(() => {
       const product = Object.values(PRODUCTS).find((item) => item.slug === slug);
       return ok({ ...(product || {}), variants: slug === "kettle-3" ? [KETTLE_VARIANT] : [] });
     }
-    if (/categories\/tree/.test(url)) return ok([]);
-    if (/^\/categories\//.test(url)) return ok({ count: 0, results: [] });
-    if (/^\/brands\//.test(url)) return ok({ count: 0, results: [] });
-    if (/products\/facets\//.test(url)) return ok({ results: [] });
-    if (/^\/banners\//.test(url)) return ok({ results: [] });
+    if (/categories\/tree/.test(url)) return ok({ count: 0, next: null, previous: null, results: [] });
+    if (/^\/categories\//.test(url)) return ok({ count: 0, next: null, previous: null, results: [] });
+    if (/^\/brands\//.test(url)) return ok({ count: 0, next: null, previous: null, results: [] });
+    if (/products\/facets\//.test(url)) return ok({ count: 0, next: null, previous: null, results: [] });
+    if (/^\/banners\//.test(url)) return ok({ count: 0, next: null, previous: null, results: [] });
     if (url === "/site/settings/") return ok({});
     if (url === "/accounts/me/") return ok(useAuthStore.getState().isAuthenticated ? ACCOUNT : { user: null });
     if (url === "/cart/") return ok(SERVER_CART);
@@ -132,7 +132,7 @@ beforeAll(() => {
         methods: [{ id: "standard", label: "ارسال عادی", cost: 45000, free_threshold: null, min_days: 3, max_days: 5, requires_address: true }],
       });
     }
-    if (url === "/accounts/addresses/") return ok([]);
+    if (url === "/accounts/addresses/") return ok({ count: 0, next: null, previous: null, results: [] });
     return originalAdapter(config);
   };
 });

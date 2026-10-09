@@ -157,14 +157,14 @@ beforeAll(() => {
       if (!product) return ok({ detail: "not found" });
       return ok({ ...product, variants: slug === "kettle-3" ? [KETTLE_VARIANT] : [] });
     }
-    if (/categories\/tree/.test(url)) return ok([]);
+    if (/categories\/tree/.test(url)) return ok({ count: 0, next: null, previous: null, results: [] });
     if (url === "/site/settings/") return ok({});
     if (url === "/accounts/me/" && method === "get") {
       return ok(useAuthStore.getState().isAuthenticated ? ACCOUNT : { user: null });
     }
     if (url === "/cart/" && method === "get") return ok(SERVER_CART);
     if (url === "/orders/shipping-methods/") return ok(SHIPPING);
-    if (url === "/accounts/addresses/") return ok([ADDRESS]);
+    if (url === "/accounts/addresses/") return ok({ count: 1, next: null, previous: null, results: [ADDRESS] });
     if (url === "/orders/checkout/") return ok(PLACED_ORDER);
     return originalAdapter(config);
   };

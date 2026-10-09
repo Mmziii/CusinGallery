@@ -13,6 +13,9 @@ import apiClient from "../services/apiClient";
 import ShopPage from "./ShopPage";
 
 const FACETS = {
+  count: 1,
+  next: null,
+  previous: null,
   results: [
     {
       slug: "rang",

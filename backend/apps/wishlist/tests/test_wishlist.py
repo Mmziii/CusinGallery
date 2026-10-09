@@ -35,17 +35,29 @@ class WishlistListTests(CacheIsolatedAPITestCase):
     def test_empty_wishlist(self):
         response = self.client.get(reverse("wishlist"))
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data, [])
+        self.assertEqual(response.data["results"], [])
 
     def test_list_shows_wishlisted_products(self):
         product = make_product(name="Wishlisted Pot", price=120000)
         WishlistItem.objects.create(user=self.user, product=product)
 
         response = self.client.get(reverse("wishlist"))
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]["product"]["id"], product.id)
-        self.assertEqual(response.data[0]["product"]["price_info"]["price"], 120000)
-        self.assertTrue(response.data[0]["is_available"])
+        self.assertEqual(len(response.data["results"]), 1)
+        self.assertEqual(response.data["results"][0]["product"]["id"], product.id)
+        self.assertEqual(response.data["results"][0]["product"]["price_info"]["price"], 120000)
+        self.assertTrue(response.data["results"][0]["is_available"])
+
+    def test_list_uses_the_standard_page_envelope_and_pages_items(self):
+        # A real second page, not merely envelope-looking JSON: the
+        # frontend service follows `next` so none of these are lost.
+        for index in range(21):
+            WishlistItem.objects.create(user=self.user, product=make_product(name=f"Item {index}"))
+
+        response = self.client.get(reverse("wishlist"))
+        self.assertEqual(response.data["count"], 21)
+        self.assertEqual(len(response.data["results"]), 20)
+        self.assertIsNotNone(response.data["next"])
+        self.assertIsNone(response.data["previous"])
 
     def test_list_reuses_phase4_product_list_serializer_shape(self):
         """Confirms the nested product uses the same fields as the
@@ -57,7 +69,7 @@ class WishlistListTests(CacheIsolatedAPITestCase):
         response = self.client.get(reverse("wishlist"))
         catalog_response = self.client.get(reverse("product-list"))
         catalog_fields = set(catalog_response.data["results"][0].keys())
-        wishlist_product_fields = set(response.data[0]["product"].keys())
+        wishlist_product_fields = set(response.data["results"][0]["product"].keys())
         self.assertEqual(catalog_fields, wishlist_product_fields)
 
 
@@ -130,7 +142,7 @@ class WishlistOwnershipTests(CacheIsolatedAPITestCase):
     def test_user_cannot_see_another_users_wishlist(self):
         self.client.login(username="+989200000005", password="a-strong-passw0rd!")
         response = self.client.get(reverse("wishlist"))
-        self.assertEqual(response.data, [])
+        self.assertEqual(response.data["results"], [])
 
     def test_user_cannot_remove_another_users_wishlist_item(self):
         self.client.login(username="+989200000005", password="a-strong-passw0rd!")
@@ -161,9 +173,9 @@ class InactiveProductInWishlistTests(CacheIsolatedAPITestCase):
 
         response = self.client.get(reverse("wishlist"))
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
-        self.assertFalse(response.data[0]["is_available"])
-        self.assertEqual(response.data[0]["product"]["id"], product.id)
+        self.assertEqual(len(response.data["results"]), 1)
+        self.assertFalse(response.data["results"][0]["is_available"])
+        self.assertEqual(response.data["results"][0]["product"]["id"], product.id)
 
 
 class WishlistCheckTests(CacheIsolatedAPITestCase):

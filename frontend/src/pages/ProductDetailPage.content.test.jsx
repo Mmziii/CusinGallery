@@ -94,7 +94,7 @@ beforeAll(() => {
       return { data: PRODUCT, status: 200, statusText: "OK", headers: {}, config };
     }
     if (/^\/reviews\//.test(url)) {
-      return { data: { count: 0, results: [] }, status: 200, statusText: "OK", headers: {}, config };
+      return { data: { count: 0, next: null, previous: null, results: [] }, status: 200, statusText: "OK", headers: {}, config };
     }
     return originalAdapter(config);
   };

@@ -65,13 +65,16 @@ beforeAll(() => {
   apiClient.defaults.adapter = async (config) => {
     const url = config.url || "";
     if (/\/products\/facets\//.test(url)) {
-      return { data: { results: [] }, status: 200, statusText: "OK", headers: {}, config };
+      return { data: { count: 0, next: null, previous: null, results: [] }, status: 200, statusText: "OK", headers: {}, config };
     }
     if (/^\/categories\//.test(url)) {
-      return { data: { results: [] }, status: 200, statusText: "OK", headers: {}, config };
+      return { data: { count: 0, next: null, previous: null, results: [] }, status: 200, statusText: "OK", headers: {}, config };
     }
     if (/^\/brands\//.test(url)) {
       const data = {
+        count: 1,
+        next: null,
+        previous: null,
         results: [
           { id: 1, name: "یونیک", slug: "unique", logo: null, tile_image: null, is_featured: true, display_order: 0 },
         ],

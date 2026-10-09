@@ -17,7 +17,7 @@ function ReviewsPage() {
   if (isLoading) return <Spinner label="در حال دریافت نظرات…" />;
   if (error) return <ErrorState message={errorMessage(error)} onRetry={refetch} />;
 
-  const reviews = data?.results || [];
+  const reviews = Array.isArray(data) ? data : [];
   if (!reviews.length) {
     return (
       <EmptyState title="هنوز نظری ثبت نکرده‌اید.">

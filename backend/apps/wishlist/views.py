@@ -3,7 +3,7 @@ Wishlist views. Same session + CSRF authentication as everywhere else in
 this project -- no second auth mechanism.
 """
 from django.db.models import Prefetch
-from rest_framework import permissions, status
+from rest_framework import generics, permissions, status
 from rest_framework.generics import get_object_or_404
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -27,12 +27,19 @@ def _wishlist_queryset(user):
     )
 
 
-class WishlistListView(APIView):
+class WishlistListView(generics.ListAPIView):
+    """The caller's wishlist in the project's standard page envelope.
+
+    The frontend follows `next` for its complete local view, while this
+    endpoint remains bounded for every other caller and matches the
+    addresses/orders/reviews/catalog list contract.
+    """
+
+    serializer_class = WishlistItemSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-    def get(self, request):
-        items = _wishlist_queryset(request.user)
-        return Response(WishlistItemSerializer(items, many=True, context={"request": request}).data)
+    def get_queryset(self):
+        return _wishlist_queryset(self.request.user)
 
 
 class WishlistItemCreateView(APIView):
