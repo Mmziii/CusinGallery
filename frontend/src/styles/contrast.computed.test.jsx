@@ -9,9 +9,9 @@
  * (b) The cart page title: the RESOLVED CASCADE gives it rgb(47, 58, 24) on
  *     rgb(250, 247, 240) = 11.28:1 -- no color rule washes it out and no
  *     ancestor paints it light, so the "light text" hypothesis is disproved by
- *     measurement. What the screenshot matches instead is geometry: from
- *     scrollY > 24 the header turns compact (`backdrop-filter: blur(12px)`,
- *     85% opaque) and, at a scroll offset of roughly its own height, covers the
+ * measurement. What the screenshot matches instead is geometry: from
+ * scrollY > 24 the header turns compact (an 85%-opaque blurred visual
+ * pseudo-element) and, at a scroll offset of roughly its own height, covers the
  *     48px-tall title while the guest note lands right below the bar -- a
  *     layout effect jsdom cannot see (no layout engine in this environment, and
  *     no browser is installable here). What this file does pin is the

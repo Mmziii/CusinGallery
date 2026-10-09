@@ -969,28 +969,39 @@ h1, h2, h3, .section__head h2 {
 /* ============================ HEADER ============================ */
 .site-header {
   position: sticky; top: 0; z-index: 60;
+  isolation: isolate;
   background: var(--brand-green-dark);
   color: var(--brand-ivory);
   box-shadow: 0 2px 14px rgba(20,26,10,.35);
   border-bottom: 1px solid rgba(206,180,100,.35);
 }
 .site-header__inner {
+  position: relative; z-index: 1;
   display: flex; align-items: center; gap: var(--space-4);
   min-height: var(--header-height);
   transition: min-height .25s ease;
 }
 .site-header--compact .site-header__inner { min-height: var(--header-height-compact); }
-/* Part R2: scrolled state -- translucent dark green + blur (solid fallback
-   when backdrop-filter is unsupported), soft shadow, reduced height.
-   Ivory text and the gold-on-dark cart badge stay readable in both states. */
+/* The blur deliberately lives on a visual sibling, not the sticky header.
+   A filter/backdrop-filter on a header can capture a fixed descendant as its
+   containing block; this pseudo-element has no descendants, while the real
+   header content stays above it. */
 .site-header--compact {
+  background: transparent;
+  box-shadow: 0 6px 24px rgba(20,26,10,.4);
+}
+.site-header--compact::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
   background: rgba(47, 58, 24, 0.85);
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
-  box-shadow: 0 6px 24px rgba(20,26,10,.4);
 }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .site-header--compact { background: var(--brand-green-dark); }
+  .site-header--compact::before { background: var(--brand-green-dark); }
 }
 
 .site-header__brand { display: flex; align-items: center; gap: var(--space-2); }
@@ -1082,7 +1093,11 @@ h1, h2, h3, .section__head h2 {
    (src/styles/overlays.structure.test.jsx). */
 .site-header__drawer {
   position: fixed; inset: 0; z-index: 115; background: var(--brand-green-dark);
-  padding: var(--space-4); display: flex; flex-direction: column; gap: 6px; overflow: auto;
+  /* `vh` is the fallback; dynamic viewport height tracks mobile browser UI. */
+  height: 100vh;
+  height: 100dvh;
+  padding: var(--space-4); display: flex; flex-direction: column; gap: 6px;
+  overflow-y: auto; overscroll-behavior: contain;
 }
 .site-header__drawer a { color: var(--brand-ivory); padding: 10px 4px; border-bottom: 1px solid rgba(206,180,100,.18); font-size: var(--font-size-md); }
 .site-header__drawer-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-3); }
@@ -1095,7 +1110,11 @@ h1, h2, h3, .section__head h2 {
 .category-bar { display: none; }
 
 /* --- Mini cart drawer --- */
-.minicart { position: fixed; inset: 0; z-index: 116; pointer-events: none; }
+.minicart {
+  position: fixed; inset: 0; z-index: 116; pointer-events: none;
+  height: 100vh;
+  height: 100dvh;
+}
 .minicart__backdrop { position: absolute; inset: 0; background: rgba(20,26,10,.5); pointer-events: auto; }
 /* Part S5 follow-up 4 item 2(a): the drawer inherits the HEADER's ivory text
    color (it lives inside .site-header), which painted ivory on the white
@@ -1319,9 +1338,11 @@ html.js-reveal .reveal.is-revealed, .reveal.is-revealed { opacity: 1; transform:
   .hero__track { transition: none; }
 }
 
-/* --- route transition fade --- */
+/* --- route transition fade ---
+   Keep this opacity-only: .route-fade sits above pages that can contain fixed
+   controls, and a transform here would turn it into their containing block. */
 .route-fade { animation: route-in .3s ease; }
-@keyframes route-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes route-in { from { opacity: 0; } to { opacity: 1; } }
 
 /* SmartImage wrappers fill their boxes like plain <img> did */
 .hero__slide picture, .hero__slide picture img { width: 100%; height: 100%; object-fit: cover; }

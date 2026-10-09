@@ -45,6 +45,7 @@ function Header() {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [compact, setCompact] = useState(false);
   const [categories, setCategories] = useState([]);
+  const hasOpenDrawer = menuOpen || cartOpen;
   const userMenuRef = useRef(null);
   const searchRef = useRef(null);
   const searchTimer = useRef(null);
@@ -62,6 +63,36 @@ function Header() {
   // focus to its trigger.
   useFocusTrap(drawerRef, menuOpen, () => setMenuOpen(false));
   useFocusTrap(minicartRef, cartOpen, () => setCartOpen(false));
+
+  // Both drawers are full-viewport dialogs. Lock the document while either
+  // is open and reserve the exact scrollbar gutter before hiding it, so the
+  // header/content do not jump horizontally when the scrollbar disappears.
+  useEffect(() => {
+    if (!hasOpenDrawer) return undefined;
+    const body = document.body;
+    const root = document.documentElement;
+    const priorCompensation = body.style.getPropertyValue("--overlay-scrollbar-compensation");
+    const priorPriority = body.style.getPropertyPriority("--overlay-scrollbar-compensation");
+    // jsdom has no layout viewport (clientWidth is 0), while browsers do.
+    // Treat that non-browser value as no scrollbar rather than reserving a
+    // fake full-window width in tests or nonvisual environments.
+    const viewportWidth = root.clientWidth;
+    const gutter = viewportWidth > 0 ? Math.max(0, window.innerWidth - viewportWidth) : 0;
+
+    body.style.setProperty("--overlay-scrollbar-compensation", `${gutter}px`);
+    body.classList.add("body--scroll-locked");
+    root.classList.add("html--scroll-locked");
+
+    return () => {
+      body.classList.remove("body--scroll-locked");
+      root.classList.remove("html--scroll-locked");
+      if (priorCompensation) {
+        body.style.setProperty("--overlay-scrollbar-compensation", priorCompensation, priorPriority);
+      } else {
+        body.style.removeProperty("--overlay-scrollbar-compensation");
+      }
+    };
+  }, [hasOpenDrawer]);
 
   useEffect(() => {
     fetchMe().then(({ success }) => {
@@ -414,9 +445,8 @@ function Header() {
         </div>
       </div>
 
-      {/* Part S5 follow-up 4: portal -- a position: fixed drawer must not live
-          inside the header, because the scrolled header's backdrop-filter makes
-          it the containing block and shrinks the drawer to the header's box. */}
+      {/* Full-viewport drawer stays portaled to body: it remains isolated from
+          all shell stacking/containing-block changes while the header scrolls. */}
       {menuOpen ? (
         <Portal>
           <div className="site-header__drawer" role="dialog" aria-modal="true" aria-label="منوی اصلی" ref={drawerRef}>
@@ -454,9 +484,8 @@ function Header() {
         </Portal>
       ) : null}
 
-      {/* Part S5 follow-up 4: portal (see the mobile drawer above) -- this is
-          the drawer the owner saw truncated to the header's height while the
-          page was scrolled. */}
+      {/* This full-viewport cart drawer shares the body portal and scroll lock
+          used by the mobile navigation drawer above. */}
       {cartOpen ? (
         <Portal>
           <div className="minicart" role="dialog" aria-modal="true" aria-label="سبد خرید">

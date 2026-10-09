@@ -1,19 +1,10 @@
 /**
- * Part S5 follow-up 4, item 1: "the mini-cart drawer is truncated when the
- * page is scrolled".
+ * Scrolled-header overlay regression coverage.
  *
- * Reproduced mechanism (real, spec-level, not a status code): the drawers
- * used to be rendered inside <header class="site-header">. From scrollY > 24
- * the header carries `.site-header--compact`, whose `backdrop-filter:
- * blur(12px)` makes the header a CONTAINING BLOCK for its fixed
- * descendants, so `position: fixed; inset: 0` resolved against the header's
- * ~60-76px box instead of the viewport: the drawer collapsed, its list got
- * a scrollbar and the checkout button spilled out of the panel. At the top
- * of the page there is no blur, which is why it only happened while
- * scrolled.
- *
- * The drawer is now portaled into document.body (components/Portal.jsx), so
- * no filtered ancestor can capture it in any scroll state.
+ * Fixed drawers are direct children of document.body, and the compact-header
+ * blur is intentionally painted by a sibling pseudo-element rather than by
+ * `.site-header` itself. Together those rules prevent a shell ancestor from
+ * capturing the fixed viewport during a scroll state.
  */
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
@@ -39,6 +30,8 @@ const PRODUCT = {
 };
 
 const originalAdapter = apiClient.defaults.adapter;
+const originalInnerWidth = Object.getOwnPropertyDescriptor(window, "innerWidth");
+const originalClientWidth = Object.getOwnPropertyDescriptor(document.documentElement, "clientWidth");
 
 beforeAll(() => {
   apiClient.defaults.adapter = async (config) => {
@@ -62,6 +55,9 @@ afterEach(() => {
   cleanup();
   useCartStore.setState({ guestLines: [], guestProducts: {}, guestHydration: "idle" });
   Object.defineProperty(window, "scrollY", { value: 0, configurable: true });
+  if (originalInnerWidth) Object.defineProperty(window, "innerWidth", originalInnerWidth);
+  if (originalClientWidth) Object.defineProperty(document.documentElement, "clientWidth", originalClientWidth);
+  else delete document.documentElement.clientWidth;
 });
 
 const originalScrollY = window.scrollY;
@@ -98,13 +94,13 @@ async function openMiniCart(view) {
 }
 
 describe("full-viewport overlays while the page is scrolled", () => {
-  it("reproduces the scrolled state that triggered the bug (header is blurred)", async () => {
+  it("keeps the compact header free of fixed-containing-block properties", async () => {
     const view = await renderScrolled();
     const header = view.container.querySelector(".site-header");
-    // The header really is in the state that creates a containing block.
     expect(header.classList.contains("site-header--compact")).toBe(true);
-    const blur = winningDeclaration(header, "backdrop-filter") || winningDeclaration(header, "-webkit-backdrop-filter");
-    expect(blur?.value).toMatch(/blur/);
+    for (const property of CONTAINING_BLOCK_PROPS) {
+      expect(winningDeclaration(header, property), `${property} on the header`).toBeNull();
+    }
   });
 
   it("renders the mini-cart drawer outside the header, as a child of body", async () => {
@@ -123,6 +119,35 @@ describe("full-viewport overlays while the page is scrolled", () => {
     // filtered/transformed ancestor any more
     const captured = fixedElements(document.body).filter((el) => containingBlockAncestor(el));
     expect(captured.map((el) => el.className)).toEqual([]);
+  });
+
+  it("keeps every header drawer a direct document.body child in compact scroll state", async () => {
+    const view = await renderScrolled();
+    const miniCart = await openMiniCart(view);
+    expect(miniCart.parentElement).toBe(document.body);
+
+    fireEvent.click(miniCart.querySelector(".minicart__backdrop"));
+    await waitFor(() => expect(document.body.querySelector(".minicart")).toBeNull());
+    fireEvent.click(view.container.querySelector(".site-header__burger"));
+    await waitFor(() => expect(document.body.querySelector(".site-header__drawer")).toBeTruthy());
+    expect(document.body.querySelector(".site-header__drawer").parentElement).toBe(document.body);
+  });
+
+  it("locks page scrolling without losing the scrollbar gutter", async () => {
+    Object.defineProperty(window, "innerWidth", { value: 1200, configurable: true });
+    Object.defineProperty(document.documentElement, "clientWidth", { value: 1184, configurable: true });
+    const view = await renderScrolled();
+    const drawer = await openMiniCart(view);
+
+    expect(document.body.classList.contains("body--scroll-locked")).toBe(true);
+    expect(document.documentElement.classList.contains("html--scroll-locked")).toBe(true);
+    expect(document.body.style.getPropertyValue("--overlay-scrollbar-compensation")).toBe("16px");
+
+    fireEvent.click(drawer.querySelector(".minicart__backdrop"));
+    await waitFor(() => expect(document.body.querySelector(".minicart")).toBeNull());
+    expect(document.body.classList.contains("body--scroll-locked")).toBe(false);
+    expect(document.documentElement.classList.contains("html--scroll-locked")).toBe(false);
+    expect(document.body.style.getPropertyValue("--overlay-scrollbar-compensation")).toBe("");
   });
 
   it("renders the mobile navigation drawer outside the header too", async () => {
