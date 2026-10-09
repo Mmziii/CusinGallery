@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, NavLink, useNavigate } from "react-router-dom";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import Icon from "./Icon";
 import Portal from "./Portal";
@@ -26,6 +26,7 @@ import { formatPrice } from "../utils/formatPrice";
  * guest lines hydrated from the products API).
  */
 function Header() {
+  const location = useLocation();
   const navigate = useNavigate();
   const { user, isAuthenticated, isLoading, logout, fetchMe } = useAuthStore();
   const cart = useCartStore((s) => s.cart);
@@ -47,6 +48,9 @@ function Header() {
   const userMenuRef = useRef(null);
   const searchRef = useRef(null);
   const searchTimer = useRef(null);
+  // A response can arrive after the shopper has used the home brand action.
+  // Versioning prevents that stale response from reopening suggestions.
+  const searchRequestVersion = useRef(0);
   const megaRef = useRef(null);
   const megaCloseTimer = useRef(null);
   const drawerRef = useRef(null);
@@ -151,6 +155,7 @@ function Header() {
   // Debounced live suggestions.
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
+    const requestVersion = ++searchRequestVersion.current;
     const query = searchTerm.trim();
     if (query.length < 2) {
       setSuggestions([]);
@@ -158,11 +163,43 @@ function Header() {
     }
     searchTimer.current = setTimeout(() => {
       listProducts({ search: query, page_size: 5 })
-        .then((data) => setSuggestions(data.results || []))
-        .catch(() => setSuggestions([]));
+        .then((data) => {
+          if (searchRequestVersion.current === requestVersion) setSuggestions(data.results || []);
+        })
+        .catch(() => {
+          if (searchRequestVersion.current === requestVersion) setSuggestions([]);
+        });
     }, 250);
     return () => clearTimeout(searchTimer.current);
   }, [searchTerm]);
+
+  // The brand is the universal way home. Close every header-owned surface
+  // before navigating so a portal or popup can never remain over the home
+  // page. This is deliberately shared by the main header and the copies
+  // inside full-screen drawers, where the original header is covered.
+  const closeHeaderSurfaces = () => {
+    cancelMegaClose();
+    megaFocusPending.current = false;
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchRequestVersion.current += 1;
+    setMenuOpen(false);
+    setCartOpen(false);
+    setMegaOpen(false);
+    setUserMenuOpen(false);
+    setSuggestions([]);
+    setSearchTerm("");
+  };
+
+  const handleHomeNavigation = () => {
+    closeHeaderSurfaces();
+    // A Link to the same pathname does not trigger MainLayout's pathname
+    // effect. Restore the expected "go to the top" action ourselves, while
+    // honouring a shopper's reduced-motion preference.
+    if (location.pathname === "/" && window.scrollY > 0) {
+      const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+      window.scrollTo({ top: 0, left: 0, behavior: reducedMotion ? "auto" : "smooth" });
+    }
+  };
 
   const submitSearch = (event) => {
     event.preventDefault();
@@ -224,7 +261,12 @@ function Header() {
           <span />
         </button>
 
-        <Link to="/" className="site-header__brand" aria-label="کازین گالری — صفحه اصلی">
+        <Link
+          to="/"
+          className="site-header__brand"
+          aria-label="کازین گالری — صفحه اصلی"
+          onClick={handleHomeNavigation}
+        >
           <img src="/brand/logo-gold.svg" alt="" className="site-header__logo" />
           <span className="site-header__brand-name">کازین گالری</span>
         </Link>
@@ -379,7 +421,15 @@ function Header() {
         <Portal>
           <div className="site-header__drawer" role="dialog" aria-modal="true" aria-label="منوی اصلی" ref={drawerRef}>
             <div className="site-header__drawer-head">
-              <span className="site-header__brand-name">کازین گالری</span>
+              <Link
+                to="/"
+                className="site-header__brand site-header__drawer-brand"
+                aria-label="کازین گالری — صفحه اصلی"
+                onClick={handleHomeNavigation}
+              >
+                <img src="/brand/logo-gold.svg" alt="" className="site-header__logo" />
+                <span className="site-header__brand-name">کازین گالری</span>
+              </Link>
               <button type="button" aria-label="بستن منو" onClick={() => setMenuOpen(false)}>
                 <Icon name="close" size={22} />
               </button>
@@ -413,6 +463,15 @@ function Header() {
             <div className="minicart__backdrop" onClick={() => setCartOpen(false)} />
             <div className="minicart__panel" ref={minicartRef}>
               <div className="minicart__head">
+                <Link
+                  to="/"
+                  className="minicart__brand"
+                  aria-label="کازین گالری — صفحه اصلی"
+                  onClick={handleHomeNavigation}
+                >
+                  <img src="/brand/logo-gold.svg" alt="" />
+                  <span>کازین گالری</span>
+                </Link>
                 <strong>سبد خرید</strong>
                 <button type="button" aria-label="بستن سبد" onClick={() => setCartOpen(false)}>
                   <Icon name="close" size={20} />

@@ -1086,6 +1086,9 @@ h1, h2, h3, .section__head h2 {
 }
 .site-header__drawer a { color: var(--brand-ivory); padding: 10px 4px; border-bottom: 1px solid rgba(206,180,100,.18); font-size: var(--font-size-md); }
 .site-header__drawer-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-3); }
+/* The full-screen drawer covers the original header, so its visible brand
+   remains a real home link rather than a decorative, unreachable label. */
+.site-header__drawer .site-header__drawer-brand { padding: 0; border-bottom: 0; color: var(--brand-gold); }
 .site-header__drawer-head button { background: none; border: none; color: var(--brand-gold); font-size: 1.6rem; cursor: pointer; }
 
 /* category bar (pre-Part-3) hidden: replaced by mega menu */
@@ -1108,7 +1111,12 @@ h1, h2, h3, .section__head h2 {
 @keyframes drawer-in { from { transform: translateX(-100%); } to { transform: translateX(0); } }
 [dir="rtl"] .minicart__panel { animation-name: drawer-in-rtl; }
 @keyframes drawer-in-rtl { from { transform: translateX(100%); } to { transform: translateX(0); } }
-.minicart__head { display: flex; justify-content: space-between; padding: var(--space-3) var(--space-4); background: var(--brand-green-dark); color: var(--brand-gold); }
+.minicart__head { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); padding: var(--space-3) var(--space-4); background: var(--brand-green-dark); color: var(--brand-gold); }
+/* Like the mobile drawer, the mini-cart is a full overlay. Keep an actual
+   logo-and-name home link inside it so the overlay never hides that action. */
+.minicart__brand { display: inline-flex; align-items: center; gap: 6px; min-width: 0; color: var(--brand-gold); font-weight: 800; white-space: nowrap; }
+.minicart__brand img { width: 28px; height: 28px; flex: none; }
+.minicart__head strong { margin-inline: auto; white-space: nowrap; }
 .minicart__head button { background: none; border: none; color: var(--brand-gold); font-size: 1.4rem; cursor: pointer; }
 .minicart__items { list-style: none; margin: 0; padding: var(--space-3); overflow: auto; flex: 1; display: flex; flex-direction: column; gap: var(--space-3); }
 .minicart__items li { display: flex; align-items: center; gap: var(--space-2); border-bottom: 1px dashed var(--color-border); padding-bottom: var(--space-2); }
