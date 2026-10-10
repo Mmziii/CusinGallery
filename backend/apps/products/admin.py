@@ -215,6 +215,16 @@ class ProductImageInline(admin.TabularInline):
         "ordering",
     )
     readonly_fields = ("thumbnail_preview",)
+    # A5: cards in a thumbnail grid instead of stock table rows. Field
+    # names, widgets and the set-primary/ordering rules are unchanged. With
+    # ADMIN_THEME_ENABLED=0 this falls back to Django's stock tabular inline.
+    @property
+    def template(self):
+        from django.conf import settings
+
+        if getattr(settings, "ADMIN_THEME_ENABLED", True):
+            return "admin/products/productimage_gallery_inline.html"
+        return "admin/edit_inline/tabular.html"
     # Part S5 item 3: `ordering` is the gallery position -- the storefront
     # orders images by (primary first, then ordering) everywhere.
     verbose_name = "تصویر"

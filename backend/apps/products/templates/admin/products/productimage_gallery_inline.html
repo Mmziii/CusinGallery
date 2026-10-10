@@ -1,0 +1,53 @@
+{% load i18n %}
+{% comment %}
+Product images as a thumbnail grid of cards (A5). Used by ProductImageInline
+through its `template` attribute. Markup follows Django's stacked inline
+template so admin/js/inlines.js keeps adding/removing rows exactly as before
+(same ids, classes, management form, empty-form and hidden pk/fk fields).
+Only the layout changed: every submitted field keeps its name and widget,
+so the set-primary checkbox (is_primary), the ordering number, the bulk
+add_images input and the server-side rules behave exactly as before.
+{% endcomment %}
+<div class="js-inline-admin-formset inline-group cusin-gallery-group"
+     id="{{ inline_admin_formset.formset.prefix }}-group"
+     data-inline-type="stacked"
+     data-inline-formset="{{ inline_admin_formset.inline_formset_data }}">
+<fieldset class="module {{ inline_admin_formset.classes }} cusin-gallery-module" aria-labelledby="{{ inline_admin_formset.formset.prefix }}-heading">
+  <h2 id="{{ inline_admin_formset.formset.prefix }}-heading" class="inline-heading">{{ inline_admin_formset.opts.verbose_name_plural|capfirst }}</h2>
+  <p class="cusin-gallery-hint">ترتیب نمایش با عدد «ترتیب» تعیین می‌شود (عدد کوچک‌تر جلوتر است). تصویر اصلی را با تیک «تصویر اصلی» مشخص کنید؛ فقط یکی می‌تواند اصلی باشد.</p>
+  {{ inline_admin_formset.formset.management_form }}
+  {{ inline_admin_formset.formset.non_form_errors }}
+  <div class="cusin-gallery">
+  {% for inline_admin_form in inline_admin_formset %}<div class="inline-related cusin-gallery-card{% if inline_admin_form.original or inline_admin_form.show_url %} has_original{% endif %}{% if forloop.last and inline_admin_formset.has_add_permission %} empty-form last-related{% endif %}" id="{{ inline_admin_formset.formset.prefix }}-{% if forloop.last and inline_admin_formset.has_add_permission %}empty{% else %}{{ forloop.counter0 }}{% endif %}">
+    <h3 class="cusin-gallery-card-head">
+      <span class="inline_label">{% if inline_admin_form.original %}تصویر {{ forloop.counter }}{% else %}تصویر جدید #{{ forloop.counter }}{% endif %}</span>
+      {% if inline_admin_form.form.instance.is_primary %}<span class="cusin-badge stock-ok">تصویر اصلی</span>{% endif %}
+      {% if inline_admin_formset.formset.can_delete and inline_admin_formset.has_delete_permission and inline_admin_form.original %}<span class="delete cusin-gallery-delete">{{ inline_admin_form.deletion_field.field }} {{ inline_admin_form.deletion_field.label_tag }}</span>{% endif %}
+    </h3>
+    {% if inline_admin_form.form.non_field_errors %}<div class="cusin-gallery-errors">{{ inline_admin_form.form.non_field_errors }}</div>{% endif %}
+    {% for fieldset in inline_admin_form %}
+      {% for line in fieldset %}
+        {% for field in line %}
+          {% if field.is_readonly %}
+          <div class="cusin-gallery-preview field-thumbnail_preview">{{ field.contents }}</div>
+          {% else %}
+          <div class="cusin-gallery-field field-{{ field.field.name }}{% if field.field.is_hidden %} hidden{% endif %}">
+            {% if field.field.errors %}<div class="cusin-gallery-errors">{{ field.field.errors }}</div>{% endif %}
+            {% if field.is_checkbox %}
+              <div class="cusin-gallery-check">{{ field.field }} {{ field.field.label_tag }}</div>
+            {% else %}
+              {{ field.field.label_tag }}
+              {{ field.field }}
+            {% endif %}
+            {% if field.field.help_text %}<p class="help cusin-gallery-help">{{ field.field.help_text|safe }}</p>{% endif %}
+          </div>
+          {% endif %}
+        {% endfor %}
+      {% endfor %}
+    {% endfor %}
+    {% if inline_admin_form.needs_explicit_pk_field %}{{ inline_admin_form.pk_field.field }}{% endif %}
+    {% if inline_admin_form.fk_field %}{{ inline_admin_form.fk_field.field }}{% endif %}
+  </div>{% endfor %}
+  </div>
+</fieldset>
+</div>
