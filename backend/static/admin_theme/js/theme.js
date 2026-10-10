@@ -13,6 +13,18 @@
   var prefersReducedMotion = window.matchMedia &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+  /* Scroll lock shared by the drawer and the palette. The page scrolls
+   * again only when no overlay still needs the lock. */
+  var overlayLocks = 0;
+  function lockBodyScroll() {
+    overlayLocks += 1;
+    document.body.style.overflow = "hidden";
+  }
+  function unlockBodyScroll() {
+    overlayLocks = Math.max(0, overlayLocks - 1);
+    if (!overlayLocks) document.body.style.overflow = "";
+  }
+
   /* ------------------------------------------------------------------ *
    * 1. Sidebar drawer
    * ------------------------------------------------------------------ */
@@ -23,17 +35,22 @@
     if (!toggle || !drawer) return;
 
     function setOpen(open) {
+      var wasOpen = drawer.classList.contains("is-open");
+      if (open === wasOpen) return;
       drawer.classList.toggle("is-open", open);
       toggle.setAttribute("aria-expanded", open ? "true" : "false");
       if (scrim) scrim.hidden = !open;
-      document.body.style.overflow = open ? "hidden" : "";
+      if (open) lockBodyScroll(); else unlockBodyScroll();
     }
     toggle.addEventListener("click", function () {
       setOpen(!drawer.classList.contains("is-open"));
     });
     if (scrim) scrim.addEventListener("click", function () { setOpen(false); });
     document.addEventListener("keydown", function (event) {
-      if (event.key === "Escape" && drawer.classList.contains("is-open")) setOpen(false);
+      if (event.key !== "Escape" || !drawer.classList.contains("is-open")) return;
+      // the palette sits on top of the drawer, so Escape closes it first
+      if (document.querySelector("[data-cusin-palette]:not([hidden])")) return;
+      setOpen(false);
     });
     // Close the drawer when a link inside it is activated (mobile SPA-ish feel)
     drawer.addEventListener("click", function (event) {
@@ -91,19 +108,57 @@
       return div.innerHTML;
     }
 
-    function closePalette() {
-      root.hidden = true;
-      document.body.style.overflow = "";
-      opener.focus();
+    function isOpen() {
+      return !root.hidden;
     }
     function openPalette() {
+      if (isOpen()) return;
+      // remember where the user was so closing returns them there
+      returnFocus = document.activeElement;
       root.hidden = false;
-      document.body.style.overflow = "hidden";
+      lockBodyScroll();
       input.value = "";
       lastQuery = "";
       renderEmptyState("برای جستجو دست‌کم ۲ حرف بنویسید…");
       input.focus();
     }
+    function closePalette(options) {
+      if (!isOpen()) return;
+      var restore = !options || options.restoreFocus !== false;
+      var target = returnFocus;
+      returnFocus = null;
+      root.hidden = true;
+      unlockBodyScroll();
+      if (restore && target && target !== document.body && target.isConnected) {
+        target.focus();
+      }
+    }
+    // Silent reset for pagehide: a back/forward-cache restore must not
+    // bring back a palette that was open when the user left the page.
+    function resetPalette() {
+      window.clearTimeout(debounceTimer);
+      if (isOpen()) {
+        root.hidden = true;
+        unlockBodyScroll();
+      }
+      returnFocus = null;
+    }
+    // Choosing a result closes the palette first, so a same-page (hash)
+    // link does not leave it open behind the new location.
+    function openResult(url) {
+      closePalette({ restoreFocus: false });
+      window.location.href = url;
+    }
+    // Keep Tab inside the open palette: the input and the result links.
+    function trapTab(event) {
+      var items = [input].concat(rows);
+      var current = items.indexOf(document.activeElement);
+      var step = event.shiftKey ? -1 : 1;
+      var next = current === -1 ? 0 : (current + step + items.length) % items.length;
+      event.preventDefault();
+      items[next].focus();
+    }
+    var returnFocus = null;
 
     function renderEmptyState(message) {
       results.innerHTML = '<div class="cusin-palette-empty">' + escapeHtml(message) + "</div>";
@@ -188,34 +243,47 @@
       else if (event.key === "ArrowUp") { event.preventDefault(); setActive(activeIndex - 1); }
       else if (event.key === "Enter") {
         event.preventDefault();
-        if (activeIndex >= 0 && rows[activeIndex]) window.location.href = rows[activeIndex].href;
-      } else if (event.key === "Escape") {
-        event.preventDefault();
-        closePalette();
+        if (activeIndex >= 0 && rows[activeIndex]) openResult(rows[activeIndex].href);
       }
+      // Escape is handled at document level so it works from any focus.
     });
 
     results.addEventListener("click", function (event) {
       var row = event.target.closest ? event.target.closest(".cusin-prow") : null;
-      if (row) event.preventDefault(), (window.location.href = row.href);
+      if (row) {
+        event.preventDefault();
+        openResult(row.href);
+      }
     });
     results.addEventListener("mousemove", function (event) {
       var row = event.target.closest ? event.target.closest(".cusin-prow") : null;
       if (row) setActive(rows.indexOf(row));
     });
 
-    closeEls.forEach(function (el) { el.addEventListener("click", closePalette); });
+    closeEls.forEach(function (el) { el.addEventListener("click", function () { closePalette(); }); });
     opener.addEventListener("click", openPalette);
+    window.addEventListener("pagehide", resetPalette);
     document.addEventListener("keydown", function (event) {
+      if (isOpen()) {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          closePalette();
+          return;
+        }
+        if (event.key === "Tab") {
+          trapTab(event);
+          return;
+        }
+      }
       var tag = (event.target.tagName || "").toLowerCase();
       var typing = tag === "input" || tag === "textarea" || tag === "select" ||
         event.target.isContentEditable;
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        if (root.hidden) openPalette(); else closePalette();
+        if (isOpen()) closePalette(); else openPalette();
         return;
       }
-      if (event.key === "/" && !typing && root.hidden && !event.ctrlKey && !event.metaKey) {
+      if (event.key === "/" && !typing && !isOpen() && !event.ctrlKey && !event.metaKey) {
         event.preventDefault();
         openPalette();
       }
