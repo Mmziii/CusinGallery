@@ -1,18 +1,18 @@
 import apiClient from "./apiClient";
+import { fetchAllPages } from "./pagination";
 
 /**
  * Wishlist API service layer (Phase 5). Same pattern as cartApi.js and
  * catalogApi.js -- plain functions over the shared apiClient.
  *
- * Note: GET /wishlist/ returns a bare array, not a paginated
- * {count, next, previous, results} shape -- WishlistListView is a plain
- * APIView, not a paginated list endpoint (unlike the Phase 4 catalog
- * list endpoints). Callers should treat fetchWishlist()'s result as an
- * array directly.
+ * GET /wishlist/ uses the same paginated envelope as every storefront
+ * collection. This service unwraps it and follows `next`, so callers work
+ * with the complete plain array (and remain safe during a rolling deploy
+ * against an older bare-array server).
  */
 
 export function fetchWishlist() {
-  return apiClient.get("/wishlist/").then((res) => res.data);
+  return fetchAllPages(() => apiClient.get("/wishlist/"));
 }
 
 /**

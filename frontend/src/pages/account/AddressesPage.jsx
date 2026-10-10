@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import AddressForm from "../../components/AddressForm";
 import { Alert, EmptyState, Spinner, errorMessage } from "../../components/ui";
@@ -16,16 +16,27 @@ function AddressesPage() {
   // double-submit nor be spammed while a request is in flight.
   const [busyId, setBusyId] = useState(null);
 
-  const load = () => {
+  // authApi.listAddresses() owns pagination and always resolves to a plain
+  // array. Keep this defensive guard at the render boundary as well: a
+  // malformed response must become an error state, never `addresses.map is
+  // not a function` and an error-boundary page.
+  const load = useCallback(async () => {
     setIsLoading(true);
-    authApi
-      .listAddresses()
-      .then(setAddresses)
-      .catch((err) => setError(normalizeApiError(err)))
-      .finally(() => setIsLoading(false));
-  };
+    setError(null);
+    try {
+      const list = await authApi.listAddresses();
+      setAddresses(Array.isArray(list) ? list : []);
+    } catch (err) {
+      setAddresses([]);
+      setError(normalizeApiError(err));
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
-  useEffect(load, []);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const handleDelete = async (id) => {
     // Part S2 item 6: destructive action needs confirmation.
@@ -34,7 +45,10 @@ function AddressesPage() {
     setBusyId(id);
     try {
       await authApi.deleteAddress(id);
-      setAddresses((list) => list.filter((a) => a.id !== id));
+      // Reload rather than editing a potentially incomplete local page:
+      // pagination, server-side ordering and the default flag remain the
+      // server's source of truth after every mutation.
+      await load();
     } catch (err) {
       setActionError(errorMessage(normalizeApiError(err)));
     } finally {
@@ -47,7 +61,7 @@ function AddressesPage() {
     setBusyId(id);
     try {
       await authApi.setDefaultAddress(id);
-      setAddresses((list) => list.map((a) => ({ ...a, is_default: a.id === id })));
+      await load();
     } catch (err) {
       setActionError(errorMessage(normalizeApiError(err)));
     } finally {
@@ -82,10 +96,10 @@ function AddressesPage() {
           <AddressForm
             key={editing?.id || "new"}
             initial={editing || null}
-            onSaved={() => {
+            onSaved={async () => {
               setShowForm(false);
               setEditing(null);
-              load();
+              await load();
             }}
           />
           <button type="button" className="link" onClick={() => setShowForm(false)}>انصراف</button>

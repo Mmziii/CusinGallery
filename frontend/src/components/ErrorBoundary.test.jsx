@@ -28,6 +28,7 @@ describe("ErrorBoundary", () => {
     expect(screen.getByText("مشکلی پیش آمد")).toBeTruthy();
     expect(screen.getByText("تلاش دوباره")).toBeTruthy();
     expect(screen.getByText("بازگشت به صفحه اصلی").getAttribute("href")).toBe("/");
+    expect(screen.getByText("رفتن به فروشگاه").getAttribute("href")).toBe("/shop/");
     spy.mockRestore();
   });
 
@@ -60,6 +61,35 @@ describe("ErrorBoundary", () => {
     fail = false;
     fireEvent.click(screen.getByText("تلاش دوباره"));
     expect(screen.getByText("بازیابی شد")).toBeTruthy();
+    spy.mockRestore();
+  });
+
+  it("resets a persistent boundary when its pathname/search reset key changes", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    let fail = true;
+    function RouteChild() {
+      if (fail) throw new Error("broken route");
+      return <p>مسیر سالم</p>;
+    }
+    const view = render(
+      <MemoryRouter>
+        <ErrorBoundary resetKey="/خراب/?مرحله=۱">
+          <RouteChild />
+        </ErrorBoundary>
+      </MemoryRouter>
+    );
+    expect(screen.getByText("مشکلی پیش آمد")).toBeTruthy();
+
+    fail = false;
+    view.rerender(
+      <MemoryRouter>
+        <ErrorBoundary resetKey="/خراب/?مرحله=۲">
+          <RouteChild />
+        </ErrorBoundary>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText("مسیر سالم")).toBeTruthy();
     spy.mockRestore();
   });
 });

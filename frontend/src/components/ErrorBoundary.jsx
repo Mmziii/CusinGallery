@@ -21,6 +21,16 @@ class ErrorBoundary extends Component {
     return { error };
   }
 
+  componentDidUpdate(previousProps) {
+    // Route boundaries stay mounted while <Outlet> changes. Resetting on
+    // location (including query-string) changes prevents one broken route
+    // from trapping the shopper on this fallback, while the retry button
+    // below remains useful without any navigation.
+    if (previousProps.resetKey !== this.props.resetKey && this.state.error) {
+      this.setState({ error: null });
+    }
+  }
+
   componentDidCatch(error, info) {
     // Visible in the owner's devtools; the user sees the friendly page.
     console.error("render error caught by ErrorBoundary:", error, info?.componentStack);
@@ -46,8 +56,13 @@ class ErrorBoundary extends Component {
           <button type="button" className="btn btn--primary" onClick={() => this.setState({ error: null })}>
             تلاش دوباره
           </button>
+          {/* Keep recovery navigation as ordinary links: they work from the
+              route boundary and from the app-level fallback alike. */}
           <Link className="btn btn--outline" to="/">
             بازگشت به صفحه اصلی
+          </Link>
+          <Link className="btn btn--outline" to="/shop/">
+            رفتن به فروشگاه
           </Link>
         </div>
       </div>
@@ -55,6 +70,11 @@ class ErrorBoundary extends Component {
   }
 }
 
-ErrorBoundary.propTypes = { children: PropTypes.node };
+ErrorBoundary.propTypes = {
+  children: PropTypes.node,
+  // MainLayout/App supply pathname+search. It is optional so the component
+  // also remains useful for local, manually retried boundaries.
+  resetKey: PropTypes.string,
+};
 
 export default ErrorBoundary;

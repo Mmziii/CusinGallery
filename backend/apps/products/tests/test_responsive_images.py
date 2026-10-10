@@ -103,5 +103,7 @@ class ResponsiveVariantApiSerializationTests(TestCase):
 
         response = self.client.get(reverse("banner-list"))
         self.assertEqual(response.status_code, 200)
-        payload = response.data["results"][0] if isinstance(response.data, dict) else response.data[0]
+        for key in ("count", "next", "previous", "results"):
+            self.assertIn(key, response.data)
+        payload = response.data["results"][0]
         self.assertTrue(payload["webp_400"].startswith("/media/"), payload["webp_400"])

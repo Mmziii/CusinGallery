@@ -1,0 +1,35 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% comment %}
+Part S5 item 8: a workbook with more than one sheet -> ask which sheet to
+read before anything is parsed. The file itself is kept on the server
+(hidden token), so the owner does not have to select it again.
+{% endcomment %}
+{% block content %}
+<h1>کدام شیت خوانده شود؟</h1>
+<p>
+  فایل اکسل شما {{ sheets|length }} شیت دارد. شیتی که جدول محصولات در آن است را انتخاب کنید.
+</p>
+
+<form method="post">
+  {% csrf_token %}
+  <input type="hidden" name="token" value="{{ token }}">
+  <input type="hidden" name="mode" value="{{ mode }}">
+  <input type="hidden" name="stock_mode" value="{{ stock_mode }}">
+  <ul style="list-style:none;padding:0">
+    {% for sheet in sheets %}
+      <li style="margin:6px 0">
+        <label>
+          <input type="radio" name="sheet" value="{{ sheet }}" {% if forloop.first %}checked{% endif %}>
+          {{ sheet }}
+        </label>
+      </li>
+    {% endfor %}
+  </ul>
+  <input type="submit" class="default" value="ادامه">
+  <a href="{% url 'admin:products_product_import' %}?mode={{ mode }}" style="margin-inline-start:12px">
+    انصراف
+  </a>
+</form>
+{% endblock %}

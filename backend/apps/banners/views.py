@@ -10,9 +10,7 @@ is likewise real, driven by the per-deal ends_at).
 """
 from django.db.models import Prefetch, Q
 from django.utils import timezone
-from rest_framework import permissions, viewsets
-from rest_framework.response import Response
-from rest_framework.views import APIView
+from rest_framework import generics, permissions, viewsets
 
 from apps.products.models import ProductImage
 
@@ -41,12 +39,9 @@ class BannerViewSet(viewsets.ReadOnlyModelViewSet):
             Q(end_date__isnull=True) | Q(end_date__gte=now),
         ).order_by("ordering", "-created_at")
 
-    def list(self, request, *args, **kwargs):
-        serializer = self.get_serializer(self.get_queryset(), many=True)
-        return Response(serializer.data)
 
 
-class DailyDealListView(APIView):
+class DailyDealListView(generics.ListAPIView):
     """
     GET /banners/daily-deals/ -- the active daily deals, each carrying its
     real starts_at/ends_at so the frontend can render an honest countdown.
@@ -54,11 +49,12 @@ class DailyDealListView(APIView):
     time-remaining without trusting its own clock.
     """
 
+    serializer_class = DailyDealSerializer
     permission_classes = [permissions.AllowAny]
 
-    def get(self, request):
-        now = _now()
-        deals = (
+    def get_queryset(self):
+        now = getattr(self, "server_now", None) or _now()
+        return (
             DailyDeal.objects.filter(
                 is_active=True,
                 starts_at__lte=now,
@@ -74,9 +70,10 @@ class DailyDealListView(APIView):
             )
             .order_by("ends_at")
         )
-        return Response(
-            {
-                "server_now": now.isoformat(),
-                "results": DailyDealSerializer(deals, many=True, context={"request": request}).data,
-            }
-        )
+
+    def list(self, request, *args, **kwargs):
+        # Keep one clock instant for both filtering and the countdown anchor.
+        self.server_now = _now()
+        response = super().list(request, *args, **kwargs)
+        response.data["server_now"] = self.server_now.isoformat()
+        return response

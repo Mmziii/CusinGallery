@@ -141,7 +141,14 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
                 by_slug[row["attribute__slug"]] = attr
                 attributes.append(attr)
             attr["values"].append({"value": row["value"], "count": row["product_count"]})
-        return Response({"results": attributes})
+        return Response(
+            {
+                "count": len(attributes),
+                "next": None,
+                "previous": None,
+                "results": attributes,
+            }
+        )
 
     def _resolve_ordering(self):
         raw = self.request.query_params.get("ordering", DEFAULT_ORDERING)

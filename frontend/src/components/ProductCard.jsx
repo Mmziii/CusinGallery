@@ -22,6 +22,10 @@ function ProductCard({ product }) {
   const addItem = useCartStore((s) => s.addItem);
   const [adding, setAdding] = useState(false);
   const [addedToWishlist, setAddedToWishlist] = useState(false);
+  // Part S4 item 1: the hover cross-fade image is decorative -- when its
+  // file is missing it hides itself silently (no broken-image icon, no
+  // placeholder: the primary image above it is the real one).
+  const [altFailed, setAltFailed] = useState(false);
 
   const outOfStock = product.stock_status === "out_of_stock";
   const lowStock = product.stock_status === "low_stock";
@@ -61,13 +65,19 @@ function ProductCard({ product }) {
           alt={product.primary_image?.alt_text || product.name}
           className="product-card__img product-card__img--main"
         />
-        {secondary ? (
+        {/* @catalog-img-allowed: reviewed exception to the
+            assets.guard.test.js rule -- this layer is decorative (the
+            primary image above it is the real one), so it renders a raw
+            <img> and hides itself silently on error instead of showing the
+            shared placeholder. */}
+        {secondary && !altFailed ? (
           <img
             src={secondary}
             alt=""
             aria-hidden="true"
             loading="lazy"
             className="product-card__img product-card__img--alt"
+            onError={() => setAltFailed(true)}
           />
         ) : null}
 

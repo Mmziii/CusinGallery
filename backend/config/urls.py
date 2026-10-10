@@ -18,6 +18,7 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 
+from apps.core.seo import product_meta, shop_meta
 from apps.core.views import healthz, robots_txt, sitemap_xml
 
 _admin_path = os.environ.get("ADMIN_URL", "admin/").strip()
@@ -39,6 +40,12 @@ urlpatterns = [
     path("healthz", healthz, name="healthz"),
     path("robots.txt", robots_txt, name="robots-txt"),
     path("sitemap.xml", sitemap_xml, name="sitemap-xml"),
+    # Part S4 item 3: crawler-visible meta. The nginx configs route known
+    # bot user agents for /products/<slug>/ and /shop/?category=<slug> to
+    # these two endpoints (a real shopper keeps getting the SPA); they are
+    # plain, minimal HTML documents, not part of the public API.
+    path("seo/product/<str:slug>/", product_meta, name="seo-product"),
+    path("seo/shop/", shop_meta, name="seo-shop"),
     # Alias of apps.payments' callback endpoint at the site root, matching
     # the PAYMENT_CALLBACK_URL shape documented in .env.example
     # (https://cusin.ir/payment/callback/). Same view either way -- see

@@ -32,11 +32,13 @@ function BrandTiles() {
             to={`/shop/?brand=${encodeURIComponent(brand.slug)}`}
             className="brand-tile"
           >
-            <span className="brand-tile__media">
-              <SmartImage
-                image={brand.tile_image || (brand.logo ? { image: brand.logo } : null)}
-                alt={brand.name}
-              />
+            {/* Part S4 item 1: the tile image, else the brand logo on a
+                tinted field, else the shared placeholder -- all through the
+                same component, so a broken file degrades identically. */}
+            <span
+              className={`brand-tile__media ${!brand.tile_image && brand.logo ? "brand-tile__media--tinted" : ""}`}
+            >
+              <SmartImage image={brand.tile_image || brand.logo || null} alt={brand.name} />
             </span>
             <span className="brand-tile__name">{brand.name}</span>
           </Link>

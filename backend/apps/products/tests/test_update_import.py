@@ -127,13 +127,33 @@ class UpdateEngineTests(TestCase):
         self.assertEqual(self.product.price, 100000)
 
     def test_unknown_column_is_rejected(self):
+        """Part S5 item 8 kept this contract: the ENGINE only accepts the
+        documented columns. Columns nobody recognizes are not silently
+        ignored -- the admin first offers a mapping step for them (see
+        test_excel_price_stock.*), and the CLI/engine still refuse."""
         import csv as csv_mod
 
-        text = "sku,price,name\nMUG-1,150000,hack\n"
+        text = "sku,price,colour\nMUG-1,150000,hack\n"
         rows = list(csv_mod.DictReader(io.StringIO(text)))
-        result = update_products_from_rows(rows, ["sku", "price", "name"])
+        result = update_products_from_rows(rows, ["sku", "price", "colour"])
         self.assertFalse(result.ok)
-        self.assertIn("name", result.errors[0])
+        self.assertIn("colour", result.errors[0])
+
+    def test_optional_descriptive_columns_are_updatable(self):
+        """Part S5 item 8: the update file may also carry name/category/
+        brand/active, so one sheet can fix prices and titles together."""
+        import csv as csv_mod
+
+        text = "sku,name,category,brand,active\nMUG-1,ماگ جدید,cookware,,غیرفعال\n"
+        rows = list(csv_mod.DictReader(io.StringIO(text)))
+        result = update_products_from_rows(
+            rows, ["sku", "name", "category", "brand", "active"]
+        )
+        self.assertTrue(result.ok, result.errors)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.name, "ماگ جدید")
+        self.assertEqual(self.product.category, self.category)
+        self.assertFalse(self.product.is_active)
 
 
 class ExportTests(TestCase):

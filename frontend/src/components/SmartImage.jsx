@@ -32,7 +32,11 @@ ImagePlaceholder.propTypes = {
  * wishlist, orders, suggestions, related) degrades identically.
  */
 function SmartImage({ image, alt, className, eager = false, sizes }) {
-  const src = image?.image || null;
+  // Part S4 item 1: callers may pass the API image object
+  // ({image, webp_*}), a bare URL string (Category.image, Brand.logo) or
+  // null. All three route through this ONE component, so the shared
+  // placeholder (and the onError fallback below) applies everywhere.
+  const src = (typeof image === "string" ? image : image?.image) || null;
   const [failed, setFailed] = useState(false);
 
   // A new src (e.g. switching gallery image) gets a fresh chance.
@@ -44,7 +48,9 @@ function SmartImage({ image, alt, className, eager = false, sizes }) {
     return <ImagePlaceholder label={alt} />;
   }
 
-  const hasVariants = Boolean(image?.webp_400 || image?.webp_800 || image?.webp_1200);
+  const hasVariants = Boolean(
+    typeof image === "object" && image && (image.webp_400 || image.webp_800 || image.webp_1200)
+  );
 
   return (
     <picture>
@@ -79,14 +85,18 @@ function SmartImage({ image, alt, className, eager = false, sizes }) {
 }
 
 SmartImage.propTypes = {
-  image: PropTypes.shape({
-    image: PropTypes.string,
-    webp_400: PropTypes.string,
-    webp_800: PropTypes.string,
-    webp_1200: PropTypes.string,
-    width: PropTypes.number,
-    height: PropTypes.number,
-  }),
+  /** An API image object, a bare URL string, or null (no image). */
+  image: PropTypes.oneOfType([
+    PropTypes.string,
+    PropTypes.shape({
+      image: PropTypes.string,
+      webp_400: PropTypes.string,
+      webp_800: PropTypes.string,
+      webp_1200: PropTypes.string,
+      width: PropTypes.number,
+      height: PropTypes.number,
+    }),
+  ]),
   alt: PropTypes.string,
   className: PropTypes.string,
   eager: PropTypes.bool,

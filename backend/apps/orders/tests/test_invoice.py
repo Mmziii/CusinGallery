@@ -30,6 +30,7 @@ class InvoiceAccessTests(CacheIsolatedAPITestCase):
             "recipient_name": "Invoice Buyer", "phone": "+989121112233",
             "province": "Tehran", "city": "Tehran", "address": "St 1",
             "postal_code": "1234567890",
+            "building_number": "10", "unit": "3",
             **({"gift_wrap": True, "gift_message": gift_message} if gift_message else {}),
         })
         serializer.is_valid(raise_exception=True)
@@ -63,6 +64,7 @@ class InvoiceAccessTests(CacheIsolatedAPITestCase):
         serializer = CheckoutSerializer(data={
             "recipient_name": "U", "phone": "+989121112233",
             "province": "T", "city": "T", "address": "X", "postal_code": "1234567890",
+            "building_number": "10", "unit": "3",
         })
         serializer.is_valid(raise_exception=True)
         order = checkout(user, serializer.validated_data)

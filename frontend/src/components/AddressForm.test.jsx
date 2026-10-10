@@ -71,6 +71,9 @@ async function fillValidAddress() {
   fireEvent.change(screen.getByLabelText(/شماره تماس/), { target: { value: "۰۹۱۲۳۴۵۶۷۸۹" } });
   fireEvent.change(screen.getByLabelText(/آدرس کامل/), { target: { value: "خیابان ولیعصر" } });
   fireEvent.change(screen.getByLabelText(/کد پستی/), { target: { value: "۱۲۳۴-۵۶۷۸۹۰" } });
+  // Part S5 item 6: the plot and the unit are required too.
+  fireEvent.change(screen.getByLabelText(/پلاک/), { target: { value: "۱۲" } });
+  fireEvent.change(screen.getByLabelText(/واحد/), { target: { value: "3" } });
 }
 
 describe("address form (S1 item 3)", () => {
@@ -93,6 +96,8 @@ describe("address form (S1 item 3)", () => {
       province: "تهران",
       city: "تهران",
       postal_code: "1234567890",
+      building_number: "12", // Persian digits normalized (Part S5 item 6)
+      unit: "3",
     });
     await waitFor(() => expect(onSaved).toHaveBeenCalled());
   });

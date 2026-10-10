@@ -29,6 +29,18 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Header drawers are portaled to body. When either is open, freeze the
+   document behind it while preserving the removed scrollbar's inline space;
+   the variable is set from the measured gutter in Header.jsx. */
+html.html--scroll-locked,
+body.body--scroll-locked {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+body.body--scroll-locked {
+  padding-inline-end: var(--overlay-scrollbar-compensation, 0px);
+}
+
 img {
   max-width: 100%;
   display: block;

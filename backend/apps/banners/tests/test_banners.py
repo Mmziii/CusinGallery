@@ -41,7 +41,9 @@ class BannerListTests(CacheIsolatedAPITestCase):
         make_banner("Disabled", is_active=False)
         response = self.client.get(BANNER_URL)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual([b["title"] for b in response.data], ["Live"])
+        for key in ("count", "next", "previous", "results"):
+            self.assertIn(key, response.data)
+        self.assertEqual([b["title"] for b in response.data["results"]], ["Live"])
 
     def test_date_window_is_enforced(self):
         now = timezone.now()
@@ -51,7 +53,7 @@ class BannerListTests(CacheIsolatedAPITestCase):
         make_banner("NoDates")  # open-ended window = always current
 
         response = self.client.get(BANNER_URL)
-        titles = [b["title"] for b in response.data]
+        titles = [b["title"] for b in response.data["results"]]
         self.assertEqual(set(titles), {"Current", "NoDates"})
 
     def test_ordering_field_controls_position(self):
@@ -59,12 +61,12 @@ class BannerListTests(CacheIsolatedAPITestCase):
         make_banner("First", ordering=1)
         make_banner("Third", ordering=3)
         response = self.client.get(BANNER_URL)
-        self.assertEqual([b["title"] for b in response.data], ["First", "Second", "Third"])
+        self.assertEqual([b["title"] for b in response.data["results"]], ["First", "Second", "Third"])
 
     def test_cta_fields_are_serialized(self):
         make_banner("Sale", cta_text="Buy now", cta_url="/shop/?sale=1", subtitle="Big sale")
         response = self.client.get(BANNER_URL)
-        banner = response.data[0]
+        banner = response.data["results"][0]
         self.assertEqual(banner["cta_text"], "Buy now")
         self.assertEqual(banner["cta_url"], "/shop/?sale=1")
         self.assertEqual(banner["subtitle"], "Big sale")
@@ -105,6 +107,8 @@ class DailyDealTests(CacheIsolatedAPITestCase):
         payload = response.data
 
         self.assertIn("server_now", payload)
+        for key in ("count", "next", "previous", "results"):
+            self.assertIn(key, payload)
         server_now = timezone.datetime.fromisoformat(payload["server_now"])
         self.assertTrue((timezone.now() - server_now).total_seconds() < 10)
 

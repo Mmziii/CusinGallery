@@ -1,4 +1,4 @@
-{% load order_extras %}<!doctype html>
+{% load order_extras cusin_images %}<!doctype html>
 <html lang="fa" dir="rtl">
 <head>
 <meta charset="utf-8">
@@ -21,12 +21,11 @@
   .totals .grand { font-weight: 800; border-top: 2px solid #8A6D1F; margin-top: 4px; padding-top: 6px; }
   .info { margin-top: 16px; font-size: 12px; color: #444; }
   .gift { background: #FAF7F0; border: 1px dashed #8A6D1F; padding: 8px 10px; margin-top: 12px; }
-  /* Part R1: consistent brand placeholder in the image area when a line has
-     no (loadable) product image -- same look as the storefront. */
-  .inv-thumb { width: 40px; height: 40px; object-fit: cover; border-radius: 6px; display: block; }
-  .inv-ph { width: 40px; height: 40px; border-radius: 6px; background: #efece4; position: relative; display: inline-block; }
-  .inv-ph::after { content: ""; position: absolute; inset: 26%; background: #637037; opacity: .35;
-    -webkit-mask: url("/brand/mark.svg") no-repeat center / contain; mask: url("/brand/mark.svg") no-repeat center / contain; }
+  /* Part S4 item 1: the image cell is built by the shared product_thumb
+     helper (apps/core/image_files.py), which ships its own inline
+     placeholder styling -- the same warm-grey field and brand mark as the
+     storefront -- so a missing or broken image never shows a broken icon. */
+  .inv-cell { width: 40px; }
   .toolbar { margin: 12px 0; }
   button { background: #637037; color: #fff; border: none; padding: 8px 18px; border-radius: 6px; font: inherit; cursor: pointer; }
   @media print {
@@ -62,13 +61,9 @@
       <tr>
         <td>
           {% with img=item.product.images.first %}
-            {% if img.image %}
-              <img class="inv-thumb" src="{{ img.image.url }}" alt=""
-                   onerror="this.style.display='none';this.nextElementSibling.style.display='inline-block';">
-              <span class="inv-ph" style="display:none"></span>
-            {% else %}
-              <span class="inv-ph" role="img" aria-label="بدون تصویر"></span>
-            {% endif %}
+            {% comment %}Part S4 item 1: the shared helper builds both the
+            thumbnail and its placeholder (missing OR broken file).{% endcomment %}
+            {{ img|product_thumb }}
           {% endwith %}
         </td>
         <td>{{ item.product_name }}</td>

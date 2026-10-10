@@ -101,8 +101,10 @@ class CategoryTreeTests(APITestCase):
 
         response = self.client.get(reverse("category-tree"))
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        for key in ("count", "next", "previous", "results"):
+            self.assertIn(key, response.data)
 
-        [root_data] = [c for c in response.data if c["slug"] == "kitchen"]
+        [root_data] = [c for c in response.data["results"] if c["slug"] == "kitchen"]
         self.assertEqual(len(root_data["children"]), 1)
         self.assertEqual(root_data["children"][0]["slug"], "cookware")
         self.assertEqual(root_data["children"][0]["children"][0]["slug"], "non-stick-pans")
@@ -110,7 +112,7 @@ class CategoryTreeTests(APITestCase):
     def test_tree_excludes_inactive_roots(self):
         make_category("Hidden Root", is_active=False)
         response = self.client.get(reverse("category-tree"))
-        slugs = [c["slug"] for c in response.data]
+        slugs = [c["slug"] for c in response.data["results"]]
         self.assertNotIn("hidden-root", slugs)
 
     def test_tree_query_count_is_bounded_not_per_node(self):
@@ -146,8 +148,9 @@ class CategoryTreeTests(APITestCase):
 
     def test_tree_query_count_is_bounded_by_depth_cap(self):
         """A chain deeper than TREE_PREFETCH_DEPTH must still cost a
-        bounded number of queries: 1 roots query + at most one query per
-        prefetch level (views.TREE_PREFETCH_DEPTH)."""
+        bounded number of queries: the paginator's root count plus the
+        root query, then at most one query per prefetch level
+        (views.TREE_PREFETCH_DEPTH)."""
         from apps.categories.views import TREE_PREFETCH_DEPTH
 
         node = make_category("Deep Root")
@@ -155,7 +158,7 @@ class CategoryTreeTests(APITestCase):
             node = make_category(f"Level {i}", parent=node)
 
         count = self._tree_query_count()
-        self.assertLessEqual(count, 1 + TREE_PREFETCH_DEPTH)
+        self.assertLessEqual(count, 2 + TREE_PREFETCH_DEPTH)
 
     def _tree_query_count(self):
         from django.db import connection

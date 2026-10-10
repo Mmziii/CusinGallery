@@ -22,7 +22,13 @@ const originalAdapter = apiClient.defaults.adapter;
 beforeAll(() => {
   apiClient.defaults.adapter = async (config) => {
     if (/categories\/tree/.test(config.url || "")) {
-      return { data: TREE, status: 200, statusText: "OK", headers: {}, config };
+      return {
+        data: { count: TREE.length, next: null, previous: null, results: TREE },
+        status: 200,
+        statusText: "OK",
+        headers: {},
+        config,
+      };
     }
     return originalAdapter(config);
   };

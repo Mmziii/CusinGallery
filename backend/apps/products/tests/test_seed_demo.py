@@ -77,3 +77,53 @@ class SeedDemoTests(TestCase):
         self.assertEqual(Coupon.objects.count(), counts["coupons"])
         self.assertEqual(Banner.objects.count(), counts["banners"])
         self.assertEqual(DailyDeal.objects.count(), counts["deals"])
+
+
+@override_settings(MEDIA_ROOT=TEMP_MEDIA)
+class SeedDemoGalleryTests(TestCase):
+    """Part S5 item 3: the demo catalog must SHOW the gallery (3-4 images
+    on several products), so the thumbnail row is visible in a preview."""
+
+    def tearDown(self):
+        shutil.rmtree(TEMP_MEDIA, ignore_errors=True)
+
+    def test_several_products_get_a_three_or_four_image_gallery(self):
+        call_command("seed_demo")
+
+        with_gallery = [
+            product for product in Product.objects.all() if product.images.count() >= 3
+        ]
+        self.assertGreaterEqual(len(with_gallery), 5)
+        for product in with_gallery:
+            count = product.images.count()
+            self.assertIn(count, (3, 4), product.sku)
+            # Exactly one primary, and it sorts first by ordering.
+            self.assertEqual(product.images.filter(is_primary=True).count(), 1, product.sku)
+            self.assertEqual(
+                list(product.images.order_by("ordering").values_list("is_primary", flat=True))[0],
+                True,
+                product.sku,
+            )
+            # Every image really exists on disk with a generated thumbnail.
+            for image in product.images.all():
+                self.assertTrue(image.image.storage.exists(image.image.name), product.sku)
+                self.assertTrue(image.thumbnail, product.sku)
+
+    def test_gallery_images_of_one_product_are_visibly_different_files(self):
+        call_command("seed_demo")
+
+        product = Product.objects.get(sku="PAN-001")
+        names = sorted(img.image.name for img in product.images.all())
+        self.assertEqual(len(names), len(set(names)), "duplicate gallery file names")
+
+        sizes = {img.image.size for img in product.images.all()}
+        self.assertGreater(len(sizes), 1, "all demo views are byte-identical")
+
+    def test_rerun_does_not_duplicate_or_drop_gallery_images(self):
+        call_command("seed_demo")
+        before = {p.sku: p.images.count() for p in Product.objects.all()}
+
+        call_command("seed_demo")
+
+        after = {p.sku: p.images.count() for p in Product.objects.all()}
+        self.assertEqual(before, after)

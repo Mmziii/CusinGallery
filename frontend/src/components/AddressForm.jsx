@@ -3,7 +3,13 @@ import { useEffect, useRef, useState } from "react";
 
 import * as authApi from "../services/authApi";
 import { fetchLocations } from "../services/siteApi";
-import { digitInput, normalizePhone, validateAddressPayload } from "../utils/iranianFields";
+import {
+  MAX_PLOT_UNIT_LENGTH,
+  digitInput,
+  normalizePhone,
+  normalizePlotUnit,
+  validateAddressPayload,
+} from "../utils/iranianFields";
 import { toast } from "../utils/toast";
 import { Alert, errorMessage } from "./ui";
 import { normalizeApiError } from "../utils/apiError";
@@ -17,8 +23,26 @@ const FIELDS = [
   { key: "city", label: "شهر", required: true, maxLength: 100 },
   { key: "address", label: "آدرس کامل", required: true, textarea: true, autoComplete: "street-address" },
   { key: "postal_code", label: "کد پستی", required: true, maxLength: 10, numeric: true, inputMode: "numeric", autoComplete: "postal-code", helper: "کد پستی ۱۰ رقمی، بدون خط تیره" },
-  { key: "unit", label: "واحد (اختیاری)", required: false, maxLength: 20 },
-  { key: "building_number", label: "پلاک (اختیاری)", required: false, maxLength: 20 },
+  // Part S5 item 6: both are required (starred) and numeric; «۰» is the
+  // documented value for a customer with no unit.
+  {
+    key: "building_number",
+    label: "پلاک",
+    required: true,
+    maxLength: 20,
+    numeric: true,
+    inputMode: "numeric",
+    helper: "شمارهٔ پلاک ساختمان؛ فقط عدد",
+  },
+  {
+    key: "unit",
+    label: "واحد",
+    required: true,
+    maxLength: 20,
+    numeric: true,
+    inputMode: "numeric",
+    helper: "اگر واحد ندارید عدد ۰ را وارد کنید",
+  },
 ];
 
 /**
@@ -76,6 +100,10 @@ function AddressForm({ value = {}, onChange, onSaved, compact = false, initial =
   const normalizeFor = (key, raw) => {
     if (key === "phone") return normalizePhone(raw).slice(0, 20);
     if (key === "postal_code") return digitInput(raw).slice(0, 10);
+    // Part S5 item 6: Persian digits become ASCII as the user types.
+    if (key === "unit" || key === "building_number") {
+      return normalizePlotUnit(raw).slice(0, MAX_PLOT_UNIT_LENGTH);
+    }
     return raw;
   };
 

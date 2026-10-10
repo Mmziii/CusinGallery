@@ -1,4 +1,4 @@
-import { SITE_ORIGIN, usePageMeta } from "../hooks/usePageMeta";
+import { usePageMeta } from "../hooks/usePageMeta";
 import PropTypes from "prop-types";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
@@ -7,6 +7,7 @@ import Breadcrumbs from "../components/Breadcrumbs";
 import Icon from "../components/Icon";
 import StarRating from "../components/StarRating";
 import PriceTag from "../components/PriceTag";
+import ProductGallery from "../components/ProductGallery";
 import SmartImage from "../components/SmartImage";
 import { productDetailShape } from "../utils/shapes";
 import { Alert, EmptyState, ErrorState, Spinner, errorMessage } from "../components/ui";
@@ -20,6 +21,7 @@ import useCartStore from "../store/useCartStore";
 import { normalizeApiError } from "../utils/apiError";
 import { formatPrice } from "../utils/formatPrice";
 import { recordView } from "../utils/recentlyViewed";
+import { shareImageUrl } from "../utils/shareImage";
 import RecentlyViewed from "../components/RecentlyViewed";
 
 function Stars({ value, size = "md" }) {
@@ -61,8 +63,8 @@ function ReviewSection({ product }) {
   );
 
   const myReview = useMemo(() => {
-    if (!myReviews?.results) return null;
-    return myReviews.results.find((review) => review.product === product.id) || null;
+    if (!Array.isArray(myReviews)) return null;
+    return myReviews.find((review) => review.product === product.id) || null;
   }, [myReviews, product.id]);
 
   const [form, setForm] = useState({ rating: 0, title: "", body: "" });
@@ -260,7 +262,6 @@ function ProductDetailPage() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const addItem = useCartStore((s) => s.addItem);
 
-  const [activeImage, setActiveImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [selected, setSelected] = useState({}); // attribute name -> value
   const [added, setAdded] = useState(null);
@@ -278,12 +279,52 @@ function ProductDetailPage() {
   // Per-product SEO/social metadata (Phase E). Values start undefined
   // and settle once the product loads; the canonical always points at
   // the slug URL (query strings like ?review=1 must not fork it).
+  //
+  // Part S4 item 2: the share image is the product's FIRST image as an
+  // ABSOLUTE url, preferring the largest WebP variant of at least 600 px
+  // wide, and the shared brand placeholder when the product has no image.
+  // (Before: `${SITE_ORIGIN}${product.primary_image}` -- primary_image is
+  // an object and may be absent, so the tag was never a real image.)
+  const shareSource = product ? product.primary_image || product.images?.[0] || null : null;
+  const ogImage = product ? shareImageUrl(shareSource) : undefined;
   usePageMeta({
     title: product?.name,
     description: product?.short_description || undefined,
     path: `/products/${slug}/`,
-    image: product?.primary_image ? `${SITE_ORIGIN}${product.primary_image}` : undefined,
+    image: ogImage,
   });
+
+  // Part S4 item 2: JSON-LD Product for search engines that DO run
+  // JavaScript (Google). It uses the same image as og:image, so a product
+  // preview is never imageless. Replaced per product, removed on unmount.
+  useEffect(() => {
+    if (!product) return undefined;
+    const script = document.createElement("script");
+    script.type = "application/ld+json";
+    script.id = "product-jsonld";
+    script.textContent = JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "Product",
+      name: product.name,
+      image: [ogImage],
+      description: product.short_description || undefined,
+      sku: product.sku,
+      brand: product.brand ? { "@type": "Brand", name: product.brand.name } : undefined,
+      url: `${window.location.origin}/products/${slug}/`,
+      offers: {
+        "@type": "Offer",
+        price: String(product.price_info?.price ?? ""),
+        // Whole-Toman prices (see README).
+        priceCurrency: "IRT",
+        availability:
+          product.stock_status === "out_of_stock"
+            ? "https://schema.org/OutOfStock"
+            : "https://schema.org/InStock",
+      },
+    });
+    document.head.appendChild(script);
+    return () => script.remove();
+  }, [product, ogImage, slug]);
 
   // Group variants by attribute for the option buttons.
   const attributeOptions = useMemo(() => {
@@ -318,7 +359,6 @@ function ProductDetailPage() {
   const outOfStock = stockStatus === "out_of_stock";
 
   useEffect(() => {
-    setActiveImage(0);
     setSelected({});
     setQuantity(1);
     setAdded(null);
@@ -367,31 +407,10 @@ function ProductDetailPage() {
         ]}
       />
       <div className="product-detail__gallery">
-        <div
-          className="product-detail__main-image"
-          onClick={(e) => e.currentTarget.querySelector("img")?.classList.toggle("is-zoomed")}
-        >
-          {/* SmartImage (Part R1): missing/broken gallery image -> shared placeholder */}
-          <SmartImage
-            image={images[activeImage] || null}
-            alt={images[activeImage]?.alt_text || product.name}
-            className="product-detail__main-img"
-          />
-        </div>
-        {images.length > 1 ? (
-          <div className="product-detail__thumbs">
-            {images.map((image, index) => (
-              <button
-                key={image.id}
-                type="button"
-                className={index === activeImage ? "thumb thumb--active" : "thumb"}
-                onClick={() => setActiveImage(index)}
-              >
-                <SmartImage image={image} alt={image.alt_text || `${product.name} ${index + 1}`} />
-              </button>
-            ))}
-          </div>
-        ) : null}
+        {/* Part S5 item 3: main image + thumbnail row (cross-fade, keyboard,
+            swipe, scroll-snap) -- every image still goes through the shared
+            SmartImage, so a broken one shows the placeholder. */}
+        <ProductGallery images={images} name={product.name} />
       </div>
 
       <div className="product-detail__info">
@@ -511,11 +530,10 @@ function ProductDetailPage() {
       </div>
 
       <div className="product-detail__extra">
-        <div className="product-detail__assurances">
-          <div><strong>ارسال:</strong> عادی ۳ تا ۵ روز / اکسپرس ۱ روزه / دریافت حضوری</div>
-          <div><strong>بسته‌بندی:</strong> ضدضربه برای ظروف شکستنی و بلور</div>
-          <div><strong>مرجوعی:</strong> تا ۷ روز با شرایط درج‌شده در «ارسال و مرجوعی»</div>
-        </div>
+        {/* Part S5 item 5: NO shipping/return/packaging content on the
+            product page. Delivery, cost and method are shown where the
+            order is actually priced (cart/checkout), and the policy lives
+            on the «ارسال و مرجوعی» page linked from the footer. */}
         <section>
           <h2>توضیحات</h2>
           <p className="product-detail__description">

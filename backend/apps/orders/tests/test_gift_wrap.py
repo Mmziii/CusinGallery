@@ -36,6 +36,9 @@ class GiftWrapCheckoutTests(CacheIsolatedAPITestCase):
             "city": "Tehran",
             "address": "Somewhere 12",
             "postal_code": "1234567890",
+            # Part S5 item 6: plot/unit are required for a new address.
+            "building_number": "10",
+            "unit": "3",
         }
         payload.update(extra)
         return self.client.post(self.url, payload, format="json")
@@ -68,6 +71,7 @@ class GiftWrapCheckoutTests(CacheIsolatedAPITestCase):
                 "recipient_name": "Gift Buyer", "phone": "+989121112233",
                 "province": "Tehran", "city": "Tehran", "address": "X 1",
                 "postal_code": "1234567890", "gift_wrap": True,
+                "building_number": "10", "unit": "3",
             },
             format="json",
         )
@@ -86,6 +90,7 @@ class GiftWrapCheckoutTests(CacheIsolatedAPITestCase):
                 "recipient_name": "Gift Buyer", "phone": "+989121112233",
                 "province": "Tehran", "city": "Tehran", "address": "X 1",
                 "postal_code": "1234567890",
+                "building_number": "10", "unit": "3",
                 "gift_wrap": True, "coupon_code": "GIFTTEST10",
             },
             format="json",
@@ -123,6 +128,7 @@ class GiftWrapHiddenWhenFeeZeroTests(CacheIsolatedAPITestCase):
             {
                 "recipient_name": "G", "phone": "+989121112233",
                 "province": "T", "city": "T", "address": "X", "postal_code": "1234567890",
+                "building_number": "10", "unit": "3",
                 "gift_wrap": True, "gift_message": "hello",
             },
             format="json",

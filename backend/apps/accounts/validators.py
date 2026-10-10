@@ -49,3 +49,42 @@ def validate_address_phone(value):
     raise serializers.ValidationError(
         "شماره تماس باید موبایل ایرانی (مانند 09123456789) یا تلفن ثابت با کد شهر (مانند 02112345678) باشد."
     )
+
+
+#: Part S5 item 6: how long a plot number / unit may be.
+MAX_PLOT_UNIT_LENGTH = 20
+
+PLOT_UNIT_MESSAGES = {
+    "building_number": "پلاک ساختمان را وارد کنید.",
+    "unit": "واحد را وارد کنید. اگر واحد ندارید عدد ۰ را وارد کنید.",
+}
+
+
+def _clean_plot_unit(value, *, field):
+    """Shared rule for the plot number (پلاک) and the unit (واحد):
+
+    required (non-empty after trimming), at most MAX_PLOT_UNIT_LENGTH
+    characters, and digits only -- Persian/Arabic digits are normalized to
+    ASCII first, so «۱۲» is stored as "12". Returns the cleaned value.
+    """
+    label = "پلاک ساختمان" if field == "building_number" else "واحد"
+    cleaned = normalize_digits(value).replace(" ", "").replace("-", "").strip()
+    if not cleaned:
+        raise serializers.ValidationError(PLOT_UNIT_MESSAGES[field])
+    if len(cleaned) > MAX_PLOT_UNIT_LENGTH:
+        raise serializers.ValidationError(
+            f"{label} حداکثر {MAX_PLOT_UNIT_LENGTH} رقم می‌تواند باشد."
+        )
+    if not cleaned.isdigit():
+        raise serializers.ValidationError(f"{label} باید فقط عدد باشد (مثلاً ۱۲).")
+    return cleaned
+
+
+def validate_building_number(value):
+    """Part S5 item 6: the plot number is required and numeric."""
+    return _clean_plot_unit(value, field="building_number")
+
+
+def validate_unit(value):
+    """Part S5 item 6: the unit is required too; «۰» means "no unit"."""
+    return _clean_plot_unit(value, field="unit")

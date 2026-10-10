@@ -1,4 +1,5 @@
 import apiClient from "./apiClient";
+import { fetchAllPages } from "./pagination";
 
 /**
  * Reviews API service layer.
@@ -17,8 +18,9 @@ export function createReview(payload) {
   return apiClient.post("/reviews/", payload).then((res) => res.data);
 }
 
+/** All of the current customer's reviews as a plain array. */
 export function fetchMyReviews() {
-  return apiClient.get("/reviews/mine/").then((res) => res.data);
+  return fetchAllPages(() => apiClient.get("/reviews/mine/"));
 }
 
 export function updateReview(id, patch) {

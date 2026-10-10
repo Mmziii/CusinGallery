@@ -34,7 +34,7 @@ export function useWishlist() {
     setError(null);
     wishlistApi
       .fetchWishlist()
-      .then((data) => setItems(data))
+      .then((data) => setItems(Array.isArray(data) ? data : []))
       .catch((err) => setError(normalizeApiError(err)))
       .finally(() => setIsLoading(false));
   }, []);
