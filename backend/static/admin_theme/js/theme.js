@@ -2,9 +2,10 @@
  *
  * Progressive enhancement only: every feature degrades to plain links /
  * plain tables when JS is unavailable. Sections:
- *   1. sidebar drawer (mobile)          4. copy-to-clipboard buttons
- *   2. user menu auto-close             5. changelist mobile card labels
- *   3. global quick-search palette (B6) 6. misc polish
+ *   1. sidebar drawer (mobile)          5. changelist mobile card labels
+ *   2. user menu auto-close             6. quick status tracking guard (B3c)
+ *   3. global quick-search palette (B6) 7. misc polish
+ *   4. copy-to-clipboard buttons
  */
 (function () {
   "use strict";
@@ -276,7 +277,32 @@
   }
 
   /* ------------------------------------------------------------------ *
-   * 6. Misc polish
+   * 6. Quick status buttons (B3c): «ارسال شده» needs a tracking code
+   *    when the order is a courier order. Progressive guard only: the
+   *    server enforces the same rule; this focuses the empty field first
+   *    so the owner does not wait for a round trip.
+   * ------------------------------------------------------------------ */
+  function initQuickStatusGuard() {
+    document.querySelectorAll("form.cusin-quick-form").forEach(function (form) {
+      var tracking = form.querySelector('input[name="tracking_code"]');
+      if (!tracking) return;
+      tracking.addEventListener("input", function () {
+        tracking.removeAttribute("aria-invalid");
+      });
+      form.querySelectorAll('button[name="next_status"]').forEach(function (button) {
+        button.addEventListener("click", function (event) {
+          if (button.value === "shipped" && !tracking.value.trim()) {
+            event.preventDefault();
+            tracking.setAttribute("aria-invalid", "true");
+            tracking.focus();
+          }
+        });
+      });
+    });
+  }
+
+  /* ------------------------------------------------------------------ *
+   * 7. Misc polish
    * ------------------------------------------------------------------ */
   function initMisc() {
     // Smooth in-page anchor scrolling unless reduced motion is requested.
@@ -293,6 +319,7 @@
     initPalette();
     initCopyButtons();
     initCardLabels();
+    initQuickStatusGuard();
     initMisc();
   });
 })();
