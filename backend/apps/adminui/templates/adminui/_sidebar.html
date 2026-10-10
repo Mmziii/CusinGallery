@@ -1,0 +1,32 @@
+{% load adminui_extras %}{% comment %}
+Grouped sidebar sections (A3), rendered by {% cusin_sidebar %} from the
+permission-filtered available_apps. Native <details>/<summary> keeps the
+collapse keyboard-accessible without JS; the active group starts open.
+{% endcomment %}
+<div class="cusin-nav-groups">
+{% for group in sidebar_groups %}
+  <details class="cusin-nav-group{% if group.active %} is-active{% endif %}"{% if group.open %} open{% endif %}>
+    <summary>
+      {% cusin_icon group.icon %}
+      <span class="cusin-nav-group-title">{{ group.title }}</span>
+      {% cusin_icon "chevron-down" "cusin-icon cusin-nav-caret" %}
+    </summary>
+    <ul>
+      {% for model in group.models %}
+      <li>
+        <a href="{{ model.url }}" class="cusin-nav-link{% if model.active %} is-active{% endif %}"{% if model.active %} aria-current="page"{% endif %}>
+          {% cusin_icon model.icon %}<span>{{ model.name }}</span>
+        </a>
+        {% if model.add_url %}
+        <a href="{{ model.add_url }}" class="cusin-nav-add" title="افزودن {{ model.name }}" aria-label="افزودن {{ model.name }}">
+          {% cusin_icon "plus" %}
+        </a>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </details>
+{% empty %}
+  <p class="cusin-nav-empty">بخشی در دسترس شما نیست.</p>
+{% endfor %}
+</div>

@@ -18,6 +18,7 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 
+from apps.adminui.views import quick_search
 from apps.core.seo import product_meta, shop_meta
 from apps.core.views import healthz, robots_txt, sitemap_xml
 
@@ -32,6 +33,15 @@ from apps.core.admin_2fa import configure_admin_2fa  # noqa: E402
 configure_admin_2fa()
 
 urlpatterns = [
+    # Staff-only quick-search JSON for the admin palette (B6). Mounted
+    # inside the admin prefix BEFORE admin.site.urls: its hyphenated
+    # segment can never collide with the admin's (\w+) app/model routes,
+    # and it inherits the admin's robots/X-Frame posture by living here.
+    path(
+        f"{_admin_path}quick-search/",
+        quick_search,
+        name="admin_quick_search",
+    ),
     path(_admin_path, admin.site.urls),
     path("api/v1/", include("config.api_urls")),
     # Site-level infrastructure (Phase E): monitoring probe + SEO files.
