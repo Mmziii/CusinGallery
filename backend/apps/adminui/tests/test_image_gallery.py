@@ -72,8 +72,7 @@ class ImageGalleryRenderTests(TestCase):
 
     def test_every_per_image_field_name_is_unchanged(self):
         html = self._html()
-        names = set(re.findall(r'name="(images-\d+-[A-Za-z_]+)"', html))
-        suffixes = {n.split("-", 2)[2] for n in names}
+        suffixes = set(re.findall(r'name="images-\d+-([A-Za-z_]+)"', html))
         expected = {"id", "product", "image", "alt_text", "is_primary",
                     "ordering", "add_images", "DELETE"}
         self.assertEqual(suffixes, expected)
