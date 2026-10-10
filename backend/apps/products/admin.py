@@ -961,14 +961,21 @@ class ProductAdmin(admin.ModelAdmin):
     thumbnail_column.short_description = ""
 
     def stock_column(self, obj):
+        # Same Persian wording as before, now rendered with the theme's
+        # badge classes (A4/B4a); with the theme disabled the classes
+        # simply have no styling and the text still reads identically.
         if obj.stock_quantity == 0:
-            return format_html('<span style="color:#b30000;font-weight:bold">۰ — ناموجود</span>')
+            return format_html(
+                '<span class="cusin-badge stock-out">۰ — ناموجود</span>'
+            )
         if obj.is_low_stock:
             return format_html(
-                '<span style="color:#a05a00;font-weight:bold">{} موجودی کم</span>',
+                '<span class="cusin-badge stock-low">{} موجودی کم</span>',
                 obj.stock_quantity,
             )
-        return str(obj.stock_quantity)
+        return format_html(
+            '<span class="cusin-badge stock-ok">{}</span>', obj.stock_quantity
+        )
 
     stock_column.short_description = "موجودی"
     stock_column.admin_order_field = "stock_quantity"
@@ -1001,10 +1008,12 @@ class ProductAdmin(admin.ModelAdmin):
     def _unique_product_name(base: str) -> str:
         """«نام (کپی)», «نام (کپی ۲)», ... -- first unused, within max_length."""
         max_len = Product._meta.get_field("name").max_length
+        from apps.adminui.jalali import fa_digits
+
         candidate = f"{base} (کپی)"
         n = 2
         while Product.objects.filter(name=candidate).exists():
-            suffix = f" (کپی {n})"
+            suffix = f" (کپی {fa_digits(n)})"
             keep = max_len - len(suffix)
             candidate = f"{base[:keep]}{suffix}"
             n += 1
