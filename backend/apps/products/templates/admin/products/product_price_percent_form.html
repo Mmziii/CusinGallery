@@ -1,0 +1,48 @@
+{% extends "admin/base_site.html" %}
+{% load i18n adminui_extras %}
+{% comment %}
+B4c step 1: choose the percentage and rounding mode for the selected
+products. The selection travels as hidden ids; the NEXT page recomputes
+everything from the database (never from client-side prices) and shows a
+before/after preview before anything is saved.
+{% endcomment %}
+
+{% block content_title %}<h1>تغییر درصدی قیمت</h1>{% endblock %}
+
+{% block content %}
+<div id="content-main" class="cusin-percent-flow">
+  <section class="cusin-card">
+    <p>
+      {% cusin_icon "tag" %}
+      <strong>{{ count|numfa }} محصول</strong> انتخاب شده است. درصد تغییر و حالت
+      گردکردن را وارد کنید؛ صفحهٔ بعد <em>پیش‌نمایش قبل/بعد</em> را نشان می‌دهد و
+      هیچ چیزی بدون تأیید شما ذخیره نمی‌شود.
+    </p>
+    <form method="post" action="{{ action_url }}" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="ids" value="{{ ids }}">
+      <div class="cusin-form-grid">
+        <div class="cusin-field">
+          <label for="cusin-percent">درصد تغییر <span class="cusin-muted">(مثلاً ۱۵ برای افزایش یا ۱۰- برای کاهش)</span></label>
+          <input type="text" id="cusin-percent" name="percent" required
+                 placeholder="۱۵ یا -۱۰" inputmode="numeric" class="vTextField" maxlength="5">
+          <p class="help">قیمت و «قیمت قبل از تخفیف» هر دو به یک نسبت تغییر می‌کنند تا درصد تخفیف معنادار بماند.</p>
+        </div>
+        <div class="cusin-field">
+          <label for="cusin-rounding">گردکردن</label>
+          <select id="cusin-rounding" name="rounding">
+            {% for value, label in roundings %}
+            <option value="{{ value }}"{% if value == "none" %} selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+          <p class="help">گِرد کردن نیمه‌به‌بالا (ROUND_HALF_UP) به نزدیک‌ترین ۱۰۰ یا ۱٬۰۰۰ تومان.</p>
+        </div>
+      </div>
+      <div class="cusin-form-actions">
+        <button type="submit" class="cusin-btn">{% cusin_icon "eye" %} مشاهدهٔ پیش‌نمایش</button>
+        <a class="cusin-btn cusin-btn--ghost" href="{% url 'admin:products_product_changelist' %}">انصراف</a>
+      </div>
+    </form>
+  </section>
+</div>
+{% endblock %}

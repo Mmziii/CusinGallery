@@ -8,12 +8,18 @@ thumbnail, price and an at-a-glance stock warning.
 """
 from django import forms
 from django.contrib import admin, messages
-from django.db.models import Prefetch
+from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import transaction
+from django.db.models import Count, Prefetch, Q
 from django.http import FileResponse, HttpResponse, HttpResponseRedirect
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
 from django.utils.html import format_html
+from django.utils.text import slugify
 
+from decimal import ROUND_HALF_UP, Decimal
+
+import csv
 import glob
 import io
 import os
@@ -209,6 +215,16 @@ class ProductImageInline(admin.TabularInline):
         "ordering",
     )
     readonly_fields = ("thumbnail_preview",)
+    # A5: cards in a thumbnail grid instead of stock table rows. Field
+    # names, widgets and the set-primary/ordering rules are unchanged. With
+    # ADMIN_THEME_ENABLED=0 this falls back to Django's stock tabular inline.
+    @property
+    def template(self):
+        from django.conf import settings
+
+        if getattr(settings, "ADMIN_THEME_ENABLED", True):
+            return "admin/products/productimage_gallery_inline.html"
+        return "admin/edit_inline/tabular.html"
     # Part S5 item 3: `ordering` is the gallery position -- the storefront
     # orders images by (primary first, then ordering) everywhere.
     verbose_name = "تصویر"
@@ -257,13 +273,23 @@ class BrandAdmin(admin.ModelAdmin):
 
 class LowStockFilter(admin.SimpleListFilter):
     """Part R4 item 3: one-click view of everything at/below the owner
-    low-stock threshold (env LOW_STOCK_THRESHOLD, default 3)."""
+    low-stock threshold (env LOW_STOCK_THRESHOLD, default 3).
+
+    Admin-panel work adds the «ناموجود» (exactly zero) lookup -- purely
+    additive: the existing "1"/"0" values and their querysets are
+    untouched (covered by apps/products/tests/test_admin_products.py).
+    """
 
     title = "وضعیت موجودی"
     parameter_name = "low_stock"
 
     def lookups(self, request, model_admin):
-        return (("1", "موجودی کم"), ("0", "موجودی کافی"))
+        return (
+            ("1", "موجودی کم"),
+            ("0", "موجودی کافی"),
+            ("2", "ناموجود"),
+            ("3", "موجودی کم (بدون ناموجود)"),
+        )
 
     def queryset(self, request, queryset):
         from django.conf import settings
@@ -272,24 +298,68 @@ class LowStockFilter(admin.SimpleListFilter):
             return queryset.filter(stock_quantity__lte=settings.LOW_STOCK_THRESHOLD)
         if self.value() == "0":
             return queryset.filter(stock_quantity__gt=settings.LOW_STOCK_THRESHOLD)
+        if self.value() == "2":
+            return queryset.filter(stock_quantity=0)
+        if self.value() == "3":
+            # Dashboard card «موجودی کم» counts items with some stock left
+            # (zero-stock rows live on their own «ناموجود» card), so its
+            # link must land on exactly that set.
+            return queryset.filter(
+                stock_quantity__lte=settings.LOW_STOCK_THRESHOLD,
+                stock_quantity__gt=0,
+            )
+        return queryset
+
+
+class HasImageFilter(admin.SimpleListFilter):
+    """Additive filter for the dashboard's «بدون تصویر» action card."""
+
+    title = "تصویر محصول"
+    parameter_name = "has_image"
+
+    def lookups(self, request, model_admin):
+        return (("1", "تصویر دارد"), ("0", "بدون تصویر"))
+
+    def queryset(self, request, queryset):
+        if self.value() == "1":
+            return queryset.filter(images__isnull=False).distinct()
+        if self.value() == "0":
+            return queryset.filter(images__isnull=True)
         return queryset
 
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
+    # Same columns as before PLUS compare_at_price and stock_quantity so
+    # the owner can edit price / sale price / stock / active / featured
+    # straight from the list (B4a). The changelist formset is built from
+    # the SAME ModelForm as the change form, so Product.clean()
+    # (compare-at >= price) validates identically in both places.
     list_display = (
         "thumbnail_column", "name", "sku", "category", "brand", "price",
-        "stock_column", "is_active", "is_featured",
+        "compare_at_price", "stock_column", "stock_quantity",
+        "is_active", "is_featured",
     )
-    list_filter = ("is_active", "is_featured", "is_new", "is_best_seller", "category", "brand", LowStockFilter)
+    list_display_links = ("thumbnail_column", "name")
+    list_editable = ("price", "compare_at_price", "stock_quantity", "is_active", "is_featured")
+    list_filter = (
+        "is_active", "is_featured", "is_new", "is_best_seller", "category",
+        "brand", LowStockFilter, HasImageFilter,
+    )
     search_fields = ("name", "sku", "slug")
     prepopulated_fields = {"slug": ("name",)}
     # Part R5 item 9: complements is an M2M to Product itself -- the
     # autocomplete widget searches by ProductAdmin.search_fields above.
     autocomplete_fields = ("category", "brand", "complements")
     inlines = [ProductImageInline, ProductVariantInline]
-    actions = ["activate_products", "deactivate_products", "mark_featured", "unmark_featured"]
+    actions = [
+        "activate_products", "deactivate_products", "mark_featured",
+        "unmark_featured", "duplicate_product", "change_price_percentage",
+    ]
     change_list_template = "admin/products/product_change_list.html"
+    # B4d: anchored sections + live preview + client-side formatting.
+    # Extends admin/change_form.html, so the stock form is untouched.
+    change_form_template = "admin/products/product_change_form.html"
 
     # --- Bulk import (CSV / Excel) --------------------------------------------
 
@@ -321,6 +391,12 @@ class ProductAdmin(admin.ModelAdmin):
                 "image-import/",
                 self.admin_site.admin_view(self.image_import_view),
                 name="products_product_image_import",
+            ),
+            # B4c: percentage price change (preview -> apply / CSV).
+            path(
+                "price-percent/",
+                self.admin_site.admin_view(self.price_percent_view),
+                name="products_product_price_percent",
             ),
         ]
         return custom + super().get_urls()
@@ -895,14 +971,21 @@ class ProductAdmin(admin.ModelAdmin):
     thumbnail_column.short_description = ""
 
     def stock_column(self, obj):
+        # Same Persian wording as before, now rendered with the theme's
+        # badge classes (A4/B4a); with the theme disabled the classes
+        # simply have no styling and the text still reads identically.
         if obj.stock_quantity == 0:
-            return format_html('<span style="color:#b30000;font-weight:bold">۰ — ناموجود</span>')
+            return format_html(
+                '<span class="cusin-badge stock-out">۰ — ناموجود</span>'
+            )
         if obj.is_low_stock:
             return format_html(
-                '<span style="color:#a05a00;font-weight:bold">{} موجودی کم</span>',
+                '<span class="cusin-badge stock-low">{} موجودی کم</span>',
                 obj.stock_quantity,
             )
-        return str(obj.stock_quantity)
+        return format_html(
+            '<span class="cusin-badge stock-ok">{}</span>', obj.stock_quantity
+        )
 
     stock_column.short_description = "موجودی"
     stock_column.admin_order_field = "stock_quantity"
@@ -928,6 +1011,267 @@ class ProductAdmin(admin.ModelAdmin):
     def unmark_featured(self, request, queryset):
         count = queryset.update(is_featured=False)
         self.message_user(request, f"{count} محصول از حالت ویژه خارج شد.", messages.SUCCESS)
+
+    # --- B4b: duplicate a product --------------------------------------------
+
+    @staticmethod
+    def _unique_product_name(base: str) -> str:
+        """«نام (کپی)», «نام (کپی ۲)», ... -- first unused, within max_length."""
+        max_len = Product._meta.get_field("name").max_length
+        from apps.adminui.jalali import fa_digits
+
+        candidate = f"{base} (کپی)"
+        n = 2
+        while Product.objects.filter(name=candidate).exists():
+            suffix = f" (کپی {fa_digits(n)})"
+            keep = max_len - len(suffix)
+            candidate = f"{base[:keep]}{suffix}"
+            n += 1
+            if n > 500:  # pragma: no cover - defensive
+                raise ValidationError("نام مناسبی برای کپی پیدا نشد.")
+        return candidate[:max_len]
+
+    @staticmethod
+    def _unique_slug(base_slug: str) -> str:
+        max_len = Product._meta.get_field("slug").max_length
+        candidate = slugify(f"{base_slug}-copy", allow_unicode=True)[:max_len]
+        n = 2
+        while Product.objects.filter(slug=candidate).exists():
+            suffix = f"-copy-{n}"
+            candidate = f"{slugify(base_slug, allow_unicode=True)[:max_len - len(suffix)]}{suffix}"
+            n += 1
+            if n > 500:  # pragma: no cover - defensive
+                raise ValidationError("شناسهٔ مناسبی برای کپی پیدا نشد.")
+        return candidate
+
+    @staticmethod
+    def _unique_sku(base_sku: str) -> str:
+        max_len = Product._meta.get_field("sku").max_length
+        candidate = f"{base_sku}-copy"[:max_len]
+        n = 2
+        while Product.objects.filter(sku=candidate).exists():
+            suffix = f"-copy-{n}"
+            candidate = f"{base_sku[:max_len - len(suffix)]}{suffix}"
+            n += 1
+            if n > 500:  # pragma: no cover - defensive
+                raise ValidationError("کد کالای مناسبی برای کپی پیدا نشد.")
+        return candidate
+
+    @admin.action(description="کپی محصول (نسخهٔ غیرفعال، بدون تصویر)")
+    def duplicate_product(self, request, queryset):
+        if not self.has_add_permission(request):
+            self.message_user(
+                request, "برای کپی محصول به دسترسی «افزودن محصول» نیاز دارید.",
+                messages.ERROR,
+            )
+            return None
+
+        # Copy scalar fields + FKs + the complements M2M. Images and
+        # variants are deliberately NOT copied: image rows would share the
+        # same media files (deleting the copy would delete the original's
+        # files) and variant SKUs are unique -- both belong to a manual
+        # re-upload. The copy starts INACTIVE so it never leaks into the
+        # storefront before the owner reviews it.
+        skip = {
+            "id", "pk", "created_at", "updated_at",
+            "search_text", "search_name",
+        }
+        made = []
+        with transaction.atomic():
+            for product in queryset.order_by("pk"):
+                copy = Product()
+                for field in Product._meta.concrete_fields:
+                    if field.name in skip:
+                        continue
+                    setattr(copy, field.attname, getattr(product, field.attname))
+                copy.pk = None
+                copy.is_active = False
+                copy.name = self._unique_product_name(product.name)
+                copy.slug = self._unique_slug(product.slug)
+                copy.sku = self._unique_sku(product.sku)
+                copy.full_clean()  # uniqueness of the suffixed name/slug/sku re-checked
+                copy.save()
+                copy.complements.set(product.complements.all())
+                self.log_addition(request, copy, [
+                    {"added": {"name": "کپی محصول", "object": f"از #{product.pk} «{product.name}»"}}
+                ])
+                made.append(copy)
+
+        if len(made) == 1:
+            msg = f"کپی غیرفعال از «{made[0].name}» ساخته شد (SKU: {made[0].sku})."
+        else:
+            msg = f"{len(made)} کپی غیرفعال از محصولات انتخاب‌شده ساخته شد."
+        self.message_user(request, msg, messages.SUCCESS)
+        return None
+
+    # --- B4c: percentage price change (all-or-nothing, with preview + CSV) ---
+
+    PRICE_PERCENT_MIN = -99
+    PRICE_PERCENT_MAX = 999
+    PRICE_ROUNDINGS = {"none": "بدون گردکردن", "100": "گرد به ۱۰۰ تومان", "1000": "گرد به ۱٬۰۰۰ تومان"}
+
+    @admin.action(description="تغییر درصدی قیمت (با پیش‌نمایش و تأیید)")
+    def change_price_percentage(self, request, queryset):
+        if not self.has_change_permission(request):
+            self.message_user(
+                request, "برای تغییر قیمت به دسترسی ویرایش محصولات نیاز دارید.",
+                messages.ERROR,
+            )
+            return None
+        ids = ",".join(str(pk) for pk in queryset.order_by("pk").values_list("pk", flat=True))
+        context = {
+            **self.admin_site.each_context(request),
+            "title": "تغییر درصدی قیمت",
+            "opts": self.model._meta,
+            "ids": ids,
+            "count": queryset.count(),
+            "roundings": self.PRICE_ROUNDINGS.items(),
+            "action_url": reverse("admin:products_product_price_percent"),
+        }
+        return TemplateResponse(request, "admin/products/product_price_percent_form.html", context)
+
+    def _parse_price_percent_request(self, request):
+        """Shared parsing for the preview/apply/CSV steps. Never trusts
+        client-side prices: only ids + percent + rounding come back, and
+        all maths is recomputed from the database rows."""
+        if not self.has_change_permission(request):
+            raise PermissionDenied
+        try:
+            ids = sorted({int(x) for x in (request.POST.get("ids") or "").split(",") if x.strip()})
+        except ValueError:
+            raise ValidationError("شناسهٔ محصولات نامعتبر است.")
+        try:
+            # Accept Persian/Arabic digits and a leading '+' for convenience;
+            # int() still rejects anything else.
+            raw_percent = (
+                request.POST.get("percent", "")
+                .translate(str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789"))
+                .strip()
+            )
+            percent = int(raw_percent)
+        except ValueError:
+            raise ValidationError("درصد را به‌صورت عدد صحیح وارد کنید (مثلاً ۱۵ یا ۱۰-).")
+        if not self.PRICE_PERCENT_MIN <= percent <= self.PRICE_PERCENT_MAX:
+            raise ValidationError(
+                f"درصد باید بین {self.PRICE_PERCENT_MIN} و {self.PRICE_PERCENT_MAX} باشد."
+            )
+        rounding = request.POST.get("rounding", "none")
+        if rounding not in self.PRICE_ROUNDINGS:
+            raise ValidationError("حالت گردکردن نامعتبر است.")
+        products = list(self.get_queryset(request).filter(pk__in=ids).order_by("sku"))
+        if not products:
+            raise ValidationError("محصولی برای تغییر انتخاب نشده است.")
+        return products, percent, rounding
+
+    @staticmethod
+    def _apply_percent(value: int | None, percent: int, rounding: str) -> int | None:
+        """new = round(value * (1 + percent/100)) then optional rounding to
+        the nearest 100/1000 Toman (ROUND_HALF_UP, never negative). The
+        function is monotonic non-decreasing, so compare_at >= price is
+        preserved when both are scaled identically."""
+        if value is None:
+            return None
+        new = Decimal(value) * (Decimal(100) + Decimal(percent)) / Decimal(100)
+        new = new.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+        if rounding in ("100", "1000"):
+            step = Decimal(rounding)
+            new = (new / step).quantize(Decimal("1"), rounding=ROUND_HALF_UP) * step
+        return int(max(new, Decimal(0)))
+
+    def _price_percent_rows(self, products, percent, rounding):
+        rows = []
+        for product in products:
+            rows.append({
+                "product": product,
+                "price_before": product.price,
+                "price_after": self._apply_percent(product.price, percent, rounding),
+                "compare_before": product.compare_at_price,
+                "compare_after": self._apply_percent(product.compare_at_price, percent, rounding),
+            })
+        return rows
+
+    def price_percent_view(self, request):
+        """POST-only multi-step endpoint: preview -> confirm / CSV / cancel."""
+        if request.method != "POST":
+            return HttpResponseRedirect(reverse("admin:products_product_changelist"))
+        try:
+            products, percent, rounding = self._parse_price_percent_request(request)
+        except (PermissionDenied, ValidationError) as exc:
+            if isinstance(exc, PermissionDenied):
+                raise
+            self.message_user(request, exc.messages[0], messages.ERROR)
+            return HttpResponseRedirect(reverse("admin:products_product_changelist"))
+
+        rows = self._price_percent_rows(products, percent, rounding)
+        base_context = {
+            **self.admin_site.each_context(request),
+            "title": "تغییر درصدی قیمت",
+            "opts": self.model._meta,
+            "ids": request.POST.get("ids", ""),
+            "percent": percent,
+            "rounding": rounding,
+            "rounding_label": self.PRICE_ROUNDINGS[rounding],
+            "rows": rows,
+            "total_count": len(rows),
+            "action_url": reverse("admin:products_product_price_percent"),
+            "changelist_url": reverse("admin:products_product_changelist"),
+        }
+
+        if "apply" in request.POST:
+            try:
+                with transaction.atomic():
+                    for row in rows:
+                        product = row["product"]
+                        product.price = row["price_after"]
+                        product.compare_at_price = row["compare_after"]
+                        # Same validation the change form runs -- a product
+                        # that cannot be saved aborts EVERYTHING (rollback).
+                        product.full_clean()
+                        product.save(update_fields=["price", "compare_at_price", "updated_at"])
+                        self.log_change(
+                            request, product,
+                            f"تغییر درصدی قیمت ({percent:+d}٪، {self.PRICE_ROUNDINGS[rounding]}): "
+                            f"{row['price_before']:,} → {row['price_after']:,}"
+                            + (
+                                f"؛ قیمت قبل تخفیف {row['compare_before']:,} → {row['compare_after']:,}"
+                                if row["compare_before"] is not None and row["compare_after"] is not None
+                                else ""
+                            ),
+                        )
+            except ValidationError as exc:
+                self.message_user(
+                    request,
+                    "تغییر قیمت اعمال نشد (هیچ محصولی ذخیره نشد): " + "؛ ".join(exc.messages),
+                    messages.ERROR,
+                )
+                return HttpResponseRedirect(reverse("admin:products_product_changelist"))
+            self.message_user(
+                request,
+                f"قیمت {len(rows)} محصول {percent:+d}٪ تغییر کرد ({self.PRICE_ROUNDINGS[rounding]}).",
+                messages.SUCCESS,
+            )
+            return HttpResponseRedirect(reverse("admin:products_product_changelist"))
+
+        if "csv" in request.POST:
+            response = HttpResponse(content_type="text/csv; charset=utf-8")
+            response["Content-Disposition"] = 'attachment; filename="price-changes.csv"'
+            response.write("\ufeff")  # BOM so Excel reads Persian correctly
+            writer = csv.writer(response)
+            writer.writerow([
+                "sku", "نام محصول", "درصد", "گردکردن",
+                "قیمت قبل", "قیمت بعد", "قیمت قبل تخفیف (قبل)", "قیمت قبل تخفیف (بعد)",
+            ])
+            for row in rows:
+                writer.writerow([
+                    row["product"].sku, row["product"].name, percent,
+                    self.PRICE_ROUNDINGS[rounding],
+                    row["price_before"], row["price_after"],
+                    row["compare_before"] if row["compare_before"] is not None else "",
+                    row["compare_after"] if row["compare_after"] is not None else "",
+                ])
+            return response
+
+        return TemplateResponse(request, "admin/products/product_price_percent_preview.html", base_context)
 
     # --- Image formset post-save: guarantee exactly one primary image ----------
 

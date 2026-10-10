@@ -1,0 +1,206 @@
+{% load i18n static adminui_extras %}{% comment %}
+Branded RTL admin shell (Part A1/A3).
+
+Lowest-risk overlay strategy:
+* every stock django.contrib.admin base.html block name is preserved, so
+  ALL child templates (stock, django-otp, and this project's custom admin
+  pages) keep working unchanged;
+* stock admin CSS (base.css / rtl.css / responsive.css / dark_mode.css) and
+  JS (theme.js, DateTimeShortcuts hooks via data-admin-utc-offset) stay
+  loaded -- theme.css layers brand styling on top instead of replacing the
+  widget machinery;
+* the sidebar lives inside the stock {% block nav-sidebar %}, so pages that
+  empty that block (login, otp login, popups) automatically hide it;
+* ADMIN_THEME_ENABLED=0 removes backend/templates from TEMPLATES["DIRS"]
+  (config/settings/base.py) and the stock templates take over instantly.
+{% endcomment %}<!DOCTYPE html>
+{% get_current_language as LANGUAGE_CODE %}{% get_current_language_bidi as LANGUAGE_BIDI %}
+<html lang="{{ LANGUAGE_CODE|default:"fa" }}" dir="{{ LANGUAGE_BIDI|yesno:'rtl,ltr,auto' }}">
+<head>
+<title>{% block title %}{% endblock %}</title>
+<link rel="stylesheet" href="{% block stylesheet %}{% static "admin/css/base.css" %}{% endblock %}">
+{% block dark-mode-vars %}
+  <link rel="stylesheet" href="{% static "admin/css/dark_mode.css" %}">
+  <script src="{% static "admin/js/theme.js" %}"></script>
+{% endblock %}
+{% block extrastyle %}{% endblock %}
+{% if LANGUAGE_BIDI %}<link rel="stylesheet" href="{% block stylesheet_rtl %}{% static "admin/css/rtl.css" %}{% endblock %}">{% endif %}
+{% block extrahead %}{% endblock %}
+{% block responsive %}
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{% static "admin/css/responsive.css" %}">
+    {% if LANGUAGE_BIDI %}<link rel="stylesheet" href="{% static "admin/css/responsive_rtl.css" %}">{% endif %}
+{% endblock %}
+{# Brand theme: loads AFTER stock stylesheets so it wins the cascade. #}
+<link rel="stylesheet" href="{% static "admin_theme/css/theme.css" %}">
+{% block blockbots %}<meta name="robots" content="NONE,NOARCHIVE">{% endblock %}
+</head>
+
+<body class="cusin-admin {% if is_popup %}popup {% endif %}{% block bodyclass %}{% endblock %}"
+  data-admin-utc-offset="{% now "Z" %}">
+<a href="#content-start" class="skip-to-content-link">{% translate 'Skip to main content' %}</a>
+{% include "adminui/_sprite.html" %}
+<!-- Container -->
+<div id="container">
+
+    {% if not is_popup %}
+    <!-- Header -->
+    {% block header %}
+      <header id="header" class="cusin-topbar-wrap">
+        <div class="cusin-topbar">
+          {% url 'admin:login' as cusin_login_url %}
+          {# Login/OTP pages empty the nav-sidebar block, so the drawer does #}
+          {# not exist there -- hide its trigger (and the palette trigger, #}
+          {# useless without a verified session) on those pages. #}
+          {% if is_nav_sidebar_enabled and request.path != cusin_login_url %}
+          <button type="button" class="cusin-drawer-toggle" id="cusin-drawer-toggle"
+                  aria-label="باز و بسته کردن منو" aria-controls="cusin-drawer" aria-expanded="false">
+            {% cusin_icon "menu" %}
+          </button>
+          {% endif %}
+          <div id="branding">
+          {% block branding %}{% endblock %}
+          </div>
+          {% if user.is_authenticated and user.is_staff and cusin_quick_search_url and request.path != cusin_login_url %}
+          <button type="button" class="cusin-search-trigger" data-cusin-search-open
+                  data-search-url="{{ cusin_quick_search_url }}" aria-label="جستجوی سریع (Ctrl+K)">
+            {% cusin_icon "search" %}
+            <span class="cusin-search-trigger-label">جستجو در پنل…</span>
+            <kbd class="cusin-kbd">Ctrl</kbd><kbd class="cusin-kbd">K</kbd>
+          </button>
+          {% endif %}
+          {% block usertools %}
+          {% if has_permission %}
+          <div id="user-tools" class="cusin-usermenu">
+            <details data-cusin-menu>
+              <summary class="cusin-usermenu-summary">
+                {% cusin_icon "user" %}
+                {% block welcome-msg %}
+                  <span class="cusin-usermenu-name">{% firstof user.get_short_name user.get_username %}</span>
+                {% endblock %}
+                {% cusin_icon "chevron-down" "cusin-icon cusin-usermenu-caret" %}
+              </summary>
+              <div class="cusin-usermenu-pop">
+                {% block userlinks %}
+                  {% if cusin_frontend_url %}
+                    <a href="{{ cusin_frontend_url }}" target="_blank" rel="noopener">{% cusin_icon "external-link" %} مشاهدهٔ فروشگاه</a>
+                  {% elif site_url %}
+                    <a href="{{ site_url }}">{% cusin_icon "external-link" %} {% translate 'View site' %}</a>
+                  {% endif %}
+                  {% if user.is_active and user.is_staff %}
+                    {% url 'django-admindocs-docroot' as docsroot %}
+                    {% if docsroot %}
+                      <a href="{{ docsroot }}">{% cusin_icon "info" %} {% translate 'Documentation' %}</a>
+                    {% endif %}
+                  {% endif %}
+                  {% if user.has_usable_password %}
+                  <a href="{% url 'admin:password_change' %}">{% cusin_icon "lock" %} {% translate 'Change password' %}</a>
+                  {% endif %}
+                  <form id="logout-form" method="post" action="{% url 'admin:logout' %}">
+                    {% csrf_token %}
+                    <button type="submit">{% cusin_icon "logout" %} {% translate 'Log out' %}</button>
+                  </form>
+                  {% include "admin/color_theme_toggle.html" %}
+                {% endblock %}
+              </div>
+            </details>
+          </div>
+          {% endif %}
+          {% endblock %}
+          {% block nav-global %}{% endblock %}
+        </div>
+        {% block nav-breadcrumbs %}
+          <nav aria-label="{% translate 'Breadcrumbs' %}" class="cusin-breadcrumbs-wrap">
+            {% block breadcrumbs %}
+              <div class="breadcrumbs">
+                <a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+                {% if title %} &rsaquo; {{ title }}{% endif %}
+              </div>
+            {% endblock %}
+          </nav>
+        {% endblock %}
+      </header>
+    {% endblock %}
+    <!-- END Header -->
+    {% endif %}
+
+    <div class="main" id="main">
+      {% if not is_popup and is_nav_sidebar_enabled %}
+        {% block nav-sidebar %}
+          <div class="cusin-drawer-scrim" data-cusin-drawer-scrim hidden></div>
+          <nav class="cusin-drawer" id="cusin-drawer" aria-label="ناوبری پنل">
+            <div class="cusin-drawer-head">
+              <img src="{% static "admin_theme/img/logo-gold.svg" %}" alt="کازین گالری" width="34" height="34">
+              <span>پنل مدیریت<br><small>کازین گالری</small></span>
+            </div>
+            <a class="cusin-drawer-dash{% if request.path == cusin_index_url %} is-active{% endif %}" href="{{ cusin_index_url|default:'/admin/' }}">
+              {% cusin_icon "grid" %}<span>داشبورد</span>
+            </a>
+            {% cusin_sidebar %}
+            <div class="cusin-drawer-foot">
+              {% if cusin_frontend_url %}
+              <a href="{{ cusin_frontend_url }}" target="_blank" rel="noopener">{% cusin_icon "store" %} مشاهدهٔ فروشگاه</a>
+              {% endif %}
+            </div>
+          </nav>
+        {% endblock %}
+      {% endif %}
+      <main id="content-start" class="content" tabindex="-1">
+        {% block messages %}
+          {% if messages %}
+            <ul class="messagelist">{% for message in messages %}
+              <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message|capfirst }}</li>
+            {% endfor %}</ul>
+          {% endif %}
+        {% endblock messages %}
+        <!-- Content -->
+        <div id="content" class="{% block coltype %}colM{% endblock %}">
+          {% block pretitle %}{% endblock %}
+          {% block content_title %}{% if title %}<h1>{{ title }}</h1>{% endif %}{% endblock %}
+          {% block content_subtitle %}{% if subtitle %}<h2>{{ subtitle }}</h2>{% endif %}{% endblock %}
+          {% block content %}
+            {% block object-tools %}{% endblock %}
+            {{ content }}
+          {% endblock %}
+          {% block sidebar %}{% endblock %}
+          <br class="clear">
+        </div>
+        <!-- END Content -->
+      </main>
+    </div>
+    <footer id="footer">{% block footer %}{% endblock %}</footer>
+</div>
+<!-- END Container -->
+
+{% if user.is_authenticated and user.is_staff and cusin_quick_search_url %}
+<!-- Global quick-search palette (B6) -->
+<div class="cusin-palette" data-cusin-palette hidden>
+  <div class="cusin-palette-backdrop" data-cusin-palette-close></div>
+  <div class="cusin-palette-box" role="dialog" aria-modal="true" aria-label="جستجوی سریع در پنل">
+    <div class="cusin-palette-input-row">
+      {% cusin_icon "search" %}
+      <input type="search" data-cusin-palette-input placeholder="جستجوی سفارش، محصول، مشتری یا بخش‌ها…"
+             autocomplete="off" spellcheck="false" aria-label="عبارت جستجو">
+      <kbd class="cusin-kbd" data-cusin-palette-esc>Esc</kbd>
+    </div>
+    <div class="cusin-palette-results" data-cusin-palette-results role="listbox" aria-label="نتایج جستجو"></div>
+    <div class="cusin-palette-foot">
+      <span><kbd class="cusin-kbd">↑</kbd><kbd class="cusin-kbd">↓</kbd> جابه‌جایی</span>
+      <span><kbd class="cusin-kbd">Enter</kbd> باز کردن</span>
+      <span>دست‌کم ۲ حرف</span>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- SVGs (stock dark-mode toggle symbols) -->
+<svg xmlns="http://www.w3.org/2000/svg" class="base-svgs">
+  <symbol viewBox="0 0 24 24" width="1.5rem" height="1.5rem" id="icon-auto"><path d="M0 0h24v24H0z" fill="currentColor"/><path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10zm0-2V4a8 8 0 1 0 0 16z"/></symbol>
+  <symbol viewBox="0 0 24 24" width="1.5rem" height="1.5rem" id="icon-moon"><path d="M0 0h24v24H0z" fill="currentColor"/><path d="M10 7a7 7 0 0 0 12 4.9v.1c0 5.523-4.477 10-10 10S2 17.523 2 12 6.477 2 12 2h.1A6.979 6.979 0 0 0 10 7zm-6 5a8 8 0 0 0 15.062 3.762A9 9 0 0 1 8.238 4.938 7.999 7.999 0 0 0 4 12z"/></symbol>
+  <symbol viewBox="0 0 24 24" width="1.5rem" height="1.5rem" id="icon-sun"><path d="M0 0h24v24H0z" fill="currentColor"/><path d="M12 18a6 6 0 1 1 0-12 6 6 0 0 1 0 12zm0-2a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM11 1h2v3h-2V1zm0 19h2v3h-2v-3zM3.515 4.929l1.414-1.414L7.05 5.636 5.636 7.05 3.515 4.93zM16.95 18.364l1.414-1.414 2.121 2.121-1.414 1.414-2.121-2.121zm2.121-14.85l1.414 1.415-2.121 2.121-1.414-1.414 2.121-2.121zM5.636 16.95l1.414 1.414-2.121 2.121-1.414-1.414 2.121-2.121zM23 11v2h-3v-2h3zM4 11v2H1v-2h3z"/></symbol>
+</svg>
+<!-- END SVGs -->
+<script src="{% static "admin_theme/js/theme.js" %}" defer></script>
+{% block extrabody %}{% endblock extrabody %}
+</body>
+</html>

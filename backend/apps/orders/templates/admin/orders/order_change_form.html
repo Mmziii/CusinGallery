@@ -1,5 +1,18 @@
 {% extends "admin/change_form.html" %}
-{% load i18n %}
+{% load i18n adminui_extras cusin_images %}
+{% comment %}
+Order change page (B3b/B3c).
+
+Additive layer over the stock change form: a read-only summary header
+(status stepper, customer card, items table, payment/shipping/refund
+cards, prominent print buttons) plus quick status buttons that ONLY offer
+workflow-legal transitions and POST to OrderAdmin.quick_status_view.
+
+The existing form, its save_model workflow routing, refund journal and
+the print object-tool below are untouched ({{ block.super }} renders the
+stock form). This template lives in the app directory, so it works with
+AND without the visual theme (ADMIN_THEME_ENABLED=False).
+{% endcomment %}
 
 {% block object-tools-items %}
   {% if original %}
@@ -10,4 +23,198 @@
   </li>
   {% endif %}
   {{ block.super }}
+{% endblock %}
+
+{% block content %}
+{% if original and cusin_order_summary %}
+<div class="cusin-order-summary">
+
+  {# ---------------- status + quick actions ---------------- #}
+  <section class="cusin-summary-card" aria-label="وضعیت سفارش">
+    <h2 class="cusin-summary-title">
+      {% cusin_icon "receipt" %}
+      سفارش {{ original.order_number }}
+      <span class="cusin-badge st-{{ original.status }}">{{ original.get_status_display }}</span>
+      <span class="cusin-badge pay-{{ original.payment_status }}">{{ original.get_payment_status_display }}</span>
+    </h2>
+
+    {% if summary_terminal %}
+      <p class="cusin-summary-terminal">
+        <span class="cusin-badge st-{{ summary_terminal.key }}">{% cusin_icon "x" %} {{ summary_terminal.label }}</span>
+        <span class="cusin-muted">این سفارش در وضعیت پایانی است و تغییر وضعیت سریع ندارد.</span>
+      </p>
+    {% elif summary_stepper_steps %}
+      <ol class="cusin-stepper" aria-label="مراحل پردازش سفارش">
+        {% for step in summary_stepper_steps %}
+        <li class="cusin-step{% if step.state == 'current' %} is-current{% elif step.state == 'done' %} is-done{% endif %}">
+          <span class="cusin-step-dot" aria-hidden="true"></span>
+          {{ step.label }}
+        </li>
+        {% endfor %}
+      </ol>
+    {% endif %}
+
+    <div class="cusin-summary-grid">
+      <span class="cusin-summary-item"><span class="k">ثبت سفارش</span>
+        <span class="v" title="{{ original.created_at|date:'Y-m-d H:i' }}">{{ original.created_at|jdatetime }}</span></span>
+      <span class="cusin-summary-item"><span class="k">روش ارسال</span>
+        <span class="v">{{ shipping_method_label_text }}</span></span>
+      {% if original.tracking_code %}
+      <span class="cusin-summary-item"><span class="k">کد رهگیری</span>
+        <span class="v">{{ original.tracking_code }}
+          <button type="button" class="cusin-btn cusin-btn--ghost cusin-btn--sm" data-cusin-copy="{{ original.tracking_code }}">{% cusin_icon "copy" %} کپی</button>
+        </span></span>
+      {% endif %}
+      {% if original.estimated_delivery_min is not None %}
+      <span class="cusin-summary-item"><span class="k">بازهٔ تحویل</span>
+        <span class="v">{{ original.estimated_delivery_min|fanum }} تا {{ original.estimated_delivery_max|fanum }} روز</span></span>
+      {% endif %}
+      <span class="cusin-summary-item"><span class="k">مبلغ نهایی</span>
+        <span class="v" title="{{ original.total }} تومان">{{ original.total|toman }}</span></span>
+    </div>
+
+    <div class="cusin-print-actions">
+      <a class="cusin-btn cusin-btn--dark" href="{{ order_print_url }}" target="_blank" rel="noopener">
+        {% cusin_icon "printer" %} چاپ برچسب ارسال و فاکتور
+      </a>
+    </div>
+
+    {% if quick_can_change and quick_allowed %}
+    <form method="post" action="{{ quick_status_url }}" class="cusin-quick-form">
+      {% csrf_token %}
+      <p class="cusin-quick-title">{% cusin_icon "zap" %} تغییر سریع وضعیت <span class="cusin-muted">(فقط انتقال‌های مجاز گردش کار)</span></p>
+      {% if quick_needs_tracking %}
+      <div class="cusin-quick-field">
+        <label for="cusin-quick-tracking">کد رهگیری مرسوله (برای «ارسال شده» الزامی است)</label>
+        <input type="text" id="cusin-quick-tracking" name="tracking_code" maxlength="100"
+               placeholder="مثلاً 1234567890" autocomplete="off">
+      </div>
+      {% endif %}
+      <div class="cusin-quick-actions">
+        {% for action in quick_allowed %}
+        <button type="submit" name="next_status" value="{{ action.value }}"
+                class="cusin-btn{% if action.tone == 'danger' %} cusin-btn--danger{% endif %}">
+          {% cusin_icon action.icon %} {{ action.label }}
+        </button>
+        {% endfor %}
+      </div>
+    </form>
+    {% endif %}
+  </section>
+
+  {# ---------------- customer + shipping snapshot ---------------- #}
+  <section class="cusin-summary-card" aria-label="مشتری و ارسال">
+    <h2 class="cusin-summary-title">{% cusin_icon "users" %} مشتری</h2>
+    <div class="cusin-summary-grid">
+      <span class="cusin-summary-item"><span class="k">حساب کاربری</span>
+        <span class="v"><a href="{% url 'admin:accounts_user_change' original.user_id %}">{{ original.user }}</a></span></span>
+      <span class="cusin-summary-item"><span class="k">سفارش‌های مشتری</span>
+        <span class="v">{{ customer_order_count|numfa }} سفارش</span></span>
+      <span class="cusin-summary-item"><span class="k">گیرنده</span>
+        <span class="v">{{ original.shipping_recipient_name }}</span></span>
+      <span class="cusin-summary-item"><span class="k">تلفن</span>
+        <span class="v">{{ original.shipping_phone }}
+          <button type="button" class="cusin-btn cusin-btn--ghost cusin-btn--sm" data-cusin-copy="{{ original.shipping_phone }}">{% cusin_icon "copy" %}</button>
+        </span></span>
+      <span class="cusin-summary-item"><span class="k">نشانی</span>
+        <span class="v">{{ original.shipping_province }}، {{ original.shipping_city }}، {{ original.shipping_address }}
+          {% if original.shipping_postal_code %}— کد پستی {{ original.shipping_postal_code }}{% endif %}
+          {% if original.shipping_unit %}— واحد {{ original.shipping_unit }}{% endif %}
+          {% if original.shipping_building_number %}— پلاک {{ original.shipping_building_number }}{% endif %}
+        </span></span>
+    </div>
+    <div class="cusin-customer-actions">
+      <a class="cusin-btn cusin-btn--ghost cusin-btn--sm" href="tel:{{ original.shipping_phone }}">
+        {% cusin_icon "phone" %} تماس
+      </a>
+      {% if whatsapp_link %}
+      <a class="cusin-btn cusin-btn--ghost cusin-btn--sm" href="{{ whatsapp_link }}" target="_blank" rel="noopener">
+        {% cusin_icon "message" %} واتس‌اپ
+      </a>
+      {% endif %}
+      {% if original.gift_wrap %}
+      <span class="cusin-badge on">{% cusin_icon "sparkle" %} بسته‌بندی هدیه ({{ original.gift_wrap_fee|toman }})</span>
+      {% endif %}
+    </div>
+  </section>
+
+  {# ---------------- items ---------------- #}
+  <section class="cusin-summary-card" aria-label="اقلام سفارش">
+    <h2 class="cusin-summary-title">{% cusin_icon "box" %} اقلام سفارش</h2>
+    <div class="cusin-table-scroll">
+      <table class="cusin-items-table">
+        <thead>
+          <tr><th>کالا</th><th>کد</th><th>قیمت واحد</th><th>تعداد</th><th>جمع</th></tr>
+        </thead>
+        <tbody>
+          {% for row in summary_items %}
+          <tr>
+            <td>
+              <span class="cusin-item-cell">
+                {% if row.image %}{{ row.image|product_thumb:44 }}{% else %}<span class="cusin-thumb-empty">{% cusin_icon "image-off" %}</span>{% endif %}
+                <span>
+                  {{ row.item.product_name }}
+                  {% if row.item.variant %}<small class="cusin-muted">— {{ row.item.variant }}</small>{% endif %}
+                </span>
+              </span>
+            </td>
+            <td class="cusin-nowrap">{{ row.item.sku }}</td>
+            <td class="cusin-nowrap">{{ row.item.unit_price|toman }}</td>
+            <td class="cusin-nowrap">{{ row.item.quantity|fanum }}</td>
+            <td class="cusin-nowrap">{{ row.item.total_price|toman }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr><td colspan="4">جمع اقلام</td><td>{{ original.subtotal|toman }}</td></tr>
+          {% if original.discount_amount %}
+          <tr><td colspan="4">تخفیف{% if original.coupon %} (کوپن {{ original.coupon.code }}){% endif %}</td><td>−{{ original.discount_amount|toman }}</td></tr>
+          {% endif %}
+          <tr><td colspan="4">هزینهٔ ارسال</td><td>{{ original.shipping_cost|toman }}</td></tr>
+          <tr><td colspan="4">مبلغ نهایی</td><td>{{ original.total|toman }}</td></tr>
+        </tfoot>
+      </table>
+    </div>
+  </section>
+
+  {# ---------------- payments + refunds ---------------- #}
+  <section class="cusin-summary-card" aria-label="پرداخت و بازپرداخت">
+    <h2 class="cusin-summary-title">{% cusin_icon "wallet" %} پرداخت و بازپرداخت</h2>
+    {% if summary_payments %}
+    <div class="cusin-table-scroll">
+      <table class="cusin-items-table">
+        <thead><tr><th>وضعیت</th><th>مبلغ</th><th>درگاه</th><th>شناسهٔ تراکنش</th><th>زمان</th></tr></thead>
+        <tbody>
+          {% for payment in summary_payments %}
+          <tr>
+            <td><span class="cusin-badge pay-{% if payment.status == 'success' %}paid{% elif payment.status == 'failed' %}failed{% elif payment.status == 'cancelled' %}unpaid{% else %}pending{% endif %}">{{ payment.get_status_display }}</span></td>
+            <td class="cusin-nowrap">{{ payment.amount|toman }}</td>
+            <td>{{ payment.gateway|default:"—" }}</td>
+            <td class="cusin-nowrap">{{ payment.gateway_transaction_id|default:"—" }}</td>
+            <td class="cusin-nowrap"><span title="{{ payment.created_at|date:'Y-m-d H:i' }}">{{ payment.created_at|jdatetime }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="cusin-empty">{% cusin_icon "wallet" %} رکورد پرداختی ثبت نشده است.</p>
+    {% endif %}
+
+    {% if original.refund_status != 'none' %}
+    <div class="cusin-refund-note {% if original.refund_status == 'required' %}is-required{% else %}is-done{% endif %}">
+      {% if original.refund_status == 'required' %}{% cusin_icon "alert-triangle" %}{% else %}{% cusin_icon "check" %}{% endif %}
+      <span>
+        <strong>{{ original.get_refund_status_display }}</strong>
+        {% if original.refund_amount %} — مبلغ {{ original.refund_amount|toman }}{% endif %}
+        {% if original.refund_reference %} — مرجع: {{ original.refund_reference }}{% endif %}
+        {% if original.refunded_at %} — ثبت در <span title="{{ original.refunded_at|date:'Y-m-d H:i' }}">{{ original.refunded_at|jdatetime }}</span>{% endif %}
+      </span>
+    </div>
+    {% endif %}
+  </section>
+
+</div>
+{% endif %}
+{{ block.super }}
 {% endblock %}

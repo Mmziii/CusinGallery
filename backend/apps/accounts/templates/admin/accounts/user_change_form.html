@@ -1,0 +1,60 @@
+{% extends "admin/change_form.html" %}
+{% load i18n adminui_extras %}
+{% comment %}
+Customer summary header (B5) -- read-only, additive layer over the stock
+user change form ({{ block.super }} renders the untouched Django form).
+Lives in the app directory, so it works with and without the visual theme.
+{% endcomment %}
+
+{% block content %}
+{% if original and cusin_customer_summary %}
+{% with summary=cusin_customer_summary %}
+<div class="cusin-order-summary cusin-customer-summary">
+  <section class="cusin-summary-card" aria-label="خلاصهٔ مشتری">
+    <h2 class="cusin-summary-title">
+      {% cusin_icon "users" %} خلاصهٔ مشتری
+      <a class="cusin-btn cusin-btn--ghost cusin-btn--sm" href="{{ summary.orders_url }}">
+        {% cusin_icon "receipt" %} مشاهدهٔ سفارش‌ها
+      </a>
+    </h2>
+    <div class="cusin-summary-grid">
+      <span class="cusin-summary-item">
+        <span class="k">تعداد سفارش‌ها</span>
+        <span class="v">{{ summary.orders_count|numfa }}</span>
+      </span>
+      <span class="cusin-summary-item">
+        <span class="k">مجموع خرید پرداخت‌شده</span>
+        <span class="v" title="جمع مبلغ نهایی سفارش‌هایی با وضعیت پرداخت «پرداخت شده»">{{ summary.total_paid|toman }}</span>
+      </span>
+      <span class="cusin-summary-item">
+        <span class="k">آخرین سفارش</span>
+        {% if summary.last_order %}
+        <span class="v">
+          <a href="{% url 'admin:orders_order_change' summary.last_order.pk %}">{{ summary.last_order.order_number }}</a>
+          <span class="cusin-muted" title="{{ summary.last_order.created_at|date:'Y-m-d H:i' }}">({{ summary.last_order.created_at|jdate }})</span>
+        </span>
+        {% else %}<span class="v cusin-muted">—</span>{% endif %}
+      </span>
+      <span class="cusin-summary-item">
+        <span class="k">نشانی پیش‌فرض</span>
+        {% if summary.default_address %}
+        <span class="v">{{ summary.default_address.province }}، {{ summary.default_address.city }}، {{ summary.default_address.address }}</span>
+        {% else %}<span class="v cusin-muted">نشانی پیش‌فرضی ثبت نشده</span>{% endif %}
+      </span>
+      <span class="cusin-summary-item">
+        <span class="k">تمایل به پیامک تبلیغاتی</span>
+        <span class="v">
+          {% if summary.sms_consent %}
+          <span class="cusin-badge on">{% cusin_icon "check" %} موافق</span>
+          {% else %}
+          <span class="cusin-badge off">{% cusin_icon "x" %} مخالف</span>
+          {% endif %}
+        </span>
+      </span>
+    </div>
+  </section>
+</div>
+{% endwith %}
+{% endif %}
+{{ block.super }}
+{% endblock %}

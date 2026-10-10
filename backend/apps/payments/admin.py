@@ -8,16 +8,62 @@ manual database action, not an admin checkbox -- a misclick here must
 never be able to mark money as received or re-trigger inventory effects.
 """
 from django.contrib import admin
+from django.utils import timezone
+from django.utils.html import format_html
+
+from apps.adminui.jalali import format_jalali_datetime
+from apps.adminui.templatetags.adminui_extras import toman_filter
 
 from .models import Payment
 
 
 @admin.register(Payment)
 class PaymentAdmin(admin.ModelAdmin):
+    # Same information as before; the display-only columns are upgraded
+    # (B2/A4): Jalali timestamps with the Gregorian value in the tooltip,
+    # Persian-digit amounts and a status badge. Sorting is preserved via
+    # admin_order_field; inputs, filters and the read-only stance are
+    # untouched.
     list_display = (
-        "id", "order_number", "customer", "amount", "gateway",
-        "status", "paid_at", "created_at",
+        "id", "order_number", "customer", "amount_fa", "gateway",
+        "status_badge", "paid_at_jalali", "created_at_jalali",
     )
+
+    @admin.display(description="مبلغ", ordering="amount")
+    def amount_fa(self, obj):
+        return format_html(
+            '<span class="cusin-nowrap" title="{}">{}</span>',
+            f"{obj.amount:,}", toman_filter(obj.amount),
+        )
+
+    @admin.display(description="وضعیت", ordering="status")
+    def status_badge(self, obj):
+        css = {
+            Payment.Status.SUCCESS: "paid",
+            Payment.Status.FAILED: "failed",
+            Payment.Status.CANCELLED: "unpaid",
+        }.get(obj.status, "pending")
+        return format_html(
+            '<span class="cusin-badge pay-{}">{}</span>', css, obj.get_status_display(),
+        )
+
+    @admin.display(description="زمان پرداخت", ordering="paid_at")
+    def paid_at_jalali(self, obj):
+        if obj.paid_at is None:
+            return format_html('<span class="cusin-muted">—</span>')
+        local = timezone.localtime(obj.paid_at)
+        return format_html(
+            '<span class="cusin-nowrap" title="{}">{}</span>',
+            local.strftime("%Y-%m-%d %H:%M"), format_jalali_datetime(local),
+        )
+
+    @admin.display(description="زمان ثبت", ordering="created_at")
+    def created_at_jalali(self, obj):
+        local = timezone.localtime(obj.created_at)
+        return format_html(
+            '<span class="cusin-nowrap" title="{}">{}</span>',
+            local.strftime("%Y-%m-%d %H:%M"), format_jalali_datetime(local),
+        )
     list_filter = ("status", "gateway", "created_at")
     search_fields = (
         "order__order_number", "order__user__username", "order__user__email",
