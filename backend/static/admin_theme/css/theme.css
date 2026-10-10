@@ -1677,6 +1677,7 @@ body.login #footer { display: none; }
     bottom: 0;
     inset-inline-start: 0;
     z-index: 120;
+    width: min(var(--cusin-sidebar-w), calc(100vw - 48px));
     max-height: 100vh;
     transform: translateX(-105%);
     transition: transform 220ms var(--cusin-ease);
@@ -1707,10 +1708,13 @@ body.login #footer { display: none; }
   .cusin-search-trigger-label { flex: 1 1 auto; text-align: start; }
   .cusin-usermenu { margin-inline-start: auto; }
 
-  /* changelist rows degrade into cards */
+  /* changelist rows degrade into cards. The first column is a <th> in
+     every body row (Django renders the link cell as a header), so it is
+     carded exactly like the <td> cells. */
   #changelist .results { overflow: visible; }
   #result_list thead { display: none; }
-  #result_list, #result_list tbody, #result_list tr, #result_list td { display: block; width: auto; }
+  #result_list, #result_list tbody, #result_list tr,
+  #result_list td, #result_list tbody th { display: block; width: auto; }
   #result_list tr {
     border: 1px solid var(--cusin-border);
     border-radius: var(--cusin-radius);
@@ -1719,7 +1723,8 @@ body.login #footer { display: none; }
     padding: 8px 4px;
     box-shadow: var(--cusin-shadow);
   }
-  #result_list td {
+  #result_list td,
+  #result_list tbody th {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -1728,8 +1733,9 @@ body.login #footer { display: none; }
     padding: 7px 12px;
     text-align: end;
   }
-  #result_list td:last-child { border-bottom: 0; }
-  #result_list td::before {
+  #result_list tr > :last-child { border-bottom: 0; }
+  #result_list td::before,
+  #result_list tbody th::before {
     content: attr(data-label);
     font-size: 0.75rem;
     font-weight: 700;
@@ -1738,6 +1744,39 @@ body.login #footer { display: none; }
     flex: none;
   }
   #result_list td:empty::before { content: none; }
+  /* the row link is the card's main tap target */
+  #result_list tbody th a { display: inline-flex; align-items: center; min-height: 44px; }
+
+  /* nothing wider than the phone: fixed-width stock inputs and images shrink */
+  input[type="text"], input[type="password"], input[type="email"], input[type="url"],
+  input[type="number"], input[type="tel"], input[type="search"], input[type="date"],
+  input[type="datetime-local"], input[type="time"], select, textarea, .vTextField,
+  .vLargeTextField, .vURLField, .vBigIntegerField, .vDateField, .vTimeField,
+  .vForeignKeyRawIdAdminField, .select2-selection {
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  .vTextField, .vLargeTextField, .vURLField { width: 100%; }
+  img { max-width: 100%; }
+  .inline-group .tabular { overflow-x: auto; }
+
+  /* 44px tap targets for the controls that were smaller on phones */
+  .paginator a:link, .paginator a:visited, .paginator .this-page {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+  }
+  #changelist-filter li a { min-height: 44px; }
+  .button, input[type="submit"], input[type="button"],
+  .submit-row a, a.deletelink, .inline-deletelink {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+  }
+  #changelist .actions select { min-height: 44px; }
 
   .cusin-kpi-grid { grid-template-columns: 1fr; }
   .cusin-action-grid { grid-template-columns: 1fr; }
