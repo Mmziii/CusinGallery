@@ -12,6 +12,14 @@
    ========================================================================== */
 
 /* --------------------------------------------------------------------------
+   0. The hidden attribute always wins.
+   Author rules such as `.cusin-palette { display: flex }` override the
+   browser's own [hidden] { display: none }, which left closed components
+   on screen. The !important keeps this true for every component.
+   -------------------------------------------------------------------------- */
+[hidden] { display: none !important; }
+
+/* --------------------------------------------------------------------------
    1. Self-hosted Vazirmatn (no CDN, no Google Fonts)
    -------------------------------------------------------------------------- */
 @font-face {
@@ -1680,11 +1688,13 @@ body.login #footer { display: none; }
     width: min(var(--cusin-sidebar-w), calc(100vw - 48px));
     max-height: 100vh;
     transform: translateX(-105%);
-    transition: transform 220ms var(--cusin-ease);
+    /* a closed drawer is also out of the tab order and the accessibility tree */
+    visibility: hidden;
+    transition: transform 220ms var(--cusin-ease), visibility 220ms var(--cusin-ease);
     box-shadow: 0 0 40px rgba(20, 26, 10, 0.4);
   }
   [dir="rtl"] .cusin-drawer { transform: translateX(105%); }
-  .cusin-drawer.is-open { transform: none !important; }
+  .cusin-drawer.is-open { transform: none !important; visibility: visible; }
   .cusin-drawer-scrim {
     display: block;
     position: fixed;
