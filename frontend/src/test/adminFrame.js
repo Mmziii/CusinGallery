@@ -24,7 +24,8 @@ export function readAdminScript(name) {
  *
  * @param {string} bodyHtml  markup for <body>
  * @param {string[]} scripts  script sources (see readAdminScript)
- * @param {{fetch?: Function}} options
+ * @param {{fetch?: Function, css?: string}} options  css: stylesheet text put in a
+ *   <style> element of the page before the scripts run (see readThemeCss)
  */
 export function mountAdminPage(bodyHtml, scripts, options = {}) {
   const iframe = document.createElement("iframe");
@@ -45,6 +46,31 @@ export function mountAdminPage(bodyHtml, scripts, options = {}) {
     win.__scrolled = (win.__scrolled || []).concat(this);
   };
   if (options.fetch) win.fetch = options.fetch;
+  if (options.css) {
+    const style = doc.createElement("style");
+    style.textContent = options.css;
+    doc.head.appendChild(style);
+  }
+
+  // jsdom also fires DOMContentLoaded for this iframe by itself, after the
+  // helper has dispatched it. A browser fires it once, so every DOMContentLoaded
+  // listener is wrapped to run at most once; otherwise each init runs twice.
+  const originalAdd = doc.addEventListener.bind(doc);
+  doc.addEventListener = function addOnce(type, listener, options) {
+    if (type !== "DOMContentLoaded" || typeof listener !== "function") {
+      return originalAdd(type, listener, options);
+    }
+    let ran = false;
+    return originalAdd(
+      type,
+      function runOnce(event) {
+        if (ran) return;
+        ran = true;
+        listener.call(this, event);
+      },
+      options
+    );
+  };
 
   for (const source of scripts) win.eval(source);
   doc.dispatchEvent(new win.Event("DOMContentLoaded"));

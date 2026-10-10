@@ -113,13 +113,110 @@ describe("palette: opening and closing", () => {
     expect(p.root.hidden).toBe(true);
   });
 
-  it("closes with Escape and returns focus to the opener", () => {
+  it("closes with Escape and returns focus to the element that opened it", () => {
     const p = mountPalette(() => jsonResponse({ groups: [] }));
+    // a browser focuses the button on click; jsdom does not, so focus it first
+    p.opener.focus();
     p.opener.click();
     expect(p.root.hidden).toBe(false);
     p.key(p.input, { key: "Escape" });
     expect(p.root.hidden).toBe(true);
     expect(p.doc.activeElement).toBe(p.opener);
+  });
+
+  it("returns focus to whatever had focus before Ctrl+K, not to the opener", () => {
+    const p = mountPalette(() => jsonResponse({ groups: [] }));
+    const field = p.doc.getElementById("outside-field");
+    field.focus();
+    p.key(field, { key: "k", ctrlKey: true });
+    expect(p.doc.activeElement).toBe(p.input);
+    p.key(p.input, { key: "Escape" });
+    expect(p.root.hidden).toBe(true);
+    expect(p.doc.activeElement).toBe(field);
+  });
+
+  it("Escape closes the palette even when focus has moved to a result link", async () => {
+    const p = mountPalette(() => jsonResponse(SEARCH_RESULTS));
+    p.opener.click();
+    p.type("کتری");
+    await waitFor(() => expect(p.rows().length).toBe(3));
+    p.rows()[0].focus();
+    p.key(p.rows()[0], { key: "Escape" });
+    expect(p.root.hidden).toBe(true);
+  });
+
+  it("keeps Tab inside the open palette: forward, backward and wrap-around", async () => {
+    const p = mountPalette(() => jsonResponse(SEARCH_RESULTS));
+    p.opener.click();
+    p.type("کتری");
+    await waitFor(() => expect(p.rows().length).toBe(3));
+    const [first, , last] = p.rows();
+    const outside = p.doc.getElementById("outside-field");
+    expect(p.doc.activeElement).toBe(p.input);
+    // forward: input -> first row -> second -> third -> back to the input
+    p.key(p.input, { key: "Tab" });
+    expect(p.doc.activeElement).toBe(first);
+    p.key(first, { key: "Tab" });
+    p.key(p.doc.activeElement, { key: "Tab" });
+    expect(p.doc.activeElement).toBe(last);
+    p.key(last, { key: "Tab" });
+    expect(p.doc.activeElement).toBe(p.input);
+    // backward from the input wraps to the last row
+    p.key(p.input, { key: "Tab", shiftKey: true });
+    expect(p.doc.activeElement).toBe(last);
+    expect(p.doc.activeElement).not.toBe(outside);
+  });
+
+  it("releases the scroll lock on close and on pagehide", () => {
+    const p = mountPalette(() => jsonResponse({ groups: [] }));
+    p.opener.click();
+    expect(p.doc.body.style.overflow).toBe("hidden");
+    p.key(p.input, { key: "Escape" });
+    expect(p.doc.body.style.overflow).toBe("");
+    p.opener.click();
+    expect(p.doc.body.style.overflow).toBe("hidden");
+    p.win.dispatchEvent(new p.win.Event("pagehide"));
+    expect(p.root.hidden).toBe(true);
+    expect(p.doc.body.style.overflow).toBe("");
+  });
+
+  it("does not release a scroll lock that the open drawer still holds", () => {
+    mounted = mountAdminPage(
+      `<button type="button" id="cusin-drawer-toggle" aria-expanded="false">منو</button>
+       <div class="cusin-drawer-scrim" data-cusin-drawer-scrim hidden></div>
+       <nav class="cusin-drawer" id="cusin-drawer"></nav>
+       <button type="button" data-cusin-search-open data-search-url="/s/">جستجو</button>
+       <div data-cusin-palette hidden><div data-cusin-palette-backdrop data-cusin-palette-close></div>
+         <div role="dialog"><input type="search" data-cusin-palette-input>
+         <div data-cusin-palette-results role="listbox"></div></div></div>`,
+      [readAdminScript("theme.js")],
+      { fetch: () => jsonResponse({ groups: [] }) }
+    );
+    const { doc, win } = mounted;
+    const toggle = doc.getElementById("cusin-drawer-toggle");
+    const opener = doc.querySelector("[data-cusin-search-open]");
+    const palette = doc.querySelector("[data-cusin-palette]");
+    toggle.click();
+    expect(doc.body.style.overflow).toBe("hidden");
+    opener.click();
+    palette.querySelector("[data-cusin-palette-input]").dispatchEvent(
+      new win.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })
+    );
+    expect(palette.hidden).toBe(true);
+    // the palette let go, but the drawer still holds the lock
+    expect(doc.body.style.overflow).toBe("hidden");
+    toggle.click();
+    expect(doc.body.style.overflow).toBe("");
+  });
+
+  it("closes when a result is clicked, before the navigation happens", async () => {
+    const p = mountPalette(() => jsonResponse(FRAGMENT_RESULTS));
+    p.opener.click();
+    p.type("کتری");
+    await waitFor(() => expect(p.rows().length).toBe(2));
+    p.rows()[1].click();
+    expect(p.root.hidden).toBe(true);
+    await waitFor(() => expect(p.win.location.hash).toBe("#product-3"));
   });
 
   it("closes from the backdrop/close control", () => {
