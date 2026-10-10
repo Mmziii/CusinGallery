@@ -1,0 +1,41 @@
+{% extends "admin/change_form.html" %}
+{% load i18n static adminui_extras %}
+{% comment %}
+Product change form enhancements (B4d) -- additive layer only:
+
+* an anchored section bar (built by product_form.js from the fieldsets, so
+  it never drifts from the real form structure);
+* a live storefront-style preview card fed from the form inputs;
+* client-side thousands separators + Persian-digit normalization on the
+  numeric inputs and SEO character counters (server-side validation is
+  untouched -- the form posts plain ASCII digits exactly as before);
+* unsaved-changes warning and Ctrl+S submit.
+
+Everything else is the stock form rendered by {{ block.super }}.
+{% endcomment %}
+
+{% block extrahead %}
+{{ block.super }}
+<script src="{% static "admin_theme/js/product_form.js" %}" defer></script>
+{% endblock %}
+
+{% block content %}
+<div class="cusin-product-enh">
+  <nav class="cusin-anchor-nav" data-cusin-anchor-nav aria-label="بخش‌های فرم محصول"></nav>
+  <aside class="cusin-card cusin-preview-card" data-cusin-preview aria-label="پیش‌نمایش کارت محصول در فروشگاه">
+    <span class="cusin-preview-tag">{% cusin_icon "eye" %} پیش‌نمایش در فروشگاه</span>
+    <div class="cusin-preview-main">
+      <span data-cusin-preview-image class="cusin-preview-image-slot">{% cusin_icon "image-off" %}</span>
+      <span class="cusin-preview-body">
+        <span class="cusin-preview-name" data-cusin-preview-name>نام محصول</span>
+        <span class="cusin-preview-prices">
+          <span class="cusin-preview-old" data-cusin-preview-compare hidden></span>
+          <span class="cusin-preview-price" data-cusin-preview-price>—</span>
+        </span>
+        <span class="cusin-preview-note">پیش‌نمایش تقریبی است؛ ظاهر نهایی در فروشگاه ممکن است کمی تفاوت داشته باشد.</span>
+      </span>
+    </div>
+  </aside>
+</div>
+{{ block.super }}
+{% endblock %}
