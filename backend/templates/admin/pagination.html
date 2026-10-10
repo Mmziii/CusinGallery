@@ -1,0 +1,37 @@
+{% load admin_list %}
+{% load i18n adminui_extras %}
+{% comment %}
+Cusin override of Django's admin/pagination.html (A4 empty states).
+Identical to the stock file below the empty-state block: the paginator,
+page links, result count and «ذخیره» button are unchanged. The block
+renders only when the changelist has zero rows, and the theme CSS hides
+the empty table body in that case (see cusin-empty-state in theme.css).
+{% endcomment %}
+{% if cl.result_count == 0 %}
+<div class="cusin-empty-state" role="status">
+  {% if cl.has_active_filters or cl.query %}
+  {% cusin_icon "search" %}
+  <h2>نتیجه‌ای پیدا نشد</h2>
+  <p>
+    {% if cl.query %}جستجوی «{{ cl.query }}» {% endif %}با فیلترهای فعلی هیچ
+    {{ cl.opts.verbose_name_plural }} پیدا نشد.
+    {% if cl.full_result_count %}در مجموع {{ cl.full_result_count }} مورد ثبت شده است.{% endif %}
+  </p>
+  <a class="cusin-btn cusin-btn--ghost cusin-btn--sm" href="?">پاک‌کردن جستجو و فیلترها</a>
+  {% else %}
+  {% cusin_icon "box" %}
+  <h2>هنوز {{ cl.opts.verbose_name_plural }} ثبت نشده است</h2>
+  <p>اولین مورد را ثبت کنید؛ بعد از ثبت، همین‌جا فهرست می‌شود.</p>
+  {% endif %}
+</div>
+{% endif %}
+<p class="paginator">
+{% if pagination_required %}
+{% for i in page_range %}
+    {% paginator_number cl i %}
+{% endfor %}
+{% endif %}
+{{ cl.result_count }} {% if cl.result_count == 1 %}{{ cl.opts.verbose_name }}{% else %}{{ cl.opts.verbose_name_plural }}{% endif %}
+{% if show_all_url %}<a href="{{ show_all_url }}" class="showall">{% translate 'Show all' %}</a>{% endif %}
+{% if cl.formset and cl.result_count %}<input type="submit" name="_save" class="default" value="{% translate 'Save' %}">{% endif %}
+</p>

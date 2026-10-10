@@ -1972,3 +1972,47 @@ body.login { background: linear-gradient(160deg, #171d0c 0%, #242c17 100%); }
 }
 .cusin-customer-summary .cusin-summary-title { justify-content: flex-start; gap: 12px; }
 .cusin-customer-summary .cusin-summary-title .cusin-btn { margin-inline-start: auto; }
+
+/* ---------------------------------------------------------------------------
+   A4: empty states on every changelist (and the no-results state of search
+   and filters). Rendered by templates/admin/pagination.html. When the block
+   is present the empty table is hidden; without :has() support the table
+   simply stays visible above the message, which is still readable.
+--------------------------------------------------------------------------- */
+.cusin-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+  padding: 36px 20px;
+  margin: 12px 0;
+  background: var(--cusin-surface);
+  border: 1px dashed var(--cusin-border-strong);
+  border-radius: 12px;
+  color: var(--cusin-text);
+}
+.cusin-empty-state .cusin-icon {
+  width: 36px;
+  height: 36px;
+  color: var(--cg-olive);
+  stroke-width: 1.5;
+}
+.cusin-empty-state h2 {
+  margin: 4px 0 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--cusin-text);
+  border: 0;
+  padding: 0;
+  background: none;
+}
+.cusin-empty-state p {
+  margin: 0;
+  max-width: 52ch;
+  color: var(--cusin-muted);
+  line-height: 1.8;
+}
+.cusin-empty-state .cusin-btn { margin-top: 6px; min-height: 44px; }
+#changelist:has(.cusin-empty-state) .results { display: none; }
+#changelist:has(.cusin-empty-state) .paginator { display: none; }
