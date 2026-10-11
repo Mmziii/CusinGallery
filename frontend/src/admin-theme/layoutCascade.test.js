@@ -50,3 +50,22 @@ describe("item 3: object tools sit in their own row above the search card", () =
     expect(style(".object-tools", "margin-top")).not.toMatch(/^-/);
   });
 });
+describe("item 4: the changelist does not push the page sideways", () => {
+  it("sizes the actions bar inside its card (border-box), so it does not overhang", () => {
+    const desktop = mountChangelist(1280);
+    expect(desktop.style("#changelist .actions", "box-sizing")).toBe("border-box");
+    mounted.cleanup();
+    const phone = mountChangelist(375);
+    expect(phone.style("#changelist .actions", "box-sizing")).toBe("border-box");
+  });
+
+  it("lets a wide results table scroll inside its own wrapper on desktop", () => {
+    const { style } = mountChangelist(1280);
+    expect(style("#changelist .results", "overflow-x")).toBe("auto");
+  });
+
+  it("keeps the card layout on phones instead of a scrolling table", () => {
+    const { style } = mountChangelist(375);
+    expect(style("#changelist .results", "overflow-x")).toBe("visible");
+  });
+});

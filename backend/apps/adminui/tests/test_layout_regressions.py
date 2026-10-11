@@ -14,7 +14,7 @@ from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 
 from .helpers import PLAIN_STATIC, make_superuser
-from .test_responsive_css import _rules, _strip_comments, _without_media
+from .test_responsive_css import _media_block, _rules, _strip_comments, _without_media
 
 BASE = Path(settings.BASE_DIR)
 THEME_CSS = BASE / "static" / "admin_theme" / "css" / "theme.css"
@@ -177,3 +177,38 @@ class ObjectToolsTests(SimpleTestCase):
         rules = _base_rules()
         self.assertEqual(rules[".object-tools"]["float"], "none")
         self.assertEqual(rules[".object-tools li"]["float"], "none")
+
+
+PHONE_QUERY = "(max-width: 767px)"
+
+
+def _phone_rules():
+    """Declarations inside the phone (<= 767px) block of theme.css."""
+    css = THEME_CSS.read_text(encoding="utf-8")
+    return _rules(_strip_comments(_media_block(css, PHONE_QUERY)))
+
+
+class PageOverflowTests(SimpleTestCase):
+    """Item 4: the page never scrolls sideways. A wide desktop table scrolls
+    inside its own results box; phones keep the card layout instead."""
+
+    def test_desktop_results_box_scrolls_horizontally(self):
+        self.assertEqual(_base_rules()["#changelist .results"]["overflow-x"], "auto")
+
+    def test_phone_results_box_has_no_scroll_because_rows_are_cards(self):
+        self.assertEqual(_phone_rules()["#changelist .results"]["overflow-x"], "visible")
+
+    def test_actions_bar_is_sized_inside_its_card(self):
+        self.assertEqual(_base_rules()["#changelist .actions"]["box-sizing"], "border-box")
+
+    def test_phone_submit_row_items_drop_the_inline_start_margin(self):
+        # image-import's cancel link carries style="margin-inline-start:10px";
+        # on phones the full-width stack must not add that margin.
+        rule = _phone_rules()[".submit-row > *"]
+        self.assertEqual(rule["margin"], "4px 0 !important")
+        self.assertEqual(rule["box-sizing"], "border-box")
+
+    def test_phone_user_menu_opens_from_its_start_edge_within_the_screen(self):
+        rule = _phone_rules()[".cusin-usermenu-pop"]
+        self.assertEqual(rule["inset-inline-start"], "0")
+        self.assertEqual(rule["max-width"], "calc(100vw - 24px)")

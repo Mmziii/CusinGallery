@@ -724,7 +724,10 @@ a.deletelink:hover { background: var(--delete-button-hover-bg); }
   box-shadow: var(--cusin-shadow);
   margin: 0 0 14px;
 }
-#changelist .results { overflow: visible; }
+/* A table wider than its column scrolls inside this box on desktop, so the
+   page itself never scrolls sideways. (The sticky header needs the page to
+   scroll vertically; a scroll box here gives that up, see the report.) */
+#changelist .results { overflow-x: auto; }
 #result_list, #changelist table {
   width: 100%;
   border: 0;
@@ -757,6 +760,7 @@ a.deletelink:hover { background: var(--delete-button-hover-bg); }
 #result_list tbody tr:last-child td, #result_list tbody tr:last-child th { border-bottom: 0; }
 
 #changelist .actions {
+  box-sizing: border-box;
   background: var(--cusin-surface);
   border: 1px solid var(--cusin-border);
   border-radius: var(--cusin-radius);
@@ -1782,7 +1786,7 @@ body.login #footer { display: none; }
   /* changelist rows degrade into cards. The first column is a <th> in
      every body row (Django renders the link cell as a header), so it is
      carded exactly like the <td> cells. */
-  #changelist .results { overflow: visible; }
+  #changelist .results { overflow-x: visible; }
   #result_list thead { display: none; }
   #result_list, #result_list tbody, #result_list tr,
   #result_list td, #result_list tbody th { display: block; width: auto; }
@@ -1854,7 +1858,11 @@ body.login #footer { display: none; }
   .cusin-stepper { flex-direction: column; align-items: stretch; }
   .cusin-step { border-inline-start: 1px solid var(--cusin-border-strong); border-radius: var(--cusin-radius-sm) !important; margin-bottom: 4px; }
   .submit-row { padding: 10px; }
-  .submit-row > * { margin: 4px 0; width: 100%; }
+  /* full-width stacked items: the stock inline margin on the cancel link
+     (image import) would push the row past the phone edge */
+  .submit-row > * { margin: 4px 0 !important; width: 100%; box-sizing: border-box; }
+  /* the user menu opens from its start edge so it stays on the phone screen */
+  .cusin-usermenu-pop { inset-inline-start: 0; inset-inline-end: auto; max-width: calc(100vw - 24px); }
 }
 
 /* --------------------------------------------------------------------------
