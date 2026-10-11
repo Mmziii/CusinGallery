@@ -1,0 +1,11 @@
+{% load adminui_extras %}{% comment %}Percent-change badge for KPI cards: expects `value` (float or None when the previous period had no data).{% endcomment %}{% spaceless %}
+{% if value is None %}
+<span class="cusin-delta is-neutral" title="دورهٔ قبل داده‌ای نداشت؛ درصد تغییر قابل محاسبه نیست.">—</span>
+{% elif value > 0 %}
+<span class="cusin-delta is-up" title="افزایش نسبت به دورهٔ قبل">{% cusin_icon "trending-up" %}{{ value|pctfa }}</span>
+{% elif value < 0 %}
+<span class="cusin-delta is-down" title="کاهش نسبت به دورهٔ قبل">{% cusin_icon "trending-down" %}{{ value|pctfa }}</span>
+{% else %}
+<span class="cusin-delta is-neutral" title="بدون تغییر نسبت به دورهٔ قبل">{% cusin_icon "minus" %}{{ value|pctfa }}</span>
+{% endif %}
+{% endspaceless %}

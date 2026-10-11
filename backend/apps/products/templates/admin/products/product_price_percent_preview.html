@@ -1,0 +1,63 @@
+{% extends "admin/base_site.html" %}
+{% load i18n adminui_extras %}
+{% comment %}
+B4c step 2: before/after preview. NOTHING is saved here. «اعمال تغییر»
+re-POSTs the same ids/percent/rounding; the server recomputes every
+figure from the database inside one transaction (all-or-nothing) and
+writes a LogEntry per product. «دانلود CSV» returns the same table as a
+spreadsheet-friendly file (UTF-8 BOM).
+{% endcomment %}
+
+{% block content_title %}<h1>پیش‌نمایش تغییر درصدی قیمت</h1>{% endblock %}
+
+{% block content %}
+<div id="content-main" class="cusin-percent-flow">
+  <section class="cusin-card">
+    <p>
+      {% cusin_icon "info" %}
+      {{ total_count|numfa }} محصول · تغییر <strong>{% if percent > 0 %}+{% endif %}{{ percent|fanum }}٪</strong> ·
+      گردکردن: <strong>{{ rounding_label }}</strong>.
+      قیمت و «قیمت قبل از تخفیف» به یک نسبت تغییر می‌کنند. اعمال تغییر
+      <strong>همه‌یا‌هیچ</strong> است: اگر حتی یک محصول نامعتبر شود، هیچ تغییری ذخیره نمی‌شود.
+    </p>
+    <div class="cusin-table-scroll">
+      <table class="cusin-price-diff">
+        <thead>
+          <tr>
+            <th>کد کالا</th><th>نام محصول</th>
+            <th>قیمت فعلی</th><th>قیمت جدید</th>
+            <th>قبل تخفیف فعلی</th><th>قبل تخفیف جدید</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr>
+            <td class="cusin-nowrap">{{ row.product.sku }}</td>
+            <td>{{ row.product.name }}</td>
+            <td class="before cusin-nowrap">{{ row.price_before|toman }}</td>
+            <td class="after cusin-nowrap">{{ row.price_after|toman }}</td>
+            <td class="before cusin-nowrap">{% if row.compare_before is not None %}{{ row.compare_before|toman }}{% else %}—{% endif %}</td>
+            <td class="after cusin-nowrap">{% if row.compare_after is not None %}{{ row.compare_after|toman }}{% else %}—{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <form method="post" action="{{ action_url }}">
+      {% csrf_token %}
+      <input type="hidden" name="ids" value="{{ ids }}">
+      <input type="hidden" name="percent" value="{{ percent }}">
+      <input type="hidden" name="rounding" value="{{ rounding }}">
+      <div class="cusin-form-actions">
+        <button type="submit" name="apply" value="1" class="cusin-btn">
+          {% cusin_icon "check" %} اعمال تغییر روی {{ total_count|numfa }} محصول
+        </button>
+        <button type="submit" name="csv" value="1" class="cusin-btn cusin-btn--ghost">
+          {% cusin_icon "list" %} دانلود CSV قبل/بعد
+        </button>
+        <a class="cusin-btn cusin-btn--ghost" href="{{ changelist_url }}">انصراف (بدون تغییر)</a>
+      </div>
+    </form>
+  </section>
+</div>
+{% endblock %}

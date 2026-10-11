@@ -1,0 +1,15 @@
+{% extends "admin/base.html" %}
+{% load i18n static %}
+
+{% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | {{ site_title|default:'کازین گالری' }}{% endblock %}
+
+{% block branding %}
+<h1 id="site-name" class="cusin-brand">
+  <a href="{% url 'admin:index' %}">
+    <img src="{% static "admin_theme/img/mark.svg" %}" alt="" width="30" height="30" class="cusin-brand-mark">
+    <span>{{ site_header|default:'مدیریت کازین گالری' }}</span>
+  </a>
+</h1>
+{% endblock %}
+
+{% block nav-global %}{% endblock %}

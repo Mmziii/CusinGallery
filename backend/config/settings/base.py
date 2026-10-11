@@ -56,8 +56,9 @@ THIRD_PARTY_APPS = [
     # smaller, dependency-light core the larger package wraps itself,
     # and all we need is admin enforcement + device models.
     "django_otp",
-    "django_otp.plugins.otp_totp",
-    "django_otp.plugins.otp_static",
+    # Persian display names (verbose_name) for the plugin apps; same labels.
+    "apps.adminui.otp_apps.OtpTotpAdminConfig",
+    "apps.adminui.otp_apps.OtpStaticAdminConfig",
 ]
 
 # Local apps. Each is a clean foundation in Phase 1 -- business models and
@@ -75,6 +76,9 @@ LOCAL_APPS = [
     "apps.notifications",
     "apps.reviews",
     "apps.banners",
+    # Admin-panel tooling (theme helpers, Jalali display filter, dashboard,
+    # quick search, staff groups). Model-less: adds no tables.
+    "apps.adminui",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -96,10 +100,17 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = "config.urls"
 
+# Admin visual theme (Part A): overlays stock django.contrib.admin with a
+# branded RTL shell from backend/templates/admin/. Set ADMIN_THEME_ENABLED=0
+# (env) to fall back instantly to the unmodified stock templates -- every
+# Part B feature (dashboard excluded, it lives in the themed index) keeps
+# working because none of it depends on the shell templates.
+ADMIN_THEME_ENABLED = env.bool("ADMIN_THEME_ENABLED", default=True)
+
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        "DIRS": [BASE_DIR / "templates"] if ADMIN_THEME_ENABLED else [],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -107,6 +118,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "apps.adminui.context_processors.admin_panel",
             ],
         },
     },

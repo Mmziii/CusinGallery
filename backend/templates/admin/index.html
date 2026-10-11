@@ -1,0 +1,265 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static adminui_extras %}
+{% comment %}
+Admin dashboard (B1) -- read-only overlay on the stock admin index.
+
+The payload arrives from apps.adminui.context_processors.admin_panel
+(~60s cache, aggregate queries only). Permission gating: whole cards are
+hidden per-model (cusin_perms.* / cusin_actions / cusin_readiness); the
+linked URLs are stock changelists that enforce the same permissions.
+
+Defensive fallback: when the dashboard context is missing (e.g. the
+context processor was removed) this page degrades to the stock app list.
+{% endcomment %}
+
+{% block extrastyle %}{{ block.super }}<link rel="stylesheet" href="{% static "admin/css/dashboard.css" %}">{% endblock %}
+
+{% block bodyclass %}{{ block.super }} dashboard cusin-dashboard{% endblock %}
+
+{% block nav-breadcrumbs %}{% endblock %}
+
+{% block content_title %}<h1>داشبورد مدیریت</h1>{% endblock %}
+
+{% block content %}
+{% if cusin_dashboard %}
+<div id="cusin-dash" class="cusin-dash">
+
+  <div class="cusin-dash-head">
+    <div>
+      <p class="cusin-dash-today">
+        {% cusin_icon "calendar" %}
+        امروز: {{ cusin_dashboard.today|jweekday }} {{ cusin_dashboard.today|jdate }}
+      </p>
+      <p class="cusin-dash-meta">
+        آخرین به‌روزرسانی اعداد: {{ cusin_dashboard.generated_at|time:"H:i" }}
+        <span class="cusin-muted">(هر ۶۰ ثانیه تازه می‌شود)</span>
+      </p>
+    </div>
+    {% if cusin_perms.orders %}
+    <div class="cusin-days-toggle" role="group" aria-label="بازهٔ نمودار">
+      <a href="?days=14" class="cusin-chip{% if cusin_dashboard_days == 14 %} is-active{% endif %}">۱۴ روز</a>
+      <a href="?days=30" class="cusin-chip{% if cusin_dashboard_days == 30 %} is-active{% endif %}">۳۰ روز</a>
+    </div>
+    {% endif %}
+  </div>
+
+  {% if cusin_perms.orders or cusin_perms.customers %}
+  <section class="cusin-kpis" aria-label="شاخص‌های کلیدی">
+    {% for kpi in cusin_dashboard.kpi_list %}
+    <article class="cusin-card cusin-kpi-card">
+      <header class="cusin-card-head">
+        <h2>{{ kpi.title }}</h2>
+        <span class="cusin-card-note">درصد تغییر نسبت به دورهٔ قبل</span>
+      </header>
+      <div class="cusin-kpi-grid">
+        {% if cusin_perms.orders %}
+        <div class="cusin-kpi">
+          <span class="cusin-kpi-label">
+            سفارش‌ها
+            <span class="cusin-tip" title="تعداد همهٔ سفارش‌های ثبت‌شده در این بازه (فارغ از وضعیت پرداخت).">{% cusin_icon "info" %}</span>
+          </span>
+          <strong class="cusin-kpi-value">{{ kpi.current.orders|numfa }}</strong>
+          {% include "adminui/_delta.html" with value=kpi.changes.orders %}
+        </div>
+        <div class="cusin-kpi">
+          <span class="cusin-kpi-label">
+            فروش ناخالص
+            <span class="cusin-tip" title="جمع «مبلغ نهایی» سفارش‌هایی که در این بازه ثبت شده و وضعیت پرداختشان «پرداخت شده» است. مبلغ سفارش‌های لغو/مرجوع شده جدا نشان داده می‌شود و از فروش خالص کسر می‌گردد.">{% cusin_icon "info" %}</span>
+          </span>
+          <strong class="cusin-kpi-value">{{ kpi.current.gross|toman }}</strong>
+          {% include "adminui/_delta.html" with value=kpi.changes.gross %}
+        </div>
+        <div class="cusin-kpi">
+          <span class="cusin-kpi-label">
+            فروش خالص
+            <span class="cusin-tip" title="فروش ناخالص منهای مبلغ سفارش‌های پرداخت‌شده‌ای که لغو یا مرجوع شده‌اند.">{% cusin_icon "info" %}</span>
+          </span>
+          <strong class="cusin-kpi-value">{{ kpi.current.net|toman }}</strong>
+          <span class="cusin-kpi-sub">لغو/مرجوع: {{ kpi.current.cancelled_returned|toman }}</span>
+        </div>
+        <div class="cusin-kpi">
+          <span class="cusin-kpi-label">
+            میانگین سبد
+            <span class="cusin-tip" title="فروش ناخالص تقسیم بر تعداد سفارش‌های پرداخت‌شدهٔ همان بازه.">{% cusin_icon "info" %}</span>
+          </span>
+          <strong class="cusin-kpi-value">{{ kpi.current.aov|toman }}</strong>
+          {% include "adminui/_delta.html" with value=kpi.changes.aov %}
+        </div>
+        {% endif %}
+        {% if cusin_perms.customers %}
+        <div class="cusin-kpi">
+          <span class="cusin-kpi-label">
+            مشتریان جدید
+            <span class="cusin-tip" title="کاربران غیرکارمندی که حسابشان در این بازه ساخته شده است.">{% cusin_icon "info" %}</span>
+          </span>
+          <strong class="cusin-kpi-value">{{ kpi.current.new_customers|numfa }}</strong>
+          {% include "adminui/_delta.html" with value=kpi.changes.new_customers %}
+        </div>
+        {% endif %}
+      </div>
+    </article>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  {% if cusin_actions %}
+  <section class="cusin-actions-section" aria-label="نیاز به اقدام">
+    <h2 class="cusin-section-title">{% cusin_icon "alert-triangle" %} نیاز به اقدام</h2>
+    <div class="cusin-action-grid">
+      {% for card in cusin_actions %}
+      <a class="cusin-card cusin-action-card{% if card.count %} has-items{% else %} is-clear{% endif %}" href="{{ card.url }}">
+        <span class="cusin-action-icon">{% cusin_icon card.icon %}</span>
+        <span class="cusin-action-body">
+          <span class="cusin-action-label">{{ card.label }}</span>
+          <span class="cusin-action-hint">{{ card.hint }}</span>
+        </span>
+        <span class="cusin-action-count">{{ card.count|numfa }}</span>
+      </a>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% if cusin_perms.orders %}
+  <div class="cusin-dash-cols">
+    <section class="cusin-card cusin-chart-card" aria-label="نمودار فروش">
+      <header class="cusin-card-head">
+        <h2>فروش روزانهٔ {{ cusin_dashboard.chart_days|fanum }} روز اخیر</h2>
+        <span class="cusin-card-note">فروش ناخالص (سفارش‌های پرداخت‌شده)</span>
+      </header>
+      {% if cusin_dashboard.chart_max %}
+      <div class="cusin-chart-scroll" dir="ltr">
+        <svg class="cusin-chart" viewBox="0 0 {{ cusin_dashboard.chart_width }} 170" role="img"
+             aria-label="نمودار ستونی فروش روزانه؛ جدول اعداد زیر نمودار آمده است.">
+          {% for p in cusin_dashboard.chart %}
+          <g class="cusin-chart-col">
+            <rect x="{{ p.x }}" y="{{ p.bar_y }}" width="24" height="{{ p.bar_h }}" rx="4">
+              <title>{{ p.jfull }} — {{ p.gross|toman }} ({{ p.orders|fanum }} سفارش)</title>
+            </rect>
+            {% if cusin_dashboard.chart_days == 14 or forloop.counter0|divisibleby:2 %}
+            <text x="{{ p.x|add:12 }}" y="162" text-anchor="middle">{{ p.jlabel }}</text>
+            {% endif %}
+          </g>
+          {% endfor %}
+        </svg>
+      </div>
+      {% else %}
+      <p class="cusin-empty">{% cusin_icon "chart-bar" %} در این بازه فروشی ثبت نشده است.</p>
+      {% endif %}
+      <details class="cusin-chart-table-wrap">
+        <summary>جدول اعداد نمودار</summary>
+        <table class="cusin-chart-table">
+          <caption>فروش ناخالص روزانه (تومان)</caption>
+          <thead><tr><th scope="col">روز</th><th scope="col">فروش ناخالص</th><th scope="col">سفارش پرداخت‌شده</th></tr></thead>
+          <tbody>
+            {% for p in cusin_dashboard.chart %}
+            <tr><th scope="row">{{ p.date|jdate }}</th><td>{{ p.gross|toman }}</td><td>{{ p.orders|numfa }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </details>
+    </section>
+
+    <section class="cusin-card" aria-label="پرفروش‌ترین محصولات">
+      <header class="cusin-card-head">
+        <h2>پرفروش‌های {{ cusin_dashboard.chart_days|fanum }} روز</h2>
+        <span class="cusin-card-note">بر پایهٔ تعداد قلم</span>
+      </header>
+      {% if cusin_dashboard.top_products %}
+      <ol class="cusin-top-list">
+        {% for row in cusin_dashboard.top_products %}
+        <li>
+          <span class="cusin-top-rank">{{ forloop.counter|numfa }}</span>
+          {% if row.url %}<a href="{{ row.url }}">{{ row.name }}</a>{% else %}<span>{{ row.name }}</span>{% endif %}
+          <strong>{{ row.qty|numfa }} قلم</strong>
+        </li>
+        {% endfor %}
+      </ol>
+      {% else %}
+      <p class="cusin-empty">{% cusin_icon "box" %} در این بازه فروشی ثبت نشده است.</p>
+      {% endif %}
+    </section>
+  </div>
+
+  <div class="cusin-dash-cols">
+    <section class="cusin-card" aria-label="آخرین سفارش‌ها">
+      <header class="cusin-card-head">
+        <h2>آخرین سفارش‌ها</h2>
+        <a class="cusin-card-link" href="{% url 'admin:orders_order_changelist' %}">همهٔ سفارش‌ها {% cusin_icon "chevron-left" %}</a>
+      </header>
+      {% if cusin_dashboard.latest_orders %}
+      <div class="cusin-table-scroll">
+        <table class="cusin-mini-table">
+          <thead><tr><th>شماره</th><th>وضعیت</th><th>پرداخت</th><th>مبلغ</th><th>تاریخ</th></tr></thead>
+          <tbody>
+            {% for row in cusin_dashboard.latest_orders %}
+            <tr>
+              <th scope="row"><a href="{{ row.url }}">{{ row.order_number }}</a></th>
+              <td><span class="cusin-badge st-{{ row.status }}">{{ row.status_label }}</span></td>
+              <td><span class="cusin-badge pay-{{ row.payment_status }}">{{ row.payment_label }}</span></td>
+              <td class="cusin-nowrap">{{ row.total|toman }}</td>
+              <td class="cusin-nowrap"><span title="{{ row.created_at|date:'Y-m-d H:i' }}">{{ row.created_at|jdatetime }}</span></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="cusin-empty">{% cusin_icon "receipt" %} هنوز سفارشی ثبت نشده است.</p>
+      {% endif %}
+    </section>
+
+    <section class="cusin-card" aria-label="آخرین تغییرات">
+      <header class="cusin-card-head">
+        <h2>آخرین تغییرات در پنل</h2>
+      </header>
+      {% if cusin_dashboard.latest_logs %}
+      <ul class="cusin-log-list">
+        {% for row in cusin_dashboard.latest_logs %}
+        <li>
+          <span class="cusin-log-flag act-{{ row.action_flag }}">{{ row.action_label }}</span>
+          {% if row.url %}<a href="{{ row.url }}">{{ row.object_repr }}</a>{% else %}<span>{{ row.object_repr }}</span>{% endif %}
+          <span class="cusin-log-who">{% firstof row.user__first_name row.user__username %}</span>
+          <time class="cusin-log-time" datetime="{{ row.action_time|date:'c' }}" title="{{ row.action_time|date:'Y-m-d H:i' }}">{{ row.action_time|jdatetime }}</time>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="cusin-empty">{% cusin_icon "clock" %} تغییری ثبت نشده است.</p>
+      {% endif %}
+    </section>
+  </div>
+  {% endif %}
+
+  {% if cusin_readiness %}
+  <section class="cusin-card cusin-readiness" aria-label="آمادگی راه‌اندازی">
+    <header class="cusin-card-head">
+      <h2>{% cusin_icon "shield" %} آمادگی راه‌اندازی</h2>
+      <span class="cusin-card-note">فقط برای مدیر ارشد — همان بررسی‌های <code>manage.py check_production</code></span>
+    </header>
+    <ul class="cusin-readiness-list">
+      {% for item in cusin_readiness %}
+      <li class="{% if item.ok %}is-ok{% else %}is-bad{% endif %}">
+        {% if item.ok %}{% cusin_icon "check" %}{% else %}{% cusin_icon "x" %}{% endif %}
+        <strong>{{ item.label }}</strong>
+        <span>{{ item.detail }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  <section class="cusin-card cusin-appsections" aria-label="بخش‌های مدیریت">
+    <header class="cusin-card-head"><h2>بخش‌های مدیریت</h2></header>
+    {% include "admin/app_list.html" with app_list=app_list show_changelinks=True %}
+  </section>
+
+</div>
+{% else %}
+<div id="content-main">
+  {% include "admin/app_list.html" with app_list=app_list show_changelinks=True %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block sidebar %}{% endblock %}

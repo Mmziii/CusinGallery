@@ -50,35 +50,4 @@ has to guess the column names.
       </span>
     </div>
   </div>
-  <style>
-    .cusin-excel-actions {
-      display: flex; flex-wrap: wrap; gap: 10px 22px; margin: 10px 0 16px;
-      padding: 12px 14px; background: #f8f8f8; border: 1px solid #e0e0e0;
-      border-radius: 8px;
-    }
-    .cusin-excel-actions__item { display: flex; flex-direction: column; gap: 4px; }
-    .cusin-excel-actions__button {
-      display: inline-block; padding: 8px 16px; border-radius: 6px;
-      background: #417690; color: #fff !important; font-weight: bold;
-      text-decoration: none; white-space: nowrap;
-    }
-    .cusin-excel-actions__button:hover { background: #205067; }
-    .cusin-excel-actions__templates { font-size: 12px; color: #666; }
-  </style>
-{% endblock %}
-
-{% block object-tools-items %}
-  <li>
-    <a href="{% url 'admin:products_product_import' %}">واردکردن / به‌روزرسانی از فایل</a>
-  </li>
-  <li>
-    <a href="{% url 'admin:products_product_export' %}?format=xlsx">خروجی Excel محصولات</a>
-  </li>
-  <li>
-    <a href="{% url 'admin:products_product_export' %}">خروجی CSV محصولات</a>
-  </li>
-  <li>
-    <a href="{% url 'admin:products_product_image_import' %}">ورود گروهی تصاویر از فایل زیپ</a>
-  </li>
-  {{ block.super }}
 {% endblock %}
