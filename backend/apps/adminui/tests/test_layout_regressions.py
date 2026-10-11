@@ -76,6 +76,37 @@ class DashboardWidthTests(TestCase):
         self.assertRegex(response.content.decode("utf-8"), r'<body class="[^"]*\bdashboard\b')
 
 
+class DashboardLatestOrdersLayoutTests(SimpleTestCase):
+    """Item 3: recent-order numbers remain readable and their table scrolls
+    inside the dashboard card without clipping the card's height."""
+
+    def test_order_number_cell_is_ltr_nonbreaking_and_monospace(self):
+        rule = _base_rules()[".cusin-orders-table .cusin-order-number"]
+        self.assertEqual(rule["direction"], "ltr")
+        self.assertEqual(rule["unicode-bidi"], "isolate")
+        self.assertEqual(rule["white-space"], "nowrap")
+        self.assertIn("monospace", rule["font-family"])
+        self.assertEqual(rule["font-size"], "14px")
+
+    def test_recent_orders_table_has_sized_columns_and_card_local_scrolling(self):
+        rules = _base_rules()
+        self.assertEqual(rules[".cusin-table-scroll"]["overflow-x"], "auto")
+        self.assertEqual(rules[".cusin-table-scroll"]["max-width"], "100%")
+        self.assertEqual(rules[".cusin-orders-table"]["min-width"], "52rem")
+        self.assertEqual(rules[".cusin-orders-table"]["table-layout"], "fixed")
+        for index, width in enumerate(("14rem", "8rem", "8rem", "10rem", "12rem"), start=1):
+            with self.subTest(column=index):
+                column = rules[f".cusin-orders-table th:nth-child({index})"]
+                self.assertEqual(column["width"], width)
+                self.assertEqual(column["min-width"], width)
+
+    def test_dashboard_template_marks_order_numbers_as_ltr_cells(self):
+        template = (BASE / "templates" / "admin" / "index.html").read_text(encoding="utf-8")
+        self.assertIn('class="cusin-mini-table cusin-orders-table"', template)
+        self.assertIn('class="cusin-order-number" dir="ltr" scope="row"', template)
+        self.assertIn('class="cusin-table-scroll cusin-orders-scroll"', template)
+
+
 PRODUCT_CHANGELIST_TEMPLATE = (
     BASE / "apps" / "products" / "templates" / "admin" / "products" / "product_change_list.html"
 )

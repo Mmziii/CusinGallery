@@ -344,6 +344,75 @@ async function assertInlineFormLayout(page, viewportWidth, includesGallery = fal
   }
 }
 
+async function assertLatestOrdersLayout(page) {
+  const section = page.locator('section[aria-label="آخرین سفارش‌ها"]');
+  const metrics = await section.evaluate((card) => {
+    const wrapper = card.querySelector(".cusin-orders-scroll");
+    const table = wrapper && wrapper.querySelector(".cusin-orders-table");
+    if (!wrapper || !table) return null;
+    const cardRect = card.getBoundingClientRect();
+    const wrapperRect = wrapper.getBoundingClientRect();
+    const cardStyle = getComputedStyle(card);
+    const rows = [...table.querySelectorAll("tbody tr")].map((row) => {
+      const cell = row.querySelector("th.cusin-order-number");
+      const cellStyle = getComputedStyle(cell);
+      const anchor = cell.querySelector("a");
+      const range = document.createRange();
+      range.selectNodeContents(anchor);
+      const lineRects = [...range.getClientRects()];
+      const rowRect = row.getBoundingClientRect();
+      return {
+        text: cell.textContent.trim(),
+        dirAttribute: cell.getAttribute("dir"),
+        direction: cellStyle.direction,
+        whiteSpace: cellStyle.whiteSpace,
+        fontFamily: cellStyle.fontFamily,
+        lineCount: lineRects.length,
+        rowBottom: rowRect.bottom,
+      };
+    });
+    return {
+      rows,
+      card: {
+        clientHeight: card.clientHeight,
+        scrollHeight: card.scrollHeight,
+        bottom: cardRect.bottom,
+        contentBottom: cardRect.bottom - parseFloat(cardStyle.paddingBottom) - parseFloat(cardStyle.borderBottomWidth),
+        overflowY: cardStyle.overflowY,
+      },
+      wrapper: {
+        left: wrapperRect.left,
+        right: wrapperRect.right,
+        cardLeft: cardRect.left,
+        cardRight: cardRect.right,
+        clientWidth: wrapper.clientWidth,
+        scrollWidth: wrapper.scrollWidth,
+        overflowX: getComputedStyle(wrapper).overflowX,
+      },
+      tableWidth: table.getBoundingClientRect().width,
+    };
+  });
+
+  expect(metrics, "dashboard should render the latest-orders table").not.toBeNull();
+  expect(metrics.rows.length, "latest-orders test requires at least four seeded orders").toBeGreaterThanOrEqual(4);
+  expect(metrics.wrapper.overflowX).toBe("auto");
+  expect(metrics.wrapper.left).toBeGreaterThanOrEqual(metrics.wrapper.cardLeft - 0.5);
+  expect(metrics.wrapper.right).toBeLessThanOrEqual(metrics.wrapper.cardRight + 0.5);
+  if (metrics.tableWidth > metrics.wrapper.clientWidth + 4) {
+    expect(metrics.wrapper.scrollWidth, "wide recent-orders table should scroll inside its card").toBeGreaterThan(metrics.wrapper.clientWidth + 4);
+  }
+  expect(metrics.card.scrollHeight, "latest-orders card must not clip vertical content").toBeLessThanOrEqual(metrics.card.clientHeight + 2);
+  for (const row of metrics.rows) {
+    expect(row.text).toMatch(/^[A-Za-z0-9-]+$/);
+    expect(row.dirAttribute).toBe("ltr");
+    expect(row.direction).toBe("ltr");
+    expect(row.whiteSpace).toBe("nowrap");
+    expect(row.fontFamily).toMatch(/monospace/i);
+    expect(row.lineCount, `order number must stay on one line: ${JSON.stringify(row)}`).toBe(1);
+    expect(row.rowBottom, "latest-orders card should grow to fit every row").toBeLessThanOrEqual(metrics.card.contentBottom + 1);
+  }
+}
+
 async function assertPanelInViewport(page, selector) {
   const panel = page.locator(selector);
   await expect(panel, `${selector} should be open`).toBeVisible();
@@ -388,6 +457,7 @@ test.describe("admin pages at all requested viewport widths", () => {
         test(`no horizontal page overflow on ${pagePath}`, async ({ page }) => {
           await page.goto(`${BASE_URL}${pagePath}`, { waitUntil: "networkidle" });
           await assertNoHorizontalOverflow(page);
+          if (pagePath === "/admin/") await assertLatestOrdersLayout(page);
           await assertAdminTypography(page);
         });
       }

@@ -1235,8 +1235,41 @@ body.login #footer { display: none; }
 .cusin-top-list a { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .cusin-top-list strong { color: var(--cusin-text); font-size: 0.8125rem; white-space: nowrap; }
 
-.cusin-table-scroll { overflow-x: auto; }
+.cusin-table-scroll {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
 .cusin-mini-table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; }
+.cusin-orders-table {
+  width: 100%;
+  min-width: 52rem;
+  table-layout: fixed;
+}
+.cusin-orders-table th,
+.cusin-orders-table td { box-sizing: border-box; }
+.cusin-orders-table th:nth-child(1) { width: 14rem; min-width: 14rem; }
+.cusin-orders-table th:nth-child(2) { width: 8rem; min-width: 8rem; }
+.cusin-orders-table th:nth-child(3) { width: 8rem; min-width: 8rem; }
+.cusin-orders-table th:nth-child(4) { width: 10rem; min-width: 10rem; }
+.cusin-orders-table th:nth-child(5) { width: 12rem; min-width: 12rem; }
+.cusin-orders-table .cusin-order-number {
+  direction: ltr;
+  unicode-bidi: isolate;
+  white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.cusin-orders-table .cusin-order-number a {
+  direction: ltr;
+  white-space: nowrap;
+  font: inherit;
+}
 .cusin-mini-table th, .cusin-mini-table td {
   padding: 8px 10px;
   border-bottom: 1px solid var(--cusin-border);

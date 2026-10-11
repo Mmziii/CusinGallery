@@ -188,13 +188,13 @@ context processor was removed) this page degrades to the stock app list.
         <a class="cusin-card-link" href="{% url 'admin:orders_order_changelist' %}">همهٔ سفارش‌ها {% cusin_icon "chevron-left" %}</a>
       </header>
       {% if cusin_dashboard.latest_orders %}
-      <div class="cusin-table-scroll">
-        <table class="cusin-mini-table">
-          <thead><tr><th>شماره</th><th>وضعیت</th><th>پرداخت</th><th>مبلغ</th><th>تاریخ</th></tr></thead>
+      <div class="cusin-table-scroll cusin-orders-scroll">
+        <table class="cusin-mini-table cusin-orders-table">
+          <thead><tr><th class="cusin-order-number-heading" scope="col">شماره</th><th scope="col">وضعیت</th><th scope="col">پرداخت</th><th scope="col">مبلغ</th><th scope="col">تاریخ</th></tr></thead>
           <tbody>
             {% for row in cusin_dashboard.latest_orders %}
             <tr>
-              <th scope="row"><a href="{{ row.url }}">{{ row.order_number }}</a></th>
+              <th class="cusin-order-number" dir="ltr" scope="row"><a href="{{ row.url }}">{{ row.order_number }}</a></th>
               <td><span class="cusin-badge st-{{ row.status }}">{{ row.status_label }}</span></td>
               <td><span class="cusin-badge pay-{{ row.payment_status }}">{{ row.payment_label }}</span></td>
               <td class="cusin-nowrap">{{ row.total|toman }}</td>

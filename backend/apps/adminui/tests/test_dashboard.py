@@ -299,6 +299,29 @@ class DashboardViewTests(CacheIsolationMixin, TestCase):
         self.assertIn("cusin-chart-table", html)
         self.assertIn("cusin-readiness", html)  # superuser-only card shown
 
+    def test_latest_orders_render_four_ltr_number_cells(self):
+        admin = make_superuser(username="fourordersowner", phone="+989000007751")
+        self.client.force_login(admin)
+        product = make_product(price=125000)
+        orders = [make_order(product=product) for _ in range(4)]
+        with frozen_clock(FROZEN):
+            for minute, order in enumerate(orders, start=30):
+                _set_created(order, utc(2026, 10, 10, 5, minute))
+            response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertGreaterEqual(len(response.context["cusin_dashboard"]["latest_orders"]), 4)
+        html = response.content.decode()
+        self.assertIn('class="cusin-mini-table cusin-orders-table"', html)
+        for order in orders:
+            with self.subTest(order=order.order_number):
+                expected = (
+                    f'<th class="cusin-order-number" dir="ltr" scope="row">'
+                    f'<a href="{reverse("admin:orders_order_change", args=[order.pk])}">'
+                    f"{order.order_number}</a></th>"
+                )
+                self.assertIn(expected, html)
+
     def test_days_30_via_query_string(self):
         admin = make_superuser(username="daysowner", phone="+989000007777")
         self.client.force_login(admin)
