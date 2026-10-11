@@ -526,8 +526,26 @@ kbd.cusin-kbd {
 .messagelist li.error { border-inline-start-color: var(--cg-danger); background: #f9e7e3; }
 .messagelist li.info { border-inline-start-color: var(--cg-info-text); background: #e7eef6; }
 
-.object-tools { margin: 0 0 14px; }
-.object-tools li { margin-inline-start: 8px; }
+/* Stock Django floats the object tools with a -48px top margin so they sit on
+   the title line. The search card (#toolbar) is a block box and the float was
+   drawn over it. The object tools get their own row above the card. */
+.object-tools {
+  float: none;
+  clear: both;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  margin: 0 0 14px;
+  padding: 0;
+}
+.object-tools li { float: none; height: auto; margin-inline-start: 8px; }
+/* stock `.object-tools a:link` (0,2,1) beats the pill rule below, so the
+   link is made a centred inline-flex box here too */
+.object-tools a:link, .object-tools a:visited {
+  float: none;
+  display: inline-flex;
+  align-items: center;
+}
 .object-tools a,
 .object-tools button {
   background: var(--cg-olive) !important;

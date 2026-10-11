@@ -10,7 +10,7 @@ import re
 from pathlib import Path
 
 from django.conf import settings
-from django.test import TestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 
 from .helpers import PLAIN_STATIC, make_superuser
@@ -167,3 +167,13 @@ class ExcelActionsTests(TestCase):
         self.assertEqual(tools.count("<li>"), 1)
         for fragment in ("import", "export", "image-import"):
             self.assertNotIn(fragment, tools)
+
+
+class ObjectToolsTests(SimpleTestCase):
+    """Item 3: stock Django floats `.object-tools` with a -48px top margin; the
+    float was drawn over the block-level search card (#toolbar)."""
+
+    def test_theme_stops_the_float(self):
+        rules = _base_rules()
+        self.assertEqual(rules[".object-tools"]["float"], "none")
+        self.assertEqual(rules[".object-tools li"]["float"], "none")
