@@ -489,6 +489,14 @@ kbd.cusin-kbd {
   background: transparent;
   padding: 0;
 }
+/* Stock Django pins the dashboard column to 600px (base.css:
+   `.dashboard #content { width: 600px }`), which left the KPI tiles about
+   71px wide. The dashboard fills main.content instead; the cap only
+   applies on very wide screens. */
+.dashboard #content {
+  width: 100%;
+  max-width: 1600px;
+}
 #content > h1, #content-main > h1, .cusin-dashboard h1 {
   color: var(--cg-green-dark);
   font-size: 1.375rem;
