@@ -56,8 +56,9 @@ THIRD_PARTY_APPS = [
     # smaller, dependency-light core the larger package wraps itself,
     # and all we need is admin enforcement + device models.
     "django_otp",
-    "django_otp.plugins.otp_totp",
-    "django_otp.plugins.otp_static",
+    # Persian display names (verbose_name) for the plugin apps; same labels.
+    "apps.adminui.otp_apps.OtpTotpAdminConfig",
+    "apps.adminui.otp_apps.OtpStaticAdminConfig",
 ]
 
 # Local apps. Each is a clean foundation in Phase 1 -- business models and

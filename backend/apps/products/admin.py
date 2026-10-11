@@ -939,11 +939,11 @@ class ProductAdmin(admin.ModelAdmin):
         return HttpResponseRedirect(reverse("admin:products_product_changelist"))
 
     fieldsets = (
-        (None, {"fields": ("name", "slug", "sku", "category", "brand")}),
-        ("Description", {"fields": ("short_description", "description")}),
-        ("Pricing", {"fields": ("price", "compare_at_price", "discount_percentage")}),
-        ("Inventory", {"fields": ("stock_quantity", "low_stock_threshold")}),
-        ("Flags", {"fields": ("is_active", "is_featured", "is_new", "is_best_seller")}),
+        ("اطلاعات اصلی", {"fields": ("name", "slug", "sku", "category", "brand")}),
+        ("توضیحات", {"fields": ("short_description", "description")}),
+        ("قیمت‌گذاری", {"fields": ("price", "compare_at_price", "discount_percentage")}),
+        ("موجودی", {"fields": ("stock_quantity", "low_stock_threshold")}),
+        ("وضعیت و نمایش", {"fields": ("is_active", "is_featured", "is_new", "is_best_seller")}),
     )
 
     # --- Changelist columns ---------------------------------------------------
