@@ -2564,7 +2564,128 @@ body.cusin-admin .select2-selection:focus {
 }
 body.cusin-admin input::placeholder,
 body.cusin-admin textarea::placeholder { color: var(--cusin-muted); opacity: 1; }
-.form-row { display: grid; grid-template-columns: minmax(180px, 240px) minmax(0, 1fr); gap: 12px; align-items: start; }
+/* The stock change-form row wraps label, widgets and help in one child.
+   Keep that wrapper full-width, stack each field vertically, and arrange
+   independent fields in two usable desktop columns only. */
+body.cusin-admin fieldset.module.aligned { display: block; min-width: 0; }
+@media (min-width: 1024px) {
+  body.cusin-admin fieldset.module.aligned {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 16px;
+    align-items: start;
+  }
+  body.cusin-admin fieldset.module.aligned > h2 { grid-column: 1 / -1; }
+  body.cusin-admin fieldset.module.aligned > .form-row:has(textarea),
+  body.cusin-admin fieldset.module.aligned > .form-row:has(.selector) { grid-column: 1 / -1; }
+}
+body.cusin-admin fieldset.module.aligned .form-row {
+  display: block;
+  min-width: 0;
+}
+body.cusin-admin fieldset.module.aligned .form-row > div,
+body.cusin-admin fieldset.module.aligned .form-row .flex-container {
+  width: 100%;
+  min-width: 0;
+}
+body.cusin-admin fieldset.module.aligned .form-row .flex-container {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+body.cusin-admin fieldset.module.aligned .form-row label,
+body.cusin-admin fieldset.module.aligned .form-row .flex-container label {
+  width: auto;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+}
+body.cusin-admin fieldset.module.aligned .form-row input:not([type="checkbox"]),
+body.cusin-admin fieldset.module.aligned .form-row select,
+body.cusin-admin fieldset.module.aligned .form-row textarea,
+body.cusin-admin fieldset.module.aligned .form-row .related-widget-wrapper,
+body.cusin-admin fieldset.module.aligned .form-row .readonly {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+body.cusin-admin fieldset.module.aligned .form-row .related-widget-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+body.cusin-admin fieldset.module.aligned .form-row .related-widget-wrapper .select2-container {
+  flex: 1 1 auto;
+  width: 100% !important;
+  min-width: 0;
+}
+body.cusin-admin fieldset.module.aligned .form-row .selector {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+body.cusin-admin fieldset.module.aligned .form-row .selector-available,
+body.cusin-admin fieldset.module.aligned .form-row .selector-chosen {
+  flex: 1 1 0;
+  width: auto;
+  min-width: 0;
+}
+body.cusin-admin fieldset.module.aligned .form-row .selector .selector-filter {
+  width: 100%;
+  min-width: 0;
+}
+body.cusin-admin fieldset.module.aligned .form-row .selector .selector-filter input {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+}
+body.cusin-admin fieldset.module.aligned .form-row .selector .helptext {
+  font-size: 14px;
+  line-height: 1.7;
+}
+@media (max-width: 767px) {
+  body.cusin-admin fieldset.module.aligned .form-row .selector {
+    flex-direction: column;
+    gap: 10px;
+  }
+  body.cusin-admin fieldset.module.aligned .form-row .selector-available,
+  body.cusin-admin fieldset.module.aligned .form-row .selector-chosen {
+    flex: 1 1 auto;
+    width: 100%;
+  }
+  body.cusin-admin fieldset.module.aligned .form-row .selector ul.selector-chooser {
+    display: flex;
+    align-self: center;
+    width: 60px;
+    height: 30px;
+    padding: 0 2px;
+    transform: none;
+  }
+  body.cusin-admin fieldset.module.aligned .form-row .selector-chooser li { float: left; }
+}
+body.cusin-admin fieldset.module.aligned .form-row textarea {
+  min-height: 165px;
+  height: auto;
+  resize: vertical;
+}
+body.cusin-admin fieldset.module.aligned .form-row .help,
+body.cusin-admin fieldset.module.aligned .form-row .helptext,
+body.cusin-admin fieldset.module.aligned .form-row .cusin-counter {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: min(240px, 100%);
+  max-width: 100%;
+  white-space: normal;
+}
+body.cusin-admin fieldset.module.aligned .form-row .cusin-counter { white-space: nowrap; }
+body.cusin-admin fieldset.module.aligned .form-row .readonly {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 .form-row label,
 .form-row .fieldBox label,
 .cusin-quick-field label { color: var(--cusin-text); font-weight: 600; }

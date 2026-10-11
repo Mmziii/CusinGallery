@@ -62,6 +62,14 @@ async function firstOrderUrl(page) {
   return firstChangeUrl(page, "/admin/orders/order/", "order");
 }
 
+async function firstProductVariantUrl(page) {
+  return firstChangeUrl(page, "/admin/products/productvariant/", "product variant");
+}
+
+async function firstUserUrl(page) {
+  return firstChangeUrl(page, "/admin/accounts/user/", "user");
+}
+
 async function assertNoHorizontalOverflow(page) {
   const { scrollWidth, clientWidth } = await page.evaluate(() => ({
     scrollWidth: document.documentElement.scrollWidth,
@@ -112,6 +120,109 @@ async function assertAdminTypography(page) {
   expect(metrics.bodyLineHeight, "Persian body leading should be at least 1.7").toBeGreaterThanOrEqual(1.7);
   expect(metrics.small, "visible admin text below 14px").toEqual([]);
   expect(metrics.tightPersian, "Persian text with line-height below 1.7").toEqual([]);
+}
+
+async function assertFormLayout(page, viewportWidth) {
+  const formMetrics = await page.evaluate(() => {
+    const visible = (element) => {
+      const box = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      return box.width > 0 && box.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+    };
+    const textareas = [...document.querySelectorAll("#content-main textarea")]
+      .filter(visible)
+      .map((element) => {
+        const box = element.getBoundingClientRect();
+        const row = element.closest(".form-row");
+        const rowBox = row.getBoundingClientRect();
+        const lineHeight = parseFloat(getComputedStyle(element).lineHeight);
+        return {
+          width: box.width,
+          rowWidth: rowBox.width,
+          height: box.height,
+          lineHeight,
+          rows: Number.isFinite(lineHeight) ? box.height / lineHeight : 0,
+        };
+      });
+    const help = [...document.querySelectorAll("#content-main .help, #content-main .helptext, #content-main .help-text")]
+      .filter((element) => element.tagName !== "IMG" && element.textContent.trim() && visible(element))
+      .map((element) => element.getBoundingClientRect().width);
+    const controls = [...document.querySelectorAll(
+      '#content-main fieldset.module.aligned .form-row input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="submit"]), ' +
+      "#content-main fieldset.module.aligned .form-row select:not(.select2-hidden-accessible), #content-main fieldset.module.aligned .form-row textarea, " +
+      "#content-main fieldset.module.aligned .form-row .related-widget-wrapper .select2-container, " +
+      "#content-main fieldset.module.aligned .form-row .readonly"
+    )]
+      .filter((element) => visible(element) && !element.closest(".selector") && !element.classList.contains("select2-search__field"))
+      .map((element) => ({
+        tag: element.tagName,
+        width: element.getBoundingClientRect().width,
+        rowWidth: element.closest(".form-row").getBoundingClientRect().width,
+      }));
+    const fieldsets = [...document.querySelectorAll("#content-main fieldset.module.aligned")]
+      .map((element) => getComputedStyle(element).display);
+    return { textareas, help, controls, fieldsets };
+  });
+
+  expect(formMetrics.textareas.length, "change form should expose its textareas").toBeGreaterThan(0);
+  for (const textarea of formMetrics.textareas) {
+    expect(textarea.rows, `textarea should render at least six lines: ${JSON.stringify(textarea)}`).toBeGreaterThanOrEqual(6);
+    if (viewportWidth === 375) {
+      expect(textarea.width, `phone textarea should fill its column: ${JSON.stringify(textarea)}`).toBeGreaterThanOrEqual(textarea.rowWidth * 0.9);
+    } else if (viewportWidth >= 1280) {
+      expect(textarea.width, `desktop textarea should be at least 480px: ${JSON.stringify(textarea)}`).toBeGreaterThanOrEqual(480);
+    }
+  }
+  expect(formMetrics.controls.length, "change form should expose controls").toBeGreaterThan(0);
+  for (const control of formMetrics.controls) {
+    if (viewportWidth === 375) {
+      expect(control.width, `phone control should fill its column: ${JSON.stringify(control)}`).toBeGreaterThanOrEqual(control.rowWidth * 0.9);
+    } else if (viewportWidth >= 1280) {
+      expect(control.width, `desktop control should fill its column: ${JSON.stringify(control)}`).toBeGreaterThanOrEqual(control.rowWidth * 0.85);
+    }
+  }
+  for (const width of formMetrics.help) {
+    if (viewportWidth === 375 || viewportWidth >= 1280) {
+      expect(width, `help text should retain a readable column at ${viewportWidth}px`).toBeGreaterThanOrEqual(200);
+    }
+  }
+  for (const display of formMetrics.fieldsets) {
+    expect(display, `fieldset layout at ${viewportWidth}px`).toBe(viewportWidth < 1024 ? "block" : "grid");
+  }
+}
+
+async function assertSelectorFormLayout(page, viewportWidth) {
+  const widgets = await page.locator("#content-main fieldset.module.aligned .form-row .selector").evaluateAll((elements) =>
+    elements.map((element) => {
+      const row = element.closest(".form-row");
+      const available = element.querySelector(".selector-available");
+      const chosen = element.querySelector(".selector-chosen");
+      const help = [...element.querySelectorAll(".helptext")].map((item) => item.getBoundingClientRect().width);
+      return {
+        rowWidth: row.getBoundingClientRect().width,
+        widgetWidth: element.getBoundingClientRect().width,
+        direction: getComputedStyle(element).flexDirection,
+        panelWidths: [available, chosen].filter(Boolean).map((panel) => panel.getBoundingClientRect().width),
+        help,
+      };
+    })
+  );
+  expect(widgets.length, "the model form should expose a dual-list selector").toBeGreaterThan(0);
+  for (const widget of widgets) {
+    expect(widget.widgetWidth, `selector should fill its row: ${JSON.stringify(widget)}`).toBeGreaterThanOrEqual(widget.rowWidth * 0.9);
+    if (viewportWidth >= 1280) {
+      expect(widget.rowWidth, `desktop selector should span both form columns: ${JSON.stringify(widget)}`).toBeGreaterThanOrEqual(700);
+    }
+    if (viewportWidth === 375) {
+      expect(widget.direction, "phone dual-list controls should stack").toBe("column");
+      for (const panelWidth of widget.panelWidths) {
+        expect(panelWidth, `phone selector panel should retain readable width: ${JSON.stringify(widget)}`).toBeGreaterThanOrEqual(240);
+      }
+    }
+    for (const helpWidth of widget.help) {
+      expect(helpWidth, `dual-list help should be at least 200px wide: ${JSON.stringify(widget)}`).toBeGreaterThanOrEqual(200);
+    }
+  }
 }
 
 async function assertPanelInViewport(page, selector) {
@@ -171,7 +282,22 @@ test.describe("admin pages at all requested viewport widths", () => {
           await page.goto(new URL(url, BASE_URL).href, { waitUntil: "networkidle" });
           await assertNoHorizontalOverflow(page);
           await assertAdminTypography(page);
+          await assertFormLayout(page, viewport.width);
         });
+      }
+
+      if (viewport.width === 375 || viewport.width === 1280) {
+        for (const form of [
+          { label: "product variant", getUrl: firstProductVariantUrl },
+          { label: "user", getUrl: firstUserUrl },
+        ]) {
+          test(`dual-list layout fills the ${form.label} form column`, async ({ page }) => {
+            const url = await form.getUrl(page);
+            await page.goto(new URL(url, BASE_URL).href, { waitUntil: "networkidle" });
+            await assertNoHorizontalOverflow(page);
+            await assertSelectorFormLayout(page, viewport.width);
+          });
+        }
       }
 
       if (viewport.width >= 1280) {
