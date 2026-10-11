@@ -119,7 +119,7 @@ class ResponsiveCssTests(SimpleTestCase):
 
     def test_the_card_label_is_mirrored_from_the_header_by_the_script(self):
         self.assertIn('setAttribute("data-label"', self.js)
-        self.assertIn('querySelectorAll("#result_list, .cusin-items-table")', self.js)
+        self.assertIn('"#result_list, .cusin-items-table, .inline-group .tabular table"', self.js)
 
     def test_the_first_link_cell_is_carded_too(self):
         """Django renders the link column as <th> in every body row. A card
@@ -154,7 +154,25 @@ class ResponsiveCssTests(SimpleTestCase):
         self.assertIn('class="cusin-items-table"', wrapper.split("</table>", 1)[0])
 
     def test_inline_tabular_tables_scroll_inside_their_box(self):
+        self.assertEqual(self.base[".inline-group .tabular"]["overflow-x"], "auto")
+        self.assertEqual(self.base["body.cusin-admin #container .inline-group .tabular"]["direction"], "ltr")
+        self.assertEqual(self.base["body.cusin-admin #container .inline-group .tabular > fieldset.module"]["overflow"], "visible")
+        self.assertEqual(self.base[".inline-group .tabular table"]["width"], "max-content")
         self.assertEqual(self.phone[".inline-group .tabular"]["overflow-x"], "auto")
+
+    def test_inline_tabular_rows_reflow_as_labeled_phone_cards(self):
+        row = self.phone[".inline-group .tabular tbody tr.form-row"]
+        self.assertEqual(row["display"], "grid")
+        self.assertEqual(row["grid-template-columns"], "minmax(0, 1fr)")
+        self.assertEqual(self.phone[".inline-group .tabular tbody tr.form-row > td::before"]["content"], "attr(data-label)")
+        self.assertEqual(self.phone[".inline-group .tabular tbody tr.form-row > td.original"]["display"], "none !important")
+        self.assertIn(".inline-group .tabular table", self.js)
+        self.assertIn("MutationObserver", self.js)
+
+    def test_image_gallery_cards_remain_bounded_on_small_screens(self):
+        self.assertEqual(self.phone[".cusin-gallery"]["grid-template-columns"], "minmax(0, 1fr)")
+        self.assertEqual(self.phone[".cusin-gallery-card"]["box-sizing"], "border-box")
+        self.assertEqual(self.phone[".cusin-gallery-card"]["max-width"], "100%")
 
     def test_palette_box_is_bounded_by_the_viewport(self):
         self.assertEqual(self.base[".cusin-palette-box"]["width"], "min(640px, 94vw)")

@@ -248,7 +248,10 @@ class ProductVariantInline(admin.TabularInline):
     model = ProductVariant
     extra = 0
     fields = ("sku", "price", "stock_quantity", "is_active", "attribute_values")
-    filter_horizontal = ("attribute_values",)
+    # A two-panel FilteredSelectMultiple makes each tabular row hundreds of
+    # pixels tall. The same multi-value relationship uses the existing,
+    # searchable ProductAttributeValueAdmin autocomplete instead.
+    autocomplete_fields = ("attribute_values",)
     show_change_link = True
 
 

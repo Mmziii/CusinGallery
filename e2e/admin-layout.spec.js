@@ -70,6 +70,14 @@ async function firstUserUrl(page) {
   return firstChangeUrl(page, "/admin/accounts/user/", "user");
 }
 
+async function firstProductWithVariantsUrl(page) {
+  return firstChangeUrl(page, "/admin/products/product/?q=MUG-300", "product with variants");
+}
+
+async function firstCartUrl(page) {
+  return firstChangeUrl(page, "/admin/cart/cart/", "cart");
+}
+
 async function assertNoHorizontalOverflow(page) {
   const { scrollWidth, clientWidth } = await page.evaluate(() => ({
     scrollWidth: document.documentElement.scrollWidth,
@@ -225,6 +233,117 @@ async function assertSelectorFormLayout(page, viewportWidth) {
   }
 }
 
+async function assertInlineFormLayout(page, viewportWidth, includesGallery = false) {
+  const metrics = await page.evaluate(() => {
+    const visible = (element) => {
+      const box = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      return box.width > 0 && box.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+    };
+    const tables = [...document.querySelectorAll("#content-main .inline-group .tabular")]
+      .filter(visible)
+      .map((wrapper) => {
+        const table = wrapper.querySelector("table");
+        const group = wrapper.closest(".inline-group");
+        const rows = [...wrapper.querySelectorAll("tbody tr.form-row:not(.empty-form):not(.add-row)")]
+          .filter(visible);
+        const rect = wrapper.getBoundingClientRect();
+        const groupRect = group.getBoundingClientRect();
+        return {
+          overflowX: getComputedStyle(wrapper).overflowX,
+          wrapper: { left: rect.left, right: rect.right, width: rect.width, clientWidth: wrapper.clientWidth, scrollWidth: wrapper.scrollWidth },
+          group: { left: groupRect.left, right: groupRect.right, width: groupRect.width },
+          tableWidth: table.getBoundingClientRect().width,
+          rows: rows.map((row) => {
+            const rowRect = row.getBoundingClientRect();
+            return {
+              display: getComputedStyle(row).display,
+              height: rowRect.height,
+              bounds: { left: rowRect.left, right: rowRect.right },
+              cells: [...row.children].map((cell) => {
+                const cellRect = cell.getBoundingClientRect();
+                return {
+                  width: cellRect.width,
+                  display: getComputedStyle(cell).display,
+                  label: cell.getAttribute("data-label"),
+                  cls: cell.className,
+                  hidden: getComputedStyle(cell).display === "none",
+                };
+              }),
+            };
+          }),
+          headers: [...table.querySelectorAll("thead th")].map((cell) => cell.getBoundingClientRect().width),
+        };
+      });
+    const gallery = document.querySelector("#content-main .cusin-gallery");
+    const cards = gallery ? [...gallery.querySelectorAll(".cusin-gallery-card:not(.empty-form)")].filter(visible) : [];
+    const galleryRect = gallery ? gallery.getBoundingClientRect() : null;
+    const galleryMetrics = gallery ? {
+      display: getComputedStyle(gallery).display,
+      columns: getComputedStyle(gallery).gridTemplateColumns,
+      width: galleryRect.width,
+      cards: cards.map((card) => {
+        const rect = card.getBoundingClientRect();
+        return { left: rect.left, right: rect.right, width: rect.width };
+      }),
+    } : null;
+    return {
+      pageWidth: document.documentElement.clientWidth,
+      pageScrollWidth: document.documentElement.scrollWidth,
+      tables,
+      gallery: galleryMetrics,
+    };
+  });
+
+  expect(metrics.tables.length, "the form should render its TabularInline scroller").toBeGreaterThan(0);
+  expect(metrics.pageScrollWidth, "inline tables must not widen the page").toBeLessThanOrEqual(metrics.pageWidth);
+  for (const table of metrics.tables) {
+    expect(table.overflowX, "inline table wrapper should own horizontal overflow").toBe("auto");
+    expect(table.wrapper.left, "inline scroller should stay inside its card").toBeGreaterThanOrEqual(table.group.left - 0.5);
+    expect(table.wrapper.right, "inline scroller should stay inside its card").toBeLessThanOrEqual(table.group.right + 0.5);
+    expect(table.rows.length, "seeded inline should render a row").toBeGreaterThan(0);
+    if (viewportWidth >= 1280) {
+      expect(table.headers.length, "header and data rows should share their column count").toBe(table.rows[0].cells.length);
+      if (table.tableWidth > table.wrapper.clientWidth + 4) {
+        expect(table.wrapper.scrollWidth, "wide inline tables should scroll inside their own box").toBeGreaterThan(table.wrapper.clientWidth + 4);
+      }
+      for (const row of table.rows) {
+        expect(row.display, "desktop rows should retain table-row alignment").toBe("table-row");
+        expect(row.height, `desktop inline row should not become tall: ${JSON.stringify(row)}`).toBeLessThanOrEqual(180);
+        expect(table.headers.length, "header and data rows should share their column count").toBe(row.cells.length);
+        table.headers.forEach((width, index) => {
+          expect(Math.abs(width - row.cells[index].width), `header/data column ${index} should align: ${JSON.stringify(row)}`).toBeLessThanOrEqual(2);
+        });
+      }
+    } else if (viewportWidth === 375) {
+      for (const row of table.rows) {
+        expect(row.display, "phone inline rows should become cards").toBe("grid");
+        expect(row.height, `phone inline card should remain compact: ${JSON.stringify(row)}`).toBeLessThanOrEqual(600);
+        expect(row.bounds.left, "phone inline card left edge").toBeGreaterThanOrEqual(0);
+        expect(row.bounds.right, "phone inline card right edge").toBeLessThanOrEqual(metrics.pageWidth + 0.5);
+        for (const cell of row.cells.filter((item) => !item.hidden && !/\boriginal\b|\bhidden\b/.test(item.cls))) {
+          expect(cell.display, `phone inline data cells should stack: ${JSON.stringify(cell)}`).toBe("grid");
+          expect(cell.label, `phone inline cell should have a mirrored header label: ${JSON.stringify(cell)}`).toBeTruthy();
+        }
+      }
+    }
+  }
+
+  if (includesGallery) {
+    expect(metrics.gallery, "product image gallery should stay as cards").not.toBeNull();
+    expect(metrics.gallery.display).toBe("grid");
+    expect(metrics.gallery.cards.length).toBeGreaterThan(0);
+    for (const card of metrics.gallery.cards) {
+      expect(card.width, `gallery card width: ${JSON.stringify(card)}`).toBeLessThanOrEqual(metrics.gallery.width + 0.5);
+      expect(card.left).toBeGreaterThanOrEqual(0);
+      expect(card.right).toBeLessThanOrEqual(metrics.pageWidth + 0.5);
+    }
+    if (viewportWidth === 375) {
+      expect(metrics.gallery.columns.trim().split(/\s+/).length, "phone image cards should use one column").toBe(1);
+    }
+  }
+}
+
 async function assertPanelInViewport(page, selector) {
   const panel = page.locator(selector);
   await expect(panel, `${selector} should be open`).toBeVisible();
@@ -296,6 +415,35 @@ test.describe("admin pages at all requested viewport widths", () => {
             await page.goto(new URL(url, BASE_URL).href, { waitUntil: "networkidle" });
             await assertNoHorizontalOverflow(page);
             await assertSelectorFormLayout(page, viewport.width);
+          });
+        }
+
+        for (const form of [
+          { label: "product variants and image gallery", getUrl: firstProductWithVariantsUrl, includesGallery: true },
+          { label: "order items", getUrl: firstOrderUrl, includesGallery: false },
+          { label: "cart items", getUrl: firstCartUrl, includesGallery: false },
+        ]) {
+          test(`inline rows are aligned and contained on ${form.label}`, async ({ page }) => {
+            const url = await form.getUrl(page);
+            await page.goto(new URL(url, BASE_URL).href, { waitUntil: "networkidle" });
+            await assertNoHorizontalOverflow(page);
+            await assertInlineFormLayout(page, viewport.width, form.includesGallery);
+          });
+        }
+
+        if (viewport.width === 375) {
+          test("a newly added product variant row receives its mobile column labels", async ({ page }) => {
+            const url = await firstProductWithVariantsUrl(page);
+            await page.goto(new URL(url, BASE_URL).href, { waitUntil: "networkidle" });
+            const table = page.locator("#variants-group .tabular");
+            const addAnother = table.locator(".add-row a");
+            await expect(addAnother).toBeVisible();
+            const rows = table.locator("tbody tr.form-row:not(.empty-form):not(.add-row)");
+            const before = await rows.count();
+            await addAnother.click();
+            await expect(rows).toHaveCount(before + 1);
+            const added = rows.last();
+            await expect.poll(() => added.locator("td[data-label]").count()).toBeGreaterThan(2);
           });
         }
       }

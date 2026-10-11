@@ -964,19 +964,49 @@
    * 5. Changelist mobile cards: mirror header text into td[data-label]
    * ------------------------------------------------------------------ */
   function initCardLabels() {
-    document.querySelectorAll("#result_list, .cusin-items-table").forEach(function (table) {
-      var headers = Array.prototype.map.call(
-        table.querySelectorAll("thead th"),
-        function (th) { return th.textContent.trim(); }
-      );
-      table.querySelectorAll("tbody tr").forEach(function (tr) {
-        Array.prototype.forEach.call(tr.children, function (cell, index) {
-          if (!cell.hasAttribute("data-label") && headers[index]) {
-            cell.setAttribute("data-label", headers[index]);
-          }
+    var tableSelector = "#result_list, .cusin-items-table, .inline-group .tabular table";
+    function labelTables(root) {
+      var tables = [];
+      if (root.matches && root.matches(tableSelector)) tables.push(root);
+      if (root.querySelectorAll) {
+        tables = tables.concat(Array.prototype.slice.call(root.querySelectorAll(tableSelector)));
+      }
+      tables.forEach(function (table) {
+        var headers = Array.prototype.map.call(
+          table.querySelectorAll("thead th"),
+          function (th) { return th.textContent.trim(); }
+        );
+        table.querySelectorAll("tbody tr").forEach(function (tr) {
+          Array.prototype.forEach.call(tr.children, function (cell, index) {
+            var label = headers[index];
+            if (!label && cell.classList.contains("delete")) label = "حذف";
+            if (!cell.hasAttribute("data-label") && label) {
+              cell.setAttribute("data-label", label);
+            }
+          });
         });
       });
-    });
+    }
+    labelTables(document);
+
+    // Django adds tabular inline rows after this script has initialized. A
+    // small scoped observer labels those cloned cells as soon as they enter
+    // the DOM, keeping the phone-card labels in sync with the table header.
+    var content = document.querySelector("#content-main");
+    if (content && "MutationObserver" in window) {
+      var observer = new MutationObserver(function (records) {
+        var inlineRowAdded = records.some(function (record) {
+          return Array.prototype.some.call(record.addedNodes, function (node) {
+            return node.nodeType === 1 && (
+              (node.matches && node.matches(".inline-group .tabular tr")) ||
+              (node.closest && node.closest(".inline-group .tabular"))
+            );
+          });
+        });
+        if (inlineRowAdded) labelTables(content);
+      });
+      observer.observe(content, { childList: true, subtree: true });
+    }
   }
 
   /* ------------------------------------------------------------------ *

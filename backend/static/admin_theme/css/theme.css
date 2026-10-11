@@ -609,7 +609,48 @@ fieldset.module > h2, .module h2 {
   margin-bottom: 18px;
   background: var(--cusin-surface);
 }
+.inline-group .tabular {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
 .inline-group .tabular table, .inline-group table { margin: 0; }
+.inline-group .tabular table {
+  width: max-content;
+  min-width: 100%;
+  table-layout: auto;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.inline-group .tabular th,
+.inline-group .tabular td {
+  min-width: 120px;
+  box-sizing: border-box;
+  vertical-align: middle;
+  text-align: start;
+}
+.inline-group .tabular thead th { white-space: nowrap; }
+.inline-group .tabular td.original,
+.inline-group .tabular th.original { width: 64px; min-width: 64px; }
+.inline-group .tabular td.delete,
+.inline-group .tabular th.delete { width: 80px; min-width: 80px; }
+.inline-group .tabular tbody td input:not([type="checkbox"]),
+.inline-group .tabular tbody td select,
+.inline-group .tabular tbody td textarea,
+.inline-group .tabular tbody td .related-widget-wrapper {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 18rem;
+}
+.inline-group .tabular tbody td input[type="checkbox"] {
+  width: auto;
+  min-width: 0;
+  min-height: 24px;
+}
 .inline-group thead th {
   background: var(--cusin-surface-2);
   color: var(--cusin-text);
@@ -1807,7 +1848,77 @@ a.cusin-btn--ghost:active { color: var(--cusin-text); }
   }
   .vTextField, .vLargeTextField, .vURLField { width: 100%; }
   img { max-width: 100%; }
+  /* Tabular inlines keep their semantic headers offscreen, while each data
+     row becomes a labelled card instead of a six-column strip. */
   .inline-group .tabular { overflow-x: auto; }
+  .inline-group .tabular table,
+  .inline-group .tabular tbody,
+  .inline-group .tabular tfoot { display: block; width: 100%; }
+  .inline-group .tabular table { min-width: 0; border-spacing: 0; }
+  .inline-group .tabular thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+  .inline-group .tabular tbody tr.form-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+    margin: 0 0 10px;
+    padding: 8px 4px;
+    border: 1px solid var(--cusin-border);
+    border-radius: var(--cusin-radius);
+    background: var(--cusin-surface);
+    box-shadow: var(--cusin-shadow);
+  }
+  .inline-group .tabular tbody tr.form-row > td,
+  .inline-group .tabular tbody tr.form-row > th {
+    display: grid;
+    grid-template-columns: minmax(88px, 35%) minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    padding: 7px 8px;
+    border: 0;
+    border-bottom: 1px solid var(--cusin-border);
+    background: transparent;
+    text-align: start;
+    white-space: normal;
+  }
+  .inline-group .tabular tbody tr.form-row > :last-child { border-bottom: 0; }
+  .inline-group .tabular tbody tr.form-row > td::before,
+  .inline-group .tabular tbody tr.form-row > th::before {
+    content: attr(data-label);
+    min-width: 0;
+    color: var(--cusin-muted);
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.6;
+  }
+  .inline-group .tabular tbody tr.form-row > td.original,
+  .inline-group .tabular tbody tr.form-row > td.hidden { display: none !important; }
+  .inline-group .tabular tbody tr.form-row > td.delete { grid-template-columns: minmax(0, 1fr); }
+  .inline-group .tabular tbody tr.form-row > td:empty::before { content: none; }
+  .inline-group .tabular tbody tr.add-row { display: block; width: 100%; margin: 0; }
+  .inline-group .tabular tbody tr.add-row > td { display: block; width: 100%; padding: 8px; }
+  .inline-group .tabular tbody tr.add-row > td::before { content: none; }
+  .inline-group .tabular tbody td input:not([type="checkbox"]),
+  .inline-group .tabular tbody td select,
+  .inline-group .tabular tbody td textarea,
+  .inline-group .tabular tbody td .related-widget-wrapper,
+  .inline-group .tabular tbody td .select2-container { width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; }
+  .inline-group .tabular tbody td input[type="checkbox"] { width: auto; min-width: 0; }
+  .cusin-gallery { grid-template-columns: minmax(0, 1fr); }
+  .cusin-gallery-card { box-sizing: border-box; width: 100%; min-width: 0; max-width: 100%; }
 
   /* 44px tap targets for the controls that were smaller on phones */
   .paginator a:link, .paginator a:visited, .paginator .this-page {
@@ -3060,4 +3171,163 @@ body.cusin-admin #toolbar form input {
 }
 body.cusin-admin #changelist .actions span.action-counter {
   font-size: max(14px, 1em);
+}
+
+/* Follow-up 2: inline tables share a single fixed grid for header/body cells.
+   Keep the scrollport inside its rounded card and override the global 240px
+   accessibility floor on table structure; controls still receive a useful
+   minimum width and the table scrolls rather than squeezing columns. */
+body.cusin-admin #container .inline-group .tabular {
+  display: block;
+  direction: ltr;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+body.cusin-admin #container .inline-group .tabular > fieldset.module {
+  overflow: visible;
+}
+body.cusin-admin #container .inline-group .tabular table {
+  display: table;
+  direction: rtl;
+  width: max-content;
+  min-width: 100%;
+  max-width: none;
+  table-layout: auto;
+}
+body.cusin-admin #container .inline-group .tabular th,
+body.cusin-admin #container .inline-group .tabular td {
+  min-width: 120px;
+  max-width: none;
+  box-sizing: border-box;
+  vertical-align: middle;
+}
+body.cusin-admin #container .inline-group .tabular th.original,
+body.cusin-admin #container .inline-group .tabular td.original {
+  width: 64px;
+  min-width: 64px;
+}
+body.cusin-admin #container .inline-group .tabular th.delete,
+body.cusin-admin #container .inline-group .tabular td.delete {
+  width: 80px;
+  min-width: 80px;
+}
+body.cusin-admin #container .inline-group .tabular td input:not([type="checkbox"]),
+body.cusin-admin #container .inline-group .tabular td select,
+body.cusin-admin #container .inline-group .tabular td textarea,
+body.cusin-admin #container .inline-group .tabular td .related-widget-wrapper,
+body.cusin-admin #container .inline-group .tabular td .select2-container {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 18rem;
+}
+body.cusin-admin #container .inline-group .tabular td input[type="checkbox"] {
+  width: auto;
+  min-width: 0;
+}
+body.cusin-admin #container .cusin-gallery,
+body.cusin-admin #container .cusin-gallery-card,
+body.cusin-admin #container .cusin-gallery-field {
+  min-width: 0;
+  max-width: 100%;
+}
+body.cusin-admin #container .cusin-gallery-field input[type="text"],
+body.cusin-admin #container .cusin-gallery-field input[type="number"],
+body.cusin-admin #container .cusin-gallery-field input[type="file"] {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+@media (max-width: 767px) {
+  body.cusin-admin #container .inline-group .tabular table,
+  body.cusin-admin #container .inline-group .tabular tbody,
+  body.cusin-admin #container .inline-group .tabular tfoot {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+  body.cusin-admin #container .inline-group .tabular thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    min-width: 0;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+  body.cusin-admin #container .inline-group .tabular tbody tr.form-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    margin: 0 0 10px;
+    padding: 8px 4px;
+    border: 1px solid var(--cusin-border);
+    border-radius: var(--cusin-radius);
+    background: var(--cusin-surface);
+    box-shadow: var(--cusin-shadow);
+  }
+  body.cusin-admin #container .inline-group .tabular tbody tr.form-row > td,
+  body.cusin-admin #container .inline-group .tabular tbody tr.form-row > th {
+    display: grid;
+    grid-template-columns: minmax(88px, 35%) minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    padding: 7px 8px;
+    border: 0;
+    border-bottom: 1px solid var(--cusin-border);
+    background: transparent;
+    text-align: start;
+    white-space: normal;
+  }
+  body.cusin-admin #container .inline-group .tabular tbody tr.form-row > :last-child { border-bottom: 0; }
+  body.cusin-admin #container .inline-group .tabular tbody tr.form-row > td::before,
+  body.cusin-admin #container .inline-group .tabular tbody tr.form-row > th::before {
+    content: attr(data-label);
+    min-width: 0;
+    color: var(--cusin-muted);
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.6;
+  }
+  body.cusin-admin #container .inline-group .tabular tbody tr.form-row > td.original,
+  body.cusin-admin #container .inline-group .tabular tbody tr.form-row > td.hidden { display: none !important; }
+  body.cusin-admin #container .inline-group .tabular tbody tr.form-row > td.delete { grid-template-columns: minmax(0, 1fr); }
+  body.cusin-admin #container .inline-group .tabular tbody tr.form-row > td:empty::before { content: none; }
+  body.cusin-admin #container .inline-group .tabular tbody tr.add-row { display: block; width: 100%; margin: 0; }
+  body.cusin-admin #container .inline-group .tabular tbody tr.add-row > td { display: block; width: 100%; min-width: 0; padding: 8px; }
+  body.cusin-admin #container .inline-group .tabular tbody tr.add-row > td::before { content: none; }
+  body.cusin-admin #container .inline-group .tabular tbody td input:not([type="checkbox"]),
+  body.cusin-admin #container .inline-group .tabular tbody td select,
+  body.cusin-admin #container .inline-group .tabular tbody td textarea,
+  body.cusin-admin #container .inline-group .tabular tbody td .related-widget-wrapper,
+  body.cusin-admin #container .inline-group .tabular tbody td .select2-container {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  body.cusin-admin #container .inline-group .tabular tbody td input[type="checkbox"] {
+    width: auto;
+    min-width: 0;
+  }
+  body.cusin-admin #container .inline-group .tabular tbody tr.form-row .selector select { max-height: 96px; }
+  body.cusin-admin #container .cusin-gallery { grid-template-columns: minmax(0, 1fr); }
+  body.cusin-admin #container .cusin-gallery-card { box-sizing: border-box; width: 100%; }
 }
