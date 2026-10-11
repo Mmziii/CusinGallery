@@ -683,6 +683,21 @@ a.deletelink, .inline-deletelink {
   border-radius: var(--cusin-radius-sm);
 }
 a.deletelink:hover { background: var(--delete-button-hover-bg); }
+/* stock forms.css/base.css set white (0,2,1) and #CC3434 / #993333 (0,2,2) on
+   these links. Each state is repeated at a higher specificity, with the
+   danger text token (7.2:1 on the normal tint, 6.2:1 on the hover tint). */
+.submit-row a.deletelink,
+.submit-row a.deletelink:link,
+.submit-row a.deletelink:visited,
+.submit-row a.deletelink:hover,
+.submit-row a.deletelink:focus,
+.submit-row a.deletelink:active {
+  color: var(--cg-danger-text);
+  background: var(--delete-button-bg);
+}
+.submit-row a.deletelink:hover,
+.submit-row a.deletelink:focus,
+.submit-row a.deletelink:active { background: var(--delete-button-hover-bg); }
 
 /* delete confirmation pages */
 .delete-confirmation .delete-confirmation-warning,
@@ -725,8 +740,9 @@ a.deletelink:hover { background: var(--delete-button-hover-bg); }
   margin: 0 0 14px;
 }
 /* A table wider than its column scrolls inside this box on desktop, so the
-   page itself never scrolls sideways. (The sticky header needs the page to
-   scroll vertically; a scroll box here gives that up, see the report.) */
+   page itself never scrolls sideways. The header is a normal first row of
+   this box: a sticky header would sit on top of the first body rows once the
+   box is a scroll container (follow-up 3, item 1). */
 #changelist .results { overflow-x: auto; }
 #result_list, #changelist table {
   width: 100%;
@@ -734,9 +750,7 @@ a.deletelink:hover { background: var(--delete-button-hover-bg); }
   background: transparent;
 }
 #result_list thead th {
-  position: sticky;
-  top: var(--cusin-sticky-top);
-  z-index: 20;
+  position: static;
   background: var(--cg-green-dark);
   color: var(--cg-ivory);
   font-weight: 700;
@@ -1064,9 +1078,12 @@ body.login #footer { display: none; }
   gap: 14px;
 }
 .cusin-kpi-card { padding: 14px 16px; }
+/* a tile needs ~180px for a 9-digit amount such as ۱۲۳٬۴۵۶٬۷۸۹ تومان on one
+   line (follow-up 3, item 6). Narrower cards stack the tiles, so no value is
+   wrapped or clipped at 1280 or 1440. */
 .cusin-kpi-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
   gap: 10px 14px;
 }
 .cusin-kpi {
@@ -1374,6 +1391,10 @@ body.login #footer { display: none; }
 }
 .cusin-summary-title {
   display: flex;
+  flex-wrap: wrap;
+  /* a long order number must break instead of pushing the card wider than
+     a 320px phone (follow-up 3, item 5) */
+  overflow-wrap: anywhere;
   align-items: center;
   gap: 8px;
   margin: 0 0 12px;
@@ -1492,6 +1513,19 @@ body.login #footer { display: none; }
 }
 .cusin-btn--ghost:hover { border-color: var(--cg-olive); color: var(--cg-green-mid); background: var(--cusin-surface-2); }
 .cusin-btn--sm { min-height: 38px; padding: 5px 14px; font-size: 0.8125rem; }
+/* The buttons above are one class each. On an <a>, stock `a:link, a:visited`
+   (0,1,1) and `a:hover` beat them, so the link text turned olive-on-dark
+   (1.6:1). Each state is repeated on <a> at 0,2,1 or more, so every
+   .cusin-btn--* keeps its own text colour (follow-up 3, item 3). */
+a.cusin-btn:link, a.cusin-btn:visited, a.cusin-btn:hover,
+a.cusin-btn:focus, a.cusin-btn:active,
+a.cusin-btn--danger:link, a.cusin-btn--danger:visited,
+a.cusin-btn--danger:hover, a.cusin-btn--danger:focus { color: #fff; }
+a.cusin-btn--dark:link, a.cusin-btn--dark:visited, a.cusin-btn--dark:hover,
+a.cusin-btn--dark:focus, a.cusin-btn--dark:active { color: var(--cg-gold); }
+a.cusin-btn--ghost:link, a.cusin-btn--ghost:visited { color: var(--cusin-text); }
+a.cusin-btn--ghost:hover, a.cusin-btn--ghost:focus,
+a.cusin-btn--ghost:active { color: var(--cusin-text); }
 
 /* --------------------------------------------------------------------------
    13. Product form enhancements (B4d) + price-percent action pages
