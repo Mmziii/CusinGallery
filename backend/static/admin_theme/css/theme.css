@@ -1653,32 +1653,67 @@ body.login #footer { display: none; }
 .cusin-palette-foot span { display: inline-flex; align-items: center; gap: 4px; }
 
 /* --------------------------------------------------------------------------
-   15. Custom existing pages (Excel tools, imports) — harmonize only
+   15. Product list: Excel actions panel (follow-up 2)
+   Styled only here, with theme tokens (the template has no inline style).
+   The panel sits above the object tools and the search card. Every label
+   keeps at least 4.5:1 against its own background (see test_layout_regressions).
    -------------------------------------------------------------------------- */
 .cusin-excel-actions {
   display: flex;
-  gap: 8px;
   flex-wrap: wrap;
-  margin-top: 10px;
+  gap: 10px 22px;
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  background: var(--cusin-surface-2);
+  border: 1px solid var(--cusin-border);
+  border-radius: var(--cusin-radius);
 }
-.cusin-excel-actions a, .cusin-excel-actions button {
+.cusin-excel-actions__item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 100%;
+  min-width: 0;
+}
+/* The `a.` prefix matters: the generic link colours of the theme must not
+   win over the button colours (the light-pill bug of follow-up 2). */
+.cusin-excel-actions a.cusin-excel-actions__button,
+.cusin-excel-actions a.cusin-excel-actions__button:visited {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
   min-height: 40px;
-  padding: 6px 14px;
+  max-width: 100%;
+  padding: 8px 16px;
   border-radius: 999px;
-  border: 1px solid var(--cusin-border-strong);
-  background: var(--cusin-surface);
-  color: var(--cg-green-mid);
-  font-weight: 700;
+  border: 0;
+  background: var(--cg-olive);
+  color: var(--cusin-surface);
   font-size: 0.8125rem;
+  font-weight: 700;
   text-decoration: none;
-  transition: all 160ms var(--cusin-ease);
+  transition: background 160ms var(--cusin-ease);
 }
-.cusin-excel-actions a:hover, .cusin-excel-actions button:hover {
-  border-color: var(--cg-olive);
-  background: var(--cusin-accent-bg);
+.cusin-excel-actions a.cusin-excel-actions__button:hover,
+.cusin-excel-actions a.cusin-excel-actions__button:focus-visible {
+  background: var(--cg-olive-hover);
+  color: var(--cusin-surface);
+}
+.cusin-excel-actions__templates {
+  font-size: 0.75rem;
+  color: var(--cusin-muted);
+}
+.cusin-excel-actions__templates a {
+  color: var(--cusin-link);
+  font-weight: 600;
+}
+.cusin-excel-actions__templates a:hover { text-decoration: underline; }
+.cusin-excel-actions__templates code {
+  padding: 0 4px;
+  border: 1px solid var(--cusin-border);
+  border-radius: 4px;
+  background: var(--cusin-surface);
+  color: var(--cusin-text);
 }
 
 /* --------------------------------------------------------------------------

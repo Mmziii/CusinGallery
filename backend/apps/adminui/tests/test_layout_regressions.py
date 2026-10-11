@@ -74,3 +74,96 @@ class DashboardWidthTests(TestCase):
         response = self.client.get(reverse("admin:index"))
         self.assertEqual(response.status_code, 200)
         self.assertRegex(response.content.decode("utf-8"), r'<body class="[^"]*\bdashboard\b')
+
+
+PRODUCT_CHANGELIST_TEMPLATE = (
+    BASE / "apps" / "products" / "templates" / "admin" / "products" / "product_change_list.html"
+)
+
+
+def _resolve_light_tokens(css_text):
+    """Light-palette custom properties, with var() references resolved."""
+    light = css_text[: css_text.index("@media (prefers-color-scheme: dark)")]
+    raw = {}
+    for name, value in re.findall(r"(--[a-z0-9-]+)\s*:\s*([^;]+);", light):
+        raw.setdefault(name, value.strip())
+
+    def resolve(value, depth=0):
+        match = re.fullmatch(r"var\((--[a-z0-9-]+)\)", value)
+        if match and depth < 10 and match.group(1) in raw:
+            return resolve(raw[match.group(1)], depth + 1)
+        return value
+
+    return {name: resolve(value) for name, value in raw.items()}
+
+
+class ExcelActionsTests(TestCase):
+    """Item 2: the four Excel actions are styled once, in theme.css, with theme
+    tokens; the product changelist shows them once; each label has 4.5:1."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.css_text = THEME_CSS.read_text(encoding="utf-8")
+        cls.tokens = _resolve_light_tokens(cls.css_text)
+
+    def test_template_has_no_inline_style_block(self):
+        source = PRODUCT_CHANGELIST_TEMPLATE.read_text(encoding="utf-8")
+        self.assertNotIn("<style", source)
+        self.assertNotIn("!important", source)
+
+    def test_button_background_and_label_colours_come_from_theme_tokens(self):
+        rules = _base_rules()
+        button = rules[".cusin-excel-actions a.cusin-excel-actions__button"]
+        self.assertEqual(button["background"], "var(--cg-olive)")
+        self.assertEqual(button["color"], "var(--cusin-surface)")
+        hover = rules[".cusin-excel-actions a.cusin-excel-actions__button:hover"]
+        self.assertEqual(hover["background"], "var(--cg-olive-hover)")
+
+    def test_every_excel_label_meets_4_5_to_1_against_its_background(self):
+        from .test_contrast import contrast
+
+        tokens = self.tokens
+        rules = _base_rules()
+        button = rules[".cusin-excel-actions a.cusin-excel-actions__button"]
+        hover = rules[".cusin-excel-actions a.cusin-excel-actions__button:hover"]
+        panel = rules[".cusin-excel-actions"]
+        templates = rules[".cusin-excel-actions__templates"]
+        link = rules[".cusin-excel-actions__templates a"]
+
+        def colour(value):
+            resolved = tokens.get(value[4:-1]) if value.startswith("var(") else value
+            self.assertIsNotNone(resolved, f"unresolved colour {value}")
+            return resolved
+
+        pairs = {
+            "button label": (colour(button["color"]), colour(button["background"])),
+            "button hover label": (colour(hover["color"]), colour(hover["background"])),
+            "template help text": (colour(templates["color"]), colour(panel["background"])),
+            "template link": (colour(link["color"]), colour(panel["background"])),
+        }
+        for label, (fg, bg) in pairs.items():
+            with self.subTest(label=label):
+                self.assertGreaterEqual(contrast(fg, bg), 4.5, f"{label}: {fg} on {bg}")
+
+    @override_settings(**PLAIN_STATIC)
+    def test_product_changelist_renders_each_excel_action_once(self):
+        self.client.force_login(make_superuser())
+        response = self.client.get(reverse("admin:products_product_changelist"))
+        html = response.content.decode("utf-8")
+        self.assertEqual(html.count('class="cusin-excel-actions__button"'), 4)
+        for name in ("products_product_import", "products_product_export", "products_product_image_import"):
+            with self.subTest(url_name=name):
+                self.assertIn(f'href="{reverse("admin:" + name)}', html)
+
+    @override_settings(**PLAIN_STATIC)
+    def test_object_tools_keep_only_the_add_link(self):
+        self.client.force_login(make_superuser())
+        html = self.client.get(reverse("admin:products_product_changelist")).content.decode("utf-8")
+        match = re.search(r'<ul class="object-tools">(.*?)</ul>', html, re.S)
+        self.assertIsNotNone(match, "product changelist must render object tools")
+        tools = match.group(1)
+        self.assertIn('class="addlink"', tools)
+        self.assertEqual(tools.count("<li>"), 1)
+        for fragment in ("import", "export", "image-import"):
+            self.assertNotIn(fragment, tools)
