@@ -13,3 +13,10 @@ class AdminuiConfig(AppConfig):
     name = "apps.adminui"
     verbose_name = "ابزارهای پنل مدیریت"
     default_auto_field = "django.db.models.BigAutoField"
+
+    def ready(self):
+        # Persian titles for the django-otp admins (see third_party_admin.py).
+        # Runs after django.contrib.admin's autodiscover, which registers them.
+        from .third_party_admin import register_persian_otp_admins
+
+        register_persian_otp_admins()

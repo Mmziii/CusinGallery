@@ -118,6 +118,13 @@ class OrderQueueFilter(admin.SimpleListFilter):
         return queryset.filter(predicate)
 
 
+def _jalali_stamp(value) -> str:
+    """Jalali date and time in the active timezone, Persian digits (B2 helper)."""
+    if value is None:
+        return "—"
+    return format_jalali_datetime(timezone.localtime(value))
+
+
 def _whatsapp_link(phone: str) -> str:
     """Best-effort wa.me link for an Iranian phone snapshot ('' if unknown)."""
     digits = "".join(ch for ch in phone or "" if ch.isdigit())
@@ -207,6 +214,14 @@ class OrderAdmin(admin.ModelAdmin):
     @admin.display(description="روش ارسال")
     def shipping_method_label(self, obj):
         return shipping_method_label(obj.shipping_method)
+
+    @admin.display(description="تاریخ ایجاد")
+    def created_at_detail(self, obj):
+        return _jalali_stamp(obj.created_at)
+
+    @admin.display(description="تاریخ ویرایش")
+    def updated_at_detail(self, obj):
+        return _jalali_stamp(obj.updated_at)
     search_fields = ("order_number", "user__username", "user__email", "shipping_phone", "tracking_code")
     autocomplete_fields = ("user", "coupon")
     date_hierarchy = "created_at"
@@ -214,7 +229,7 @@ class OrderAdmin(admin.ModelAdmin):
         # Gift-wrap values are checkout SNAPSHOTs (Part 2): visible in
         # admin but never editable after the fact.
         "gift_wrap", "gift_wrap_fee", "gift_message",
-        "order_number", "created_at", "updated_at", "stock_restored_at",
+        "order_number", "created_at_detail", "updated_at_detail", "stock_restored_at",
         # Stamped by the system when a refund is recorded, never typed.
         "refunded_at",
         # Totals snapshot
@@ -223,8 +238,8 @@ class OrderAdmin(admin.ModelAdmin):
         "shipping_recipient_name", "shipping_phone", "shipping_province",
         "shipping_city", "shipping_address", "shipping_postal_code",
         "shipping_unit", "shipping_building_number",
-        # Shipping method + delivery window snapshot
-        "shipping_method", "estimated_delivery_min", "estimated_delivery_max",
+        # Shipping method (shown as its Persian label) + delivery window snapshot
+        "shipping_method_label", "estimated_delivery_min", "estimated_delivery_max",
     )
     inlines = [OrderItemInline]
     actions = ["export_orders_csv"]
@@ -232,9 +247,9 @@ class OrderAdmin(admin.ModelAdmin):
 
     fieldsets = (
         (None, {"fields": ("order_number", "user", "status", "payment_status", "coupon")}),
-        ("Fulfilment", {"fields": ("tracking_code", "stock_restored_at")}),
-        ("Totals", {"fields": ("subtotal", "discount_amount", "shipping_cost", "total")}),
-        ("Refund", {
+        ("ارسال و پیگیری", {"fields": ("tracking_code", "stock_restored_at")}),
+        ("جمع‌ها", {"fields": ("subtotal", "discount_amount", "shipping_cost", "total")}),
+        ("بازپرداخت", {
             "fields": ("refund_status", "refund_amount", "refund_reference", "refunded_at"),
             "description": (
                 "بازپرداخت وجه دستی است (از پنل درگاه انجام می‌شود). لغو یا مرجوع کردن "
@@ -243,16 +258,16 @@ class OrderAdmin(admin.ModelAdmin):
                 "مرجع/یادداشت آن را در فیلد یادداشت اضافه کنید (بدون یادداشت ثبت نمی‌شود)."
             ),
         }),
-        ("Shipping address", {
+        ("نشانی ارسال", {
             "fields": (
                 "shipping_recipient_name", "shipping_phone", "shipping_province",
                 "shipping_city", "shipping_address", "shipping_postal_code",
                 "shipping_unit", "shipping_building_number",
             ),
         }),
-        ("Shipping method", {"fields": ("shipping_method", "estimated_delivery_min", "estimated_delivery_max")}),
-        ("Gift wrapping (Part 2)", {"fields": ("gift_wrap", "gift_wrap_fee", "gift_message")}),
-        ("Timestamps", {"fields": ("created_at", "updated_at")}),
+        ("روش ارسال", {"fields": ("shipping_method_label", "estimated_delivery_min", "estimated_delivery_max")}),
+        ("بسته‌بندی هدیه", {"fields": ("gift_wrap", "gift_wrap_fee", "gift_message")}),
+        ("زمان‌ها", {"fields": ("created_at_detail", "updated_at_detail")}),
     )
 
     def has_add_permission(self, request):

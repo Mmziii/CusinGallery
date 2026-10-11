@@ -26,10 +26,10 @@ class CouponAdmin(admin.ModelAdmin):
     actions = ["activate_coupons", "deactivate_coupons"]
     fieldsets = (
         (None, {"fields": ("code", "discount_type", "is_active")}),
-        ("Value", {"fields": ("percentage_value", "fixed_value", "maximum_discount_amount")}),
-        ("Conditions", {"fields": ("minimum_order_amount", "applicable_products", "applicable_categories")}),
-        ("Validity", {"fields": ("start_date", "expiration_date")}),
-        ("Usage limits", {"fields": ("usage_limit", "per_user_usage_limit")}),
+        ("مقدار", {"fields": ("percentage_value", "fixed_value", "maximum_discount_amount")}),
+        ("شرایط", {"fields": ("minimum_order_amount", "applicable_products", "applicable_categories")}),
+        ("اعتبار", {"fields": ("start_date", "expiration_date")}),
+        ("محدودیت استفاده", {"fields": ("usage_limit", "per_user_usage_limit")}),
     )
 
     def get_queryset(self, request):

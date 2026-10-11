@@ -79,7 +79,7 @@ class PaymentAdmin(admin.ModelAdmin):
     )
     fieldsets = (
         (None, {"fields": ("order", "amount", "status")}),
-        ("Gateway", {
+        ("درگاه پرداخت", {
             "fields": (
                 "gateway", "gateway_transaction_id", "gateway_ref_id",
                 # Receipt data captured from the gateway's verify answer
@@ -90,7 +90,7 @@ class PaymentAdmin(admin.ModelAdmin):
                 "failure_reason",
             ),
         }),
-        ("Timestamps", {"fields": ("paid_at", "created_at", "updated_at")}),
+        ("زمان‌ها", {"fields": ("paid_at", "created_at", "updated_at")}),
     )
 
     def order_number(self, obj):

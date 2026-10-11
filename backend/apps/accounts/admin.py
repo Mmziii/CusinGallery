@@ -32,7 +32,7 @@ from .models import Address, User
 
 class UserAdmin(DjangoUserAdmin):
     fieldsets = DjangoUserAdmin.fieldsets + (
-        ("Contact", {"fields": ("phone",)}),
+        ("تماس", {"fields": ("phone",)}),
     )
     list_display = DjangoUserAdmin.list_display + (
         "phone", "orders_count", "date_joined_jalali",
