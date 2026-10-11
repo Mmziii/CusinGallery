@@ -123,9 +123,9 @@ class DeleteLinkContrastTests(SimpleTestCase):
 
 
 class PrintButtonContrastTests(SimpleTestCase):
-    """Item 3: `a.cusin-btn--dark` (print) rendered #4a5a27 on #2f3a18 (1.6:1).
-    Stock base.css `a:link, a:visited` (0,1,1) beat the one-class `.cusin-btn--*`
-    text colours on every <a>. Each variant is repeated on <a> for each state."""
+    """The print action is now a neutral white control with near-black text.
+    Stock base.css `a:link, a:visited` (0,1,1) beats one-class button rules
+    on anchors, so every state must repeat the text color at higher specificity."""
 
     ANCHOR_STATES = (":link", ":visited", ":hover", ":focus")
 
@@ -137,27 +137,27 @@ class PrintButtonContrastTests(SimpleTestCase):
                     self.assertIn(selector, _base_rules())
                     self.assertGreater(_specificity(selector), STOCK_A_LINK)
 
-    def test_print_button_text_is_gold_in_every_state(self):
+    def test_print_button_text_is_near_black_in_every_state(self):
         rules = _base_rules()
         for state in self.ANCHOR_STATES:
             selector = f"a.cusin-btn--dark{state}"
             with self.subTest(selector=selector):
-                self.assertEqual(rules[selector]["color"], "var(--cg-gold)")
+                self.assertEqual(rules[selector]["color"], "var(--cusin-text)")
 
-    def test_print_button_gold_meets_4_5_to_1_in_every_state(self):
+    def test_print_button_text_meets_aa_in_every_state(self):
         tokens = _tokens()
         rules = _base_rules()
-        gold = _colour(tokens, rules["a.cusin-btn--dark:link"]["color"])
+        text = _colour(tokens, rules["a.cusin-btn--dark:link"]["color"])
         normal_bg = _colour(tokens, rules[".cusin-btn--dark"]["background"])
         hover_bg = _colour(tokens, rules[".cusin-btn--dark:hover"]["background"])
         for label, bg in (("normal", normal_bg), ("hover", hover_bg), ("focus", normal_bg)):
             with self.subTest(state=label):
-                self.assertGreaterEqual(contrast(gold, bg), 4.5, f"{gold} on {bg}")
+                self.assertGreaterEqual(contrast(text, bg), 4.5, f"{text} on {bg}")
 
     def test_danger_and_ghost_anchors_keep_their_text_colour(self):
         tokens = _tokens()
         rules = _base_rules()
-        white = "#fff"
+        white = "#ffffff"
         danger_bg = _colour(tokens, rules[".cusin-btn--danger"]["background"])
         self.assertEqual(_colour(tokens, rules["a.cusin-btn--danger:link"]["color"]), white)
         self.assertGreaterEqual(contrast(white, danger_bg), 4.5)

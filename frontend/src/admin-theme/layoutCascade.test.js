@@ -108,13 +108,14 @@ describe("item 2: the delete link keeps the danger text colour", () => {
   });
 });
 
-describe("item 3: the print button text stays gold on an <a>", () => {
-  it("is gold on a link, not the stock link colour", () => {
+describe("item 3: the print button stays neutral and legible on an <a>", () => {
+  it("uses near-black text on the white surface instead of decorative gold", () => {
     const { style } = mountWith(
       `<a class="cusin-btn cusin-btn--dark" href="#">چاپ</a>`,
       1280,
     );
-    expect(style("a.cusin-btn--dark", "color")).toBe("var(--cg-gold)");
+    expect(style("a.cusin-btn--dark", "color")).toBe("var(--cusin-text)");
+    expect(style(".cusin-btn--dark", "background")).toBe("var(--cusin-surface)");
   });
 });
 

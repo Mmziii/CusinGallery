@@ -1,17 +1,18 @@
 {% load adminui_extras %}{% comment %}
-Grouped sidebar sections (A3), rendered by {% cusin_sidebar %} from the
-permission-filtered available_apps. Native <details>/<summary> keeps the
-collapse keyboard-accessible without JS; the active group starts open.
+Grouped sidebar sections rendered from permission-filtered available_apps.
+Native <details>/<summary> keeps the groups keyboard-accessible; theme.js
+remembers their open state per user without ever changing permissions.
 {% endcomment %}
 <div class="cusin-nav-groups">
 {% for group in sidebar_groups %}
-  <details class="cusin-nav-group{% if group.active %} is-active{% endif %}"{% if group.open %} open{% endif %}>
-    <summary>
+  <details class="cusin-nav-group{% if group.active %} is-active{% endif %}"
+           data-cusin-nav-group="{{ group.id }}"{% if group.open %} open{% endif %}>
+    <summary aria-controls="cusin-nav-{{ group.id }}" aria-expanded="{% if group.open %}true{% else %}false{% endif %}">
       {% cusin_icon group.icon %}
       <span class="cusin-nav-group-title">{{ group.title }}</span>
       {% cusin_icon "chevron-down" "cusin-icon cusin-nav-caret" %}
     </summary>
-    <ul>
+    <ul id="cusin-nav-{{ group.id }}">
       {% for model in group.models %}
       <li>
         <a href="{{ model.url }}" class="cusin-nav-link{% if model.active %} is-active{% endif %}"{% if model.active %} aria-current="page"{% endif %}>

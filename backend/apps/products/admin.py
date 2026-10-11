@@ -7,6 +7,7 @@ activate/deactivate/feature actions, and a changelist that shows a
 thumbnail, price and an at-a-glance stock warning.
 """
 from django import forms
+from django.conf import settings
 from django.contrib import admin, messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
@@ -338,7 +339,7 @@ class ProductAdmin(admin.ModelAdmin):
     list_display = (
         "thumbnail_column", "name", "sku", "category", "brand", "price",
         "compare_at_price", "stock_column", "stock_quantity",
-        "is_active", "is_featured",
+        "is_active", "is_featured", "storefront_data",
     )
     list_display_links = ("thumbnail_column", "name")
     list_editable = ("price", "compare_at_price", "stock_quantity", "is_active", "is_featured")
@@ -969,6 +970,16 @@ class ProductAdmin(admin.ModelAdmin):
         return image_or_placeholder_html(primary and (primary.thumbnail or primary.image))
 
     thumbnail_column.short_description = ""
+
+    @admin.display(description="", ordering="name")
+    def storefront_data(self, obj):
+        """Expose the existing public product URL to the row-action menu.
+
+        This empty presentation-only cell is hidden by the admin theme; it
+        neither changes routes nor grants access to the storefront.
+        """
+        store_url = f"{settings.FRONTEND_URL.rstrip('/')}/products/{obj.slug}/"
+        return format_html('<span data-cusin-store-url="{}" hidden></span>', store_url)
 
     def stock_column(self, obj):
         # Same Persian wording as before, now rendered with the theme's

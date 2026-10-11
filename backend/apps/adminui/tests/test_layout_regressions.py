@@ -83,7 +83,7 @@ PRODUCT_CHANGELIST_TEMPLATE = (
 
 def _resolve_light_tokens(css_text):
     """Light-palette custom properties, with var() references resolved."""
-    light = css_text[: css_text.index("@media (prefers-color-scheme: dark)")]
+    light = _without_media(_strip_comments(css_text))
     raw = {}
     for name, value in re.findall(r"(--[a-z0-9-]+)\s*:\s*([^;]+);", light):
         raw.setdefault(name, value.strip())

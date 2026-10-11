@@ -5,10 +5,9 @@ Lowest-risk overlay strategy:
 * every stock django.contrib.admin base.html block name is preserved, so
   ALL child templates (stock, django-otp, and this project's custom admin
   pages) keep working unchanged;
-* stock admin CSS (base.css / rtl.css / responsive.css / dark_mode.css) and
-  JS (theme.js, DateTimeShortcuts hooks via data-admin-utc-offset) stay
-  loaded -- theme.css layers brand styling on top instead of replacing the
-  widget machinery;
+* stock admin CSS (base.css / rtl.css / responsive.css) and date-widget
+  machinery stay loaded; the light theme overlays widgets without replacing
+  Django's form behavior;
 * the sidebar lives inside the stock {% block nav-sidebar %}, so pages that
   empty that block (login, otp login, popups) automatically hide it;
 * ADMIN_THEME_ENABLED=0 removes backend/templates from TEMPLATES["DIRS"]
@@ -18,11 +17,8 @@ Lowest-risk overlay strategy:
 <html lang="{{ LANGUAGE_CODE|default:"fa" }}" dir="{{ LANGUAGE_BIDI|yesno:'rtl,ltr,auto' }}">
 <head>
 <title>{% block title %}{% endblock %}</title>
+<meta name="color-scheme" content="light">
 <link rel="stylesheet" href="{% block stylesheet %}{% static "admin/css/base.css" %}{% endblock %}">
-{% block dark-mode-vars %}
-  <link rel="stylesheet" href="{% static "admin/css/dark_mode.css" %}">
-  <script src="{% static "admin/js/theme.js" %}"></script>
-{% endblock %}
 {% block extrastyle %}{% endblock %}
 {% if LANGUAGE_BIDI %}<link rel="stylesheet" href="{% block stylesheet_rtl %}{% static "admin/css/rtl.css" %}{% endblock %}">{% endif %}
 {% block extrahead %}{% endblock %}
@@ -37,7 +33,7 @@ Lowest-risk overlay strategy:
 </head>
 
 <body class="cusin-admin {% if is_popup %}popup {% endif %}{% block bodyclass %}{% endblock %}"
-  data-admin-utc-offset="{% now "Z" %}">
+  data-admin-utc-offset="{% now "Z" %}" data-cusin-user-id="{{ user.pk|default:'guest' }}">
 <a href="#content-start" class="skip-to-content-link">{% translate 'Skip to main content' %}</a>
 {% include "adminui/_sprite.html" %}
 <!-- Container -->
@@ -71,39 +67,39 @@ Lowest-risk overlay strategy:
           {% endif %}
           {% block usertools %}
           {% if has_permission %}
-          <div id="user-tools" class="cusin-usermenu">
-            <details data-cusin-menu>
-              <summary class="cusin-usermenu-summary">
-                {% cusin_icon "user" %}
-                {% block welcome-msg %}
-                  <span class="cusin-usermenu-name">{% firstof user.get_short_name user.get_username %}</span>
-                {% endblock %}
-                {% cusin_icon "chevron-down" "cusin-icon cusin-usermenu-caret" %}
-              </summary>
-              <div class="cusin-usermenu-pop">
-                {% block userlinks %}
-                  {% if cusin_frontend_url %}
-                    <a href="{{ cusin_frontend_url }}" target="_blank" rel="noopener">{% cusin_icon "external-link" %} مشاهدهٔ فروشگاه</a>
-                  {% elif site_url %}
-                    <a href="{{ site_url }}">{% cusin_icon "external-link" %} {% translate 'View site' %}</a>
+          <div id="user-tools" class="cusin-usermenu cusin-menu" data-cusin-menu>
+            <button type="button" class="cusin-usermenu-summary" id="cusin-user-menu-trigger"
+                    data-cusin-menu-trigger aria-haspopup="menu" aria-expanded="false"
+                    aria-controls="cusin-user-menu" aria-label="منوی کاربر">
+              {% cusin_icon "user" %}
+              {% block welcome-msg %}
+                <span class="cusin-usermenu-name">{% firstof user.get_short_name user.get_username %}</span>
+              {% endblock %}
+              {% cusin_icon "chevron-down" "cusin-icon cusin-usermenu-caret" %}
+            </button>
+            <div class="cusin-usermenu-pop cusin-menu-panel" id="cusin-user-menu"
+                 data-cusin-menu-panel role="menu" aria-labelledby="cusin-user-menu-trigger" hidden>
+              {% block userlinks %}
+                {% if cusin_frontend_url %}
+                  <a role="menuitem" href="{{ cusin_frontend_url }}" target="_blank" rel="noopener">{% cusin_icon "external-link" %} مشاهدهٔ فروشگاه</a>
+                {% elif site_url %}
+                  <a role="menuitem" href="{{ site_url }}">{% cusin_icon "external-link" %} مشاهدهٔ فروشگاه</a>
+                {% endif %}
+                {% if user.is_active and user.is_staff %}
+                  {% url 'django-admindocs-docroot' as docsroot %}
+                  {% if docsroot %}
+                    <a role="menuitem" href="{{ docsroot }}">{% cusin_icon "info" %} مستندات</a>
                   {% endif %}
-                  {% if user.is_active and user.is_staff %}
-                    {% url 'django-admindocs-docroot' as docsroot %}
-                    {% if docsroot %}
-                      <a href="{{ docsroot }}">{% cusin_icon "info" %} {% translate 'Documentation' %}</a>
-                    {% endif %}
-                  {% endif %}
-                  {% if user.has_usable_password %}
-                  <a href="{% url 'admin:password_change' %}">{% cusin_icon "lock" %} {% translate 'Change password' %}</a>
-                  {% endif %}
-                  <form id="logout-form" method="post" action="{% url 'admin:logout' %}">
-                    {% csrf_token %}
-                    <button type="submit">{% cusin_icon "logout" %} {% translate 'Log out' %}</button>
-                  </form>
-                  {% include "admin/color_theme_toggle.html" %}
-                {% endblock %}
-              </div>
-            </details>
+                {% endif %}
+                {% if user.has_usable_password %}
+                <a role="menuitem" href="{% url 'admin:password_change' %}">{% cusin_icon "lock" %} تغییر گذرواژه</a>
+                {% endif %}
+                <form id="logout-form" method="post" action="{% url 'admin:logout' %}">
+                  {% csrf_token %}
+                  <button role="menuitem" type="submit">{% cusin_icon "logout" %} خروج از پنل</button>
+                </form>
+              {% endblock %}
+            </div>
           </div>
           {% endif %}
           {% endblock %}
@@ -193,13 +189,7 @@ Lowest-risk overlay strategy:
 </div>
 {% endif %}
 
-<!-- SVGs (stock dark-mode toggle symbols) -->
-<svg xmlns="http://www.w3.org/2000/svg" class="base-svgs">
-  <symbol viewBox="0 0 24 24" width="1.5rem" height="1.5rem" id="icon-auto"><path d="M0 0h24v24H0z" fill="currentColor"/><path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10zm0-2V4a8 8 0 1 0 0 16z"/></symbol>
-  <symbol viewBox="0 0 24 24" width="1.5rem" height="1.5rem" id="icon-moon"><path d="M0 0h24v24H0z" fill="currentColor"/><path d="M10 7a7 7 0 0 0 12 4.9v.1c0 5.523-4.477 10-10 10S2 17.523 2 12 6.477 2 12 2h.1A6.979 6.979 0 0 0 10 7zm-6 5a8 8 0 0 0 15.062 3.762A9 9 0 0 1 8.238 4.938 7.999 7.999 0 0 0 4 12z"/></symbol>
-  <symbol viewBox="0 0 24 24" width="1.5rem" height="1.5rem" id="icon-sun"><path d="M0 0h24v24H0z" fill="currentColor"/><path d="M12 18a6 6 0 1 1 0-12 6 6 0 0 1 0 12zm0-2a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM11 1h2v3h-2V1zm0 19h2v3h-2v-3zM3.515 4.929l1.414-1.414L7.05 5.636 5.636 7.05 3.515 4.93zM16.95 18.364l1.414-1.414 2.121 2.121-1.414 1.414-2.121-2.121zm2.121-14.85l1.414 1.415-2.121 2.121-1.414-1.414 2.121-2.121zM5.636 16.95l1.414 1.414-2.121 2.121-1.414-1.414 2.121-2.121zM23 11v2h-3v-2h3zM4 11v2H1v-2h3z"/></symbol>
-</svg>
-<!-- END SVGs -->
+
 <script src="{% static "admin_theme/js/theme.js" %}" defer></script>
 {% block extrabody %}{% endblock extrabody %}
 </body>

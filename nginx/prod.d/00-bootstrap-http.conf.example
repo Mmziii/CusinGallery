@@ -41,8 +41,18 @@ server {
         root /var/www/certbot;
     }
 
+    # Even during the HTTP bootstrap, only collectstatic's content-hashed
+    # names receive a long cache lifetime. Unhashed admin URLs are revalidated.
+    location ~* ^/static/(.+\.[a-f0-9]{12}\.[^/]+)$ {
+        alias /app/staticfiles/$1;
+        expires 30d;
+        add_header Cache-Control "public, immutable" always;
+    }
+
     location /static/ {
         alias /app/staticfiles/;
+        expires off;
+        add_header Cache-Control "no-cache, must-revalidate" always;
     }
 
     location /media/ {

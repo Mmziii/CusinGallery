@@ -139,6 +139,17 @@ class ProductionSettingsAuditTests(TestCase):
             prod.EMAIL_BACKEND, "django.core.mail.backends.smtp.EmailBackend"
         )
 
+    def test_production_staticfiles_storage_uses_a_manifest(self):
+        prod = self._production()
+        self.assertEqual(
+            prod.STORAGES["staticfiles"]["BACKEND"],
+            "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        )
+        self.assertEqual(
+            prod.STORAGES["default"]["BACKEND"],
+            "django.core.files.storage.FileSystemStorage",
+        )
+
 
 class StructuredLoggingTests(TestCase):
     def setUp(self):

@@ -37,6 +37,7 @@ venv/
 
 # --- Node / frontend --------------------------------------------------------------
 frontend/node_modules/
+e2e/node_modules/
 frontend/dist/
 frontend/.vite/
 npm-debug.log*

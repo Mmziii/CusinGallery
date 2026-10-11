@@ -80,7 +80,7 @@ AND without the visual theme (ADMIN_THEME_ENABLED=False).
     </div>
 
     {% if quick_can_change and quick_allowed %}
-    <form method="post" action="{{ quick_status_url }}" class="cusin-quick-form">
+    <form method="post" action="{{ quick_status_url }}" class="cusin-quick-form" id="cusin-quick-status-form">
       {% csrf_token %}
       <p class="cusin-quick-title">{% cusin_icon "zap" %} تغییر سریع وضعیت <span class="cusin-muted">(فقط انتقال‌های مجاز گردش کار)</span></p>
       {% if quick_needs_tracking %}
@@ -90,13 +90,22 @@ AND without the visual theme (ADMIN_THEME_ENABLED=False).
                placeholder="مثلاً 1234567890" autocomplete="off">
       </div>
       {% endif %}
-      <div class="cusin-quick-actions">
-        {% for action in quick_allowed %}
-        <button type="submit" name="next_status" value="{{ action.value }}"
-                class="cusin-btn{% if action.tone == 'danger' %} cusin-btn--danger{% endif %}">
-          {% cusin_icon action.icon %} {{ action.label }}
+      <div class="cusin-quick-actions cusin-menu" data-cusin-menu>
+        <button type="button" class="cusin-btn" data-cusin-menu-trigger
+                aria-haspopup="menu" aria-expanded="false" aria-controls="cusin-order-status-menu">
+          تغییر وضعیت سفارش {% cusin_icon "chevron-down" %}
         </button>
-        {% endfor %}
+        <div class="cusin-menu-panel cusin-status-menu" id="cusin-order-status-menu"
+             data-cusin-menu-panel role="menu" aria-label="تغییر وضعیت سفارش" hidden>
+          {% for action in quick_allowed %}
+          <button role="menuitem" type="submit" form="cusin-quick-status-form"
+                  name="next_status" value="{{ action.value }}"
+                  class="cusin-menu-item{% if action.tone == 'danger' %} is-danger{% endif %}"
+                  {% if action.tone == 'danger' %}data-cusin-confirm-message="از انجام این کار مطمئن هستید؟"{% endif %}>
+            {% cusin_icon action.icon %} {{ action.label }}
+          </button>
+          {% endfor %}
+        </div>
       </div>
     </form>
     {% endif %}
