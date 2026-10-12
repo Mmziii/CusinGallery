@@ -878,6 +878,46 @@ test.describe("changelist filter cleanup and active chips", () => {
   });
 });
 
+test.describe("desktop order-status column layout", () => {
+  test.skip(!USER || !PASSWORD, "set E2E_ADMIN_USER and E2E_ADMIN_PASSWORD to run");
+  test.use({ viewport: { width: 1280, height: 900 } });
+
+  test.beforeEach(async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "chromium", "desktop project only");
+    await login(page);
+  });
+
+  test("status badges remain inside their own cells without overlapping", async ({ page }) => {
+    await page.goto(`${BASE_URL}/admin/orders/order/`, { waitUntil: "networkidle" });
+    const badges = await page.locator(
+      "#result_list tbody td.field-status_badge .cusin-badge, #result_list tbody td.field-payment_badge .cusin-badge",
+    ).evaluateAll((items) => items.map((badge) => {
+      const cell = badge.parentElement;
+      const cellBox = cell.getBoundingClientRect();
+      const badgeBox = badge.getBoundingClientRect();
+      const style = getComputedStyle(cell);
+      const innerLeft = cellBox.left + parseFloat(style.paddingLeft);
+      const innerRight = cellBox.right - parseFloat(style.paddingRight);
+      return {
+        text: badge.textContent.trim(),
+        badgeLeft: badgeBox.left,
+        badgeRight: badgeBox.right,
+        innerLeft,
+        innerRight,
+        scrollWidth: badge.scrollWidth,
+        clientWidth: badge.clientWidth,
+      };
+    }));
+
+    expect(badges.length, "the order list should have visible status examples").toBeGreaterThan(0);
+    for (const badge of badges) {
+      expect(badge.badgeLeft, `${badge.text} should stay within its column's left edge`).toBeGreaterThanOrEqual(badge.innerLeft - 0.5);
+      expect(badge.badgeRight, `${badge.text} should stay within its column's right edge`).toBeLessThanOrEqual(badge.innerRight + 0.5);
+      expect(badge.scrollWidth, `${badge.text} should wrap rather than clip`).toBeLessThanOrEqual(badge.clientWidth + 1);
+    }
+  });
+});
+
 test.describe("product and image import pages at 320px", () => {
   test.skip(!USER || !PASSWORD, "set E2E_ADMIN_USER and E2E_ADMIN_PASSWORD to run");
   test.use({ viewport: { width: 320, height: 760 } });

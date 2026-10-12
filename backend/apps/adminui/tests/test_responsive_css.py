@@ -152,6 +152,19 @@ class ResponsiveCssTests(SimpleTestCase):
             "at widths <=1024px, horizontal scrolling stays in the results box",
         )
 
+    def test_desktop_order_status_badges_fit_their_columns(self):
+        for selector in (
+            "body.cusin-admin.app-orders.model-order #result_list td.field-status_badge .cusin-badge",
+            "body.cusin-admin.app-orders.model-order #result_list td.field-payment_badge .cusin-badge",
+        ):
+            with self.subTest(selector=selector):
+                badge = self.desktop[selector]
+                self.assertEqual(badge["box-sizing"], "border-box")
+                self.assertEqual(badge["display"], "inline-block")
+                self.assertEqual(badge["max-width"], "100%")
+                self.assertEqual(badge["font-size"], "13px")
+                self.assertEqual(badge["white-space"], "normal")
+
     def test_all_six_desktop_changelists_reserve_explicit_column_widths(self):
         lists = {
             "app-products.model-product": {
@@ -163,11 +176,11 @@ class ResponsiveCssTests(SimpleTestCase):
                 "column-is_featured": "8%", "column-cusin-row-actions": "10%",
             },
             "app-orders.model-order": {
-                "action-checkbox-column": "4%", "column-order_number": "17%",
-                "column-user": "12%", "column-status_badge": "8%",
-                "column-payment_badge": "8%", "column-total_fa": "9%",
-                "column-shipping_method_cell": "8%", "column-stock_restored_badge": "6%",
-                "column-refund_badge": "6%", "column-created_at_jalali": "12%",
+                "action-checkbox-column": "4%", "column-order_number": "15%",
+                "column-user": "10%", "column-status_badge": "12%",
+                "column-payment_badge": "12%", "column-total_fa": "8%",
+                "column-shipping_method_cell": "7%", "column-stock_restored_badge": "6%",
+                "column-refund_badge": "6%", "column-created_at_jalali": "10%",
                 "column-cusin-row-actions": "10%",
             },
             "app-categories.model-category": {
