@@ -146,6 +146,94 @@ async function assertNineDigitNumericInputs(page, listPath, inputSelector) {
   }
 }
 
+async function assertProductRowItemsDoNotOverlap(page) {
+  await page.goto(`${BASE_URL}/admin/products/product/`, { waitUntil: "networkidle" });
+  await assertNoHorizontalOverflow(page);
+  const rows = await page.locator("#result_list tbody tr").evaluateAll((elements) => {
+    const isVisible = (element) => {
+      const rect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+    };
+    const box = (element) => {
+      const rect = element.getBoundingClientRect();
+      return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
+    };
+    const overlaps = (a, b) =>
+      Math.min(a.right, b.right) - Math.max(a.left, b.left) > 0.75 &&
+      Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 0.75;
+    const targets = "a, button, input, select, textarea, img, .cusin-badge, .cusin-thumb-empty";
+    return elements.filter((row) => !row.classList.contains("add-row") && row.children.length)
+      .map((row) => {
+        const cells = [...row.children].filter(isVisible);
+        const cellBoxes = cells.map((cell) => ({ element: cell, box: box(cell) }));
+        const cellOverlaps = [];
+        for (let i = 0; i < cellBoxes.length; i += 1) {
+          for (let j = i + 1; j < cellBoxes.length; j += 1) {
+            if (overlaps(cellBoxes[i].box, cellBoxes[j].box)) {
+              cellOverlaps.push({ leftCell: cellBoxes[i].element.className, rightCell: cellBoxes[j].element.className });
+            }
+          }
+        }
+        const content = [...row.querySelectorAll(targets)].filter(isVisible).map((element) => {
+          const rect = box(element);
+          const cell = element.closest("td, th");
+          const cellRect = cell.getBoundingClientRect();
+          const cellStyle = getComputedStyle(cell);
+          const inner = {
+            left: cellRect.left + parseFloat(cellStyle.borderLeftWidth) + parseFloat(cellStyle.paddingLeft),
+            right: cellRect.right - parseFloat(cellStyle.borderRightWidth) - parseFloat(cellStyle.paddingRight),
+            top: cellRect.top + parseFloat(cellStyle.borderTopWidth) + parseFloat(cellStyle.paddingTop),
+            bottom: cellRect.bottom - parseFloat(cellStyle.borderBottomWidth) - parseFloat(cellStyle.paddingBottom),
+          };
+          return {
+            element,
+            rect,
+            inner,
+            className: element.className || element.type || element.tagName,
+            cellClass: cell.className,
+          };
+        });
+        const outOfCell = content.filter(({ rect, inner }) =>
+          rect.left < inner.left - 1 || rect.right > inner.right + 1 ||
+          rect.top < inner.top - 1 || rect.bottom > inner.bottom + 1
+        ).map(({ className, cellClass, rect, inner }) => ({ className, cellClass, rect, inner }));
+        const topLevelContent = content.filter(({ element }) => {
+          const parent = element.parentElement && element.parentElement.closest(targets);
+          return !parent || parent.closest("tr") !== row;
+        });
+        const itemOverlaps = [];
+        for (let i = 0; i < topLevelContent.length; i += 1) {
+          for (let j = i + 1; j < topLevelContent.length; j += 1) {
+            if (overlaps(topLevelContent[i].rect, topLevelContent[j].rect)) {
+              itemOverlaps.push({
+                first: topLevelContent[i].className,
+                second: topLevelContent[j].className,
+                firstCell: topLevelContent[i].cellClass,
+                secondCell: topLevelContent[j].cellClass,
+              });
+            }
+          }
+        }
+        const badge = row.querySelector("td.field-stock_column .stock-low");
+        const stockInput = row.querySelector("td.field-stock_quantity input");
+        return {
+          cellOverlaps,
+          outOfCell,
+          itemOverlaps,
+          lowStockOverlap: badge && stockInput ? overlaps(box(badge), box(stockInput)) : false,
+        };
+      });
+  });
+  expect(rows.length, "product changelist should include rows to inspect").toBeGreaterThan(0);
+  for (const row of rows) {
+    expect(row.cellOverlaps, `table cells overlap: ${JSON.stringify(row)}`).toEqual([]);
+    expect(row.outOfCell, `row content escapes its cell: ${JSON.stringify(row)}`).toEqual([]);
+    expect(row.itemOverlaps, `visible row elements overlap: ${JSON.stringify(row)}`).toEqual([]);
+    expect(row.lowStockOverlap, `low-stock badge overlaps stock input: ${JSON.stringify(row)}`).toBe(false);
+  }
+}
+
 async function assertProductHeaderWrapping(page) {
   const headers = await page.locator("#result_list thead tr:first-child > th").evaluateAll((cells) =>
     cells.map((cell) => {
@@ -886,6 +974,25 @@ test.describe("nine-digit numeric changelist inputs", () => {
       );
     });
   });
+});
+
+test.describe("product changelist row elements never overlap", () => {
+  test.skip(!USER || !PASSWORD, "set E2E_ADMIN_USER and E2E_ADMIN_PASSWORD to run");
+
+  test.beforeEach(async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "chromium", "desktop project only");
+    await login(page);
+  });
+
+  for (const width of [320, 375, 768, 1024, 1280, 1440, 1920]) {
+    test.describe(`${width}px rows`, () => {
+      test.use({ viewport: { width, height: 1000 } });
+
+      test("stock badges, edit inputs and all visible row items remain separate", async ({ page }) => {
+        await assertProductRowItemsDoNotOverlap(page);
+      });
+    });
+  }
 });
 
 test.describe("shared menus and phone navigation", () => {

@@ -191,8 +191,8 @@ class ResponsiveCssTests(SimpleTestCase):
             "app-products.model-product": {
                 "action-checkbox-column": "4%", "column-thumbnail_column": "6%",
                 "column-name": "8%", "column-sku": "4%", "column-category": "8%",
-                "column-brand": "4%", "column-price": "14%",
-                "column-compare_at_price": "14%", "column-stock_column": "6%",
+                "column-brand": "4%", "column-price": "13.5%",
+                "column-compare_at_price": "13.5%", "column-stock_column": "7%",
                 "column-stock_quantity": "14%", "column-is_active": "4%",
                 "column-is_featured": "4%", "column-cusin-row-actions": "10%",
             },
@@ -259,12 +259,43 @@ class ResponsiveCssTests(SimpleTestCase):
                 self.assertEqual(control["min-width"], "108px")
                 self.assertEqual(control["max-width"], "120px")
                 self.assertEqual(control["box-sizing"], "border-box")
-        numeric = self.desktop[
+        numeric = self.base[
             'body.cusin-admin #container #changelist #result_list tbody td input[type="number"]'
         ]
         self.assertEqual(numeric["direction"], "ltr")
         self.assertEqual(numeric["text-align"], "left")
         self.assertEqual(numeric["font-variant-numeric"], "tabular-nums")
+
+    def test_stock_badges_and_thumbnails_stay_inside_product_cells(self):
+        badge = self.base[
+            "body.cusin-admin.app-products.model-product #result_list td.field-stock_column .cusin-badge"
+        ]
+        self.assertEqual(badge["box-sizing"], "border-box")
+        self.assertEqual(badge["display"], "inline-block")
+        self.assertEqual(badge["max-width"], "100%")
+        self.assertEqual(badge["white-space"], "normal")
+        self.assertEqual(badge["overflow-wrap"], "anywhere")
+        for field in ("price", "compare_at_price", "stock_quantity"):
+            with self.subTest(field=field):
+                numeric_input = self.base[
+                    f"body.cusin-admin.app-products.model-product #result_list td.field-{field} input"
+                ]
+                self.assertEqual(numeric_input["box-sizing"], "border-box")
+                self.assertEqual(numeric_input["width"], "100%")
+                self.assertEqual(numeric_input["min-width"], "0")
+                self.assertEqual(numeric_input["max-width"], "100%")
+        thumbnail_link = self.base[
+            "body.cusin-admin.app-products.model-product #result_list tbody .field-thumbnail_column > a"
+        ]
+        self.assertEqual(thumbnail_link["box-sizing"], "border-box")
+        self.assertEqual(thumbnail_link["width"], "100%")
+        self.assertEqual(thumbnail_link["max-width"], "48px")
+        thumbnail = self.base[
+            "body.cusin-admin.app-products.model-product #result_list tbody .field-thumbnail_column > a img"
+        ]
+        self.assertEqual(thumbnail["width"], "100% !important")
+        self.assertEqual(thumbnail["max-width"], "100%")
+        self.assertEqual(thumbnail["height"], "auto")
 
     def test_product_headers_wrap_between_words_and_use_short_labels(self):
         selector = (

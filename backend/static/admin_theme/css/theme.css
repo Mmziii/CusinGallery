@@ -902,6 +902,41 @@ a.deletelink:hover { background: var(--delete-button-hover-bg); }
 .cusin-badge.stock-ok  { background: #e4f1e9; color: var(--cg-success-text); border-color: #bfe0cc; }
 .cusin-badge.stock-low { background: #fbf3de; color: var(--cg-warning-text); border-color: #ead9a8; }
 .cusin-badge.stock-out { background: #f9e7e3; color: var(--cg-danger-text); border-color: #efc9bf; }
+body.cusin-admin.app-products.model-product #result_list td.field-stock_column .cusin-badge {
+  box-sizing: border-box;
+  display: inline-block;
+  max-width: 100%;
+  padding-inline: 3px;
+  text-align: center;
+  vertical-align: middle;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+body.cusin-admin #container #changelist #result_list tbody td input[type="number"] {
+  direction: ltr;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+body.cusin-admin.app-products.model-product #result_list td.field-price input,
+body.cusin-admin.app-products.model-product #result_list td.field-compare_at_price input,
+body.cusin-admin.app-products.model-product #result_list td.field-stock_quantity input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+body.cusin-admin.app-products.model-product #result_list tbody .field-thumbnail_column > a {
+  display: inline-block;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 48px;
+}
+body.cusin-admin.app-products.model-product #result_list tbody .field-thumbnail_column > a img {
+  box-sizing: border-box;
+  width: 100% !important;
+  max-width: 100%;
+  height: auto;
+}
 /* generic */
 .cusin-badge.on  { background: #e4f1e9; color: var(--cg-success-text); border-color: #bfe0cc; }
 .cusin-badge.off { background: var(--cusin-surface-2); color: var(--cusin-muted); border-color: var(--cusin-border); }
@@ -3444,13 +3479,6 @@ body.cusin-admin #container .cusin-gallery-field input[type="file"] {
     padding: 0;
   }
 
-  /* Keep every numeric inline edit LTR and tabular, even in this RTL table. */
-  body.cusin-admin #container #changelist #result_list tbody td input[type="number"] {
-    direction: ltr;
-    text-align: left;
-    font-variant-numeric: tabular-nums;
-  }
-
   /* Product labels must stay whole; compact headers are shortened in admin. */
   body.cusin-admin.app-products.model-product #container #changelist #result_list thead th {
     padding-inline: 2px;
@@ -3469,9 +3497,9 @@ body.cusin-admin #container .cusin-gallery-field input[type="file"] {
   body.cusin-admin.app-products.model-product #result_list th.column-sku { width: 4%; }
   body.cusin-admin.app-products.model-product #result_list th.column-category { width: 8%; }
   body.cusin-admin.app-products.model-product #result_list th.column-brand { width: 4%; }
-  body.cusin-admin.app-products.model-product #result_list th.column-price { width: 14%; }
-  body.cusin-admin.app-products.model-product #result_list th.column-compare_at_price { width: 14%; }
-  body.cusin-admin.app-products.model-product #result_list th.column-stock_column { width: 6%; }
+  body.cusin-admin.app-products.model-product #result_list th.column-price { width: 13.5%; }
+  body.cusin-admin.app-products.model-product #result_list th.column-compare_at_price { width: 13.5%; }
+  body.cusin-admin.app-products.model-product #result_list th.column-stock_column { width: 7%; }
   body.cusin-admin.app-products.model-product #result_list th.column-stock_quantity { width: 14%; }
   body.cusin-admin.app-products.model-product #result_list th.column-is_active { width: 4%; }
   body.cusin-admin.app-products.model-product #result_list th.column-is_featured { width: 4%; }
