@@ -2,8 +2,9 @@
  * Real-browser layout, accessibility and visual review of the Django admin.
  *
  * Set E2E_BASE_URL, E2E_ADMIN_USER and E2E_ADMIN_PASSWORD. Product and order
- * form checks, plus the screenshot review, require at least one product and
- * one order in the database. Screenshots are captured only when
+ * form checks require at least one product and order; desktop changelist
+ * checks require at least one row in each of the six target admin lists.
+ * Screenshots are captured only when
  * E2E_CAPTURE_SCREENSHOTS=1 and go to e2e/screenshots/ for PR review.
  */
 const fs = require("node:fs");
@@ -30,6 +31,8 @@ const PAGES = [
   "/admin/categories/category/",
   "/admin/orders/order/",
   "/admin/accounts/user/",
+  "/admin/discounts/coupon/",
+  "/admin/reviews/review/",
 ];
 
 const CHANGELISTS = PAGES.slice(1);
@@ -84,6 +87,114 @@ async function assertNoHorizontalOverflow(page) {
     clientWidth: document.documentElement.clientWidth,
   }));
   expect(scrollWidth, `scrollWidth ${scrollWidth} vs clientWidth ${clientWidth}`).toBeLessThanOrEqual(clientWidth);
+}
+
+async function assertDesktopChangelistLayout(page, pagePath) {
+  const metrics = await page.evaluate(() => {
+    const wrapper = document.querySelector("#changelist .results");
+    const table = wrapper && wrapper.querySelector("#result_list");
+    if (!wrapper || !table) return null;
+    const box = (element) => {
+      const rect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      return {
+        left: rect.left,
+        right: rect.right,
+        width: rect.width,
+        display: style.display,
+        visible: rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden",
+      };
+    };
+    const headers = [...table.querySelectorAll("thead tr:first-child > th")].map((cell) => ({
+      ...box(cell),
+      className: cell.className,
+      text: cell.innerText.trim().replace(/\s+/g, " "),
+    }));
+    const rows = [...table.querySelectorAll("tbody tr")].map((row) => {
+      const actionCell = row.querySelector("td.cusin-row-actions");
+      return {
+        cells: [...row.children].map(box),
+        actions: actionCell ? {
+          cell: box(actionCell),
+          controls: [...actionCell.querySelectorAll(".cusin-row-edit, .cusin-row-more")].map(box),
+        } : null,
+      };
+    });
+    const name = table.querySelector("tbody .field-name > a");
+    const nameStyle = name && getComputedStyle(name);
+    const priceInputs = [...table.querySelectorAll(
+      "tbody td.field-price input, tbody td.field-compare_at_price input"
+    )].map((input) => ({
+      width: input.getBoundingClientRect().width,
+      minWidth: getComputedStyle(input).minWidth,
+    }));
+    const wrapperBox = box(wrapper);
+    return {
+      wrapper: {
+        ...wrapperBox,
+        clientWidth: wrapper.clientWidth,
+        scrollWidth: wrapper.scrollWidth,
+        overflowX: getComputedStyle(wrapper).overflowX,
+      },
+      table: { ...box(table), layout: getComputedStyle(table).tableLayout },
+      headers,
+      rows,
+      productName: name && {
+        lineClamp: nameStyle.webkitLineClamp,
+        lineHeight: parseFloat(nameStyle.lineHeight),
+        height: name.getBoundingClientRect().height,
+      },
+      priceInputs,
+    };
+  });
+
+  expect(metrics, `${pagePath} should render a changelist table`).not.toBeNull();
+  expect(metrics.table.visible, `${pagePath} table should be visible`).toBe(true);
+  expect(metrics.table.layout, `${pagePath} desktop table should use fixed columns`).toBe("fixed");
+  expect(metrics.table.width, `${pagePath} table should fit the results box`).toBeLessThanOrEqual(metrics.wrapper.clientWidth + 1);
+  expect(metrics.wrapper.scrollWidth, `${pagePath} should not need a horizontal scrollbar at desktop width`).toBeLessThanOrEqual(metrics.wrapper.clientWidth + 1);
+  expect(metrics.rows.length, `${pagePath} needs a sample row to measure`).toBeGreaterThan(0);
+
+  const visibleHeaders = metrics.headers.filter((header) => !header.className.includes("storefront_data"));
+  for (const header of visibleHeaders) {
+    expect(header.visible, `${pagePath} column should be visible: ${JSON.stringify(header)}`).toBe(true);
+    expect(header.left, `${pagePath} column should remain inside the results box`).toBeGreaterThanOrEqual(metrics.wrapper.left - 0.5);
+    expect(header.right, `${pagePath} column should remain inside the results box`).toBeLessThanOrEqual(metrics.wrapper.right + 0.5);
+  }
+  const actionHeader = metrics.headers.find((header) => header.className.includes("column-cusin-row-actions"));
+  expect(actionHeader?.text, `${pagePath} should keep the actions heading`).toBe("کارها");
+
+  for (const row of metrics.rows) {
+    expect(row.cells.length, `${pagePath} header/data column count`).toBe(metrics.headers.length);
+    expect(row.actions, `${pagePath} row should keep its edit/menu actions`).not.toBeNull();
+    expect(row.actions.cell.visible, `${pagePath} action cell should be visible`).toBe(true);
+    expect(row.actions.cell.left).toBeGreaterThanOrEqual(metrics.wrapper.left - 0.5);
+    expect(row.actions.cell.right).toBeLessThanOrEqual(metrics.wrapper.right + 0.5);
+    expect(row.actions.controls.length, `${pagePath} should expose edit and more actions`).toBe(2);
+    for (const control of row.actions.controls) {
+      expect(control.visible, `${pagePath} row action should be visible: ${JSON.stringify(control)}`).toBe(true);
+      expect(control.left).toBeGreaterThanOrEqual(row.actions.cell.left - 0.5);
+      expect(control.right).toBeLessThanOrEqual(row.actions.cell.right + 0.5);
+    }
+    row.cells.forEach((cell, index) => {
+      expect(Math.abs(cell.width - metrics.headers[index].width),
+        `${pagePath} header/body column ${index} should align`).toBeLessThanOrEqual(2);
+    });
+  }
+
+  if (pagePath === "/admin/products/product/") {
+    expect(metrics.priceInputs.length, "product changelist should expose both editable price fields").toBeGreaterThanOrEqual(2);
+    for (const input of metrics.priceInputs) {
+      expect(input.width, `product price input should stay narrow: ${JSON.stringify(input)}`).toBeLessThanOrEqual(90);
+      expect(input.minWidth).toBe("0px");
+    }
+    expect(metrics.productName.lineClamp).toBe("2");
+    expect(metrics.productName.height).toBeLessThanOrEqual(metrics.productName.lineHeight * 2 + 1);
+
+    const headings = metrics.headers.map((header) => header.text);
+    expect(headings).toContain("وضعیت موجودی");
+    expect(headings).toContain("موجودی");
+  }
 }
 
 async function assertAdminTypography(page) {
@@ -525,6 +636,24 @@ test.describe("admin pages at all requested viewport widths", () => {
           expect(box, "#content must be rendered").not.toBeNull();
           expect(box.width).toBeGreaterThan(800);
         });
+
+        for (const pagePath of CHANGELISTS) {
+          test(`all columns and row actions fit on ${pagePath}`, async ({ page }) => {
+            await page.goto(`${BASE_URL}${pagePath}`, { waitUntil: "networkidle" });
+            await assertDesktopChangelistLayout(page, pagePath);
+          });
+        }
+      }
+
+      if (viewport.width === 1024) {
+        for (const pagePath of CHANGELISTS) {
+          test(`horizontal scrolling stays inside the ${pagePath} results box`, async ({ page }) => {
+            await page.goto(`${BASE_URL}${pagePath}`, { waitUntil: "networkidle" });
+            await assertNoHorizontalOverflow(page);
+            const overflowX = await page.locator("#changelist .results").evaluate((el) => getComputedStyle(el).overflowX);
+            expect(overflowX, `${pagePath} results should own tablet-width scrolling`).toBe("auto");
+          });
+        }
       }
 
       for (const pagePath of CHANGELISTS) {

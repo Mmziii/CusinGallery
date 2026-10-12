@@ -107,6 +107,15 @@ class DashboardLatestOrdersLayoutTests(SimpleTestCase):
         self.assertIn('class="cusin-table-scroll cusin-orders-scroll"', template)
 
 
+class ProductStockHeadingTests(SimpleTestCase):
+    """Follow-up 4: the stock badge's heading is distinct from raw quantity."""
+
+    def test_product_stock_badge_uses_a_distinct_heading(self):
+        from apps.products.admin import ProductAdmin
+
+        self.assertEqual(ProductAdmin.stock_column.short_description, "وضعیت موجودی")
+
+
 PRODUCT_CHANGELIST_TEMPLATE = (
     BASE / "apps" / "products" / "templates" / "admin" / "products" / "product_change_list.html"
 )

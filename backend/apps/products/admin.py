@@ -1001,7 +1001,7 @@ class ProductAdmin(admin.ModelAdmin):
             '<span class="cusin-badge stock-ok">{}</span>', obj.stock_quantity
         )
 
-    stock_column.short_description = "موجودی"
+    stock_column.short_description = "وضعیت موجودی"
     stock_column.admin_order_field = "stock_quantity"
 
     # --- Bulk actions ----------------------------------------------------------

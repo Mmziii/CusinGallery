@@ -86,6 +86,7 @@ class ResponsiveCssTests(SimpleTestCase):
         cls.base = _rules(_without_media(cls.css))
         cls.tablet = _rules(_media_block(cls.css, "(max-width: 1024px)"))
         cls.phone = _rules(_media_block(cls.css, "(max-width: 767px)"))
+        cls.desktop = _rules(_media_block(cls.css, "(min-width: 1025px)"))
 
     def _effective(self, selector, prop):
         """The value the cascade gives on a phone: the 767px rule wins."""
@@ -130,6 +131,109 @@ class ResponsiveCssTests(SimpleTestCase):
 
     def test_the_row_link_is_a_44px_tap_target_in_the_card(self):
         self.assertEqual(self.phone["#result_list tbody th a"]["min-height"], "44px")
+
+    def test_desktop_changelists_use_the_full_results_box_with_a_fixed_grid(self):
+        table = self.desktop[
+            "body.cusin-admin #container #changelist .results #result_list"
+        ]
+        self.assertEqual(table["width"], "100%")
+        self.assertEqual(table["min-width"], "0")
+        self.assertEqual(table["max-width"], "100%")
+        self.assertEqual(table["table-layout"], "fixed")
+        cells = self.desktop[
+            "body.cusin-admin #container #changelist #result_list tbody td"
+        ]
+        self.assertEqual(cells["min-width"], "0")
+        self.assertEqual(cells["white-space"], "normal")
+        self.assertEqual(cells["overflow-wrap"], "anywhere")
+        self.assertEqual(
+            self.base["#changelist .results"]["overflow-x"],
+            "auto",
+            "at widths <=1024px, horizontal scrolling stays in the results box",
+        )
+
+    def test_all_six_desktop_changelists_reserve_explicit_column_widths(self):
+        lists = {
+            "app-products.model-product": {
+                "action-checkbox-column": "4%", "column-thumbnail_column": "6%",
+                "column-name": "12%", "column-sku": "7%", "column-category": "9%",
+                "column-brand": "6%", "column-price": "8%",
+                "column-compare_at_price": "9%", "column-stock_column": "8%",
+                "column-stock_quantity": "8%", "column-is_active": "5%",
+                "column-is_featured": "8%", "column-cusin-row-actions": "10%",
+            },
+            "app-orders.model-order": {
+                "action-checkbox-column": "4%", "column-order_number": "17%",
+                "column-user": "12%", "column-status_badge": "8%",
+                "column-payment_badge": "8%", "column-total_fa": "9%",
+                "column-shipping_method_cell": "8%", "column-stock_restored_badge": "6%",
+                "column-refund_badge": "6%", "column-created_at_jalali": "12%",
+                "column-cusin-row-actions": "10%",
+            },
+            "app-categories.model-category": {
+                "action-checkbox-column": "5%", "column-name": "27%",
+                "column-parent": "22%", "column-is_active": "10%",
+                "column-ordering": "22%", "column-cusin-row-actions": "14%",
+            },
+            "app-accounts.model-user": {
+                "action-checkbox-column": "4%", "column-username": "15%",
+                "column-email": "15%", "column-first_name": "7%",
+                "column-last_name": "9%", "column-is_staff": "9%",
+                "column-phone": "14%", "column-orders_count": "7%",
+                "column-date_joined_jalali": "10%", "column-cusin-row-actions": "10%",
+            },
+            "app-discounts.model-coupon": {
+                "action-checkbox-column": "4%", "column-code": "14%",
+                "column-discount_summary": "12%", "column-status_badge": "9%",
+                "column-usage_summary": "15%", "column-minimum_order_amount": "16%",
+                "column-start_date": "10%", "column-expiration_date": "10%",
+                "column-cusin-row-actions": "10%",
+            },
+            "app-reviews.model-review": {
+                "action-checkbox-column": "4%", "column-product": "20%",
+                "column-user": "17%", "column-rating": "8%", "column-status": "10%",
+                "column-is_verified_purchase": "13%", "column-created_at": "16%",
+                "column-cusin-row-actions": "12%",
+            },
+        }
+        for body_classes, columns in lists.items():
+            for column, expected_width in columns.items():
+                selector = f"body.cusin-admin.{body_classes} #result_list th.{column}"
+                with self.subTest(selector=selector):
+                    self.assertEqual(self.desktop[selector]["width"], expected_width)
+
+    def test_desktop_row_actions_stay_compact_and_product_fields_are_narrow(self):
+        actions = self.desktop[
+            "body.cusin-admin #container #changelist #result_list tbody td.cusin-row-actions"
+        ]
+        self.assertEqual(actions["min-width"], "0")
+        self.assertEqual(actions["flex-wrap"], "wrap")
+        for selector in (
+            "body.cusin-admin #container #changelist #result_list .cusin-row-actions .cusin-row-edit",
+            "body.cusin-admin #container #changelist #result_list .cusin-row-actions .cusin-row-more",
+        ):
+            with self.subTest(selector=selector):
+                button = self.desktop[selector]
+                self.assertEqual(button["width"], "40px")
+                self.assertEqual(button["min-width"], "40px")
+                self.assertEqual(button["min-height"], "40px")
+
+        product = "body.cusin-admin.app-products.model-product #result_list"
+        for field in ("price", "compare_at_price", "stock_quantity"):
+            with self.subTest(field=field):
+                control = self.desktop[f"{product} td.field-{field} input"]
+                self.assertEqual(control["min-width"], "0")
+                self.assertEqual(control["max-width"], "80px")
+                self.assertEqual(control["box-sizing"], "border-box")
+
+    def test_product_names_are_clamped_to_two_lines(self):
+        product_name = self.desktop[
+            "body.cusin-admin.app-products.model-product #result_list .field-name > a"
+        ]
+        self.assertEqual(product_name["-webkit-line-clamp"], "2")
+        self.assertEqual(product_name["-webkit-box-orient"], "vertical")
+        self.assertEqual(product_name["max-height"], "3.4em")
+        self.assertEqual(product_name["line-height"], "1.7")
 
     # --- no horizontal scroll --------------------------------------------
 
