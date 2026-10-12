@@ -868,6 +868,36 @@ async function assertInlineCellContentIsContained(page, viewportWidth, includesG
   }
 }
 
+async function assertHelpTextInsideFieldset(page) {
+  const helps = await page.locator(".help").evaluateAll((elements) => elements.flatMap((element) => {
+    const rect = element.getBoundingClientRect();
+    const style = getComputedStyle(element);
+    if (rect.width <= 0 || rect.height <= 0 || style.display === "none" ||
+        style.visibility === "hidden" || style.opacity === "0") return [];
+    const fieldset = element.closest("fieldset");
+    const fieldsetRect = fieldset && fieldset.getBoundingClientRect();
+    return [{
+      id: element.id,
+      className: element.className,
+      text: element.textContent.trim().replace(/\s+/g, " ").slice(0, 90),
+      help: { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom },
+      fieldset: fieldset ? {
+        id: fieldset.id,
+        className: fieldset.className,
+        left: fieldsetRect.left,
+        right: fieldsetRect.right,
+        top: fieldsetRect.top,
+        bottom: fieldsetRect.bottom,
+      } : null,
+      contained: Boolean(fieldset) && rect.left >= fieldsetRect.left - 1 &&
+        rect.right <= fieldsetRect.right + 1 && rect.top >= fieldsetRect.top - 1 &&
+        rect.bottom <= fieldsetRect.bottom + 1,
+    }];
+  }));
+  expect(helps.length, "the tested form should render visible help text").toBeGreaterThan(0);
+  expect(helps.filter((help) => !help.contained), "every visible .help must stay inside its fieldset").toEqual([]);
+}
+
 async function assertLatestOrdersLayout(page) {
   const section = page.locator('section[aria-label="آخرین سفارش‌ها"]');
   const metrics = await section.evaluate((card) => {
@@ -1028,6 +1058,9 @@ test.describe("admin pages at all requested viewport widths", () => {
               form.includesGallery,
               form.includesPayments,
             );
+            if (form.includesGallery || form.includesPayments) {
+              await assertHelpTextInsideFieldset(page);
+            }
           });
         }
 
@@ -1134,6 +1167,33 @@ test.describe("admin pages at all requested viewport widths", () => {
         }));
         expect(contrastOf(colors.text, colors.page), `body ${colors.text} on page ${colors.page}`).toBeGreaterThanOrEqual(7);
         expect(contrastOf(colors.text, colors.surface), `body ${colors.text} on white surface ${colors.surface}`).toBeGreaterThanOrEqual(7);
+      });
+    });
+  }
+});
+
+test.describe("fieldset help text stays inside at every width", () => {
+  test.skip(!USER || !PASSWORD, "set E2E_ADMIN_USER and E2E_ADMIN_PASSWORD to run");
+
+  test.beforeEach(async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "chromium", "desktop project only; this spec sets its own viewport");
+    await login(page);
+  });
+
+  for (const width of [320, 375, 768, 1024, 1280, 1440, 1920]) {
+    test.describe(`${width}px help`, () => {
+      test.use({ viewport: { width, height: 1000 } });
+
+      test("product and order help blocks stay within their nearest fieldsets", async ({ page }) => {
+        for (const form of [
+          { label: "two-variant product", getUrl: firstProductWithVariantsUrl },
+          { label: "order", getUrl: firstOrderUrl },
+        ]) {
+          const url = await form.getUrl(page);
+          await page.goto(new URL(url, BASE_URL).href, { waitUntil: "networkidle" });
+          await assertNoHorizontalOverflow(page);
+          await assertHelpTextInsideFieldset(page);
+        }
       });
     });
   }

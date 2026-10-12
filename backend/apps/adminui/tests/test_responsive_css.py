@@ -438,6 +438,19 @@ class ResponsiveCssTests(SimpleTestCase):
         self.assertIn(".inline-group .tabular table", self.js)
         self.assertIn("MutationObserver", self.js)
 
+    def test_help_text_overrides_django_aligned_row_indentation_without_overflow(self):
+        for selector in (
+            "body.cusin-admin fieldset.module.aligned .form-row .help",
+            "body.cusin-admin fieldset.module.aligned .form-row .helptext",
+        ):
+            with self.subTest(selector=selector):
+                help_rule = self.base[selector]
+                self.assertEqual(help_rule["display"], "block")
+                self.assertEqual(help_rule["width"], "100%")
+                self.assertEqual(help_rule["max-width"], "100%")
+                self.assertEqual(help_rule["margin"], "0")
+                self.assertEqual(help_rule["white-space"], "normal")
+
     def test_wide_product_variants_fit_their_inline_card_without_original_label_cells(self):
         table = self.desktop[
             "body.cusin-admin #container #variants-group .tabular table"

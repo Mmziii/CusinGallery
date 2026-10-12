@@ -2875,6 +2875,7 @@ body.cusin-admin fieldset.module.aligned .form-row .cusin-counter {
   width: 100%;
   min-width: min(240px, 100%);
   max-width: 100%;
+  margin: 0;
   white-space: normal;
 }
 body.cusin-admin fieldset.module.aligned .form-row .cusin-counter { white-space: nowrap; }
