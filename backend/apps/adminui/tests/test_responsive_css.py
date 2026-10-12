@@ -235,6 +235,24 @@ class ResponsiveCssTests(SimpleTestCase):
         self.assertEqual(product_name["max-height"], "3.4em")
         self.assertEqual(product_name["line-height"], "1.7")
 
+    def test_normal_sidebar_and_menu_labels_use_ink_and_keep_active_and_danger_distinct(self):
+        ink = "#111827"
+        for selector in (
+            "body.cusin-admin #container #cusin-drawer .cusin-drawer-dash:not(.is-active)",
+            "body.cusin-admin #container #cusin-drawer .cusin-nav-group > summary",
+            "body.cusin-admin #container #cusin-drawer .cusin-nav-link:not(.is-active)",
+            "body.cusin-admin #container #cusin-drawer .cusin-drawer-foot a",
+            "body.cusin-admin .cusin-menu-panel .cusin-menu-item:not(.is-danger):not(:hover):not(:focus-visible):not([aria-current=\"page\"])",
+            "body.cusin-admin #cusin-user-menu [role=\"menuitem\"]:not(.is-danger):not(:hover):not(:focus-visible)",
+        ):
+            with self.subTest(selector=selector):
+                self.assertEqual(self.base[selector]["color"], ink)
+        self.assertEqual(
+            self.base["body.cusin-admin #container #cusin-drawer .cusin-nav-link.is-active"]["color"],
+            "var(--cg-olive-hover)",
+        )
+        self.assertEqual(self.base[".cusin-menu-item.is-danger"]["color"], "var(--cg-danger-text)")
+
     # --- no horizontal scroll --------------------------------------------
 
     def test_fixed_width_stock_inputs_shrink_to_the_phone_width(self):

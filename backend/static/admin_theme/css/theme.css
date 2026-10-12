@@ -3513,3 +3513,19 @@ body.cusin-admin #container .cusin-gallery-field input[type="file"] {
   body.cusin-admin.app-reviews.model-review #result_list th.column-created_at { width: 16%; }
   body.cusin-admin.app-reviews.model-review #result_list th.column-cusin-row-actions { width: 12%; }
 }
+
+/* Follow-up 5: keep normal navigation and menu labels at the ink color.
+   A selected child may mark its disclosure group as active, but only the
+   selected destination itself receives the olive accent. */
+body.cusin-admin #container #cusin-drawer .cusin-drawer-dash:not(.is-active),
+body.cusin-admin #container #cusin-drawer .cusin-nav-group > summary,
+body.cusin-admin #container #cusin-drawer .cusin-nav-link:not(.is-active),
+body.cusin-admin #container #cusin-drawer .cusin-drawer-foot a,
+body.cusin-admin .cusin-menu-panel .cusin-menu-item:not(.is-danger):not(:hover):not(:focus-visible):not([aria-current="page"]),
+body.cusin-admin #cusin-user-menu [role="menuitem"]:not(.is-danger):not(:hover):not(:focus-visible) {
+  color: #111827;
+}
+body.cusin-admin #container #cusin-drawer .cusin-drawer-dash.is-active,
+body.cusin-admin #container #cusin-drawer .cusin-nav-link.is-active {
+  color: var(--cg-olive-hover);
+}

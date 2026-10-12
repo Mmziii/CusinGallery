@@ -643,6 +643,40 @@ test.describe("admin pages at all requested viewport widths", () => {
             await assertDesktopChangelistLayout(page, pagePath);
           });
         }
+
+        if (viewport.width === 1280) {
+          test("normal navigation and menu labels stay near-black; active and destructive items stay distinct", async ({ page }) => {
+            await page.goto(`${BASE_URL}/admin/products/product/`, { waitUntil: "networkidle" });
+            const sidebar = await page.evaluate(() => {
+              const color = (selector) => getComputedStyle(document.querySelector(selector)).color;
+              return {
+                activeGroup: color("#cusin-drawer .cusin-nav-group.is-active > summary"),
+                activeLink: color("#cusin-drawer .cusin-nav-link.is-active"),
+                normalLink: color("#cusin-drawer .cusin-nav-group.is-active .cusin-nav-link:not(.is-active)"),
+                normalDashboard: color("#cusin-drawer .cusin-drawer-dash:not(.is-active)"),
+              };
+            });
+            expect(sidebar.activeGroup).toBe("rgb(17, 24, 39)");
+            expect(sidebar.normalLink).toBe("rgb(17, 24, 39)");
+            expect(sidebar.normalDashboard).toBe("rgb(17, 24, 39)");
+            expect(sidebar.activeLink).toBe("rgb(79, 90, 44)");
+
+            await page.locator("#result_list .cusin-row-more").first().click();
+            const rowMenu = page.locator(".cusin-menu-panel:not([hidden])").last();
+            await expect(rowMenu).toBeVisible();
+            const rowLabel = rowMenu.locator(".cusin-menu-item:not(.is-danger)").last();
+            const destructiveLabel = rowMenu.locator(".cusin-menu-item.is-danger").first();
+            expect(await rowLabel.evaluate((el) => getComputedStyle(el).color)).toBe("rgb(17, 24, 39)");
+            expect(await destructiveLabel.evaluate((el) => getComputedStyle(el).color)).toBe("rgb(143, 29, 20)");
+            await page.keyboard.press("Escape");
+
+            await page.locator("#cusin-user-menu-trigger").click();
+            const userMenu = page.locator("#cusin-user-menu");
+            await expect(userMenu).toBeVisible();
+            const userLabel = userMenu.locator('[role="menuitem"]:not(.is-danger)').last();
+            expect(await userLabel.evaluate((el) => getComputedStyle(el).color)).toBe("rgb(17, 24, 39)");
+          });
+        }
       }
 
       if (viewport.width === 1024) {
