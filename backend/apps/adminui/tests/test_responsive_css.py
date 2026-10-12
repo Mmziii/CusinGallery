@@ -183,7 +183,7 @@ class ResponsiveCssTests(SimpleTestCase):
                 self.assertEqual(badge["box-sizing"], "border-box")
                 self.assertEqual(badge["display"], "inline-block")
                 self.assertEqual(badge["max-width"], "100%")
-                self.assertEqual(badge["font-size"], "13px")
+                self.assertEqual(badge["font-size"], "14px")
                 self.assertEqual(badge["white-space"], "normal")
 
     def test_all_six_desktop_changelists_reserve_explicit_column_widths(self):

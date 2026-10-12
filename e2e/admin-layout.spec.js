@@ -425,6 +425,14 @@ async function assertAdminTypography(page) {
     });
     const small = [];
     const tightPersian = [];
+    const badges = [...document.querySelectorAll("#container .cusin-badge")]
+      .filter((element) => {
+        const rect = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        return element.innerText.trim() && rect.width > 0 && rect.height > 0 &&
+          style.display !== "none" && style.visibility !== "hidden" && style.opacity !== "0";
+      })
+      .map((element) => ({ text: element.innerText.trim().slice(0, 40), size: getComputedStyle(element).fontSize }));
     for (const element of textElements) {
       const style = getComputedStyle(element);
       const size = parseFloat(style.fontSize);
@@ -443,12 +451,14 @@ async function assertAdminTypography(page) {
       bodySize,
       bodyLineHeight: parseFloat(bodyStyle.lineHeight) / bodySize,
       small,
+      badges,
       tightPersian,
     };
   });
   expect(metrics.bodySize, "admin desktop base text should be 16px").toBe(16);
   expect(metrics.bodyLineHeight, "Persian body leading should be at least 1.7").toBeGreaterThanOrEqual(1.7);
   expect(metrics.small, "visible admin text below 14px").toEqual([]);
+  expect(metrics.badges.filter((badge) => parseFloat(badge.size) < 14), "visible admin status pills, including order status, must be at least 14px").toEqual([]);
   expect(metrics.tightPersian, "Persian text with line-height below 1.7").toEqual([]);
 }
 
