@@ -664,6 +664,210 @@ async function assertInlineFormLayout(page, viewportWidth, includesGallery = fal
   }
 }
 
+async function assertInlineCellContentIsContained(page, viewportWidth, includesGallery = false, includesPayments = false) {
+  const metrics = await page.evaluate(() => {
+    const visible = (element) => {
+      const rect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      return rect.width > 0 && rect.height > 0 && style.display !== "none" &&
+        style.visibility !== "hidden" && style.opacity !== "0";
+    };
+    const box = (element) => {
+      const rect = element.getBoundingClientRect();
+      return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
+    };
+    const intersects = (a, b) =>
+      Math.min(a.right, b.right) - Math.max(a.left, b.left) > 0.75 &&
+      Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 0.75;
+    const describeRow = (row) => {
+      const cells = [...row.children].map((cell, cellIndex) => {
+        const rect = cell.getBoundingClientRect();
+        const style = getComputedStyle(cell);
+        const inner = {
+          left: rect.left + parseFloat(style.borderLeftWidth) + parseFloat(style.paddingLeft),
+          right: rect.right - parseFloat(style.borderRightWidth) - parseFloat(style.paddingRight),
+          top: rect.top + parseFloat(style.borderTopWidth) + parseFloat(style.paddingTop),
+          bottom: rect.bottom - parseFloat(style.borderBottomWidth) - parseFloat(style.paddingBottom),
+        };
+        const contents = [...cell.children].filter(visible).map((element) => ({
+          rect: box(element),
+          inner,
+          cellIndex,
+          cellClass: cell.className,
+          className: element.className || element.type || element.tagName,
+        }));
+        return {
+          cell,
+          cellIndex,
+          rect: box(cell),
+          className: cell.className,
+          hidden: getComputedStyle(cell).display === "none",
+          contents,
+        };
+      });
+      const visibleCells = cells.filter(({ hidden }) => !hidden);
+      const cellOverlaps = [];
+      for (let i = 0; i < visibleCells.length; i += 1) {
+        for (let j = i + 1; j < visibleCells.length; j += 1) {
+          if (intersects(visibleCells[i].rect, visibleCells[j].rect)) {
+            cellOverlaps.push({ first: visibleCells[i].className, second: visibleCells[j].className });
+          }
+        }
+      }
+      const content = cells.flatMap(({ contents }) => contents);
+      const outOfCell = content.filter(({ rect, inner }) =>
+        rect.left < inner.left - 1 || rect.right > inner.right + 1 ||
+        rect.top < inner.top - 1 || rect.bottom > inner.bottom + 1
+      ).map(({ className, cellClass, rect, inner }) => ({ className, cellClass, rect, inner }));
+      const contentOverlaps = [];
+      for (let i = 0; i < content.length; i += 1) {
+        for (let j = i + 1; j < content.length; j += 1) {
+          if (content[i].cellIndex !== content[j].cellIndex && intersects(content[i].rect, content[j].rect)) {
+            contentOverlaps.push({
+              first: content[i].className,
+              second: content[j].className,
+              firstCell: content[i].cellClass,
+              secondCell: content[j].cellClass,
+            });
+          }
+        }
+      }
+      return {
+        cellOverlaps,
+        outOfCell,
+        contentOverlaps,
+        originalHidden: !row.querySelector("td.original") ||
+          getComputedStyle(row.querySelector("td.original")).display === "none",
+      };
+    };
+    const tables = [...document.querySelectorAll("#content-main .inline-group .tabular")]
+      .filter(visible)
+      .map((wrapper) => {
+        const table = wrapper.querySelector("table");
+        return {
+          id: wrapper.closest(".inline-group").id,
+          wrapperClientWidth: wrapper.clientWidth,
+          wrapperScrollWidth: wrapper.scrollWidth,
+          tableWidth: table.getBoundingClientRect().width,
+          rows: [...table.querySelectorAll("tbody tr.form-row:not(.empty-form):not(.add-row)")]
+            .filter(visible).map(describeRow),
+        };
+      });
+    const gallery = document.querySelector("#content-main .cusin-gallery");
+    const cards = gallery ? [...gallery.querySelectorAll(".cusin-gallery-card:not(.empty-form)")].filter(visible) : [];
+    const galleryMetrics = gallery ? {
+      clientWidth: gallery.clientWidth,
+      scrollWidth: gallery.scrollWidth,
+      cards: cards.map((card) => {
+        const cardRect = card.getBoundingClientRect();
+        const cardStyle = getComputedStyle(card);
+        const inner = {
+          left: cardRect.left + parseFloat(cardStyle.borderLeftWidth) + parseFloat(cardStyle.paddingLeft),
+          right: cardRect.right - parseFloat(cardStyle.borderRightWidth) - parseFloat(cardStyle.paddingRight),
+          top: cardRect.top + parseFloat(cardStyle.borderTopWidth) + parseFloat(cardStyle.paddingTop),
+          bottom: cardRect.bottom - parseFloat(cardStyle.borderBottomWidth) - parseFloat(cardStyle.paddingBottom),
+        };
+        const children = [...card.children].filter(visible).map((element) => ({
+          rect: box(element),
+          className: element.className || element.tagName,
+        }));
+        const overlaps = [];
+        for (let i = 0; i < children.length; i += 1) {
+          for (let j = i + 1; j < children.length; j += 1) {
+            if (intersects(children[i].rect, children[j].rect)) {
+              overlaps.push({ first: children[i].className, second: children[j].className });
+            }
+          }
+        }
+        const outOfCard = children.filter(({ rect }) =>
+          rect.left < inner.left - 1 || rect.right > inner.right + 1 ||
+          rect.top < inner.top - 1 || rect.bottom > inner.bottom + 1
+        ).map(({ className, rect }) => ({ className, rect, inner }));
+        const controlsOutOfField = [...card.querySelectorAll(".cusin-gallery-field")].flatMap((field) => {
+          const fieldRect = field.getBoundingClientRect();
+          return [...field.querySelectorAll("input:not([type=hidden]), select, textarea")]
+            .filter(visible)
+            .filter((control) => {
+              const rect = control.getBoundingClientRect();
+              return rect.left < fieldRect.left - 1 || rect.right > fieldRect.right + 1 ||
+                rect.top < fieldRect.top - 1 || rect.bottom > fieldRect.bottom + 1;
+            }).map((control) => ({
+              field: field.className,
+              control: control.type || control.tagName,
+              rect: box(control),
+              fieldRect: box(field),
+            }));
+        });
+        return {
+          clientWidth: card.clientWidth,
+          scrollWidth: card.scrollWidth,
+          overlaps,
+          outOfCard,
+          controlsOutOfField,
+        };
+      }),
+    } : null;
+    const summaryTables = [
+      ...document.querySelectorAll('section[aria-label="اقلام سفارش"] .cusin-table-scroll'),
+      ...document.querySelectorAll('section[aria-label="پرداخت و بازپرداخت"] .cusin-table-scroll'),
+    ].filter((wrapper) => visible(wrapper) && wrapper.querySelector("table"))
+      .map((wrapper) => {
+        const table = wrapper.querySelector("table");
+        return {
+          wrapperClientWidth: wrapper.clientWidth,
+          wrapperScrollWidth: wrapper.scrollWidth,
+          tableWidth: table.getBoundingClientRect().width,
+          rows: [...table.querySelectorAll("tbody tr")].filter(visible).map(describeRow),
+        };
+      });
+    return { tables, gallery: galleryMetrics, summaryTables };
+  });
+
+  expect(metrics.tables.length, "inline tables should be present for overlap inspection").toBeGreaterThan(0);
+  for (const table of metrics.tables) {
+    expect(table.rows.length).toBeGreaterThan(0);
+    if (table.id === "variants-group" && viewportWidth >= 1280) {
+      expect(table.tableWidth, "product variants table should fit its card").toBeLessThanOrEqual(table.wrapperClientWidth + 2);
+      expect(table.wrapperScrollWidth, "product variants card should not need horizontal scrolling").toBeLessThanOrEqual(table.wrapperClientWidth + 4);
+      expect(table.rows.length, "the selected product should have two saved variants").toBeGreaterThanOrEqual(2);
+    }
+    for (const row of table.rows) {
+      expect(row.originalHidden, `Django original label must be hidden: ${JSON.stringify(row)}`).toBe(true);
+      expect(row.cellOverlaps, `inline cells overlap: ${JSON.stringify(row)}`).toEqual([]);
+      expect(row.outOfCell, `inline content escapes its cell: ${JSON.stringify(row)}`).toEqual([]);
+      expect(row.contentOverlaps, `inline cell contents overlap: ${JSON.stringify(row)}`).toEqual([]);
+    }
+  }
+
+  if (includesGallery) {
+    expect(metrics.gallery, "product image gallery should stay as bounded cards").not.toBeNull();
+    expect(metrics.gallery.cards.length).toBeGreaterThan(0);
+    expect(metrics.gallery.scrollWidth).toBeLessThanOrEqual(metrics.gallery.clientWidth + 1);
+    for (const card of metrics.gallery.cards) {
+      expect(card.scrollWidth, `gallery card should not overflow: ${JSON.stringify(card)}`).toBeLessThanOrEqual(card.clientWidth + 1);
+      expect(card.overlaps, `gallery card children overlap: ${JSON.stringify(card)}`).toEqual([]);
+      expect(card.outOfCard, `gallery content escapes its card: ${JSON.stringify(card)}`).toEqual([]);
+      expect(card.controlsOutOfField, `gallery control escapes its field: ${JSON.stringify(card)}`).toEqual([]);
+    }
+  }
+
+  if (includesPayments) {
+    expect(metrics.summaryTables.length, "order summary should include item and payment tables").toBeGreaterThanOrEqual(2);
+    for (const table of metrics.summaryTables) {
+      expect(table.rows.length, "order summary table should contain data").toBeGreaterThan(0);
+      if (viewportWidth >= 1280) {
+        expect(table.tableWidth, `desktop summary table should fit its card: ${JSON.stringify(table)}`).toBeLessThanOrEqual(table.wrapperClientWidth + 2);
+        expect(table.wrapperScrollWidth, `desktop summary table should not scroll: ${JSON.stringify(table)}`).toBeLessThanOrEqual(table.wrapperClientWidth + 4);
+      }
+      for (const row of table.rows) {
+        expect(row.cellOverlaps, `order summary cells overlap: ${JSON.stringify(row)}`).toEqual([]);
+        expect(row.outOfCell, `order summary content escapes its cell: ${JSON.stringify(row)}`).toEqual([]);
+        expect(row.contentOverlaps, `order summary cell contents overlap: ${JSON.stringify(row)}`).toEqual([]);
+      }
+    }
+  }
+}
+
 async function assertLatestOrdersLayout(page) {
   const section = page.locator('section[aria-label="آخرین سفارش‌ها"]');
   const metrics = await section.evaluate((card) => {
@@ -795,7 +999,7 @@ test.describe("admin pages at all requested viewport widths", () => {
         });
       }
 
-      if (viewport.width === 375 || viewport.width === 1280) {
+      if (viewport.width === 375 || viewport.width === 1280 || viewport.width === 1440) {
         for (const form of [
           { label: "product variant", getUrl: firstProductVariantUrl },
           { label: "user", getUrl: firstUserUrl },
@@ -809,15 +1013,21 @@ test.describe("admin pages at all requested viewport widths", () => {
         }
 
         for (const form of [
-          { label: "product variants and image gallery", getUrl: firstProductWithVariantsUrl, includesGallery: true },
-          { label: "order items", getUrl: firstOrderUrl, includesGallery: false },
-          { label: "cart items", getUrl: firstCartUrl, includesGallery: false },
+          { label: "product variants and image gallery", getUrl: firstProductWithVariantsUrl, includesGallery: true, includesPayments: false },
+          { label: "order items", getUrl: firstOrderUrl, includesGallery: false, includesPayments: true },
+          { label: "cart items", getUrl: firstCartUrl, includesGallery: false, includesPayments: false },
         ]) {
           test(`inline rows are aligned and contained on ${form.label}`, async ({ page }) => {
             const url = await form.getUrl(page);
             await page.goto(new URL(url, BASE_URL).href, { waitUntil: "networkidle" });
             await assertNoHorizontalOverflow(page);
             await assertInlineFormLayout(page, viewport.width, form.includesGallery);
+            await assertInlineCellContentIsContained(
+              page,
+              viewport.width,
+              form.includesGallery,
+              form.includesPayments,
+            );
           });
         }
 
@@ -1279,7 +1489,7 @@ test.describe("visual review screenshots for the PR", () => {
           await page.goto(`${BASE_URL}${pagePath}`, { waitUntil: "networkidle" });
           await page.screenshot({ path: path.join(SCREENSHOT_DIR, `${viewport.width}-${name}.png`), fullPage: true });
         }
-        const productUrl = await firstProductUrl(page);
+        const productUrl = await firstProductWithVariantsUrl(page);
         await page.goto(new URL(productUrl, BASE_URL).href, { waitUntil: "networkidle" });
         await page.screenshot({ path: path.join(SCREENSHOT_DIR, `${viewport.width}-product-form.png`), fullPage: true });
         const orderUrl = await firstOrderUrl(page);

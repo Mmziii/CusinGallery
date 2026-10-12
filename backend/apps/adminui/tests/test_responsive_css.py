@@ -438,6 +438,37 @@ class ResponsiveCssTests(SimpleTestCase):
         self.assertIn(".inline-group .tabular table", self.js)
         self.assertIn("MutationObserver", self.js)
 
+    def test_wide_product_variants_fit_their_inline_card_without_original_label_cells(self):
+        table = self.desktop[
+            "body.cusin-admin #container #variants-group .tabular table"
+        ]
+        self.assertEqual(table["table-layout"], "fixed")
+        self.assertEqual(table["width"], "100%")
+        self.assertEqual(table["min-width"], "100%")
+        self.assertEqual(table["max-width"], "100%")
+        for selector in (
+            "body.cusin-admin #container .inline-group .tabular thead th.original",
+            "body.cusin-admin #container .inline-group .tabular tbody tr.form-row > td.original",
+        ):
+            with self.subTest(selector=selector):
+                self.assertEqual(self.desktop[selector]["display"], "none !important")
+        widths = {
+            "sku": "15%",
+            "price": "13.5%",
+            "stock_quantity": "15%",
+            "is_active": "9%",
+            "attribute_values": "35.5%",
+            "last-child": "12%",
+        }
+        for field, width in widths.items():
+            selector = (
+                f"body.cusin-admin #container #variants-group .tabular tbody td.field-{field}"
+                if field != "last-child"
+                else "body.cusin-admin #container #variants-group .tabular tbody td.delete"
+            )
+            with self.subTest(field=field):
+                self.assertEqual(self.desktop[selector]["width"], width)
+
     def test_image_gallery_cards_remain_bounded_on_small_screens(self):
         self.assertEqual(self.phone[".cusin-gallery"]["grid-template-columns"], "minmax(0, 1fr)")
         self.assertEqual(self.phone[".cusin-gallery-card"]["box-sizing"], "border-box")
