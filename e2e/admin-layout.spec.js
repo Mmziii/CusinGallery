@@ -146,6 +146,54 @@ async function assertNineDigitNumericInputs(page, listPath, inputSelector) {
   }
 }
 
+async function assertProductHeaderWrapping(page) {
+  const headers = await page.locator("#result_list thead tr:first-child > th").evaluateAll((cells) =>
+    cells.map((cell) => {
+      const text = cell.innerText.trim().replace(/\s+/g, " ");
+      const textNodes = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT);
+      const textRects = [];
+      let node;
+      while ((node = textNodes.nextNode())) {
+        if (!node.nodeValue.trim()) continue;
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        for (const rect of range.getClientRects()) {
+          if (rect.width > 0 && rect.height > 0) {
+            textRects.push({ left: rect.left, right: rect.right, top: rect.top });
+          }
+        }
+      }
+      const lines = textRects.map((rect) => rect.top).sort((a, b) => a - b).reduce((unique, top) => {
+        if (!unique.some((existing) => Math.abs(existing - top) < 1)) unique.push(top);
+        return unique;
+      }, []);
+      const cellRect = cell.getBoundingClientRect();
+      const style = getComputedStyle(cell);
+      return {
+        text,
+        wordCount: text ? text.split(/\s+/).length : 0,
+        lineCount: lines.length,
+        textRects,
+        cell: { left: cellRect.left, right: cellRect.right },
+        overflowWrap: style.overflowWrap,
+        wordBreak: style.wordBreak,
+        hyphens: style.hyphens,
+      };
+    })
+  );
+  for (const header of headers.filter((item) => item.wordCount > 0)) {
+    expect(header.lineCount, `header should use at most two lines: ${JSON.stringify(header)}`).toBeLessThanOrEqual(2);
+    expect(header.lineCount, `header must break only between words: ${JSON.stringify(header)}`).toBeLessThanOrEqual(header.wordCount);
+    expect(header.overflowWrap).toBe("normal");
+    expect(header.wordBreak).toBe("normal");
+    expect(header.hyphens).toBe("none");
+    for (const rect of header.textRects) {
+      expect(rect.left, `header text should remain inside its cell: ${JSON.stringify(header)}`).toBeGreaterThanOrEqual(header.cell.left - 0.5);
+      expect(rect.right, `header text should remain inside its cell: ${JSON.stringify(header)}`).toBeLessThanOrEqual(header.cell.right + 0.5);
+    }
+  }
+}
+
 async function assertDesktopChangelistLayout(page, pagePath) {
   const metrics = await page.evaluate(() => {
     const wrapper = document.querySelector("#changelist .results");
@@ -261,8 +309,12 @@ async function assertDesktopChangelistLayout(page, pagePath) {
     expect(metrics.productName.height).toBeLessThanOrEqual(metrics.productName.lineHeight * 2 + 1);
 
     const headings = metrics.headers.map((header) => header.text);
-    expect(headings).toContain("وضعیت موجودی");
+    expect(headings).toContain("وضعیت");
     expect(headings).toContain("موجودی");
+    expect(headings).toContain("SKU");
+    expect(headings).toContain("ویژه");
+    expect(headings).toContain("قیمت (تومان)");
+    expect(headings).toContain("قیمت قبل از تخفیف");
   }
 }
 
@@ -801,7 +853,9 @@ test.describe("nine-digit numeric changelist inputs", () => {
     test.describe(`${width}px product changelist`, () => {
       test.use({ viewport: { width, height: 900 } });
 
-      test("price, compare-at and stock inputs show 123456789 without clipping", async ({ page }) => {
+      test("price, compare-at and stock inputs show 123456789 without clipping, and headers wrap only at words", async ({ page }) => {
+        await page.goto(`${BASE_URL}/admin/products/product/`, { waitUntil: "networkidle" });
+        await assertProductHeaderWrapping(page);
         await assertNineDigitNumericInputs(
           page,
           "/admin/products/product/",

@@ -79,7 +79,7 @@ class Product(TimeStampedModel, ActivableModel):
     # restores all funnel through it.
     name = models.CharField("نام محصول", max_length=255)
     slug = models.SlugField("شناسه (آدرس)", max_length=280, unique=True, allow_unicode=True)
-    sku = models.CharField("کد کالا (SKU)", max_length=64, unique=True)
+    sku = models.CharField("SKU", max_length=64, unique=True)
 
     category = models.ForeignKey(
         Category, on_delete=models.PROTECT, related_name="products", verbose_name="دسته‌بندی"
@@ -101,10 +101,10 @@ class Product(TimeStampedModel, ActivableModel):
 
     price = models.PositiveBigIntegerField("قیمت (تومان)")
     compare_at_price = models.PositiveBigIntegerField(
-        "قیمت قبل از تخفیف (تومان)",
+        "قیمت قبل از تخفیف",
         null=True,
         blank=True,
-        help_text="قیمت خط‌خوردهٔ نمایشی. در صورت درج باید بزرگ‌تر یا مساوی قیمت فروش باشد.",
+        help_text="قیمت خط‌خوردهٔ نمایشی به تومان. در صورت درج باید بزرگ‌تر یا مساوی قیمت فروش باشد.",
     )
     discount_percentage = models.PositiveSmallIntegerField(
         "درصد تخفیف", default=0, validators=[MinValueValidator(0), MaxValueValidator(100)]
@@ -117,7 +117,7 @@ class Product(TimeStampedModel, ActivableModel):
     )
 
     is_featured = models.BooleanField(
-        "محصول ویژه", default=False, help_text="در بخش «محصولات ویژه» صفحهٔ اصلی نمایش داده می‌شود."
+        "ویژه", default=False, help_text="در بخش «محصولات ویژه» صفحهٔ اصلی نمایش داده می‌شود."
     )
     is_new = models.BooleanField("محصول جدید", default=False)
     is_best_seller = models.BooleanField("محصول پرفروش", default=False)

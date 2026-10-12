@@ -266,6 +266,28 @@ class ResponsiveCssTests(SimpleTestCase):
         self.assertEqual(numeric["text-align"], "left")
         self.assertEqual(numeric["font-variant-numeric"], "tabular-nums")
 
+    def test_product_headers_wrap_between_words_and_use_short_labels(self):
+        selector = (
+            "body.cusin-admin.app-products.model-product #container #changelist "
+            "#result_list thead th"
+        )
+        headers = self.desktop[selector]
+        self.assertEqual(headers["overflow-wrap"], "normal")
+        self.assertEqual(headers["word-break"], "normal")
+        self.assertEqual(headers["hyphens"], "none")
+        self.assertEqual(headers["padding-inline"], "2px")
+        self.assertEqual(
+            self.desktop[
+                "body.cusin-admin.app-products.model-product #container #changelist "
+                "#result_list thead th .text a"
+            ]["padding"],
+            "0",
+        )
+        self.assertEqual(Product._meta.get_field("sku").verbose_name, "SKU")
+        self.assertEqual(Product._meta.get_field("compare_at_price").verbose_name, "قیمت قبل از تخفیف")
+        self.assertEqual(Product._meta.get_field("is_featured").verbose_name, "ویژه")
+        self.assertEqual(admin.site._registry[Product].stock_column.short_description, "وضعیت")
+
     def test_product_names_are_clamped_to_two_lines(self):
         product_name = self.desktop[
             "body.cusin-admin.app-products.model-product #result_list .field-name > a"
