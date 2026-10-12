@@ -141,7 +141,7 @@ class ProductStockHeadingTests(SimpleTestCase):
     def test_product_stock_badge_uses_a_distinct_heading(self):
         from apps.products.admin import ProductAdmin
 
-        self.assertEqual(ProductAdmin.stock_column.short_description, "وضعیت موجودی")
+        self.assertEqual(ProductAdmin.stock_column.short_description, "وضعیت")
 
 
 PRODUCT_CHANGELIST_TEMPLATE = (
