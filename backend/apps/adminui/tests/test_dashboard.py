@@ -316,7 +316,7 @@ class DashboardViewTests(CacheIsolationMixin, TestCase):
         for order in orders:
             with self.subTest(order=order.order_number):
                 expected = (
-                    f'<th class="cusin-order-number" dir="ltr" scope="row">'
+                    f'<th class="cusin-order-number" data-label="شماره" dir="ltr" scope="row">'
                     f'<a href="{reverse("admin:orders_order_change", args=[order.pk])}">'
                     f"{order.order_number}</a></th>"
                 )
