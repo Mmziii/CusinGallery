@@ -752,10 +752,26 @@ test.describe("shared menus and phone navigation", () => {
         const filterPanel = page.locator("#cusin-menu-panel-filters");
         if (viewport.width <= 480) {
           await expect(filterPanel).toHaveClass(/is-sheet/);
+          await expect(filterPanel).toHaveClass(/is-side-sheet/);
+          await expect(filterPanel).toHaveAttribute("aria-labelledby", await filterTrigger.getAttribute("id"));
+          const sheet = await filterPanel.boundingBox();
+          expect(sheet.x).toBeGreaterThanOrEqual(0);
+          expect(sheet.x + sheet.width).toBeLessThanOrEqual(viewport.width + 0.5);
+          expect(sheet.y).toBeLessThanOrEqual(8.5);
+          expect(sheet.y + sheet.height).toBeGreaterThanOrEqual(viewport.height - 8.5);
         } else {
           await expect(filterPanel).not.toHaveClass(/is-sheet/);
           const panelWidth = await filterPanel.evaluate((el) => el.getBoundingClientRect().width);
           expect(panelWidth, "desktop filters should remain a bounded popover").toBeLessThanOrEqual(500);
+          if (viewport.width >= 1280) {
+            const anchor = await page.evaluate(() => {
+              const trigger = document.querySelector(".cusin-filter-menu [data-cusin-menu-trigger]").getBoundingClientRect();
+              const panel = document.querySelector("#cusin-menu-panel-filters").getBoundingClientRect();
+              const rtl = getComputedStyle(document.documentElement).direction === "rtl";
+              return { trigger: rtl ? trigger.right : trigger.left, panel: rtl ? panel.right : panel.left };
+            });
+            expect(Math.abs(anchor.panel - anchor.trigger), "desktop filter panel should anchor to its trigger edge").toBeLessThanOrEqual(1);
+          }
         }
         await assertPanelInViewport(page, "#cusin-menu-panel-filters");
         await page.keyboard.press("Escape");
@@ -802,6 +818,64 @@ test.describe("shared menus and phone navigation", () => {
       });
     });
   }
+});
+
+test.describe("changelist filter cleanup and active chips", () => {
+  test.skip(!USER || !PASSWORD, "set E2E_ADMIN_USER and E2E_ADMIN_PASSWORD to run");
+  test.use({ viewport: { width: 1280, height: 900 } });
+
+  test.beforeEach(async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "chromium", "desktop project only");
+    await login(page);
+  });
+
+  test("remove count links and arrow labels; expose removable chips above filtered results", async ({ page }) => {
+    const filteredUrl = `${BASE_URL}/admin/products/product/?is_active__exact=1&q=MUG-300`;
+    await page.goto(filteredUrl, { waitUntil: "networkidle" });
+    await expect(page.locator("#changelist-filter-extra-actions")).toHaveCount(0);
+    const groups = page.locator("#cusin-menu-panel-filters #changelist-filter details");
+    expect(await groups.evaluateAll((items) => items.map((item) => item.open))).toEqual(
+      Array(await groups.count()).fill(false),
+    );
+    const summaryStyle = await groups.first().locator(":scope > summary").evaluate((el) => ({
+      minHeight: getComputedStyle(el).minHeight,
+      padding: getComputedStyle(el).padding,
+    }));
+    expect(summaryStyle).toEqual({ minHeight: "34px", padding: "4px 6px" });
+
+    const chips = page.locator(".cusin-active-filters");
+    await expect(chips).toBeVisible();
+    const individual = chips.locator(".cusin-filter-chip:not(.cusin-filter-chip--clear)").first();
+    await expect(individual).toHaveText("بله");
+    const clearAll = chips.locator(".cusin-filter-chip--clear");
+    await expect(clearAll).toHaveText("حذف همهٔ فیلترها");
+    const clearUrl = new URL(await clearAll.getAttribute("href"), BASE_URL);
+    expect(clearUrl.searchParams.get("q")).toBe("MUG-300");
+    expect(clearUrl.searchParams.has("is_active__exact")).toBe(false);
+    const aboveResults = await chips.evaluate((el) => Boolean(
+      el.compareDocumentPosition(document.querySelector("#result_list")) & Node.DOCUMENT_POSITION_FOLLOWING
+    ));
+    expect(aboveResults).toBe(true);
+
+    await individual.click();
+    await page.waitForURL((url) => !url.searchParams.has("is_active__exact"));
+    await expect(page.locator(".cusin-active-filters")).toHaveCount(0);
+
+    await page.goto(filteredUrl, { waitUntil: "networkidle" });
+    await page.locator(".cusin-filter-chip--clear").click();
+    await page.waitForURL((url) => url.searchParams.get("q") === "MUG-300" && !url.searchParams.has("is_active__exact"));
+    await expect(page.locator(".cusin-active-filters")).toHaveCount(0);
+
+    await page.goto(`${BASE_URL}/admin/orders/order/`, { waitUntil: "networkidle" });
+    await expect(page.locator("#changelist-filter-extra-actions")).toHaveCount(0);
+    const dateTrigger = page.locator(".cusin-date-menu [data-cusin-menu-trigger]");
+    if (await dateTrigger.count()) {
+      await dateTrigger.click();
+      const dateLabels = await page.locator("#cusin-menu-panel-date-range:not([hidden]) .cusin-menu-item").allTextContents();
+      expect(dateLabels.length).toBeGreaterThan(0);
+      expect(dateLabels.some((label) => /^[‹›←→]/.test(label.trim()))).toBe(false);
+    }
+  });
 });
 
 test.describe("product and image import pages at 320px", () => {

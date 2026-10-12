@@ -144,8 +144,9 @@
     var viewportWidth = Math.max(document.documentElement.clientWidth, window.innerWidth || 0);
     var viewportHeight = Math.max(document.documentElement.clientHeight, window.innerHeight || 0);
     var margin = 8;
+    var rtl = document.documentElement.getAttribute("dir") === "rtl";
 
-    panel.classList.remove("is-sheet");
+    panel.classList.remove("is-sheet", "is-side-sheet");
     panel.style.position = "fixed";
     panel.style.zIndex = "1001";
     panel.style.visibility = "hidden";
@@ -168,6 +169,11 @@
     var useSheet = viewportWidth <= 480;
     var panelHeight = 0;
     if (!useSheet) {
+      // Keep the popover attached to its trigger even when there is not room
+      // for its preferred width on the trigger's RTL start edge.
+      var anchoredWidth = rtl ? triggerRect.right - margin : viewportWidth - triggerRect.left - margin;
+      panelWidth = Math.min(panelWidth, Math.max(0, anchoredWidth));
+      panel.style.minWidth = Math.min(220, panelWidth) + "px";
       // Width changes can wrap long filter labels, so measure the actual
       // bounded box only after applying its final desktop width.
       panel.style.width = panelWidth + "px";
@@ -178,17 +184,30 @@
 
     if (useSheet) {
       panel.classList.add("is-sheet");
-      panel.style.left = margin + "px";
-      panel.style.right = margin + "px";
-      panel.style.top = "auto";
-      panel.style.bottom = margin + "px";
-      panel.style.width = "auto";
-      panel.style.maxWidth = "none";
-      panel.style.maxHeight = Math.max(120, Math.min(viewportHeight - margin * 2, viewportHeight * 0.72)) + "px";
+      if (menu.root.classList.contains("cusin-filter-menu")) {
+        // Filters use a full-height side sheet on phones, aligned to the
+        // filter trigger's RTL start edge instead of a generic bottom tray.
+        panel.classList.add("is-side-sheet");
+        var sheetWidth = Math.min(panelWidth, Math.max(0, viewportWidth - margin * 2));
+        panel.style.left = rtl ? "auto" : margin + "px";
+        panel.style.right = rtl ? margin + "px" : "auto";
+        panel.style.top = margin + "px";
+        panel.style.bottom = margin + "px";
+        panel.style.width = sheetWidth + "px";
+        panel.style.maxWidth = sheetWidth + "px";
+        panel.style.maxHeight = Math.max(120, viewportHeight - margin * 2) + "px";
+      } else {
+        panel.style.left = margin + "px";
+        panel.style.right = margin + "px";
+        panel.style.top = "auto";
+        panel.style.bottom = margin + "px";
+        panel.style.width = "auto";
+        panel.style.maxWidth = "none";
+        panel.style.maxHeight = Math.max(120, Math.min(viewportHeight - margin * 2, viewportHeight * 0.72)) + "px";
+      }
       menu.scrollLocked = true;
       if (!wasLocked) lockBodyScroll();
     } else {
-      var rtl = document.documentElement.getAttribute("dir") === "rtl";
       var left = rtl ? triggerRect.right - panelWidth : triggerRect.left;
       var top = triggerRect.bottom + 6;
       if (top + panelHeight > viewportHeight - margin && triggerRect.top - panelHeight - 6 >= margin) {
@@ -210,7 +229,7 @@
     var menu = activeMenu;
     restoreConfirmation(menu);
     menu.panel.hidden = true;
-    menu.panel.classList.remove("is-sheet", "is-confirming");
+    menu.panel.classList.remove("is-sheet", "is-side-sheet", "is-confirming");
     menu.panel.removeAttribute("style");
     if (menu.placeholder && menu.placeholder.parentNode) {
       menu.placeholder.parentNode.insertBefore(menu.panel, menu.placeholder);
@@ -540,6 +559,24 @@
     });
   }
 
+  function stripLeadingArrows(text) {
+    return String(text || "")
+      .replace(/^[\s\u200e\u200f]*[‹›←→↔]+[\s\u200e\u200f]*/, "")
+      .trim();
+  }
+
+  function clearFilterUrl() {
+    var current = new URL(window.location.href);
+    var keep = new URLSearchParams();
+    ["q", "o", "ot"].forEach(function (key) {
+      current.searchParams.getAll(key).forEach(function (value) {
+        keep.append(key, value);
+      });
+    });
+    var query = keep.toString();
+    return current.pathname + (query ? "?" + query : "");
+  }
+
   function initChangelistToolbar() {
     var changelist = document.getElementById("changelist");
     if (!changelist || changelist.dataset.cusinToolbarReady) return;
@@ -559,7 +596,8 @@
       if (dateLinks.length) {
         var dateMenu = makeMenu("بازهٔ زمانی", "date-range", "calendar", "cusin-date-menu");
         dateLinks.forEach(function (link) {
-          addMenuItem(dateMenu.panel, link.textContent.trim(), link.href, "calendar");
+          var label = stripLeadingArrows(link.textContent);
+          if (label) addMenuItem(dateMenu.panel, label, link.href, "calendar");
         });
         toolbar.appendChild(dateMenu.root);
       }
@@ -570,16 +608,22 @@
     if (filterNav) {
       var filterMenu = makeMenu("فیلتر", "filters", "filter", "cusin-filter-menu");
       filterMenu.panel.classList.add("cusin-filter-panel");
+      var extraActions = filterNav.querySelector("#changelist-filter-extra-actions");
+      if (extraActions) extraActions.remove();
+
       var chips = document.createElement("div");
       chips.className = "cusin-active-filters";
       chips.setAttribute("aria-label", "فیلترهای فعال");
+      var isResetChoice = function (text) {
+        return /^(?:همه(?:\s+موارد)?|هر تاریخی|all)$/i.test(text.trim());
+      };
       filterNav.querySelectorAll("details[data-filter-title]").forEach(function (details) {
         var selected = details.querySelector("li.selected a");
         if (!selected) return;
-        var label = selected.textContent.trim();
-        if (!label || /^(همه|همه موارد|all)$/i.test(label)) return;
+        var label = stripLeadingArrows(selected.textContent);
+        if (!label || isResetChoice(label)) return;
         var remove = Array.prototype.slice.call(details.querySelectorAll("li a")).find(function (link) {
-          return /^(همه|همه موارد|all)$/i.test(link.textContent.trim());
+          return isResetChoice(link.textContent.trim());
         });
         if (remove) {
           var chip = document.createElement("a");
@@ -593,7 +637,16 @@
       });
       filterMenu.panel.appendChild(filterNav);
       toolbar.appendChild(filterMenu.root);
-      if (chips.childElementCount) toolbar.appendChild(chips);
+      if (chips.childElementCount) {
+        var clearAll = document.createElement("a");
+        clearAll.className = "cusin-filter-chip cusin-filter-chip--clear";
+        clearAll.href = clearFilterUrl();
+        clearAll.setAttribute("aria-label", "حذف همهٔ فیلترها");
+        clearAll.textContent = "حذف همهٔ فیلترها";
+        clearAll.appendChild(spriteIcon("x"));
+        chips.insertBefore(clearAll, chips.firstChild);
+        toolbar.appendChild(chips);
+      }
     }
 
     var sortHeaders = document.querySelectorAll("#result_list thead th .text a[href]");

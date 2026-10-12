@@ -2379,6 +2379,14 @@ body.cusin-admin .skip-to-content-link {
   padding: 10px;
   box-shadow: 0 -8px 32px rgba(17, 24, 39, 0.16);
 }
+.cusin-filter-panel.is-side-sheet {
+  border-radius: 16px 0 0 16px;
+  box-shadow: -8px 0 32px rgba(17, 24, 39, 0.16);
+}
+[dir="ltr"] .cusin-filter-panel.is-side-sheet {
+  border-radius: 0 16px 16px 0;
+  box-shadow: 8px 0 32px rgba(17, 24, 39, 0.16);
+}
 .cusin-menu-item {
   display: flex;
   align-items: center;
@@ -2506,6 +2514,11 @@ body.cusin-admin .skip-to-content-link {
   text-decoration: none;
 }
 .cusin-filter-chip .cusin-icon { width: 14px; height: 14px; }
+.cusin-filter-chip--clear {
+  border-color: #e3b7b1;
+  background: #fff2f0;
+  color: var(--cusin-danger-text, var(--cg-danger-text));
+}
 .cusin-filter-panel { width: min(460px, calc(100vw - 16px)); max-width: calc(100vw - 16px); }
 #changelist-filter {
   position: static;
@@ -2521,13 +2534,17 @@ body.cusin-admin .skip-to-content-link {
 #changelist-filter h2,
 #changelist-filter h3 { color: var(--cusin-text); }
 #changelist-filter details > summary {
-  min-height: 40px;
-  padding: 6px 8px;
+  min-height: 34px;
+  padding: 4px 6px;
   color: var(--cusin-text);
   font-weight: 700;
+  line-height: 1.5;
 }
-#changelist-filter li a { min-height: 40px; color: var(--cusin-text); }
+#changelist-filter li a { min-height: 32px; padding: 3px 8px; color: var(--cusin-text); }
 #changelist-filter li.selected a { background: var(--cusin-accent-bg); color: var(--cg-olive-hover); border-color: var(--cg-olive); }
+#changelist-filter details + details { border-top: 1px solid var(--cusin-border); }
+#changelist-filter ul { gap: 4px; margin-bottom: 4px; }
+#changelist-filter-extra-actions { display: none !important; }
 .cusin-date-menu .cusin-menu-panel,
 .cusin-sort-menu .cusin-menu-panel { max-height: min(70vh, 480px); }
 .cusin-bulk-menu { margin-inline-end: 10px; }
@@ -3098,6 +3115,7 @@ body.login #footer { display: none; }
   body.cusin-admin .cusin-row-edit,
   body.cusin-admin .cusin-row-more,
   body.cusin-admin #changelist-filter li a,
+  body.cusin-admin #changelist-filter details > summary,
   body.cusin-admin .calendar td a,
   body.cusin-admin .datetimeshortcuts a,
   body.cusin-admin .calendar-shortcuts a,

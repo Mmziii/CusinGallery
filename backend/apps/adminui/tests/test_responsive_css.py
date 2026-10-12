@@ -287,6 +287,26 @@ class ResponsiveCssTests(SimpleTestCase):
                     source,
                 )
 
+    def test_filter_panel_groups_are_compact_and_active_chips_can_clear_filters(self):
+        summary = self.base["#changelist-filter details > summary"]
+        self.assertEqual(summary["min-height"], "34px")
+        self.assertEqual(summary["padding"], "4px 6px")
+        self.assertEqual(self.base["#changelist-filter li a"]["min-height"], "32px")
+        self.assertEqual(self.base["#changelist-filter ul"]["gap"], "4px")
+        self.assertEqual(self.base["#changelist-filter-extra-actions"]["display"], "none !important")
+        self.assertEqual(self.base[".cusin-filter-panel.is-side-sheet"]["border-radius"], "16px 0 0 16px")
+        self.assertEqual(self.base[".cusin-filter-chip--clear"]["background"], "#fff2f0")
+
+        filter_template = BASE / "templates" / "admin" / "filter.html"
+        source = filter_template.read_text(encoding="utf-8")
+        self.assertIn('<details data-filter-title="{{ title }}">', source)
+        self.assertNotIn('<details data-filter-title="{{ title }}" open>', source)
+        self.assertIn("{{ choice.display }}", source)
+        self.assertIn("filterNav.querySelector(\"#changelist-filter-extra-actions\")", self.js)
+        self.assertIn("function stripLeadingArrows", self.js)
+        self.assertIn("حذف همهٔ فیلترها", self.js)
+        self.assertIn("function clearFilterUrl", self.js)
+
     # --- no horizontal scroll --------------------------------------------
 
     def test_fixed_width_stock_inputs_shrink_to_the_phone_width(self):
