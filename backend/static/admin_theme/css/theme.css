@@ -3529,3 +3529,40 @@ body.cusin-admin #container #cusin-drawer .cusin-drawer-dash.is-active,
 body.cusin-admin #container #cusin-drawer .cusin-nav-link.is-active {
   color: var(--cg-olive-hover);
 }
+
+/* Follow-up 6: import workflows contain older inline 12–13px hints and
+   dense tables. Keep all copy readable without letting native file controls
+   or long spreadsheet values widen the page on a phone. */
+body.cusin-admin.cusin-import-page #content * {
+  font-size: max(14px, 1em) !important;
+}
+body.cusin-admin.cusin-import-page #content > h1 {
+  font-size: 1.5rem !important;
+}
+body.cusin-admin.cusin-import-page #content h2 {
+  font-size: 1.0625rem !important;
+}
+body.cusin-admin.cusin-import-page #content form,
+body.cusin-admin.cusin-import-page #content fieldset {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+body.cusin-admin.cusin-import-page #content input[type="file"] {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+body.cusin-admin.cusin-import-page #content table {
+  width: 100%;
+  max-width: 100%;
+  table-layout: fixed;
+  overflow-wrap: anywhere;
+}
+body.cusin-admin.cusin-import-page #content th,
+body.cusin-admin.cusin-import-page #content td,
+body.cusin-admin.cusin-import-page #content code {
+  overflow-wrap: anywhere;
+}

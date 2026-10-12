@@ -253,6 +253,40 @@ class ResponsiveCssTests(SimpleTestCase):
         )
         self.assertEqual(self.base[".cusin-menu-item.is-danger"]["color"], "var(--cg-danger-text)")
 
+    def test_product_and_image_import_pages_enforce_readable_type_and_mobile_bounds(self):
+        page_selector = "body.cusin-admin.cusin-import-page #content"
+        typography = self.base[f"{page_selector} *"]
+        self.assertEqual(typography["font-size"], "max(14px, 1em) !important")
+        self.assertEqual(self.base[f"{page_selector} > h1"]["font-size"], "1.5rem !important")
+        self.assertEqual(self.base[f"{page_selector} h2"]["font-size"], "1.0625rem !important")
+
+        file_input = self.base[f'{page_selector} input[type="file"]']
+        self.assertEqual(file_input["width"], "100%")
+        self.assertEqual(file_input["min-width"], "0")
+        self.assertEqual(file_input["max-width"], "100%")
+        self.assertEqual(file_input["box-sizing"], "border-box")
+        table = self.base[f"{page_selector} table"]
+        self.assertEqual(table["width"], "100%")
+        self.assertEqual(table["table-layout"], "fixed")
+        self.assertEqual(self.base[f"{page_selector} td"]["overflow-wrap"], "anywhere")
+
+        import_templates = (
+            "product_import_form.html",
+            "product_import_mapping.html",
+            "product_import_sheet.html",
+            "product_import_preview.html",
+            "product_image_import.html",
+            "product_image_import_preview.html",
+        )
+        template_dir = BASE / "apps" / "products" / "templates" / "admin" / "products"
+        for template_name in import_templates:
+            with self.subTest(template=template_name):
+                source = (template_dir / template_name).read_text(encoding="utf-8")
+                self.assertIn(
+                    "{% block bodyclass %}{{ block.super }} cusin-import-page{% endblock %}",
+                    source,
+                )
+
     # --- no horizontal scroll --------------------------------------------
 
     def test_fixed_width_stock_inputs_shrink_to_the_phone_width(self):

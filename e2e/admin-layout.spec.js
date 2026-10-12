@@ -804,6 +804,31 @@ test.describe("shared menus and phone navigation", () => {
   }
 });
 
+test.describe("product and image import pages at 320px", () => {
+  test.skip(!USER || !PASSWORD, "set E2E_ADMIN_USER and E2E_ADMIN_PASSWORD to run");
+  test.use({ viewport: { width: 320, height: 760 } });
+
+  test("keep all copy readable and prevent page-level horizontal overflow", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "chromium", "desktop project only; this test sets its own viewport");
+    await login(page);
+
+    for (const pagePath of [
+      "/admin/products/product/import/",
+      "/admin/products/product/image-import/",
+    ]) {
+      await page.goto(`${BASE_URL}${pagePath}`, { waitUntil: "networkidle" });
+      await expect(page.locator("body")).toHaveClass(/cusin-import-page/);
+      await assertNoHorizontalOverflow(page);
+      await assertAdminTypography(page);
+      const upload = page.locator('#content input[type="file"]');
+      await expect(upload).toBeVisible();
+      const bounds = await upload.boundingBox();
+      expect(bounds.x, `${pagePath} file control should stay inside the viewport`).toBeGreaterThanOrEqual(0);
+      expect(bounds.x + bounds.width, `${pagePath} file control should stay inside the viewport`).toBeLessThanOrEqual(320);
+    }
+  });
+});
+
 test.describe("light theme is independent of the operating-system color scheme", () => {
   test.skip(!USER || !PASSWORD, "set E2E_ADMIN_USER and E2E_ADMIN_PASSWORD to run");
 

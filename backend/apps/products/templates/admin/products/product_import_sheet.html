@@ -6,6 +6,8 @@ Part S5 item 8: a workbook with more than one sheet -> ask which sheet to
 read before anything is parsed. The file itself is kept on the server
 (hidden token), so the owner does not have to select it again.
 {% endcomment %}
+{% block bodyclass %}{{ block.super }} cusin-import-page{% endblock %}
+
 {% block content %}
 <h1>کدام شیت خوانده شود؟</h1>
 <p>
