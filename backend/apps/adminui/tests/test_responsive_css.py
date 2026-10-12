@@ -10,7 +10,12 @@ import re
 from pathlib import Path
 
 from django.conf import settings
-from django.test import SimpleTestCase
+from django.contrib import admin
+from django.contrib.auth.models import AnonymousUser
+from django.test import RequestFactory, SimpleTestCase
+
+from apps.banners.models import Banner
+from apps.products.models import Brand, Product
 
 BASE = Path(settings.BASE_DIR)
 THEME_CSS = BASE / "static" / "admin_theme" / "css" / "theme.css"
@@ -94,6 +99,22 @@ class ResponsiveCssTests(SimpleTestCase):
             return self.phone[selector][prop]
         return self.base.get(selector, {}).get(prop)
 
+    def test_numeric_changelist_widgets_are_explicitly_ltr_and_mobile_numeric(self):
+        request = RequestFactory().get("/admin/")
+        request.user = AnonymousUser()
+        cases = (
+            (Product, ("price", "compare_at_price", "stock_quantity")),
+            (Brand, ("display_order",)),
+            (Banner, ("ordering",)),
+        )
+        for model, field_names in cases:
+            formset = admin.site._registry[model].get_changelist_formset(request)
+            for field_name in field_names:
+                with self.subTest(model=model.__name__, field=field_name):
+                    widget = formset.form.base_fields[field_name].widget
+                    self.assertEqual(widget.attrs.get("dir"), "ltr")
+                    self.assertEqual(widget.attrs.get("inputmode"), "numeric")
+
     # --- drawer -----------------------------------------------------------
 
     def test_drawer_is_off_canvas_below_1024px(self):
@@ -169,11 +190,11 @@ class ResponsiveCssTests(SimpleTestCase):
         lists = {
             "app-products.model-product": {
                 "action-checkbox-column": "4%", "column-thumbnail_column": "6%",
-                "column-name": "12%", "column-sku": "7%", "column-category": "9%",
-                "column-brand": "6%", "column-price": "8%",
-                "column-compare_at_price": "9%", "column-stock_column": "8%",
-                "column-stock_quantity": "8%", "column-is_active": "5%",
-                "column-is_featured": "8%", "column-cusin-row-actions": "10%",
+                "column-name": "8%", "column-sku": "4%", "column-category": "8%",
+                "column-brand": "4%", "column-price": "14%",
+                "column-compare_at_price": "14%", "column-stock_column": "6%",
+                "column-stock_quantity": "14%", "column-is_active": "4%",
+                "column-is_featured": "4%", "column-cusin-row-actions": "10%",
             },
             "app-orders.model-order": {
                 "action-checkbox-column": "4%", "column-order_number": "15%",
@@ -215,7 +236,7 @@ class ResponsiveCssTests(SimpleTestCase):
                 with self.subTest(selector=selector):
                     self.assertEqual(self.desktop[selector]["width"], expected_width)
 
-    def test_desktop_row_actions_stay_compact_and_product_fields_are_narrow(self):
+    def test_desktop_row_actions_stay_compact_and_product_numeric_inputs_fit_nine_digits(self):
         actions = self.desktop[
             "body.cusin-admin #container #changelist #result_list tbody td.cusin-row-actions"
         ]
@@ -235,9 +256,15 @@ class ResponsiveCssTests(SimpleTestCase):
         for field in ("price", "compare_at_price", "stock_quantity"):
             with self.subTest(field=field):
                 control = self.desktop[f"{product} td.field-{field} input"]
-                self.assertEqual(control["min-width"], "0")
-                self.assertEqual(control["max-width"], "80px")
+                self.assertEqual(control["min-width"], "108px")
+                self.assertEqual(control["max-width"], "120px")
                 self.assertEqual(control["box-sizing"], "border-box")
+        numeric = self.desktop[
+            'body.cusin-admin #container #changelist #result_list tbody td input[type="number"]'
+        ]
+        self.assertEqual(numeric["direction"], "ltr")
+        self.assertEqual(numeric["text-align"], "left")
+        self.assertEqual(numeric["font-variant-numeric"], "tabular-nums")
 
     def test_product_names_are_clamped_to_two_lines(self):
         product_name = self.desktop[

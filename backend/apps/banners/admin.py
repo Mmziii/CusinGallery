@@ -9,11 +9,13 @@ from django.contrib import admin, messages
 from django.utils import timezone
 from django.utils.html import format_html
 
+from apps.adminui.admin_forms import NumericChangelistAdminMixin
+
 from .models import Banner, DailyDeal
 
 
 @admin.register(Banner)
-class BannerAdmin(admin.ModelAdmin):
+class BannerAdmin(NumericChangelistAdminMixin, admin.ModelAdmin):
     list_display = (
         "preview", "title", "status_badge", "is_active", "ordering",
         "start_date", "end_date",

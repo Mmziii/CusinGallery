@@ -20,6 +20,8 @@ from django.utils.text import slugify
 
 from decimal import ROUND_HALF_UP, Decimal
 
+from apps.adminui.admin_forms import NumericChangelistAdminMixin
+
 import csv
 import glob
 import io
@@ -256,7 +258,7 @@ class ProductVariantInline(admin.TabularInline):
 
 
 @admin.register(Brand)
-class BrandAdmin(admin.ModelAdmin):
+class BrandAdmin(NumericChangelistAdminMixin, admin.ModelAdmin):
     # Part R2: featured tiles are managed right from the changelist --
     # tick is_featured and set display_order inline, or use bulk actions.
     list_display = ("name", "slug", "is_featured", "display_order", "is_active")
@@ -333,7 +335,7 @@ class HasImageFilter(admin.SimpleListFilter):
 
 
 @admin.register(Product)
-class ProductAdmin(admin.ModelAdmin):
+class ProductAdmin(NumericChangelistAdminMixin, admin.ModelAdmin):
     # Same columns as before PLUS compare_at_price and stock_quantity so
     # the owner can edit price / sale price / stock / active / featured
     # straight from the list (B4a). The changelist formset is built from

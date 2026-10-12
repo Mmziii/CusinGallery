@@ -89,6 +89,63 @@ async function assertNoHorizontalOverflow(page) {
   expect(scrollWidth, `scrollWidth ${scrollWidth} vs clientWidth ${clientWidth}`).toBeLessThanOrEqual(clientWidth);
 }
 
+async function assertNineDigitNumericInputs(page, listPath, inputSelector) {
+  await page.goto(`${BASE_URL}${listPath}`, { waitUntil: "networkidle" });
+  const inputs = page.locator(inputSelector);
+  const count = await inputs.count();
+  expect(count, `${listPath} should render list_editable numeric inputs`).toBeGreaterThan(0);
+  await inputs.evaluateAll((elements) => {
+    for (const input of elements) {
+      input.value = "123456789";
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+  });
+  const metrics = await inputs.evaluateAll((elements) => elements.map((input) => {
+    const style = getComputedStyle(input);
+    const rect = input.getBoundingClientRect();
+    const sample = document.createElement("span");
+    Object.assign(sample.style, {
+      position: "fixed",
+      left: "-10000px",
+      width: "max-content",
+      whiteSpace: "pre",
+      fontFamily: style.fontFamily,
+      fontSize: style.fontSize,
+      fontWeight: style.fontWeight,
+      fontStyle: style.fontStyle,
+      fontVariantNumeric: style.fontVariantNumeric,
+      fontFeatureSettings: style.fontFeatureSettings,
+      letterSpacing: style.letterSpacing,
+    });
+    sample.textContent = input.value;
+    document.body.appendChild(sample);
+    const textWidth = sample.getBoundingClientRect().width;
+    sample.remove();
+    const horizontalChrome =
+      parseFloat(style.paddingLeft) + parseFloat(style.paddingRight) +
+      parseFloat(style.borderLeftWidth) + parseFloat(style.borderRightWidth) + 14;
+    return {
+      value: input.value,
+      width: rect.width,
+      usableTextWidth: rect.width - horizontalChrome,
+      textWidth,
+      dir: input.getAttribute("dir"),
+      inputMode: input.getAttribute("inputmode"),
+      direction: style.direction,
+      fontVariantNumeric: style.fontVariantNumeric,
+    };
+  }));
+  for (const input of metrics) {
+    expect(input.value, `nine-digit value should remain intact: ${JSON.stringify(input)}`).toBe("123456789");
+    expect(input.dir).toBe("ltr");
+    expect(input.inputMode).toBe("numeric");
+    expect(input.direction).toBe("ltr");
+    expect(input.fontVariantNumeric).toContain("tabular-nums");
+    expect(input.textWidth, `digits should fit outside the spinner: ${JSON.stringify(input)}`)
+      .toBeLessThanOrEqual(input.usableTextWidth + 0.5);
+  }
+}
+
 async function assertDesktopChangelistLayout(page, pagePath) {
   const metrics = await page.evaluate(() => {
     const wrapper = document.querySelector("#changelist .results");
@@ -122,12 +179,19 @@ async function assertDesktopChangelistLayout(page, pagePath) {
     });
     const name = table.querySelector("tbody .field-name > a");
     const nameStyle = name && getComputedStyle(name);
-    const priceInputs = [...table.querySelectorAll(
-      "tbody td.field-price input, tbody td.field-compare_at_price input"
-    )].map((input) => ({
-      width: input.getBoundingClientRect().width,
-      minWidth: getComputedStyle(input).minWidth,
-    }));
+    const numericInputs = [...table.querySelectorAll(
+      "tbody td.field-price input, tbody td.field-compare_at_price input, tbody td.field-stock_quantity input"
+    )].map((input) => {
+      const style = getComputedStyle(input);
+      return {
+        width: input.getBoundingClientRect().width,
+        minWidth: style.minWidth,
+        dir: input.getAttribute("dir"),
+        inputMode: input.getAttribute("inputmode"),
+        direction: style.direction,
+        fontVariantNumeric: style.fontVariantNumeric,
+      };
+    });
     const wrapperBox = box(wrapper);
     return {
       wrapper: {
@@ -144,7 +208,7 @@ async function assertDesktopChangelistLayout(page, pagePath) {
         lineHeight: parseFloat(nameStyle.lineHeight),
         height: name.getBoundingClientRect().height,
       },
-      priceInputs,
+      numericInputs,
     };
   });
 
@@ -183,10 +247,15 @@ async function assertDesktopChangelistLayout(page, pagePath) {
   }
 
   if (pagePath === "/admin/products/product/") {
-    expect(metrics.priceInputs.length, "product changelist should expose both editable price fields").toBeGreaterThanOrEqual(2);
-    for (const input of metrics.priceInputs) {
-      expect(input.width, `product price input should stay narrow: ${JSON.stringify(input)}`).toBeLessThanOrEqual(90);
-      expect(input.minWidth).toBe("0px");
+    expect(metrics.numericInputs.length, "product changelist should expose every editable numeric field").toBeGreaterThanOrEqual(3);
+    for (const input of metrics.numericInputs) {
+      expect(input.width, `product numeric input should fit nine digits: ${JSON.stringify(input)}`).toBeGreaterThanOrEqual(108);
+      expect(input.width, `product numeric input should stay in its reserved column: ${JSON.stringify(input)}`).toBeLessThanOrEqual(120);
+      expect(input.minWidth).toBe("108px");
+      expect(input.dir).toBe("ltr");
+      expect(input.inputMode).toBe("numeric");
+      expect(input.direction).toBe("ltr");
+      expect(input.fontVariantNumeric).toContain("tabular-nums");
     }
     expect(metrics.productName.lineClamp).toBe("2");
     expect(metrics.productName.height).toBeLessThanOrEqual(metrics.productName.lineHeight * 2 + 1);
@@ -718,6 +787,51 @@ test.describe("admin pages at all requested viewport widths", () => {
       });
     });
   }
+});
+
+test.describe("nine-digit numeric changelist inputs", () => {
+  test.skip(!USER || !PASSWORD, "set E2E_ADMIN_USER and E2E_ADMIN_PASSWORD to run");
+
+  test.beforeEach(async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "chromium", "desktop project only");
+    await login(page);
+  });
+
+  for (const width of [1280, 1440, 1920]) {
+    test.describe(`${width}px product changelist`, () => {
+      test.use({ viewport: { width, height: 900 } });
+
+      test("price, compare-at and stock inputs show 123456789 without clipping", async ({ page }) => {
+        await assertNineDigitNumericInputs(
+          page,
+          "/admin/products/product/",
+          "#result_list tbody td.field-price input[type=number], " +
+            "#result_list tbody td.field-compare_at_price input[type=number], " +
+            "#result_list tbody td.field-stock_quantity input[type=number]"
+        );
+      });
+    });
+  }
+
+  test.describe("other editable admin lists at 1280px", () => {
+    test.use({ viewport: { width: 1280, height: 900 } });
+
+    test("brand display-order values remain readable", async ({ page }) => {
+      await assertNineDigitNumericInputs(
+        page,
+        "/admin/products/brand/",
+        "#result_list tbody td.field-display_order input[type=number]"
+      );
+    });
+
+    test("banner ordering values remain readable", async ({ page }) => {
+      await assertNineDigitNumericInputs(
+        page,
+        "/admin/banners/banner/",
+        "#result_list tbody td.field-ordering input[type=number]"
+      );
+    });
+  });
 });
 
 test.describe("shared menus and phone navigation", () => {
