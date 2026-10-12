@@ -194,11 +194,11 @@ context processor was removed) this page degrades to the stock app list.
           <tbody>
             {% for row in cusin_dashboard.latest_orders %}
             <tr>
-              <th class="cusin-order-number" dir="ltr" scope="row"><a href="{{ row.url }}">{{ row.order_number }}</a></th>
-              <td><span class="cusin-badge st-{{ row.status }}">{{ row.status_label }}</span></td>
-              <td><span class="cusin-badge pay-{{ row.payment_status }}">{{ row.payment_label }}</span></td>
-              <td class="cusin-nowrap">{{ row.total|toman }}</td>
-              <td class="cusin-nowrap"><span title="{{ row.created_at|date:'Y-m-d H:i' }}">{{ row.created_at|jdatetime }}</span></td>
+              <th class="cusin-order-number" data-label="شماره" dir="ltr" scope="row"><a href="{{ row.url }}">{{ row.order_number }}</a></th>
+              <td data-label="وضعیت"><span class="cusin-badge st-{{ row.status }}">{{ row.status_label }}</span></td>
+              <td data-label="پرداخت"><span class="cusin-badge pay-{{ row.payment_status }}">{{ row.payment_label }}</span></td>
+              <td class="cusin-nowrap" data-label="مبلغ">{{ row.total|toman }}</td>
+              <td class="cusin-nowrap" data-label="تاریخ"><span title="{{ row.created_at|date:'Y-m-d H:i' }}">{{ row.created_at|jdatetime }}</span></td>
             </tr>
             {% endfor %}
           </tbody>

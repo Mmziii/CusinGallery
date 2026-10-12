@@ -77,8 +77,8 @@ class DashboardWidthTests(TestCase):
 
 
 class DashboardLatestOrdersLayoutTests(SimpleTestCase):
-    """Item 3: recent-order numbers remain readable and their table scrolls
-    inside the dashboard card without clipping the card's height."""
+    """Item 6: keep all five order columns visible at desktop widths and
+    render labeled stacked order cards on phones."""
 
     def test_order_number_cell_is_ltr_nonbreaking_and_monospace(self):
         rule = _base_rules()[".cusin-orders-table .cusin-order-number"]
@@ -100,11 +100,39 @@ class DashboardLatestOrdersLayoutTests(SimpleTestCase):
                 self.assertEqual(column["width"], width)
                 self.assertEqual(column["min-width"], width)
 
-    def test_dashboard_template_marks_order_numbers_as_ltr_cells(self):
+    def test_desktop_card_spans_grid_so_all_five_columns_fit_at_1280px_plus(self):
+        css = _strip_comments(THEME_CSS.read_text(encoding="utf-8"))
+        wide = _rules(_media_block(css, "(min-width: 1280px)"))
+        card = 'body.cusin-admin #container .cusin-dash-cols > section[aria-label="آخرین سفارش‌ها"]'
+        table = "body.cusin-admin #container .cusin-orders-table"
+        self.assertEqual(wide[card]["grid-column"], "1 / -1")
+        self.assertEqual(wide[table]["width"], "100%")
+        self.assertEqual(wide[table]["max-width"], "100%")
+
+    def test_phone_order_rows_are_stacked_and_labeled_without_a_scrollport(self):
+        css = _strip_comments(THEME_CSS.read_text(encoding="utf-8"))
+        phone = _rules(_media_block(css, "(max-width: 767px)"))
+        scroll = "body.cusin-admin #container .cusin-orders-scroll"
+        table = "body.cusin-admin #container .cusin-orders-table"
+        body = "body.cusin-admin #container .cusin-orders-table tbody"
+        row = "body.cusin-admin #container .cusin-orders-table tbody tr"
+        label = "body.cusin-admin #container .cusin-orders-table tbody tr > td::before"
+        self.assertEqual(phone[scroll]["overflow-x"], "visible")
+        self.assertEqual(phone[table]["display"], "block")
+        self.assertEqual(phone[table]["min-width"], "0")
+        self.assertEqual(phone[body]["display"], "grid")
+        self.assertEqual(phone[row]["display"], "grid")
+        self.assertEqual(phone[label]["content"], "attr(data-label)")
+        self.assertEqual(phone[label]["font-size"], "14px")
+
+    def test_dashboard_template_marks_ltr_order_numbers_and_every_card_label(self):
         template = (BASE / "templates" / "admin" / "index.html").read_text(encoding="utf-8")
         self.assertIn('class="cusin-mini-table cusin-orders-table"', template)
-        self.assertIn('class="cusin-order-number" dir="ltr" scope="row"', template)
+        self.assertIn('class="cusin-order-number" data-label="شماره" dir="ltr" scope="row"', template)
         self.assertIn('class="cusin-table-scroll cusin-orders-scroll"', template)
+        for label in ("شماره", "وضعیت", "پرداخت", "مبلغ", "تاریخ"):
+            with self.subTest(label=label):
+                self.assertIn(f'data-label="{label}"', template)
 
 
 class ProductStockHeadingTests(SimpleTestCase):

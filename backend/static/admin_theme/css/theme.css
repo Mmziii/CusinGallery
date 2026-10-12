@@ -1305,6 +1305,18 @@ body.login #footer { display: none; }
   white-space: nowrap;
   font: inherit;
 }
+@media (min-width: 1280px) {
+  /* Give the five-column dashboard table its own full-width card at the first
+     desktop breakpoint where a half-width card would force horizontal scroll. */
+  body.cusin-admin #container .cusin-dash-cols > section[aria-label="آخرین سفارش‌ها"] {
+    grid-column: 1 / -1;
+  }
+  body.cusin-admin #container .cusin-orders-table {
+    width: 100%;
+    min-width: 52rem;
+    max-width: 100%;
+  }
+}
 .cusin-mini-table th, .cusin-mini-table td {
   padding: 8px 10px;
   border-bottom: 1px solid var(--cusin-border);
@@ -2005,6 +2017,85 @@ a.cusin-btn--ghost:active { color: var(--cusin-text); }
     min-height: 44px;
   }
   #changelist .actions select { min-height: 44px; }
+
+  /* Recent orders become one labelled card per order instead of a clipped
+     five-column table; keep the table headers available to assistive tech. */
+  body.cusin-admin #container .cusin-orders-scroll {
+    overflow-x: visible;
+    overflow-y: visible;
+  }
+  body.cusin-admin #container .cusin-orders-table {
+    display: block;
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    table-layout: auto;
+    border-collapse: separate;
+  }
+  body.cusin-admin #container .cusin-orders-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+  body.cusin-admin #container .cusin-orders-table tbody {
+    display: grid;
+    box-sizing: border-box;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+  body.cusin-admin #container .cusin-orders-table tbody tr {
+    display: grid;
+    box-sizing: border-box;
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    padding: 8px 4px;
+    border: 1px solid var(--cusin-border);
+    border-radius: var(--cusin-radius);
+    background: var(--cusin-surface);
+    box-shadow: var(--cusin-shadow);
+  }
+  body.cusin-admin #container .cusin-orders-table tbody tr > th,
+  body.cusin-admin #container .cusin-orders-table tbody tr > td {
+    display: grid;
+    box-sizing: border-box;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    padding: 7px 10px;
+    border: 0;
+    border-bottom: 1px dashed var(--cusin-border);
+    text-align: start;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  body.cusin-admin #container .cusin-orders-table tbody tr > :last-child { border-bottom: 0; }
+  body.cusin-admin #container .cusin-orders-table tbody tr > th::before,
+  body.cusin-admin #container .cusin-orders-table tbody tr > td::before {
+    content: attr(data-label);
+    min-width: 0;
+    color: var(--cusin-muted);
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.5;
+  }
+  body.cusin-admin #container .cusin-orders-table tbody tr > th.cusin-order-number::before {
+    direction: rtl;
+  }
 
   .cusin-kpi-grid { grid-template-columns: 1fr; }
   .cusin-action-grid { grid-template-columns: 1fr; }

@@ -20,9 +20,11 @@ const SCREENSHOT_DIR = path.join(__dirname, "screenshots");
 const VIEWPORTS = [
   { width: 320, height: 700 },
   { width: 375, height: 812 },
+  { width: 768, height: 900 },
   { width: 1024, height: 900 },
   { width: 1280, height: 900 },
   { width: 1440, height: 1000 },
+  { width: 1920, height: 1000 },
 ];
 
 const PAGES = [
@@ -899,6 +901,7 @@ async function assertHelpTextInsideFieldset(page) {
 }
 
 async function assertLatestOrdersLayout(page) {
+  const viewportWidth = page.viewportSize().width;
   const section = page.locator('section[aria-label="آخرین سفارش‌ها"]');
   const metrics = await section.evaluate((card) => {
     const wrapper = card.querySelector(".cusin-orders-scroll");
@@ -915,24 +918,49 @@ async function assertLatestOrdersLayout(page) {
       range.selectNodeContents(anchor);
       const lineRects = [...range.getClientRects()];
       const rowRect = row.getBoundingClientRect();
+      const cells = [...row.children].map((orderCell) => {
+        const cellRect = orderCell.getBoundingClientRect();
+        const cellStyle = getComputedStyle(orderCell);
+        const label = getComputedStyle(orderCell, "::before");
+        return {
+          label: orderCell.dataset.label || "",
+          display: cellStyle.display,
+          left: cellRect.left,
+          right: cellRect.right,
+          top: cellRect.top,
+          bottom: cellRect.bottom,
+          labelContent: label.content,
+          labelFontSize: label.fontSize,
+        };
+      });
       return {
         text: cell.textContent.trim(),
         dirAttribute: cell.getAttribute("dir"),
         direction: cellStyle.direction,
-        whiteSpace: cellStyle.whiteSpace,
+        whiteSpace: getComputedStyle(anchor).whiteSpace,
         fontFamily: cellStyle.fontFamily,
         lineCount: lineRects.length,
-        rowBottom: rowRect.bottom,
+        display: getComputedStyle(row).display,
+        left: rowRect.left,
+        right: rowRect.right,
+        bottom: rowRect.bottom,
+        cells,
       };
+    });
+    const headers = [...table.querySelectorAll("thead th")].map((header) => {
+      const rect = header.getBoundingClientRect();
+      return { text: header.textContent.trim(), display: getComputedStyle(header).display, width: rect.width, height: rect.height };
     });
     return {
       rows,
+      headers,
       card: {
         clientHeight: card.clientHeight,
         scrollHeight: card.scrollHeight,
         bottom: cardRect.bottom,
         contentBottom: cardRect.bottom - parseFloat(cardStyle.paddingBottom) - parseFloat(cardStyle.borderBottomWidth),
         overflowY: cardStyle.overflowY,
+        gridColumn: getComputedStyle(card).gridColumn,
       },
       wrapper: {
         left: wrapperRect.left,
@@ -943,19 +971,65 @@ async function assertLatestOrdersLayout(page) {
         scrollWidth: wrapper.scrollWidth,
         overflowX: getComputedStyle(wrapper).overflowX,
       },
-      tableWidth: table.getBoundingClientRect().width,
+      table: {
+        width: table.getBoundingClientRect().width,
+        clientWidth: table.clientWidth,
+        scrollWidth: table.scrollWidth,
+        display: getComputedStyle(table).display,
+        bodyDisplay: getComputedStyle(table.querySelector("tbody")).display,
+      },
     };
   });
 
   expect(metrics, "dashboard should render the latest-orders table").not.toBeNull();
-  expect(metrics.rows.length, "latest-orders test requires at least four seeded orders").toBeGreaterThanOrEqual(4);
-  expect(metrics.wrapper.overflowX).toBe("auto");
+  expect(metrics.rows.length, "dashboard should show its four latest orders").toBe(4);
+  expect(metrics.headers).toHaveLength(5);
   expect(metrics.wrapper.left).toBeGreaterThanOrEqual(metrics.wrapper.cardLeft - 0.5);
   expect(metrics.wrapper.right).toBeLessThanOrEqual(metrics.wrapper.cardRight + 0.5);
-  if (metrics.tableWidth > metrics.wrapper.clientWidth + 4) {
-    expect(metrics.wrapper.scrollWidth, "wide recent-orders table should scroll inside its card").toBeGreaterThan(metrics.wrapper.clientWidth + 4);
-  }
   expect(metrics.card.scrollHeight, "latest-orders card must not clip vertical content").toBeLessThanOrEqual(metrics.card.clientHeight + 2);
+
+  if (viewportWidth < 768) {
+    const expectedLabels = ["شماره", "وضعیت", "پرداخت", "مبلغ", "تاریخ"];
+    expect(metrics.wrapper.overflowX).toBe("visible");
+    expect(metrics.table.display).toBe("block");
+    expect(metrics.table.bodyDisplay).toBe("grid");
+    expect(metrics.table.scrollWidth, "phone orders must not retain the wide table").toBeLessThanOrEqual(metrics.wrapper.clientWidth + 1);
+    expect(metrics.wrapper.scrollWidth, "phone orders must not scroll horizontally").toBeLessThanOrEqual(metrics.wrapper.clientWidth + 1);
+    for (const row of metrics.rows) {
+      expect(row.display, "each phone order should be a stacked card").toBe("grid");
+      expect(row.left).toBeGreaterThanOrEqual(metrics.wrapper.left - 0.5);
+      expect(row.right).toBeLessThanOrEqual(metrics.wrapper.right + 0.5);
+      expect(row.cells.map((cell) => cell.label)).toEqual(expectedLabels);
+      for (let index = 0; index < row.cells.length; index += 1) {
+        const cell = row.cells[index];
+        expect(cell.display).toBe("grid");
+        expect(cell.labelContent).toContain(cell.label);
+        expect(parseFloat(cell.labelFontSize)).toBeGreaterThanOrEqual(14);
+        if (index > 0) {
+          expect(cell.top, "labeled phone order fields must not overlap").toBeGreaterThanOrEqual(row.cells[index - 1].bottom - 1);
+        }
+      }
+    }
+  } else {
+    for (const row of metrics.rows) {
+      expect(row.display).toBe("table-row");
+      expect(row.cells).toHaveLength(5);
+    }
+    if (viewportWidth >= 1280) {
+      expect(metrics.card.gridColumn).toBe("1 / -1");
+      expect(metrics.wrapper.scrollWidth, "five desktop columns must fit without horizontal scrolling").toBeLessThanOrEqual(metrics.wrapper.clientWidth + 1);
+      expect(metrics.table.scrollWidth).toBeLessThanOrEqual(metrics.wrapper.clientWidth + 1);
+      expect(metrics.table.width).toBeLessThanOrEqual(metrics.wrapper.clientWidth + 1);
+      for (const header of metrics.headers) {
+        expect(header.display).not.toBe("none");
+        expect(header.width).toBeGreaterThan(0);
+        expect(header.height).toBeGreaterThan(0);
+      }
+    } else if (metrics.table.width > metrics.wrapper.clientWidth + 4) {
+      expect(metrics.wrapper.scrollWidth, "narrow desktop table may scroll only inside its card").toBeGreaterThan(metrics.wrapper.clientWidth + 4);
+    }
+  }
+
   for (const row of metrics.rows) {
     expect(row.text).toMatch(/^[A-Za-z0-9-]+$/);
     expect(row.dirAttribute).toBe("ltr");
@@ -963,7 +1037,7 @@ async function assertLatestOrdersLayout(page) {
     expect(row.whiteSpace).toBe("nowrap");
     expect(row.fontFamily).toMatch(/monospace/i);
     expect(row.lineCount, `order number must stay on one line: ${JSON.stringify(row)}`).toBe(1);
-    expect(row.rowBottom, "latest-orders card should grow to fit every row").toBeLessThanOrEqual(metrics.card.contentBottom + 1);
+    expect(row.bottom, "latest-orders card should grow to fit every row").toBeLessThanOrEqual(metrics.card.contentBottom + 1);
   }
 }
 
