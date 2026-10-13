@@ -1599,6 +1599,27 @@ test.describe("product changelist SKUs remain fully visible on desktop", () => {
   }
 });
 
+test.describe("product changelist stock badges show exceptions only", () => {
+  test.skip(!USER || !PASSWORD, "set E2E_ADMIN_USER and E2E_ADMIN_PASSWORD to run");
+
+  test.beforeEach(async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "chromium", "desktop project only");
+    await login(page);
+  });
+
+  test("sufficient stock is not repeated as a badge beside its input", async ({ page }) => {
+    await page.goto(`${BASE_URL}/admin/products/product/?q=MUG-300`, { waitUntil: "networkidle" });
+    const row = page.locator("#result_list tbody tr").filter({
+      has: page.locator('.cusin-product-summary__sku[title="MUG-300"]'),
+    });
+    await expect(row).toHaveCount(1);
+    const stockInput = row.locator("td.field-stock_quantity input");
+    await expect(stockInput).toHaveValue("40");
+    expect(Number(await stockInput.inputValue()), "MUG-300 is a sufficiently stocked demo product").toBeGreaterThan(5);
+    await expect(row.locator("td.field-stock_quantity .cusin-badge")).toHaveCount(0);
+  });
+});
+
 test.describe("product changelist row elements never overlap", () => {
   test.skip(!USER || !PASSWORD, "set E2E_ADMIN_USER and E2E_ADMIN_PASSWORD to run");
 

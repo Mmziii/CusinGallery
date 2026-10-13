@@ -303,12 +303,12 @@ class ProductStockChangelistWidget(forms.NumberInput):
             quantity = 0
 
         if quantity <= 0:
-            badge_class, label = "stock-out", "۰ — ناموجود"
+            badge_class, label = "stock-out", "ناموجود"
         elif quantity <= getattr(self, "low_stock_threshold", settings.LOW_STOCK_THRESHOLD):
             badge_class = "stock-low"
             label = f"{fa_digits(quantity)} موجودی کم"
         else:
-            badge_class, label = "stock-ok", fa_digits(quantity)
+            return format_html('<div class="cusin-stock-edit">{}</div>', input_html)
 
         return format_html(
             '<div class="cusin-stock-edit">{}'

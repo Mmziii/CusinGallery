@@ -113,6 +113,27 @@ class ProductListEditableTests(TestCase):
         self.assertIn("۴ موجودی کم", low_row)
         self.assertNotIn("stock-low", sufficient_row)
 
+    def test_sufficient_stock_has_no_duplicate_stock_badge(self):
+        healthy = make_product(
+            category=self.category,
+            name="موجودی کافی",
+            slug="healthy-stock",
+            sku="HEALTHY-10",
+            stock_quantity=10,
+            low_stock_threshold=5,
+        )
+        response = self.client.get(reverse(CHANGELIST))
+        rows = re.findall(r"<tr\b[^>]*>.*?</tr>", response.content.decode(), re.S)
+        healthy_row = next(
+            (row for row in rows if f'title="{healthy.sku}">{healthy.sku}</bdi>' in row),
+            None,
+        )
+
+        self.assertIsNotNone(healthy_row, "the well-stocked product should appear in the list")
+        self.assertIn('name="form-', healthy_row)
+        self.assertIn('value="10"', healthy_row)
+        self.assertNotIn("cusin-badge", healthy_row)
+
     def test_product_and_variant_sku_editors_render_with_ltr_direction(self):
         variant = ProductVariant.objects.create(
             product=self.product,
@@ -215,8 +236,7 @@ class ProductListEditableTests(TestCase):
     def test_stock_badge_rendered(self):
         make_product(name="کتری", stock_quantity=0)
         html = self.client.get(reverse(CHANGELIST)).content.decode()
-        self.assertIn('class="cusin-badge stock-out"', html)
-        self.assertIn("ناموجود", html)
+        self.assertIn('<span class="cusin-badge stock-out">ناموجود</span>', html)
 
 
 @override_settings(**PLAIN_STATIC)
