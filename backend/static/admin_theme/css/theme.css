@@ -902,7 +902,16 @@ a.deletelink:hover { background: var(--delete-button-hover-bg); }
 .cusin-badge.stock-ok  { background: #e4f1e9; color: var(--cg-success-text); border-color: #bfe0cc; }
 .cusin-badge.stock-low { background: #fbf3de; color: var(--cg-warning-text); border-color: #ead9a8; }
 .cusin-badge.stock-out { background: #f9e7e3; color: var(--cg-danger-text); border-color: #efc9bf; }
-body.cusin-admin.app-products.model-product #result_list td.field-stock_column .cusin-badge {
+body.cusin-admin.app-products.model-product #result_list td.field-stock_quantity .cusin-stock-edit {
+  display: flex;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+body.cusin-admin.app-products.model-product #result_list td.field-stock_quantity .cusin-badge {
   box-sizing: border-box;
   display: inline-block;
   max-width: 100%;
@@ -910,7 +919,9 @@ body.cusin-admin.app-products.model-product #result_list td.field-stock_column .
   text-align: center;
   vertical-align: middle;
   white-space: normal;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
 }
 body.cusin-admin #container #changelist #result_list tbody td input[type="number"] {
   direction: ltr;
@@ -925,17 +936,96 @@ body.cusin-admin.app-products.model-product #result_list td.field-stock_quantity
   min-width: 0;
   max-width: 100%;
 }
-body.cusin-admin.app-products.model-product #result_list tbody .field-thumbnail_column > a {
-  display: inline-block;
+body.cusin-admin.app-products.model-product #result_list tbody .field-product_summary > a {
+  display: block;
   box-sizing: border-box;
-  width: 100%;
-  max-width: 48px;
-}
-body.cusin-admin.app-products.model-product #result_list tbody .field-thumbnail_column > a img {
-  box-sizing: border-box;
-  width: 100% !important;
+  min-width: 0;
   max-width: 100%;
-  height: auto;
+}
+body.cusin-admin.app-products.model-product #result_list .cusin-product-summary {
+  display: flex;
+  box-sizing: border-box;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  direction: rtl;
+}
+body.cusin-admin.app-products.model-product #result_list .cusin-product-summary__thumbnail {
+  display: block;
+  box-sizing: border-box;
+  flex: 0 0 48px;
+  width: 48px;
+  height: 48px;
+  overflow: hidden;
+  border-radius: 6px;
+}
+body.cusin-admin.app-products.model-product #result_list .cusin-product-summary__thumbnail img {
+  box-sizing: border-box;
+  display: block;
+  width: 48px !important;
+  max-width: 100%;
+  height: 48px !important;
+  object-fit: cover;
+}
+body.cusin-admin.app-products.model-product #result_list .cusin-product-summary__details {
+  display: flex;
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+body.cusin-admin.app-products.model-product #result_list .cusin-product-summary__name {
+  display: -webkit-box;
+  box-sizing: border-box;
+  max-width: 100%;
+  max-height: 3.4em;
+  overflow: hidden;
+  color: var(--cusin-text);
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+  line-height: 1.7;
+  text-overflow: ellipsis;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+body.cusin-admin.app-products.model-product #result_list .cusin-product-summary__meta {
+  display: flex;
+  box-sizing: border-box;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--cusin-muted);
+  font-size: 0.78em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+}
+body.cusin-admin.app-products.model-product #result_list .cusin-product-summary__sku {
+  flex: 0 1 auto;
+  max-width: 42%;
+  overflow: hidden;
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+body.cusin-admin.app-products.model-product #result_list .cusin-product-summary__separator { flex: 0 0 auto; }
+body.cusin-admin.app-products.model-product #result_list .cusin-product-summary__category,
+body.cusin-admin.app-products.model-product #result_list .cusin-product-summary__brand {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 /* generic */
 .cusin-badge.on  { background: #e4f1e9; color: var(--cg-success-text); border-color: #bfe0cc; }
@@ -3580,9 +3670,15 @@ body.cusin-admin #container .cusin-gallery-field input[type="file"] {
     padding: 0;
   }
 
-  /* Product labels must stay whole; compact headers are shortened in admin. */
+  /* Product text wraps between words only; compact headers stay legible. */
   body.cusin-admin.app-products.model-product #container #changelist #result_list thead th {
     padding-inline: 2px;
+    overflow-wrap: normal;
+    word-break: normal;
+    hyphens: none;
+  }
+  body.cusin-admin.app-products.model-product #container #changelist #result_list tbody td,
+  body.cusin-admin.app-products.model-product #container #changelist #result_list tbody th {
     overflow-wrap: normal;
     word-break: normal;
     hyphens: none;
@@ -3591,19 +3687,14 @@ body.cusin-admin #container .cusin-gallery-field input[type="file"] {
     padding: 0;
   }
 
-  /* Reserve room for nine-digit prices and stock before squeezing labels. */
+  /* The merged identity cell still reserves room for each nine-digit edit. */
   body.cusin-admin.app-products.model-product #result_list th.action-checkbox-column { width: 4%; }
-  body.cusin-admin.app-products.model-product #result_list th.column-thumbnail_column { width: 6%; }
-  body.cusin-admin.app-products.model-product #result_list th.column-name { width: 8%; }
-  body.cusin-admin.app-products.model-product #result_list th.column-sku { width: 4%; }
-  body.cusin-admin.app-products.model-product #result_list th.column-category { width: 8%; }
-  body.cusin-admin.app-products.model-product #result_list th.column-brand { width: 4%; }
-  body.cusin-admin.app-products.model-product #result_list th.column-price { width: 13.5%; }
-  body.cusin-admin.app-products.model-product #result_list th.column-compare_at_price { width: 13.5%; }
-  body.cusin-admin.app-products.model-product #result_list th.column-stock_column { width: 7%; }
-  body.cusin-admin.app-products.model-product #result_list th.column-stock_quantity { width: 14%; }
+  body.cusin-admin.app-products.model-product #result_list th.column-product_summary { width: 30%; }
+  body.cusin-admin.app-products.model-product #result_list th.column-price { width: 15%; }
+  body.cusin-admin.app-products.model-product #result_list th.column-compare_at_price { width: 15%; }
+  body.cusin-admin.app-products.model-product #result_list th.column-stock_quantity { width: 17%; }
   body.cusin-admin.app-products.model-product #result_list th.column-is_active { width: 4%; }
-  body.cusin-admin.app-products.model-product #result_list th.column-is_featured { width: 4%; }
+  body.cusin-admin.app-products.model-product #result_list th.column-is_featured { width: 5%; }
   body.cusin-admin.app-products.model-product #result_list th.column-cusin-row-actions { width: 10%; }
   body.cusin-admin.app-products.model-product #result_list td.field-price input,
   body.cusin-admin.app-products.model-product #result_list td.field-compare_at_price input,
@@ -3614,17 +3705,10 @@ body.cusin-admin #container .cusin-gallery-field input[type="file"] {
     max-width: 120px;
     padding-inline: 4px;
   }
-  body.cusin-admin.app-products.model-product #result_list .field-name > a {
-    display: -webkit-box;
-    max-width: 100%;
-    max-height: 3.4em;
-    overflow: hidden;
-    overflow-wrap: anywhere;
-    line-height: 1.7;
-    text-overflow: ellipsis;
-    white-space: normal;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
+  body.cusin-admin.app-products.model-product #container #changelist #result_list tbody td.field-stock_quantity .cusin-badge {
+    overflow-wrap: normal;
+    word-break: normal;
+    hyphens: none;
   }
 
   /* Product variants carry six visible columns in a narrower card. Size the

@@ -9,7 +9,8 @@ from django.core.exceptions import ValidationError
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from apps.products.models import Product
+from apps.categories.models import Category
+from apps.products.models import Brand, Product
 
 from .helpers import PLAIN_STATIC, make_product, make_staff, make_superuser
 
@@ -33,9 +34,12 @@ class ProductListEditableTests(TestCase):
     def setUp(self):
         self.admin = make_superuser(username="prodowner", phone="+989000030001")
         self.client.force_login(self.admin)
+        self.category = Category.objects.create(name="ظروف سرو", slug="servedishes")
+        self.brand = Brand.objects.create(name="کازین", slug="kazin")
         self.product = make_product(
-            name="ماهی‌تابه", price=100000, compare_at_price=120000,
-            stock_quantity=5,
+            category=self.category,
+            name="ماهی‌تابه", sku="PAN-001", brand=self.brand,
+            price=100000, compare_at_price=120000, stock_quantity=5,
         )
 
     def test_changelist_renders_editable_inputs(self):
@@ -44,8 +48,24 @@ class ProductListEditableTests(TestCase):
         self.assertIn("form-0-price", html)
         self.assertIn("form-0-stock_quantity", html)
         self.assertIn("form-0-is_active", html)
-        # the name cell stays the row link
+        self.assertRegex(
+            html,
+            r'<input[^>]+name="form-0-stock_quantity"[^>]+dir="ltr"',
+        )
+        self.assertIn("cusin-product-summary__name", html)
+        self.assertIn("cusin-product-summary__sku", html)
+        self.assertIn('title="PAN-001"', html)
+        self.assertIn(self.category.name, html)
+        self.assertIn(self.brand.name, html)
         self.assertIn(reverse("admin:products_product_change", args=[self.product.pk]), html)
+
+        from django.contrib import admin
+        product_admin = admin.site._registry[Product]
+        self.assertEqual(product_admin.list_display_links, ("product_summary",))
+        self.assertNotIn("sku", product_admin.list_display)
+        self.assertNotIn("category", product_admin.list_display)
+        self.assertNotIn("brand", product_admin.list_display)
+        self.assertEqual(product_admin.product_summary.admin_order_field, "name")
 
     def _post_row(self, **overrides):
         data = formset_prefix_fields()
@@ -123,7 +143,7 @@ class ProductListEditableTests(TestCase):
     def test_stock_badge_rendered(self):
         make_product(name="کتری", stock_quantity=0)
         html = self.client.get(reverse(CHANGELIST)).content.decode()
-        self.assertIn("cusin-badge", html)
+        self.assertIn('class="cusin-badge stock-out"', html)
         self.assertIn("ناموجود", html)
 
 

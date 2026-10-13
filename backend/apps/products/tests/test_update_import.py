@@ -21,7 +21,7 @@ from ..importing import (
     export_products_xlsx,
     update_products_from_rows,
 )
-from ..models import Product
+from ..models import Brand, Product
 from .helpers import make_product
 
 
@@ -159,9 +159,11 @@ class UpdateEngineTests(TestCase):
 class ExportTests(TestCase):
     def setUp(self):
         self.category = Category.objects.create(name="Cookware", slug="cookware")
+        self.brand = Brand.objects.create(name="Kazin", slug="kazin")
         self.product = make_product(
             category=self.category, name="ماگ سرامیکی", sku="MUG-9",
-            price=180000, compare_at_price=220000, stock_quantity=40,
+            brand=self.brand, price=180000, compare_at_price=220000,
+            stock_quantity=40,
         )
 
     def test_csv_export_uses_the_import_template_format(self):
@@ -179,6 +181,7 @@ class ExportTests(TestCase):
         self.assertEqual(row["compare_at_price"], "220000")
         self.assertEqual(row["stock_quantity"], "40")
         self.assertEqual(row["category_slug"], "cookware")
+        self.assertEqual(row["brand_name"], "Kazin")
 
     def test_xlsx_export_is_readable_and_round_trips(self):
         from openpyxl import load_workbook
@@ -188,9 +191,11 @@ class ExportTests(TestCase):
         grid = list(workbook.worksheets[0].iter_rows(values_only=True))
         workbook.close()
         self.assertEqual(list(grid[0]), TEMPLATE_COLUMNS)
-        row = grid[1]
-        self.assertIn("MUG-9", row)
-        self.assertIn("ماگ سرامیکی", row)
+        row = dict(zip(TEMPLATE_COLUMNS, grid[1]))
+        self.assertEqual(row["sku"], "MUG-9")
+        self.assertEqual(row["name"], "ماگ سرامیکی")
+        self.assertEqual(row["category_slug"], "cookware")
+        self.assertEqual(row["brand_name"], "Kazin")
 
     def test_export_then_reimport_is_a_noop_update(self):
         """The owner's real loop: export, edit nothing, re-upload in

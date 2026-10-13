@@ -189,12 +189,10 @@ class ResponsiveCssTests(SimpleTestCase):
     def test_all_six_desktop_changelists_reserve_explicit_column_widths(self):
         lists = {
             "app-products.model-product": {
-                "action-checkbox-column": "4%", "column-thumbnail_column": "6%",
-                "column-name": "8%", "column-sku": "4%", "column-category": "8%",
-                "column-brand": "4%", "column-price": "13.5%",
-                "column-compare_at_price": "13.5%", "column-stock_column": "7%",
-                "column-stock_quantity": "14%", "column-is_active": "4%",
-                "column-is_featured": "4%", "column-cusin-row-actions": "10%",
+                "action-checkbox-column": "4%", "column-product_summary": "30%",
+                "column-price": "15%", "column-compare_at_price": "15%",
+                "column-stock_quantity": "17%", "column-is_active": "4%",
+                "column-is_featured": "5%", "column-cusin-row-actions": "10%",
             },
             "app-orders.model-order": {
                 "action-checkbox-column": "4%", "column-order_number": "15%",
@@ -268,13 +266,20 @@ class ResponsiveCssTests(SimpleTestCase):
 
     def test_stock_badges_and_thumbnails_stay_inside_product_cells(self):
         badge = self.base[
-            "body.cusin-admin.app-products.model-product #result_list td.field-stock_column .cusin-badge"
+            "body.cusin-admin.app-products.model-product #result_list td.field-stock_quantity .cusin-badge"
         ]
         self.assertEqual(badge["box-sizing"], "border-box")
         self.assertEqual(badge["display"], "inline-block")
         self.assertEqual(badge["max-width"], "100%")
         self.assertEqual(badge["white-space"], "normal")
-        self.assertEqual(badge["overflow-wrap"], "anywhere")
+        self.assertEqual(badge["overflow-wrap"], "normal")
+        self.assertEqual(badge["word-break"], "normal")
+        self.assertEqual(badge["hyphens"], "none")
+        widget = self.base[
+            "body.cusin-admin.app-products.model-product #result_list td.field-stock_quantity .cusin-stock-edit"
+        ]
+        self.assertEqual(widget["display"], "flex")
+        self.assertEqual(widget["flex-direction"], "column")
         for field in ("price", "compare_at_price", "stock_quantity"):
             with self.subTest(field=field):
                 numeric_input = self.base[
@@ -284,18 +289,18 @@ class ResponsiveCssTests(SimpleTestCase):
                 self.assertEqual(numeric_input["width"], "100%")
                 self.assertEqual(numeric_input["min-width"], "0")
                 self.assertEqual(numeric_input["max-width"], "100%")
-        thumbnail_link = self.base[
-            "body.cusin-admin.app-products.model-product #result_list tbody .field-thumbnail_column > a"
+        product_link = self.base[
+            "body.cusin-admin.app-products.model-product #result_list tbody .field-product_summary > a"
         ]
-        self.assertEqual(thumbnail_link["box-sizing"], "border-box")
-        self.assertEqual(thumbnail_link["width"], "100%")
-        self.assertEqual(thumbnail_link["max-width"], "48px")
+        self.assertEqual(product_link["display"], "block")
+        self.assertEqual(product_link["min-width"], "0")
+        self.assertEqual(product_link["max-width"], "100%")
         thumbnail = self.base[
-            "body.cusin-admin.app-products.model-product #result_list tbody .field-thumbnail_column > a img"
+            "body.cusin-admin.app-products.model-product #result_list .cusin-product-summary__thumbnail img"
         ]
-        self.assertEqual(thumbnail["width"], "100% !important")
+        self.assertEqual(thumbnail["width"], "48px !important")
         self.assertEqual(thumbnail["max-width"], "100%")
-        self.assertEqual(thumbnail["height"], "auto")
+        self.assertEqual(thumbnail["height"], "48px !important")
 
     def test_product_headers_wrap_between_words_and_use_short_labels(self):
         selector = (
@@ -319,14 +324,26 @@ class ResponsiveCssTests(SimpleTestCase):
         self.assertEqual(Product._meta.get_field("is_featured").verbose_name, "ویژه")
         self.assertEqual(admin.site._registry[Product].stock_column.short_description, "وضعیت")
 
-    def test_product_names_are_clamped_to_two_lines(self):
-        product_name = self.desktop[
-            "body.cusin-admin.app-products.model-product #result_list .field-name > a"
+    def test_product_names_are_clamped_to_two_word_safe_lines(self):
+        product_name = self.base[
+            "body.cusin-admin.app-products.model-product #result_list .cusin-product-summary__name"
         ]
         self.assertEqual(product_name["-webkit-line-clamp"], "2")
         self.assertEqual(product_name["-webkit-box-orient"], "vertical")
         self.assertEqual(product_name["max-height"], "3.4em")
         self.assertEqual(product_name["line-height"], "1.7")
+        self.assertEqual(product_name["overflow-wrap"], "normal")
+        self.assertEqual(product_name["word-break"], "normal")
+        self.assertEqual(product_name["hyphens"], "none")
+
+    def test_product_sku_is_ltr_monospace_and_never_wraps(self):
+        sku = self.base[
+            "body.cusin-admin.app-products.model-product #result_list .cusin-product-summary__sku"
+        ]
+        self.assertEqual(sku["direction"], "ltr")
+        self.assertEqual(sku["unicode-bidi"], "isolate")
+        self.assertEqual(sku["white-space"], "nowrap")
+        self.assertIn("monospace", sku["font-family"])
 
     def test_normal_sidebar_and_menu_labels_use_ink_and_keep_active_and_danger_distinct(self):
         ink = "#111827"

@@ -83,6 +83,70 @@ async function firstCartUrl(page) {
   return firstChangeUrl(page, "/admin/cart/cart/", "cart");
 }
 
+const LAYOUT_FIXTURE_NAME =
+  "ماگ سرامیکی دسته‌دار دست‌ساز با لعاب رنگی ویژه برای سرو قهوه، چای و نوشیدنی‌های گرم در خانه و محل کار";
+let productLayoutFixtureOriginal = null;
+
+async function saveProductLayoutFixture(page, values) {
+  const href = await firstProductWithVariantsUrl(page);
+  await page.goto(new URL(href, BASE_URL).href, { waitUntil: "networkidle" });
+  await page.locator("#id_name").fill(values.name);
+  await page.locator("#id_price").fill(values.price);
+  await page.locator("#id_compare_at_price").fill(values.compareAt);
+  await Promise.all([
+    page.waitForLoadState("networkidle"),
+    page.locator('input[name="_save"]').first().click(),
+  ]);
+}
+
+// Layout checks deliberately use the same nine-digit amount and long Persian
+// title across every desktop width. Keep a note of the seeded demo values and
+// restore them after the full browser file finishes.
+test.beforeAll(async ({ browser }, testInfo) => {
+  if (!USER || !PASSWORD || testInfo.project.name !== "chromium") return;
+  const context = await browser.newContext({
+    viewport: { width: 1280, height: 900 },
+    locale: "fa-IR",
+    timezoneId: "Asia/Tehran",
+  });
+  const page = await context.newPage();
+  try {
+    await login(page);
+    const href = await firstProductWithVariantsUrl(page);
+    await page.goto(new URL(href, BASE_URL).href, { waitUntil: "networkidle" });
+    productLayoutFixtureOriginal = {
+      name: await page.locator("#id_name").inputValue(),
+      price: await page.locator("#id_price").inputValue(),
+      compareAt: await page.locator("#id_compare_at_price").inputValue(),
+    };
+    await page.locator("#id_name").fill(LAYOUT_FIXTURE_NAME);
+    await page.locator("#id_price").fill("123456789");
+    await page.locator("#id_compare_at_price").fill("223456789");
+    await Promise.all([
+      page.waitForLoadState("networkidle"),
+      page.locator('input[name="_save"]').first().click(),
+    ]);
+  } finally {
+    await context.close();
+  }
+});
+
+test.afterAll(async ({ browser }, testInfo) => {
+  if (!productLayoutFixtureOriginal || testInfo.project.name !== "chromium") return;
+  const context = await browser.newContext({
+    viewport: { width: 1280, height: 900 },
+    locale: "fa-IR",
+    timezoneId: "Asia/Tehran",
+  });
+  const page = await context.newPage();
+  try {
+    await login(page);
+    await saveProductLayoutFixture(page, productLayoutFixtureOriginal);
+  } finally {
+    await context.close();
+  }
+});
+
 async function assertNoHorizontalOverflow(page) {
   const { scrollWidth, clientWidth } = await page.evaluate(() => ({
     scrollWidth: document.documentElement.scrollWidth,
@@ -145,6 +209,41 @@ async function assertNineDigitNumericInputs(page, listPath, inputSelector) {
     expect(input.fontVariantNumeric).toContain("tabular-nums");
     expect(input.textWidth, `digits should fit outside the spinner: ${JSON.stringify(input)}`)
       .toBeLessThanOrEqual(input.usableTextWidth + 0.5);
+  }
+}
+
+async function assertChangelistTextBreaksAtWords(page, pagePath) {
+  await page.goto(`${BASE_URL}${pagePath}`, { waitUntil: "networkidle" });
+  const textRuns = await page.locator("#result_list").evaluate((table) => {
+    const walker = document.createTreeWalker(table, NodeFilter.SHOW_TEXT);
+    const runs = [];
+    let node;
+    while ((node = walker.nextNode())) {
+      const value = node.nodeValue.trim().replace(/\s+/gu, " ");
+      if (!value) continue;
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      const tops = [];
+      for (const rect of range.getClientRects()) {
+        if (rect.width <= 0 || rect.height <= 0) continue;
+        if (!tops.some((top) => Math.abs(top - rect.top) < 1)) tops.push(rect.top);
+      }
+      const cell = node.parentElement && node.parentElement.closest("th, td");
+      runs.push({
+        text: value,
+        wordCount: value.split(/\s+/u).filter(Boolean).length,
+        lineTops: tops.sort((a, b) => a - b),
+        cell: cell ? cell.className : "outside-cell",
+      });
+    }
+    return runs;
+  });
+  expect(textRuns.length, `${pagePath} should expose visible changelist text`).toBeGreaterThan(0);
+  for (const run of textRuns) {
+    expect(
+      run.lineTops.length,
+      `${pagePath} text must not split inside a word: ${JSON.stringify(run)}`
+    ).toBeLessThanOrEqual(run.wordCount);
   }
 }
 
@@ -217,7 +316,7 @@ async function assertProductRowItemsDoNotOverlap(page) {
             }
           }
         }
-        const badge = row.querySelector("td.field-stock_column .stock-low");
+        const badge = row.querySelector("td.field-stock_quantity .stock-low");
         const stockInput = row.querySelector("td.field-stock_quantity input");
         return {
           cellOverlaps,
@@ -315,7 +414,7 @@ async function assertDesktopChangelistLayout(page, pagePath) {
         } : null,
       };
     });
-    const name = table.querySelector("tbody .field-name > a");
+    const name = table.querySelector("tbody .field-product_summary .cusin-product-summary__name");
     const nameStyle = name && getComputedStyle(name);
     const numericInputs = [...table.querySelectorAll(
       "tbody td.field-price input, tbody td.field-compare_at_price input, tbody td.field-stock_quantity input"
@@ -399,12 +498,13 @@ async function assertDesktopChangelistLayout(page, pagePath) {
     expect(metrics.productName.height).toBeLessThanOrEqual(metrics.productName.lineHeight * 2 + 1);
 
     const headings = metrics.headers.map((header) => header.text);
-    expect(headings).toContain("وضعیت");
+    expect(headings).toContain("محصول");
     expect(headings).toContain("موجودی");
-    expect(headings).toContain("SKU");
+    expect(headings).toContain("فعال");
     expect(headings).toContain("ویژه");
     expect(headings).toContain("قیمت (تومان)");
     expect(headings).toContain("قیمت قبل از تخفیف");
+    expect(headings).not.toContain("SKU");
   }
 }
 
@@ -1252,6 +1352,28 @@ test.describe("admin pages at all requested viewport widths", () => {
         expect(contrastOf(colors.text, colors.page), `body ${colors.text} on page ${colors.page}`).toBeGreaterThanOrEqual(7);
         expect(contrastOf(colors.text, colors.surface), `body ${colors.text} on white surface ${colors.surface}`).toBeGreaterThanOrEqual(7);
       });
+    });
+  }
+});
+
+test.describe("changelist text breaks only between words", () => {
+  test.skip(!USER || !PASSWORD, "set E2E_ADMIN_USER and E2E_ADMIN_PASSWORD to run");
+
+  test.beforeEach(async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "chromium", "desktop project only; this spec sets its own viewport");
+    await login(page);
+  });
+
+  const wordSafeLists = ["/admin/products/product/"];
+  for (const width of [1024, 1280, 1440, 1920]) {
+    test.describe(`${width}px`, () => {
+      test.use({ viewport: { width, height: 1000 } });
+
+      for (const pagePath of wordSafeLists) {
+        test(`every text node stays within whole words on ${pagePath}`, async ({ page }) => {
+          await assertChangelistTextBreaksAtWords(page, pagePath);
+        });
+      }
     });
   }
 });
