@@ -246,7 +246,17 @@ class ProductImageInline(admin.TabularInline):
     thumbnail_preview.short_description = "پیش‌نمایش"
 
 
-class ProductVariantInline(admin.TabularInline):
+class AdminSkuDirectionMixin:
+    """Render every editable SKU as an explicit left-to-right control."""
+
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
+        formfield = super().formfield_for_dbfield(db_field, request, **kwargs)
+        if formfield is not None and db_field.name == "sku":
+            formfield.widget.attrs["dir"] = "ltr"
+        return formfield
+
+
+class ProductVariantInline(AdminSkuDirectionMixin, admin.TabularInline):
     model = ProductVariant
     extra = 0
     fields = ("sku", "price", "stock_quantity", "is_active", "attribute_values")
@@ -367,7 +377,9 @@ class HasImageFilter(admin.SimpleListFilter):
 
 
 @admin.register(Product)
-class ProductAdmin(NumericChangelistAdminMixin, admin.ModelAdmin):
+class ProductAdmin(
+    AdminSkuDirectionMixin, NumericChangelistAdminMixin, admin.ModelAdmin
+):
     # The owner edits prices, stock and flags inline as before. Product name,
     # image and identifying metadata share one compact, sortable link cell;
     # the stock widget keeps its status badge beside the editable value.
@@ -1397,7 +1409,7 @@ class ProductAttributeValueAdmin(admin.ModelAdmin):
 
 
 @admin.register(ProductVariant)
-class ProductVariantAdmin(admin.ModelAdmin):
+class ProductVariantAdmin(AdminSkuDirectionMixin, admin.ModelAdmin):
     """
     Registered standalone (in addition to being inlined under
     ProductAdmin) purely so `search_fields` exists here -- Django's

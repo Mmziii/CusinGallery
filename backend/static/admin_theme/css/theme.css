@@ -3767,6 +3767,11 @@ body.cusin-admin #container .cusin-gallery-field input[type="file"] {
   }
   body.cusin-admin #container #variants-group .tabular thead th.column-sku,
   body.cusin-admin #container #variants-group .tabular tbody td.field-sku { width: 15%; }
+  body.cusin-admin.app-products.model-product #container #variants-group .tabular tbody td.field-sku input[type="text"] {
+    direction: ltr;
+    text-align: left;
+    padding-inline: 6px;
+  }
   body.cusin-admin #container #variants-group .tabular thead th.column-price,
   body.cusin-admin #container #variants-group .tabular tbody td.field-price { width: 13.5%; }
   body.cusin-admin #container #variants-group .tabular thead th.column-stock_quantity,

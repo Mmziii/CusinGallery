@@ -1432,6 +1432,52 @@ test.describe("changelist text breaks only between words", () => {
   }
 });
 
+test.describe("SKU editor direction", () => {
+  test.skip(!USER || !PASSWORD, "set E2E_ADMIN_USER and E2E_ADMIN_PASSWORD to run");
+  test.use({ viewport: { width: 1280, height: 1000 } });
+
+  test.beforeEach(async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "chromium", "desktop project only");
+    await login(page);
+  });
+
+  test("product, inline-variant and standalone-variant SKU inputs are LTR", async ({ page }) => {
+    const productUrl = await firstProductWithVariantsUrl(page);
+    await page.goto(new URL(productUrl, BASE_URL).href, { waitUntil: "networkidle" });
+    const productSku = page.locator("#id_sku");
+    await expect(productSku).toHaveAttribute("dir", "ltr");
+    expect(await productSku.evaluate((input) => getComputedStyle(input).direction)).toBe("ltr");
+
+    const inlineSkus = page.locator('#variants-group input[name$="-sku"]');
+    expect(await inlineSkus.count(), "the two-variant product should expose SKU editors").toBeGreaterThan(0);
+    const inlineValues = await inlineSkus.evaluateAll((inputs) => inputs.map((input) => input.value));
+    expect(inlineValues).toContain("MUG-300-آجری");
+    const inlineMetrics = await inlineSkus.evaluateAll((inputs) => inputs.map((input) => ({
+      value: input.value,
+      dir: input.getAttribute("dir"),
+      direction: getComputedStyle(input).direction,
+      clientWidth: input.clientWidth,
+      scrollWidth: input.scrollWidth,
+    })));
+    const mixedSku = inlineMetrics.find((input) => input.value === "MUG-300-آجری");
+    expect(mixedSku).toBeTruthy();
+    expect(mixedSku.dir).toBe("ltr");
+    expect(mixedSku.direction).toBe("ltr");
+    expect(mixedSku.clientWidth).toBeGreaterThanOrEqual(120);
+    expect(mixedSku.scrollWidth, "mixed Persian-Latin SKU must fit without clipping").toBeLessThanOrEqual(mixedSku.clientWidth);
+    for (const input of await inlineSkus.all()) {
+      await expect(input).toHaveAttribute("dir", "ltr");
+      expect(await input.evaluate((element) => getComputedStyle(element).direction)).toBe("ltr");
+    }
+
+    const variantUrl = await firstProductVariantUrl(page);
+    await page.goto(new URL(variantUrl, BASE_URL).href, { waitUntil: "networkidle" });
+    const standaloneSku = page.locator("#id_sku");
+    await expect(standaloneSku).toHaveAttribute("dir", "ltr");
+    expect(await standaloneSku.evaluate((input) => getComputedStyle(input).direction)).toBe("ltr");
+  });
+});
+
 test.describe("fieldset help text stays inside at every width", () => {
   test.skip(!USER || !PASSWORD, "set E2E_ADMIN_USER and E2E_ADMIN_PASSWORD to run");
 

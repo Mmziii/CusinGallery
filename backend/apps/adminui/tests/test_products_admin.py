@@ -2,6 +2,7 @@
 duplicate action, bulk percentage price change (preview / apply /
 rollback / CSV / permissions) and the enhanced change form assets.
 """
+import re
 from unittest import mock
 
 from django.contrib.admin.models import LogEntry
@@ -10,7 +11,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from apps.categories.models import Category
-from apps.products.models import Brand, Product
+from apps.products.models import Brand, Product, ProductVariant
 
 from .helpers import PLAIN_STATIC, make_product, make_staff, make_superuser
 
@@ -66,6 +67,32 @@ class ProductListEditableTests(TestCase):
         self.assertNotIn("category", product_admin.list_display)
         self.assertNotIn("brand", product_admin.list_display)
         self.assertEqual(product_admin.product_summary.admin_order_field, "name")
+
+    def test_product_and_variant_sku_editors_render_with_ltr_direction(self):
+        variant = ProductVariant.objects.create(
+            product=self.product,
+            sku="PAN-001-آجری",
+            price=100000,
+            stock_quantity=2,
+        )
+        def ltr_input(name):
+            return re.compile(
+                rf'<input\b(?=[^>]*\bname="{re.escape(name)}")(?=[^>]*\bdir="ltr")[^>]*>'
+            )
+
+        product_response = self.client.get(
+            reverse("admin:products_product_change", args=[self.product.pk])
+        )
+        self.assertEqual(product_response.status_code, 200)
+        product_html = product_response.content.decode()
+        self.assertRegex(product_html, ltr_input("sku"))
+        self.assertRegex(product_html, ltr_input("variants-0-sku"))
+
+        variant_response = self.client.get(
+            reverse("admin:products_productvariant_change", args=[variant.pk])
+        )
+        self.assertEqual(variant_response.status_code, 200)
+        self.assertRegex(variant_response.content.decode(), ltr_input("sku"))
 
     def _post_row(self, **overrides):
         data = formset_prefix_fields()

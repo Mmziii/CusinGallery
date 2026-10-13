@@ -552,6 +552,16 @@ class ResponsiveCssTests(SimpleTestCase):
                 self.assertEqual(help_rule["margin"], "0")
                 self.assertEqual(help_rule["white-space"], "normal")
 
+    def test_variant_inline_sku_input_is_ltr_with_enough_text_room(self):
+        selector = (
+            "body.cusin-admin.app-products.model-product #container #variants-group "
+            ".tabular tbody td.field-sku input[type=\"text\"]"
+        )
+        rules = self.desktop[selector]
+        self.assertEqual(rules["direction"], "ltr")
+        self.assertEqual(rules["text-align"], "left")
+        self.assertEqual(rules["padding-inline"], "6px")
+
     def test_wide_product_variants_fit_their_inline_card_without_original_label_cells(self):
         table = self.desktop[
             "body.cusin-admin #container #variants-group .tabular table"
