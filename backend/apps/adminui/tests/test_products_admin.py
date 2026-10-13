@@ -68,6 +68,47 @@ class ProductListEditableTests(TestCase):
         self.assertNotIn("brand", product_admin.list_display)
         self.assertEqual(product_admin.product_summary.admin_order_field, "name")
 
+    def test_stock_badge_uses_each_products_own_low_stock_threshold(self):
+        low_at_five = make_product(
+            category=self.category,
+            name="آستانه پنج",
+            slug="threshold-five",
+            sku="THRESHOLD-5",
+            stock_quantity=4,
+            low_stock_threshold=5,
+        )
+        sufficient_at_three = make_product(
+            category=self.category,
+            name="آستانه سه",
+            slug="threshold-three",
+            sku="THRESHOLD-3",
+            stock_quantity=4,
+            low_stock_threshold=3,
+        )
+
+        response = self.client.get(reverse(CHANGELIST))
+        self.assertEqual(response.status_code, 200)
+        rows = re.findall(r"<tr\b[^>]*>.*?</tr>", response.content.decode(), re.S)
+
+        def row_for(product):
+            sku = re.escape(product.sku)
+            return next(
+                (
+                    row
+                    for row in rows
+                    if re.search(rf'title="{sku}">{sku}</bdi>', row)
+                ),
+                None,
+            )
+
+        low_row = row_for(low_at_five)
+        sufficient_row = row_for(sufficient_at_three)
+        self.assertIsNotNone(low_row, "the threshold-five product should appear in the list")
+        self.assertIsNotNone(sufficient_row, "the threshold-three product should appear in the list")
+        self.assertIn('class="cusin-badge stock-low"', low_row)
+        self.assertIn("۴ موجودی کم", low_row)
+        self.assertNotIn("stock-low", sufficient_row)
+
     def test_product_and_variant_sku_editors_render_with_ltr_direction(self):
         variant = ProductVariant.objects.create(
             product=self.product,

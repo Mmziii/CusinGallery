@@ -304,7 +304,7 @@ class ProductStockChangelistWidget(forms.NumberInput):
 
         if quantity <= 0:
             badge_class, label = "stock-out", "۰ — ناموجود"
-        elif quantity <= settings.LOW_STOCK_THRESHOLD:
+        elif quantity <= getattr(self, "low_stock_threshold", settings.LOW_STOCK_THRESHOLD):
             badge_class = "stock-low"
             label = f"{fa_digits(quantity)} موجودی کم"
         else:
@@ -1014,6 +1014,19 @@ class ProductAdmin(
         attrs = dict(stock_field.widget.attrs)
         attrs.update({"dir": "ltr", "inputmode": "numeric"})
         stock_field.widget = ProductStockChangelistWidget(attrs=attrs)
+
+        form_class = formset.form
+        base_init = form_class.__init__
+
+        def init_with_product_threshold(form, *args, **form_kwargs):
+            base_init(form, *args, **form_kwargs)
+            form.fields["stock_quantity"].widget.low_stock_threshold = getattr(
+                form.instance,
+                "low_stock_threshold",
+                settings.LOW_STOCK_THRESHOLD,
+            )
+
+        form_class.__init__ = init_with_product_threshold
         return formset
 
     def thumbnail_column(self, obj):
