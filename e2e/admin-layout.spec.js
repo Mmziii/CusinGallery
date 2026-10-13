@@ -1552,6 +1552,53 @@ test.describe("nine-digit numeric changelist inputs", () => {
   });
 });
 
+test.describe("product changelist SKUs remain fully visible on desktop", () => {
+  test.skip(!USER || !PASSWORD, "set E2E_ADMIN_USER and E2E_ADMIN_PASSWORD to run");
+
+  test.beforeEach(async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "chromium", "desktop project only");
+    await login(page);
+  });
+
+  for (const width of [1024, 1280, 1440]) {
+    test.describe(`${width}px product changelist`, () => {
+      test.use({ viewport: { width, height: 900 } });
+
+      test("every product SKU is fully visible without ellipsis", async ({ page }) => {
+        await page.goto(`${BASE_URL}/admin/products/product/`, { waitUntil: "networkidle" });
+        const skus = await page.locator(
+          "#result_list tbody .cusin-product-summary__sku"
+        ).evaluateAll((elements) => elements.map((element) => {
+          const style = getComputedStyle(element);
+          return {
+            text: element.textContent.trim(),
+            title: element.getAttribute("title"),
+            clientWidth: element.clientWidth,
+            scrollWidth: element.scrollWidth,
+            direction: style.direction,
+            whiteSpace: style.whiteSpace,
+            textOverflow: style.textOverflow,
+            fontFamily: style.fontFamily,
+          };
+        }));
+
+        expect(skus.length, "product changelist should include SKU tokens").toBeGreaterThan(0);
+        for (const sku of skus) {
+          expect(sku.text, `SKU should match its complete title: ${JSON.stringify(sku)}`).toBe(sku.title);
+          expect(sku.text).not.toContain("…");
+          expect(sku.text).not.toContain("...");
+          expect(sku.direction).toBe("ltr");
+          expect(sku.whiteSpace).toBe("nowrap");
+          expect(sku.textOverflow).not.toBe("ellipsis");
+          expect(sku.fontFamily).toContain("monospace");
+          expect(sku.clientWidth, `SKU should have measurable width: ${JSON.stringify(sku)}`).toBeGreaterThan(0);
+          expect(sku.scrollWidth, `SKU should not be clipped: ${JSON.stringify(sku)}`).toBeLessThanOrEqual(sku.clientWidth);
+        }
+      });
+    });
+  }
+});
+
 test.describe("product changelist row elements never overlap", () => {
   test.skip(!USER || !PASSWORD, "set E2E_ADMIN_USER and E2E_ADMIN_PASSWORD to run");
 

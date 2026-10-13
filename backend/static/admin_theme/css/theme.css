@@ -1009,14 +1009,19 @@ body.cusin-admin.app-products.model-product #result_list .cusin-product-summary_
   hyphens: none;
 }
 body.cusin-admin.app-products.model-product #result_list .cusin-product-summary__sku {
-  flex: 0 1 auto;
-  max-width: 42%;
-  overflow: hidden;
+  display: block;
+  align-self: flex-start;
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  width: max-content;
+  max-width: 100%;
+  min-width: 0;
+  overflow: visible;
   direction: ltr;
   unicode-bidi: isolate;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   white-space: nowrap;
-  text-overflow: ellipsis;
+  text-overflow: clip;
 }
 body.cusin-admin.app-products.model-product #result_list .cusin-product-summary__separator { flex: 0 0 auto; }
 body.cusin-admin.app-products.model-product #result_list .cusin-product-summary__category,
