@@ -3923,3 +3923,31 @@ body.cusin-admin.cusin-import-page #content code {
   body.cusin-admin.app-orders.model-order #result_list th.column-total_fa { width: 20%; }
   body.cusin-admin.app-orders.model-order #result_list th.column-cusin-row-actions { width: 10%; }
 }
+
+/* Global changelist typography: never make Persian or Latin words break by
+   character merely to fit a table cell. Keep inherently directional values
+   (codes, SKUs, order numbers and phone data) as one isolated LTR token. */
+body.cusin-admin #container #changelist #result_list thead th,
+body.cusin-admin #container #changelist #result_list tbody td,
+body.cusin-admin #container #changelist #result_list tbody th {
+  word-break: normal;
+  overflow-wrap: normal;
+  hyphens: none;
+}
+body.cusin-admin #container #changelist #result_list .cusin-nowrap {
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+}
+body.cusin-admin.app-products.model-product #container #changelist #result_list .cusin-product-summary__sku,
+body.cusin-admin.app-products.model-productvariant #container #changelist #result_list td.field-sku,
+body.cusin-admin.app-orders.model-order #container #changelist #result_list td.field-user,
+body.cusin-admin.app-accounts.model-user #container #changelist #result_list td.field-username,
+body.cusin-admin.app-accounts.model-user #container #changelist #result_list td.field-email,
+body.cusin-admin.app-accounts.model-user #container #changelist #result_list td.field-phone,
+body.cusin-admin.app-discounts.model-coupon #container #changelist #result_list td.field-code {
+  direction: ltr;
+  unicode-bidi: isolate;
+  white-space: nowrap;
+}

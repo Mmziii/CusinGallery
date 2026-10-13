@@ -1412,15 +1412,18 @@ test.describe("changelist text breaks only between words", () => {
     await login(page);
   });
 
-  const wordSafeLists = ["/admin/products/product/", "/admin/orders/order/"];
+  const wordSafeLists = [
+    "/admin/products/product/",
+    "/admin/orders/order/",
+    "/admin/accounts/user/",
+    "/admin/categories/category/",
+    "/admin/discounts/coupon/",
+  ];
   for (const width of [1024, 1280, 1440, 1920]) {
     test.describe(`${width}px`, () => {
       test.use({ viewport: { width, height: 1000 } });
 
-      const listsAtWidth = width === 1280
-        ? [...wordSafeLists, "/admin/accounts/user/"]
-        : wordSafeLists;
-      for (const pagePath of listsAtWidth) {
+      for (const pagePath of wordSafeLists) {
         test(`every text node stays within whole words on ${pagePath}`, async ({ page }) => {
           await assertChangelistTextBreaksAtWords(page, pagePath);
         });

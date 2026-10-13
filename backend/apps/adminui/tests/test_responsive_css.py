@@ -203,6 +203,38 @@ class ResponsiveCssTests(SimpleTestCase):
                 self.assertEqual(rules["word-break"], "normal")
                 self.assertEqual(rules["hyphens"], "none")
 
+    def test_global_changelist_headers_and_cells_use_word_level_breaks(self):
+        for selector in (
+            "body.cusin-admin #container #changelist #result_list thead th",
+            "body.cusin-admin #container #changelist #result_list tbody td",
+            "body.cusin-admin #container #changelist #result_list tbody th",
+        ):
+            with self.subTest(selector=selector):
+                rules = self.base[selector]
+                self.assertEqual(rules["word-break"], "normal")
+                self.assertEqual(rules["overflow-wrap"], "normal")
+                self.assertEqual(rules["hyphens"], "none")
+
+        nowrap = self.base["body.cusin-admin #container #changelist #result_list .cusin-nowrap"]
+        self.assertEqual(nowrap["white-space"], "nowrap")
+        self.assertEqual(nowrap["overflow-wrap"], "normal")
+
+    def test_changelist_codes_and_phones_are_isolated_ltr_tokens(self):
+        for selector in (
+            "body.cusin-admin.app-products.model-product #container #changelist #result_list .cusin-product-summary__sku",
+            "body.cusin-admin.app-products.model-productvariant #container #changelist #result_list td.field-sku",
+            "body.cusin-admin.app-orders.model-order #container #changelist #result_list td.field-user",
+            "body.cusin-admin.app-accounts.model-user #container #changelist #result_list td.field-username",
+            "body.cusin-admin.app-accounts.model-user #container #changelist #result_list td.field-email",
+            "body.cusin-admin.app-accounts.model-user #container #changelist #result_list td.field-phone",
+            "body.cusin-admin.app-discounts.model-coupon #container #changelist #result_list td.field-code",
+        ):
+            with self.subTest(selector=selector):
+                rules = self.base[selector]
+                self.assertEqual(rules["direction"], "ltr")
+                self.assertEqual(rules["unicode-bidi"], "isolate")
+                self.assertEqual(rules["white-space"], "nowrap")
+
     def test_order_number_amount_and_date_stay_on_one_titled_line(self):
         for selector in (".cusin-order-number", ".cusin-order-amount", ".cusin-order-date"):
             with self.subTest(selector=selector):
