@@ -2225,6 +2225,32 @@ a.cusin-btn--ghost:active { color: var(--cusin-text); }
        price-percent flow, shipping cell, refund note)
    -------------------------------------------------------------------------- */
 .cusin-ship { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.cusin-order-number,
+.cusin-order-amount,
+.cusin-order-date {
+  display: inline-block;
+  box-sizing: border-box;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cusin-order-number {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+}
+.cusin-order-amount {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+}
+body.cusin-admin.app-orders.model-order #result_list .cusin-ship {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .cusin-item-cell { display: inline-flex; align-items: center; gap: 10px; text-align: start; }
 .cusin-item-cell img, .cusin-item-cell .cusin-thumb-empty { flex: none; }
 
@@ -3742,20 +3768,22 @@ body.cusin-admin #container .cusin-gallery-field input[type="file"] {
   body.cusin-admin #container #variants-group .tabular thead th:last-child,
   body.cusin-admin #container #variants-group .tabular tbody td.delete { width: 12%; }
 
-  /* Give long status labels their own room so the pills never collide. */
+  /* Compact 1440px+ order grid: the least urgent facts move out of sight
+     on narrower screens, leaving the owner the customer, workflow and total. */
   body.cusin-admin.app-orders.model-order #result_list th.action-checkbox-column { width: 4%; }
-  body.cusin-admin.app-orders.model-order #result_list th.column-order_number { width: 15%; }
-  body.cusin-admin.app-orders.model-order #result_list th.column-user { width: 10%; }
-  body.cusin-admin.app-orders.model-order #result_list th.column-status_badge { width: 12%; }
-  body.cusin-admin.app-orders.model-order #result_list th.column-payment_badge { width: 12%; }
-  body.cusin-admin.app-orders.model-order #result_list th.column-total_fa { width: 8%; }
-  body.cusin-admin.app-orders.model-order #result_list th.column-shipping_method_cell { width: 7%; }
-  body.cusin-admin.app-orders.model-order #result_list th.column-stock_restored_badge { width: 6%; }
-  body.cusin-admin.app-orders.model-order #result_list th.column-refund_badge { width: 6%; }
+  body.cusin-admin.app-orders.model-order #result_list th.column-order_number_cell { width: 14%; }
+  body.cusin-admin.app-orders.model-order #result_list th.column-user { width: 14%; }
+  body.cusin-admin.app-orders.model-order #result_list th.column-status_badge { width: 8%; }
+  body.cusin-admin.app-orders.model-order #result_list th.column-payment_badge { width: 8%; }
+  body.cusin-admin.app-orders.model-order #result_list th.column-total_fa { width: 12%; }
+  body.cusin-admin.app-orders.model-order #result_list th.column-shipping_method_cell { width: 6%; }
+  body.cusin-admin.app-orders.model-order #result_list th.column-stock_restored_badge { width: 4%; }
+  body.cusin-admin.app-orders.model-order #result_list th.column-refund_badge { width: 10%; }
   body.cusin-admin.app-orders.model-order #result_list th.column-created_at_jalali { width: 10%; }
   body.cusin-admin.app-orders.model-order #result_list th.column-cusin-row-actions { width: 10%; }
   body.cusin-admin.app-orders.model-order #result_list td.field-status_badge .cusin-badge,
-  body.cusin-admin.app-orders.model-order #result_list td.field-payment_badge .cusin-badge {
+  body.cusin-admin.app-orders.model-order #result_list td.field-payment_badge .cusin-badge,
+  body.cusin-admin.app-orders.model-order #result_list td.field-refund_badge .cusin-badge {
     box-sizing: border-box;
     display: inline-block;
     max-width: 100%;
@@ -3763,6 +3791,14 @@ body.cusin-admin #container .cusin-gallery-field input[type="file"] {
     font-size: 14px;
     text-align: center;
     white-space: normal;
+    overflow-wrap: normal;
+    word-break: normal;
+    hyphens: none;
+  }
+  body.cusin-admin.app-orders.model-order #result_list th.column-refund_badge {
+    overflow-wrap: normal;
+    word-break: normal;
+    hyphens: none;
   }
 
   body.cusin-admin.app-categories.model-category #result_list th.action-checkbox-column { width: 5%; }
@@ -3854,4 +3890,26 @@ body.cusin-admin.cusin-import-page #content th,
 body.cusin-admin.cusin-import-page #content td,
 body.cusin-admin.cusin-import-page #content code {
   overflow-wrap: anywhere;
+}
+
+/* Order desk: below 1440px keep only the number, customer, workflow and
+   amount. The underlying snapshot fields remain available on the order. */
+@media (max-width: 1439px) {
+  body.cusin-admin.app-orders.model-order #container #changelist #result_list .column-shipping_method_cell,
+  body.cusin-admin.app-orders.model-order #container #changelist #result_list .field-shipping_method_cell,
+  body.cusin-admin.app-orders.model-order #container #changelist #result_list .column-stock_restored_badge,
+  body.cusin-admin.app-orders.model-order #container #changelist #result_list .field-stock_restored_badge,
+  body.cusin-admin.app-orders.model-order #container #changelist #result_list .column-refund_badge,
+  body.cusin-admin.app-orders.model-order #container #changelist #result_list .field-refund_badge,
+  body.cusin-admin.app-orders.model-order #container #changelist #result_list .column-created_at_jalali,
+  body.cusin-admin.app-orders.model-order #container #changelist #result_list .field-created_at_jalali {
+    display: none !important;
+  }
+  body.cusin-admin.app-orders.model-order #result_list th.action-checkbox-column { width: 4%; }
+  body.cusin-admin.app-orders.model-order #result_list th.column-order_number_cell { width: 18%; }
+  body.cusin-admin.app-orders.model-order #result_list th.column-user { width: 20%; }
+  body.cusin-admin.app-orders.model-order #result_list th.column-status_badge { width: 14%; }
+  body.cusin-admin.app-orders.model-order #result_list th.column-payment_badge { width: 14%; }
+  body.cusin-admin.app-orders.model-order #result_list th.column-total_fa { width: 20%; }
+  body.cusin-admin.app-orders.model-order #result_list th.column-cusin-row-actions { width: 10%; }
 }

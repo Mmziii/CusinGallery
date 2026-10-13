@@ -429,6 +429,23 @@ async function assertDesktopChangelistLayout(page, pagePath) {
         fontVariantNumeric: style.fontVariantNumeric,
       };
     });
+    const orderNumbers = [...table.querySelectorAll(
+      "tbody .field-order_number_cell .cusin-order-number"
+    )].map((element) => ({
+      text: element.textContent.trim(),
+      title: element.getAttribute("title"),
+      dir: element.getAttribute("dir"),
+      direction: getComputedStyle(element).direction,
+      whiteSpace: getComputedStyle(element).whiteSpace,
+      fontFamily: getComputedStyle(element).fontFamily,
+    }));
+    const orderAmounts = [...table.querySelectorAll(
+      "tbody .field-total_fa .cusin-order-amount"
+    )].map((element) => ({
+      text: element.textContent.trim(),
+      title: element.getAttribute("title"),
+      whiteSpace: getComputedStyle(element).whiteSpace,
+    }));
     const wrapperBox = box(wrapper);
     return {
       wrapper: {
@@ -440,6 +457,9 @@ async function assertDesktopChangelistLayout(page, pagePath) {
       table: { ...box(table), layout: getComputedStyle(table).tableLayout },
       headers,
       rows,
+      viewportWidth: window.innerWidth,
+      orderNumbers,
+      orderAmounts,
       productName: name && {
         lineClamp: nameStyle.webkitLineClamp,
         lineHeight: parseFloat(nameStyle.lineHeight),
@@ -456,7 +476,9 @@ async function assertDesktopChangelistLayout(page, pagePath) {
   expect(metrics.wrapper.scrollWidth, `${pagePath} should not need a horizontal scrollbar at desktop width`).toBeLessThanOrEqual(metrics.wrapper.clientWidth + 1);
   expect(metrics.rows.length, `${pagePath} needs a sample row to measure`).toBeGreaterThan(0);
 
-  const visibleHeaders = metrics.headers.filter((header) => !header.className.includes("storefront_data"));
+  const visibleHeaders = metrics.headers.filter((header) =>
+    header.visible && !header.className.includes("storefront_data")
+  );
   for (const header of visibleHeaders) {
     expect(header.visible, `${pagePath} column should be visible: ${JSON.stringify(header)}`).toBe(true);
     expect(header.left, `${pagePath} column should remain inside the results box`).toBeGreaterThanOrEqual(metrics.wrapper.left - 0.5);
@@ -481,6 +503,32 @@ async function assertDesktopChangelistLayout(page, pagePath) {
       expect(Math.abs(cell.width - metrics.headers[index].width),
         `${pagePath} header/body column ${index} should align`).toBeLessThanOrEqual(2);
     });
+  }
+
+  if (pagePath === "/admin/orders/order/") {
+    const orderNumberHeader = metrics.headers.find((header) => header.className.includes("column-order_number_cell"));
+    const amountHeader = metrics.headers.find((header) => header.className.includes("column-total_fa"));
+    expect(orderNumberHeader?.text).toBe("شماره");
+    expect(amountHeader?.text).toBe("مبلغ (تومان)");
+    expect(metrics.orderNumbers.length, "orders should render their LTR order number").toBeGreaterThan(0);
+    for (const number of metrics.orderNumbers) {
+      expect(number.dir).toBe("ltr");
+      expect(number.direction).toBe("ltr");
+      expect(number.whiteSpace).toBe("nowrap");
+      expect(number.fontFamily).toContain("monospace");
+      expect(number.title).toBe(number.text);
+    }
+    expect(metrics.orderAmounts.length, "orders should render their amounts").toBeGreaterThan(0);
+    for (const amount of metrics.orderAmounts) {
+      expect(amount.whiteSpace).toBe("nowrap");
+      expect(amount.text).not.toContain("تومان");
+      expect(amount.title).toBeTruthy();
+    }
+    for (const column of ["shipping_method_cell", "stock_restored_badge", "refund_badge", "created_at_jalali"]) {
+      const header = metrics.headers.find((item) => item.className.includes(`column-${column}`));
+      expect(header, `order ${column} header should exist`).toBeTruthy();
+      expect(header.visible, `order ${column} visibility below 1440px`).toBe(metrics.viewportWidth >= 1440);
+    }
   }
 
   if (pagePath === "/admin/products/product/") {
@@ -1364,7 +1412,7 @@ test.describe("changelist text breaks only between words", () => {
     await login(page);
   });
 
-  const wordSafeLists = ["/admin/products/product/"];
+  const wordSafeLists = ["/admin/products/product/", "/admin/orders/order/"];
   for (const width of [1024, 1280, 1440, 1920]) {
     test.describe(`${width}px`, () => {
       test.use({ viewport: { width, height: 1000 } });

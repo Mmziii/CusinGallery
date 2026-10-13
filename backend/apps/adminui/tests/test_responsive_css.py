@@ -92,6 +92,7 @@ class ResponsiveCssTests(SimpleTestCase):
         cls.tablet = _rules(_media_block(cls.css, "(max-width: 1024px)"))
         cls.phone = _rules(_media_block(cls.css, "(max-width: 767px)"))
         cls.desktop = _rules(_media_block(cls.css, "(min-width: 1025px)"))
+        cls.narrow_desktop = _rules(_media_block(cls.css, "(max-width: 1439px)"))
 
     def _effective(self, selector, prop):
         """The value the cascade gives on a phone: the 767px rule wins."""
@@ -177,6 +178,7 @@ class ResponsiveCssTests(SimpleTestCase):
         for selector in (
             "body.cusin-admin.app-orders.model-order #result_list td.field-status_badge .cusin-badge",
             "body.cusin-admin.app-orders.model-order #result_list td.field-payment_badge .cusin-badge",
+            "body.cusin-admin.app-orders.model-order #result_list td.field-refund_badge .cusin-badge",
         ):
             with self.subTest(selector=selector):
                 badge = self.desktop[selector]
@@ -185,6 +187,44 @@ class ResponsiveCssTests(SimpleTestCase):
                 self.assertEqual(badge["max-width"], "100%")
                 self.assertEqual(badge["font-size"], "14px")
                 self.assertEqual(badge["white-space"], "normal")
+                self.assertEqual(badge["overflow-wrap"], "normal")
+                self.assertEqual(badge["word-break"], "normal")
+                self.assertEqual(badge["hyphens"], "none")
+
+    def test_order_number_amount_and_date_stay_on_one_titled_line(self):
+        for selector in (".cusin-order-number", ".cusin-order-amount", ".cusin-order-date"):
+            with self.subTest(selector=selector):
+                self.assertEqual(self.base[selector]["white-space"], "nowrap")
+                self.assertEqual(self.base[selector]["overflow"], "hidden")
+                self.assertEqual(self.base[selector]["text-overflow"], "ellipsis")
+        order_number = self.base[".cusin-order-number"]
+        self.assertEqual(order_number["direction"], "ltr")
+        self.assertEqual(order_number["unicode-bidi"], "isolate")
+        self.assertIn("monospace", order_number["font-family"])
+        self.assertEqual(self.base[".cusin-order-amount"]["direction"], "ltr")
+
+    def test_secondary_order_columns_are_hidden_below_1440px(self):
+        for column in (
+            "shipping_method_cell", "stock_restored_badge", "refund_badge",
+            "created_at_jalali",
+        ):
+            for selector in (
+                f"body.cusin-admin.app-orders.model-order #container #changelist #result_list .column-{column}",
+                f"body.cusin-admin.app-orders.model-order #container #changelist #result_list .field-{column}",
+            ):
+                with self.subTest(selector=selector):
+                    self.assertEqual(self.narrow_desktop[selector]["display"], "none !important")
+
+        widths = {
+            "action-checkbox-column": "4%", "column-order_number_cell": "18%",
+            "column-user": "20%", "column-status_badge": "14%",
+            "column-payment_badge": "14%", "column-total_fa": "20%",
+            "column-cusin-row-actions": "10%",
+        }
+        for column, width in widths.items():
+            selector = f"body.cusin-admin.app-orders.model-order #result_list th.{column}"
+            with self.subTest(selector=selector):
+                self.assertEqual(self.narrow_desktop[selector]["width"], width)
 
     def test_all_six_desktop_changelists_reserve_explicit_column_widths(self):
         lists = {
@@ -195,11 +235,11 @@ class ResponsiveCssTests(SimpleTestCase):
                 "column-is_featured": "5%", "column-cusin-row-actions": "10%",
             },
             "app-orders.model-order": {
-                "action-checkbox-column": "4%", "column-order_number": "15%",
-                "column-user": "10%", "column-status_badge": "12%",
-                "column-payment_badge": "12%", "column-total_fa": "8%",
-                "column-shipping_method_cell": "7%", "column-stock_restored_badge": "6%",
-                "column-refund_badge": "6%", "column-created_at_jalali": "10%",
+                "action-checkbox-column": "4%", "column-order_number_cell": "14%",
+                "column-user": "14%", "column-status_badge": "8%",
+                "column-payment_badge": "8%", "column-total_fa": "12%",
+                "column-shipping_method_cell": "6%", "column-stock_restored_badge": "4%",
+                "column-refund_badge": "10%", "column-created_at_jalali": "10%",
                 "column-cusin-row-actions": "10%",
             },
             "app-categories.model-category": {
