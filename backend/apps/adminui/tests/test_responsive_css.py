@@ -191,6 +191,18 @@ class ResponsiveCssTests(SimpleTestCase):
                 self.assertEqual(badge["word-break"], "normal")
                 self.assertEqual(badge["hyphens"], "none")
 
+    def test_desktop_user_changelist_wraps_only_between_words(self):
+        for selector in (
+            "body.cusin-admin.app-accounts.model-user #container #changelist #result_list thead th",
+            "body.cusin-admin.app-accounts.model-user #container #changelist #result_list tbody td",
+            "body.cusin-admin.app-accounts.model-user #container #changelist #result_list tbody th",
+        ):
+            with self.subTest(selector=selector):
+                rules = self.desktop[selector]
+                self.assertEqual(rules["overflow-wrap"], "normal")
+                self.assertEqual(rules["word-break"], "normal")
+                self.assertEqual(rules["hyphens"], "none")
+
     def test_order_number_amount_and_date_stay_on_one_titled_line(self):
         for selector in (".cusin-order-number", ".cusin-order-amount", ".cusin-order-date"):
             with self.subTest(selector=selector):

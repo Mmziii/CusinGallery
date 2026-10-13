@@ -1417,7 +1417,10 @@ test.describe("changelist text breaks only between words", () => {
     test.describe(`${width}px`, () => {
       test.use({ viewport: { width, height: 1000 } });
 
-      for (const pagePath of wordSafeLists) {
+      const listsAtWidth = width === 1280
+        ? [...wordSafeLists, "/admin/accounts/user/"]
+        : wordSafeLists;
+      for (const pagePath of listsAtWidth) {
         test(`every text node stays within whole words on ${pagePath}`, async ({ page }) => {
           await assertChangelistTextBreaksAtWords(page, pagePath);
         });

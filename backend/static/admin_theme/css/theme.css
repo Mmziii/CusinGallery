@@ -3709,6 +3709,16 @@ body.cusin-admin #container .cusin-gallery-field input[type="file"] {
     word-break: normal;
     hyphens: none;
   }
+
+  /* User headers and names may wrap at their spaces, never character by
+     character, even when a value cannot use every reserved column pixel. */
+  body.cusin-admin.app-accounts.model-user #container #changelist #result_list thead th,
+  body.cusin-admin.app-accounts.model-user #container #changelist #result_list tbody td,
+  body.cusin-admin.app-accounts.model-user #container #changelist #result_list tbody th {
+    overflow-wrap: normal;
+    word-break: normal;
+    hyphens: none;
+  }
   body.cusin-admin.app-products.model-product #container #changelist #result_list thead th .text a {
     padding: 0;
   }
