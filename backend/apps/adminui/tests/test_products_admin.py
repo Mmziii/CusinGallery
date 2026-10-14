@@ -2,6 +2,7 @@
 duplicate action, bulk percentage price change (preview / apply /
 rollback / CSV / permissions) and the enhanced change form assets.
 """
+import re
 from unittest import mock
 
 from django.contrib.admin.models import LogEntry
@@ -9,7 +10,8 @@ from django.core.exceptions import ValidationError
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from apps.products.models import Product
+from apps.categories.models import Category
+from apps.products.models import Brand, Product, ProductVariant
 
 from .helpers import PLAIN_STATIC, make_product, make_staff, make_superuser
 
@@ -33,9 +35,12 @@ class ProductListEditableTests(TestCase):
     def setUp(self):
         self.admin = make_superuser(username="prodowner", phone="+989000030001")
         self.client.force_login(self.admin)
+        self.category = Category.objects.create(name="ظروف سرو", slug="servedishes")
+        self.brand = Brand.objects.create(name="کازین", slug="kazin")
         self.product = make_product(
-            name="ماهی‌تابه", price=100000, compare_at_price=120000,
-            stock_quantity=5,
+            category=self.category,
+            name="ماهی‌تابه", sku="PAN-001", brand=self.brand,
+            price=100000, compare_at_price=120000, stock_quantity=5,
         )
 
     def test_changelist_renders_editable_inputs(self):
@@ -44,8 +49,116 @@ class ProductListEditableTests(TestCase):
         self.assertIn("form-0-price", html)
         self.assertIn("form-0-stock_quantity", html)
         self.assertIn("form-0-is_active", html)
-        # the name cell stays the row link
+        self.assertRegex(
+            html,
+            r'<input[^>]+name="form-0-stock_quantity"[^>]+dir="ltr"',
+        )
+        self.assertIn("cusin-product-summary__name", html)
+        self.assertIn("cusin-product-summary__sku", html)
+        self.assertIn('title="PAN-001"', html)
+        details_start = html.index('<span class="cusin-product-summary__details">')
+        sku_position = html.index('<bdi class="cusin-product-summary__sku"', details_start)
+        metadata_position = html.index('<span class="cusin-product-summary__meta"', details_start)
+        self.assertLess(sku_position, metadata_position, "SKU should have its own identity line")
+        self.assertIn(self.category.name, html)
+        self.assertIn(self.brand.name, html)
         self.assertIn(reverse("admin:products_product_change", args=[self.product.pk]), html)
+
+        from django.contrib import admin
+        product_admin = admin.site._registry[Product]
+        self.assertEqual(product_admin.list_display_links, ("product_summary",))
+        self.assertNotIn("sku", product_admin.list_display)
+        self.assertNotIn("category", product_admin.list_display)
+        self.assertNotIn("brand", product_admin.list_display)
+        self.assertEqual(product_admin.product_summary.admin_order_field, "name")
+
+    def test_stock_badge_uses_each_products_own_low_stock_threshold(self):
+        low_at_five = make_product(
+            category=self.category,
+            name="آستانه پنج",
+            slug="threshold-five",
+            sku="THRESHOLD-5",
+            stock_quantity=4,
+            low_stock_threshold=5,
+        )
+        sufficient_at_three = make_product(
+            category=self.category,
+            name="آستانه سه",
+            slug="threshold-three",
+            sku="THRESHOLD-3",
+            stock_quantity=4,
+            low_stock_threshold=3,
+        )
+
+        response = self.client.get(reverse(CHANGELIST))
+        self.assertEqual(response.status_code, 200)
+        rows = re.findall(r"<tr\b[^>]*>.*?</tr>", response.content.decode(), re.S)
+
+        def row_for(product):
+            sku = re.escape(product.sku)
+            return next(
+                (
+                    row
+                    for row in rows
+                    if re.search(rf'title="{sku}">{sku}</bdi>', row)
+                ),
+                None,
+            )
+
+        low_row = row_for(low_at_five)
+        sufficient_row = row_for(sufficient_at_three)
+        self.assertIsNotNone(low_row, "the threshold-five product should appear in the list")
+        self.assertIsNotNone(sufficient_row, "the threshold-three product should appear in the list")
+        self.assertIn('class="cusin-badge stock-low"', low_row)
+        self.assertIn("۴ موجودی کم", low_row)
+        self.assertNotIn("stock-low", sufficient_row)
+
+    def test_sufficient_stock_has_no_duplicate_stock_badge(self):
+        healthy = make_product(
+            category=self.category,
+            name="موجودی کافی",
+            slug="healthy-stock",
+            sku="HEALTHY-10",
+            stock_quantity=10,
+            low_stock_threshold=5,
+        )
+        response = self.client.get(reverse(CHANGELIST))
+        rows = re.findall(r"<tr\b[^>]*>.*?</tr>", response.content.decode(), re.S)
+        healthy_row = next(
+            (row for row in rows if f'title="{healthy.sku}">{healthy.sku}</bdi>' in row),
+            None,
+        )
+
+        self.assertIsNotNone(healthy_row, "the well-stocked product should appear in the list")
+        self.assertIn('name="form-', healthy_row)
+        self.assertIn('value="10"', healthy_row)
+        self.assertNotIn("cusin-badge", healthy_row)
+
+    def test_product_and_variant_sku_editors_render_with_ltr_direction(self):
+        variant = ProductVariant.objects.create(
+            product=self.product,
+            sku="PAN-001-آجری",
+            price=100000,
+            stock_quantity=2,
+        )
+        def ltr_input(name):
+            return re.compile(
+                rf'<input\b(?=[^>]*\bname="{re.escape(name)}")(?=[^>]*\bdir="ltr")[^>]*>'
+            )
+
+        product_response = self.client.get(
+            reverse("admin:products_product_change", args=[self.product.pk])
+        )
+        self.assertEqual(product_response.status_code, 200)
+        product_html = product_response.content.decode()
+        self.assertRegex(product_html, ltr_input("sku"))
+        self.assertRegex(product_html, ltr_input("variants-0-sku"))
+
+        variant_response = self.client.get(
+            reverse("admin:products_productvariant_change", args=[variant.pk])
+        )
+        self.assertEqual(variant_response.status_code, 200)
+        self.assertRegex(variant_response.content.decode(), ltr_input("sku"))
 
     def _post_row(self, **overrides):
         data = formset_prefix_fields()
@@ -123,8 +236,7 @@ class ProductListEditableTests(TestCase):
     def test_stock_badge_rendered(self):
         make_product(name="کتری", stock_quantity=0)
         html = self.client.get(reverse(CHANGELIST)).content.decode()
-        self.assertIn("cusin-badge", html)
-        self.assertIn("ناموجود", html)
+        self.assertIn('<span class="cusin-badge stock-out">ناموجود</span>', html)
 
 
 @override_settings(**PLAIN_STATIC)

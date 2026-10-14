@@ -40,7 +40,14 @@
       drawer.classList.toggle("is-open", open);
       toggle.setAttribute("aria-expanded", open ? "true" : "false");
       if (scrim) scrim.hidden = !open;
-      if (open) lockBodyScroll(); else unlockBodyScroll();
+      if (open) {
+        lockBodyScroll();
+        var firstLink = drawer.querySelector("a, button, summary");
+        if (firstLink) firstLink.focus();
+      } else {
+        unlockBodyScroll();
+        toggle.focus();
+      }
     }
     toggle.addEventListener("click", function () {
       setOpen(!drawer.classList.contains("is-open"));
@@ -48,8 +55,9 @@
     if (scrim) scrim.addEventListener("click", function () { setOpen(false); });
     document.addEventListener("keydown", function (event) {
       if (event.key !== "Escape" || !drawer.classList.contains("is-open")) return;
-      // the palette sits on top of the drawer, so Escape closes it first
-      if (document.querySelector("[data-cusin-palette]:not([hidden])")) return;
+      // Menus and the palette sit on top of the drawer, so Escape closes
+      // the topmost layer first.
+      if (activeMenu || document.querySelector("[data-cusin-palette]:not([hidden])")) return;
       setOpen(false);
     });
     // Close the drawer when a link inside it is activated (mobile SPA-ish feel)
@@ -61,18 +69,698 @@
   }
 
   /* ------------------------------------------------------------------ *
-   * 2. User menu: close on outside click / Escape
+   * 2. Shared menu/popover component
+   *
+   * Every dropdown uses data-cusin-menu / trigger / panel. Panels are
+   * temporarily portalled to body while open so scroll boxes cannot clip
+   * them. The same positioning code flips/shifts desktop menus and turns
+   * short touch viewports into bottom sheets.
    * ------------------------------------------------------------------ */
+  var activeMenu = null;
+  var menuSequence = 0;
+
+  function spriteIcon(name) {
+    var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    var use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+    svg.setAttribute("class", "cusin-icon");
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("focusable", "false");
+    use.setAttribute("href", "#cusin-i-" + name);
+    svg.appendChild(use);
+    return svg;
+  }
+
+  function makeMenu(label, id, icon, className) {
+    menuSequence += 1;
+    var root = document.createElement("div");
+    root.className = "cusin-menu" + (className ? " " + className : "");
+    root.setAttribute("data-cusin-menu", "");
+
+    var trigger = document.createElement("button");
+    trigger.type = "button";
+    trigger.className = "cusin-menu-trigger";
+    trigger.setAttribute("data-cusin-menu-trigger", "");
+    trigger.setAttribute("aria-haspopup", "menu");
+    trigger.setAttribute("aria-expanded", "false");
+    trigger.id = "cusin-menu-trigger-" + (id || menuSequence);
+    trigger.setAttribute("aria-controls", "cusin-menu-panel-" + (id || menuSequence));
+    if (icon) trigger.appendChild(spriteIcon(icon));
+    var triggerText = document.createElement("span");
+    triggerText.textContent = label;
+    trigger.appendChild(triggerText);
+
+    var panel = document.createElement("div");
+    panel.className = "cusin-menu-panel";
+    panel.id = "cusin-menu-panel-" + (id || menuSequence);
+    panel.setAttribute("data-cusin-menu-panel", "");
+    panel.setAttribute("role", "menu");
+    panel.setAttribute("aria-labelledby", trigger.id);
+    panel.hidden = true;
+
+    root.appendChild(trigger);
+    root.appendChild(panel);
+    return { root: root, trigger: trigger, panel: panel };
+  }
+
+  function getMenuItems(panel) {
+    return Array.prototype.slice.call(panel.querySelectorAll(
+      '[role="menuitem"], a[href], button:not([disabled]), summary, [tabindex="0"]'
+    )).filter(function (item) {
+      return !item.hidden && item.getAttribute("aria-hidden") !== "true";
+    });
+  }
+
+  function restoreConfirmation(menu) {
+    if (!menu || !menu.pending) return;
+    menu.panel.replaceChildren(menu.pending.nodes);
+    menu.panel.classList.remove("is-confirming");
+    menu.pending = null;
+  }
+
+  function positionMenu(menu) {
+    var wasLocked = menu.scrollLocked;
+    var panel = menu.panel;
+    var triggerRect = menu.trigger.getBoundingClientRect();
+    var viewportWidth = Math.max(document.documentElement.clientWidth, window.innerWidth || 0);
+    var viewportHeight = Math.max(document.documentElement.clientHeight, window.innerHeight || 0);
+    var margin = 8;
+    var rtl = document.documentElement.getAttribute("dir") === "rtl";
+
+    panel.classList.remove("is-sheet", "is-side-sheet");
+    panel.style.position = "fixed";
+    panel.style.zIndex = "1001";
+    panel.style.visibility = "hidden";
+    panel.style.left = "0px";
+    panel.style.right = "auto";
+    panel.style.top = "0px";
+    panel.style.bottom = "auto";
+    panel.style.maxWidth = Math.max(0, viewportWidth - margin * 2) + "px";
+    // On desktop, long filters stay in a scrollable, width-bounded popover
+    // instead of becoming a viewport-wide sheet. Narrow screens use a sheet.
+    var maxPanelHeight = Math.max(120, Math.min(viewportHeight - margin * 2, viewportHeight * 0.72));
+    panel.style.maxHeight = maxPanelHeight + "px";
+    panel.style.overflowY = "auto";
+
+    var measured = panel.getBoundingClientRect();
+    var panelWidth = Math.min(
+      measured.width || panel.offsetWidth || 240,
+      Math.max(0, viewportWidth - margin * 2)
+    );
+    var useSheet = viewportWidth <= 480;
+    var panelHeight = 0;
+    if (!useSheet) {
+      // Keep the popover attached to its trigger even when there is not room
+      // for its preferred width on the trigger's RTL start edge.
+      var anchoredWidth = rtl ? triggerRect.right - margin : viewportWidth - triggerRect.left - margin;
+      panelWidth = Math.min(panelWidth, Math.max(0, anchoredWidth));
+      panel.style.minWidth = Math.min(220, panelWidth) + "px";
+      // Width changes can wrap long filter labels, so measure the actual
+      // bounded box only after applying its final desktop width.
+      panel.style.width = panelWidth + "px";
+      panelHeight = Math.min(panel.getBoundingClientRect().height, maxPanelHeight);
+    }
+    var below = viewportHeight - triggerRect.bottom - margin;
+    var above = triggerRect.top - margin;
+
+    if (useSheet) {
+      panel.classList.add("is-sheet");
+      if (menu.root.classList.contains("cusin-filter-menu")) {
+        // Filters use a full-height side sheet on phones, aligned to the
+        // filter trigger's RTL start edge instead of a generic bottom tray.
+        panel.classList.add("is-side-sheet");
+        var sheetWidth = Math.min(panelWidth, Math.max(0, viewportWidth - margin * 2));
+        panel.style.left = rtl ? "auto" : margin + "px";
+        panel.style.right = rtl ? margin + "px" : "auto";
+        panel.style.top = margin + "px";
+        panel.style.bottom = margin + "px";
+        panel.style.width = sheetWidth + "px";
+        panel.style.maxWidth = sheetWidth + "px";
+        panel.style.maxHeight = Math.max(120, viewportHeight - margin * 2) + "px";
+      } else {
+        panel.style.left = margin + "px";
+        panel.style.right = margin + "px";
+        panel.style.top = "auto";
+        panel.style.bottom = margin + "px";
+        panel.style.width = "auto";
+        panel.style.maxWidth = "none";
+        panel.style.maxHeight = Math.max(120, Math.min(viewportHeight - margin * 2, viewportHeight * 0.72)) + "px";
+      }
+      menu.scrollLocked = true;
+      if (!wasLocked) lockBodyScroll();
+    } else {
+      var left = rtl ? triggerRect.right - panelWidth : triggerRect.left;
+      var top = triggerRect.bottom + 6;
+      if (top + panelHeight > viewportHeight - margin && triggerRect.top - panelHeight - 6 >= margin) {
+        top = triggerRect.top - panelHeight - 6;
+      }
+      left = Math.max(margin, Math.min(left, viewportWidth - panelWidth - margin));
+      top = Math.max(margin, Math.min(top, viewportHeight - panelHeight - margin));
+      panel.style.left = left + "px";
+      panel.style.top = top + "px";
+      panel.style.width = panelWidth + "px";
+      menu.scrollLocked = false;
+      if (wasLocked) unlockBodyScroll();
+    }
+    panel.style.visibility = "visible";
+  }
+
+  function closeMenu(restoreFocus) {
+    if (!activeMenu) return;
+    var menu = activeMenu;
+    restoreConfirmation(menu);
+    menu.panel.hidden = true;
+    menu.panel.classList.remove("is-sheet", "is-side-sheet", "is-confirming");
+    menu.panel.removeAttribute("style");
+    if (menu.placeholder && menu.placeholder.parentNode) {
+      menu.placeholder.parentNode.insertBefore(menu.panel, menu.placeholder);
+      menu.placeholder.parentNode.removeChild(menu.placeholder);
+    }
+    menu.trigger.setAttribute("aria-expanded", "false");
+    menu.root.classList.remove("is-open");
+    if (menu.scrollLocked) unlockBodyScroll();
+    activeMenu = null;
+    if (restoreFocus && menu.trigger.isConnected) menu.trigger.focus();
+  }
+
+  function openMenu(root, focusLast) {
+    if (activeMenu && activeMenu.root === root) {
+      closeMenu(true);
+      return;
+    }
+    if (activeMenu) closeMenu(false);
+    var trigger = root.querySelector("[data-cusin-menu-trigger]");
+    var panel = root.querySelector("[data-cusin-menu-panel]");
+    if (!trigger || !panel) return;
+
+    var placeholder = document.createComment("cusin-menu-panel");
+    panel.parentNode.insertBefore(placeholder, panel);
+    document.body.appendChild(panel);
+    panel.hidden = false;
+    trigger.setAttribute("aria-expanded", "true");
+    root.classList.add("is-open");
+    activeMenu = {
+      root: root,
+      trigger: trigger,
+      panel: panel,
+      placeholder: placeholder,
+      pending: null,
+      scrollLocked: false,
+    };
+    positionMenu(activeMenu);
+    var items = getMenuItems(panel);
+    if (items.length) items[focusLast ? items.length - 1 : 0].focus();
+  }
+
+  function submitAdminAction(form, submitter) {
+    if (!form) return;
+    if (typeof form.requestSubmit === "function") {
+      form.requestSubmit(submitter || undefined);
+      return;
+    }
+    var submitEvent = document.createEvent("Event");
+    submitEvent.initEvent("submit", true, true);
+    if (form.dispatchEvent(submitEvent) && typeof form.submit === "function") form.submit();
+  }
+
+  function runBulkAction(value, form, nativeSelects, submitter) {
+    nativeSelects.forEach(function (select) {
+      select.value = value;
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    closeMenu(true);
+    submitAdminAction(form, submitter);
+  }
+
+  function showConfirmation(menu, item, message) {
+    var nodes = document.createDocumentFragment();
+    while (menu.panel.firstChild) nodes.appendChild(menu.panel.firstChild);
+    menu.pending = { item: item, nodes: nodes };
+    menu.panel.classList.add("is-confirming");
+
+    var question = document.createElement("p");
+    question.className = "cusin-menu-confirm-message";
+    question.setAttribute("role", "status");
+    question.textContent = message;
+
+    var actions = document.createElement("div");
+    actions.className = "cusin-menu-confirm-actions";
+    var cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.className = "cusin-menu-item";
+    cancel.setAttribute("role", "menuitem");
+    cancel.setAttribute("data-cusin-confirm-cancel", "");
+    cancel.textContent = "بازگشت";
+    var confirm = document.createElement("button");
+    confirm.type = "button";
+    confirm.className = "cusin-menu-item is-danger";
+    confirm.setAttribute("role", "menuitem");
+    confirm.setAttribute("data-cusin-confirm-yes", "");
+    confirm.textContent = "بله، انجام شود";
+    actions.appendChild(cancel);
+    actions.appendChild(confirm);
+    menu.panel.appendChild(question);
+    menu.panel.appendChild(actions);
+    confirm.focus();
+  }
+
   function initMenus() {
     var menus = document.querySelectorAll("[data-cusin-menu]");
-    if (!menus.length) return;
-    document.addEventListener("click", function (event) {
-      menus.forEach(function (menu) {
-        if (!menu.contains(event.target)) menu.removeAttribute("open");
+    menus.forEach(function (root) {
+      var trigger = root.querySelector("[data-cusin-menu-trigger]");
+      var panel = root.querySelector("[data-cusin-menu-panel]");
+      if (!trigger || !panel || root.dataset.cusinMenuReady) return;
+      root.dataset.cusinMenuReady = "true";
+      if (!panel.id) panel.id = "cusin-menu-panel-auto-" + (++menuSequence);
+      if (!trigger.id) trigger.id = "cusin-menu-trigger-auto-" + menuSequence;
+      trigger.setAttribute("aria-haspopup", "menu");
+      trigger.setAttribute("aria-controls", panel.id);
+      trigger.setAttribute("aria-expanded", "false");
+      panel.setAttribute("role", "menu");
+      panel.setAttribute("aria-labelledby", trigger.id);
+      panel.hidden = true;
+
+      trigger.addEventListener("click", function (event) {
+        event.preventDefault();
+        openMenu(root, false);
+      });
+      trigger.addEventListener("keydown", function (event) {
+        if (event.key === "ArrowDown" || event.key === "ArrowUp" ||
+            event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          if (activeMenu && activeMenu.root === root) closeMenu(true);
+          else openMenu(root, event.key === "ArrowUp");
+        }
+      });
+
+      panel.addEventListener("click", function (event) {
+        var cancel = event.target.closest && event.target.closest("[data-cusin-confirm-cancel]");
+        if (cancel && activeMenu) {
+          event.preventDefault();
+          var pendingItem = activeMenu.pending && activeMenu.pending.item;
+          restoreConfirmation(activeMenu);
+          var previousItems = getMenuItems(panel);
+          if (pendingItem && pendingItem.isConnected) pendingItem.focus();
+          else if (previousItems.length) previousItems[0].focus();
+          return;
+        }
+        var yes = event.target.closest && event.target.closest("[data-cusin-confirm-yes]");
+        if (yes && activeMenu && activeMenu.pending) {
+          event.preventDefault();
+          var pending = activeMenu.pending;
+          var actionItem = pending.item;
+          restoreConfirmation(activeMenu);
+          if (actionItem.hasAttribute("data-cusin-action-value")) {
+            runBulkAction(
+              actionItem.getAttribute("data-cusin-action-value"),
+              actionItem._cusinForm,
+              actionItem._cusinSelects,
+              actionItem._cusinSubmitter
+            );
+          } else {
+            actionItem.removeAttribute("data-cusin-confirm-message");
+            var actionForm = actionItem.form || (actionItem.getAttribute("form") && document.getElementById(actionItem.getAttribute("form")));
+            closeMenu(true);
+            if (actionForm && actionItem.type === "submit") submitAdminAction(actionForm, actionItem);
+            else if (actionItem.tagName === "A" && actionItem.href) window.location.href = actionItem.href;
+            else actionItem.click();
+          }
+          return;
+        }
+
+        var item = event.target.closest && event.target.closest('[role="menuitem"], a[href], button:not([disabled])');
+        if (!item) return;
+        var bulkValue = item.getAttribute("data-cusin-action-value");
+        if (bulkValue !== null) {
+          event.preventDefault();
+          if (item.hasAttribute("data-cusin-confirm-message")) {
+            item._cusinForm = item._cusinForm || document.getElementById("changelist-form");
+            item._cusinSelects = item._cusinSelects || Array.prototype.slice.call(
+              document.querySelectorAll('#changelist-form select[name="action"]')
+            );
+            showConfirmation(activeMenu, item, item.getAttribute("data-cusin-confirm-message"));
+          } else {
+            runBulkAction(item.getAttribute("data-cusin-action-value"), item._cusinForm,
+              item._cusinSelects || [], item._cusinSubmitter);
+          }
+          return;
+        }
+        if (item.hasAttribute("data-cusin-confirm-message")) {
+          event.preventDefault();
+          showConfirmation(activeMenu, item, item.getAttribute("data-cusin-confirm-message"));
+          return;
+        }
+        closeMenu(true);
       });
     });
+
+    document.addEventListener("click", function (event) {
+      if (!activeMenu) return;
+      var pendingItem = activeMenu.pending && activeMenu.pending.item;
+      if (activeMenu.root.contains(event.target) || activeMenu.panel.contains(event.target) ||
+          (pendingItem && (pendingItem === event.target || pendingItem.contains(event.target)))) return;
+      // Let an outside control retain pointer/keyboard focus. Escape and
+      // confirmation cancellation are the paths that explicitly return it.
+      closeMenu(false);
+    });
     document.addEventListener("keydown", function (event) {
-      if (event.key === "Escape") menus.forEach(function (m) { m.removeAttribute("open"); });
+      if (!activeMenu) return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        closeMenu(true);
+        return;
+      }
+      if (!activeMenu.panel.contains(event.target)) return;
+      var items = getMenuItems(activeMenu.panel);
+      if (!items.length) return;
+      var current = items.indexOf(document.activeElement);
+      if (event.key === "ArrowDown" || event.key === "ArrowUp" ||
+          event.key === "Home" || event.key === "End") {
+        event.preventDefault();
+        var next = current;
+        if (event.key === "Home") next = 0;
+        else if (event.key === "End") next = items.length - 1;
+        else if (event.key === "ArrowDown") next = (current + 1 + items.length) % items.length;
+        else next = (current - 1 + items.length) % items.length;
+        items[next].focus();
+      }
+    });
+    window.addEventListener("resize", function () {
+      if (activeMenu) positionMenu(activeMenu);
+    });
+    window.addEventListener("scroll", function () {
+      if (activeMenu) positionMenu(activeMenu);
+    }, true);
+  }
+
+  /* ------------------------------------------------------------------ *
+   * 2a. Sidebar group state (per-user, resilient to blocked storage)
+   * ------------------------------------------------------------------ */
+  function initSidebarGroups() {
+    var groups = document.querySelectorAll("[data-cusin-nav-group]");
+    if (!groups.length) return;
+    var userId = document.body.getAttribute("data-cusin-user-id") || "guest";
+    var key = "cusin-admin-nav:v1:" + userId;
+    var state = {};
+    try {
+      state = JSON.parse(window.localStorage.getItem(key) || "{}") || {};
+    } catch (error) {
+      state = {};
+    }
+
+    groups.forEach(function (group) {
+      var id = group.getAttribute("data-cusin-nav-group");
+      var summary = group.querySelector("summary");
+      if (!summary) return;
+      if (Object.prototype.hasOwnProperty.call(state, id)) group.open = Boolean(state[id]);
+      summary.setAttribute("aria-expanded", group.open ? "true" : "false");
+      group.addEventListener("toggle", function () {
+        summary.setAttribute("aria-expanded", group.open ? "true" : "false");
+        try {
+          var stored = JSON.parse(window.localStorage.getItem(key) || "{}") || {};
+          stored[id] = group.open;
+          window.localStorage.setItem(key, JSON.stringify(stored));
+        } catch (error) {
+          // Storage may be disabled by privacy settings; the group still works.
+        }
+      });
+    });
+  }
+
+  /* ------------------------------------------------------------------ *
+   * 2b. Changelist toolbar, filter/date/sort and pagination menus
+   * ------------------------------------------------------------------ */
+  function addMenuItem(panel, text, href, icon, confirmMessage) {
+    var item = document.createElement("a");
+    item.href = href;
+    item.className = "cusin-menu-item";
+    item.setAttribute("role", "menuitem");
+    if (icon) item.appendChild(spriteIcon(icon));
+    var label = document.createElement("span");
+    label.textContent = text;
+    item.appendChild(label);
+    if (confirmMessage) item.setAttribute("data-cusin-confirm-message", confirmMessage);
+    panel.appendChild(item);
+    return item;
+  }
+
+  function initBulkActionMenus() {
+    var form = document.getElementById("changelist-form");
+    if (!form) return;
+    var allSelects = Array.prototype.slice.call(form.querySelectorAll('select[name="action"]'));
+    if (!allSelects.length) return;
+    var sourceSelect = allSelects[0];
+    var options = Array.prototype.filter.call(sourceSelect.options, function (option) {
+      return option.value && !option.disabled;
+    });
+    if (!options.length) return;
+
+    allSelects.forEach(function (select) {
+      select.classList.add("cusin-native-action-select");
+      select.tabIndex = -1;
+      select.setAttribute("aria-hidden", "true");
+    });
+    var submitter = form.querySelector('button[name="index"], input[name="index"]');
+    if (!submitter) {
+      submitter = document.createElement("button");
+      submitter.type = "submit";
+      submitter.name = "index";
+      submitter.value = "0";
+      submitter.setAttribute("hidden", "");
+      form.appendChild(submitter);
+    }
+    submitter.setAttribute("hidden", "");
+
+    form.querySelectorAll(".actions").forEach(function (actions, index) {
+      if (actions.dataset.cusinActionsReady) return;
+      actions.dataset.cusinActionsReady = "true";
+      var menu = makeMenu("اقدام", "bulk-actions-" + index, "list", "cusin-bulk-menu");
+      menu.trigger.setAttribute("aria-label", "اقدام برای موارد انتخاب‌شده");
+      options.forEach(function (option) {
+        var item = document.createElement("button");
+        item.type = "button";
+        item.className = "cusin-menu-item";
+        item.setAttribute("role", "menuitem");
+        item.setAttribute("data-cusin-action-value", option.value);
+        item.textContent = option.textContent.trim();
+        item._cusinForm = form;
+        item._cusinSelects = allSelects;
+        item._cusinSubmitter = submitter;
+        if (/delete|remove|destroy/i.test(option.value)) {
+          item.setAttribute("data-cusin-confirm-message",
+            "آیا از انجام «" + option.textContent.trim() + "» روی موارد انتخاب‌شده مطمئن هستید؟");
+          item.classList.add("is-danger");
+        }
+        menu.panel.appendChild(item);
+      });
+      actions.insertBefore(menu.root, actions.firstChild);
+      var oldGo = actions.querySelector('button[name="index"], input[name="index"]');
+      if (oldGo && oldGo !== submitter) oldGo.setAttribute("hidden", "");
+    });
+  }
+
+  function stripLeadingArrows(text) {
+    return String(text || "")
+      .replace(/^[\s\u200e\u200f]*[‹›←→↔]+[\s\u200e\u200f]*/, "")
+      .trim();
+  }
+
+  function clearFilterUrl() {
+    var current = new URL(window.location.href);
+    var keep = new URLSearchParams();
+    ["q", "o", "ot"].forEach(function (key) {
+      current.searchParams.getAll(key).forEach(function (value) {
+        keep.append(key, value);
+      });
+    });
+    var query = keep.toString();
+    return current.pathname + (query ? "?" + query : "");
+  }
+
+  function initChangelistToolbar() {
+    var changelist = document.getElementById("changelist");
+    if (!changelist || changelist.dataset.cusinToolbarReady) return;
+    changelist.dataset.cusinToolbarReady = "true";
+    var container = changelist.querySelector(".changelist-form-container") || changelist;
+    var toolbar = document.createElement("div");
+    toolbar.className = "cusin-changelist-toolbar";
+    toolbar.setAttribute("aria-label", "ابزارهای فهرست");
+    container.insertBefore(toolbar, container.firstChild);
+
+    var search = document.getElementById("toolbar");
+    if (search) toolbar.appendChild(search);
+
+    var dateNav = changelist.querySelector("nav.toplinks");
+    if (dateNav) {
+      var dateLinks = Array.prototype.slice.call(dateNav.querySelectorAll("a[href]"));
+      if (dateLinks.length) {
+        var dateMenu = makeMenu("بازهٔ زمانی", "date-range", "calendar", "cusin-date-menu");
+        dateLinks.forEach(function (link) {
+          var label = stripLeadingArrows(link.textContent);
+          if (label) addMenuItem(dateMenu.panel, label, link.href, "calendar");
+        });
+        toolbar.appendChild(dateMenu.root);
+      }
+      dateNav.remove();
+    }
+
+    var filterNav = document.getElementById("changelist-filter");
+    if (filterNav) {
+      var filterMenu = makeMenu("فیلتر", "filters", "filter", "cusin-filter-menu");
+      filterMenu.panel.classList.add("cusin-filter-panel");
+      var extraActions = filterNav.querySelector("#changelist-filter-extra-actions");
+      if (extraActions) extraActions.remove();
+
+      var chips = document.createElement("div");
+      chips.className = "cusin-active-filters";
+      chips.setAttribute("aria-label", "فیلترهای فعال");
+      var isResetChoice = function (text) {
+        return /^(?:همه(?:\s+موارد)?|هر تاریخی|all)$/i.test(text.trim());
+      };
+      filterNav.querySelectorAll("details[data-filter-title]").forEach(function (details) {
+        var selected = details.querySelector("li.selected a");
+        if (!selected) return;
+        var label = stripLeadingArrows(selected.textContent);
+        if (!label || isResetChoice(label)) return;
+        var remove = Array.prototype.slice.call(details.querySelectorAll("li a")).find(function (link) {
+          return isResetChoice(link.textContent.trim());
+        });
+        if (remove) {
+          var chip = document.createElement("a");
+          chip.className = "cusin-filter-chip";
+          chip.href = remove.href;
+          chip.setAttribute("aria-label", "حذف فیلتر " + label);
+          chip.textContent = label;
+          chip.appendChild(spriteIcon("x"));
+          chips.appendChild(chip);
+        }
+      });
+      filterMenu.panel.appendChild(filterNav);
+      toolbar.appendChild(filterMenu.root);
+      if (chips.childElementCount) {
+        var clearAll = document.createElement("a");
+        clearAll.className = "cusin-filter-chip cusin-filter-chip--clear";
+        clearAll.href = clearFilterUrl();
+        clearAll.setAttribute("aria-label", "حذف همهٔ فیلترها");
+        clearAll.textContent = "حذف همهٔ فیلترها";
+        clearAll.appendChild(spriteIcon("x"));
+        chips.insertBefore(clearAll, chips.firstChild);
+        toolbar.appendChild(chips);
+      }
+    }
+
+    var sortHeaders = document.querySelectorAll("#result_list thead th .text a[href]");
+    if (sortHeaders.length) {
+      var sortMenu = makeMenu("مرتب‌سازی", "sort", "sliders", "cusin-sort-menu");
+      Array.prototype.forEach.call(sortHeaders, function (link) {
+        addMenuItem(sortMenu.panel, link.textContent.trim(), link.href, "sliders");
+      });
+      toolbar.appendChild(sortMenu.root);
+    }
+
+    initBulkActionMenus();
+    initRowActionMenus();
+    initPaginationMenu();
+  }
+
+  function initRowActionMenus() {
+    var table = document.getElementById("result_list");
+    if (!table || table.dataset.cusinRowActionsReady) return;
+    table.dataset.cusinRowActionsReady = "true";
+    var headerRow = table.querySelector("thead tr");
+    if (!headerRow) return;
+    var actionHeader = document.createElement("th");
+    actionHeader.scope = "col";
+    actionHeader.className = "column-cusin-row-actions";
+    actionHeader.textContent = "کارها";
+    headerRow.appendChild(actionHeader);
+
+    var deleteAllowed = !!document.querySelector('#changelist-form select[name="action"] option[value="delete_selected"]');
+    table.querySelectorAll("tbody tr").forEach(function (row, index) {
+      if (row.querySelector("[data-cusin-row-actions]")) return;
+      var editLink = Array.prototype.slice.call(row.querySelectorAll('th a[href], td a[href]')).find(function (link) {
+        return /\/change\/?(?:\?.*)?$/.test(link.getAttribute("href") || "");
+      });
+      var cell = document.createElement("td");
+      cell.className = "cusin-row-actions";
+      cell.setAttribute("data-label", "کارها");
+      cell.setAttribute("data-cusin-row-actions", "");
+      if (!editLink) {
+        row.appendChild(cell);
+        return;
+      }
+      var editUrl = editLink.href;
+      var edit = document.createElement("a");
+      edit.className = "cusin-row-edit";
+      edit.href = editUrl;
+      edit.title = "ویرایش";
+      edit.setAttribute("aria-label", "ویرایش");
+      edit.appendChild(spriteIcon("pencil"));
+      cell.appendChild(edit);
+
+      var menu = makeMenu("", "row-actions-" + index, "more", "cusin-row-menu");
+      menu.trigger.classList.add("cusin-row-more");
+      menu.trigger.setAttribute("aria-label", "کارهای بیشتر برای " + (editLink.textContent.trim() || "این مورد"));
+      menu.trigger.title = "کارهای بیشتر";
+      addMenuItem(menu.panel, "ویرایش", editUrl, "pencil");
+      var storeData = row.querySelector("[data-cusin-store-url]");
+      if (storeData && storeData.getAttribute("data-cusin-store-url")) {
+        addMenuItem(menu.panel, "مشاهده در فروشگاه", storeData.getAttribute("data-cusin-store-url"), "external-link");
+      }
+      if (/\/orders\/order\//.test(editUrl)) {
+        addMenuItem(menu.panel, "چاپ سفارش", editUrl.replace(/\/change\/?(?:\?.*)?$/, "/print/"), "printer");
+      }
+      if (deleteAllowed) {
+        var deleteLink = addMenuItem(
+          menu.panel,
+          "حذف",
+          editUrl.replace(/\/change\/?(?:\?.*)?$/, "/delete/"),
+          "x",
+          "آیا از حذف این مورد مطمئن هستید؟"
+        );
+        deleteLink.classList.add("is-danger");
+      }
+      cell.appendChild(menu.root);
+      row.appendChild(cell);
+    });
+  }
+
+  function initPaginationMenu() {
+    document.querySelectorAll(".paginator").forEach(function (paginator, index) {
+      if (paginator.dataset.cusinPaginationReady) return;
+      var pageLinks = Array.prototype.slice.call(paginator.querySelectorAll("a:not(.showall)[href]"));
+      var current = paginator.querySelector(".this-page");
+      if (!pageLinks.length) return;
+      paginator.dataset.cusinPaginationReady = "true";
+      var currentLabel = current ? current.textContent.trim() : "۱";
+      var menu = makeMenu("صفحهٔ " + currentLabel, "pagination-" + index, "chevron-down", "cusin-pagination-menu");
+      pageLinks.forEach(function (link) {
+        var item = addMenuItem(menu.panel, link.textContent.trim(), link.href, null);
+        if (current && item.textContent.trim() === currentLabel) item.setAttribute("aria-current", "page");
+      });
+      paginator.insertBefore(menu.root, paginator.firstChild);
+      paginator.classList.add("cusin-enhanced-pagination");
+    });
+  }
+
+  /* ------------------------------------------------------------------ *
+   * 2c. Persian tooltips and sprite icons for related-object controls
+   * ------------------------------------------------------------------ */
+  function initRelatedControls() {
+    var labels = {
+      "add-related": ["افزودن مورد تازه", "plus"],
+      "change-related": ["ویرایش مورد", "pencil"],
+      "view-related": ["مشاهدهٔ مورد", "eye"],
+      "delete-related": ["حذف مورد", "x"],
+    };
+    document.querySelectorAll(".related-widget-wrapper-link").forEach(function (link) {
+      var kind = Object.keys(labels).find(function (name) { return link.classList.contains(name); });
+      if (!kind) return;
+      var config = labels[kind];
+      link.title = config[0];
+      link.setAttribute("aria-label", config[0]);
+      link.setAttribute("role", "button");
+      link.replaceChildren(spriteIcon(config[1]));
     });
   }
 
@@ -329,19 +1017,49 @@
    * 5. Changelist mobile cards: mirror header text into td[data-label]
    * ------------------------------------------------------------------ */
   function initCardLabels() {
-    document.querySelectorAll("#result_list, .cusin-items-table").forEach(function (table) {
-      var headers = Array.prototype.map.call(
-        table.querySelectorAll("thead th"),
-        function (th) { return th.textContent.trim(); }
-      );
-      table.querySelectorAll("tbody tr").forEach(function (tr) {
-        Array.prototype.forEach.call(tr.children, function (cell, index) {
-          if (!cell.hasAttribute("data-label") && headers[index]) {
-            cell.setAttribute("data-label", headers[index]);
-          }
+    var tableSelector = "#result_list, .cusin-items-table, .inline-group .tabular table";
+    function labelTables(root) {
+      var tables = [];
+      if (root.matches && root.matches(tableSelector)) tables.push(root);
+      if (root.querySelectorAll) {
+        tables = tables.concat(Array.prototype.slice.call(root.querySelectorAll(tableSelector)));
+      }
+      tables.forEach(function (table) {
+        var headers = Array.prototype.map.call(
+          table.querySelectorAll("thead th"),
+          function (th) { return th.textContent.trim(); }
+        );
+        table.querySelectorAll("tbody tr").forEach(function (tr) {
+          Array.prototype.forEach.call(tr.children, function (cell, index) {
+            var label = headers[index];
+            if (!label && cell.classList.contains("delete")) label = "حذف";
+            if (!cell.hasAttribute("data-label") && label) {
+              cell.setAttribute("data-label", label);
+            }
+          });
         });
       });
-    });
+    }
+    labelTables(document);
+
+    // Django adds tabular inline rows after this script has initialized. A
+    // small scoped observer labels those cloned cells as soon as they enter
+    // the DOM, keeping the phone-card labels in sync with the table header.
+    var content = document.querySelector("#content-main");
+    if (content && "MutationObserver" in window) {
+      var observer = new MutationObserver(function (records) {
+        var inlineRowAdded = records.some(function (record) {
+          return Array.prototype.some.call(record.addedNodes, function (node) {
+            return node.nodeType === 1 && (
+              (node.matches && node.matches(".inline-group .tabular tr")) ||
+              (node.closest && node.closest(".inline-group .tabular"))
+            );
+          });
+        });
+        if (inlineRowAdded) labelTables(content);
+      });
+      observer.observe(content, { childList: true, subtree: true });
+    }
   }
 
   /* ------------------------------------------------------------------ *
@@ -383,10 +1101,13 @@
 
   document.addEventListener("DOMContentLoaded", function () {
     initDrawer();
+    initSidebarGroups();
+    initChangelistToolbar();
+    initRelatedControls();
+    initCardLabels();
     initMenus();
     initPalette();
     initCopyButtons();
-    initCardLabels();
     initQuickStatusGuard();
     initMisc();
   });

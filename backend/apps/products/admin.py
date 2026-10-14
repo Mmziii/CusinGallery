@@ -7,6 +7,7 @@ activate/deactivate/feature actions, and a changelist that shows a
 thumbnail, price and an at-a-glance stock warning.
 """
 from django import forms
+from django.conf import settings
 from django.contrib import admin, messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
@@ -18,6 +19,8 @@ from django.utils.html import format_html
 from django.utils.text import slugify
 
 from decimal import ROUND_HALF_UP, Decimal
+
+from apps.adminui.admin_forms import NumericChangelistAdminMixin
 
 import csv
 import glob
@@ -243,16 +246,29 @@ class ProductImageInline(admin.TabularInline):
     thumbnail_preview.short_description = "پیش‌نمایش"
 
 
-class ProductVariantInline(admin.TabularInline):
+class AdminSkuDirectionMixin:
+    """Render every editable SKU as an explicit left-to-right control."""
+
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
+        formfield = super().formfield_for_dbfield(db_field, request, **kwargs)
+        if formfield is not None and db_field.name == "sku":
+            formfield.widget.attrs["dir"] = "ltr"
+        return formfield
+
+
+class ProductVariantInline(AdminSkuDirectionMixin, admin.TabularInline):
     model = ProductVariant
     extra = 0
     fields = ("sku", "price", "stock_quantity", "is_active", "attribute_values")
-    filter_horizontal = ("attribute_values",)
+    # A two-panel FilteredSelectMultiple makes each tabular row hundreds of
+    # pixels tall. The same multi-value relationship uses the existing,
+    # searchable ProductAttributeValueAdmin autocomplete instead.
+    autocomplete_fields = ("attribute_values",)
     show_change_link = True
 
 
 @admin.register(Brand)
-class BrandAdmin(admin.ModelAdmin):
+class BrandAdmin(NumericChangelistAdminMixin, admin.ModelAdmin):
     # Part R2: featured tiles are managed right from the changelist --
     # tick is_featured and set display_order inline, or use bulk actions.
     list_display = ("name", "slug", "is_featured", "display_order", "is_active")
@@ -269,6 +285,38 @@ class BrandAdmin(admin.ModelAdmin):
     @admin.action(description="برند ویژه: خیر")
     def make_not_featured(self, request, queryset):
         queryset.update(is_featured=False)
+
+
+class ProductStockChangelistWidget(forms.NumberInput):
+    """Keep the editable stock field and its status badge in one cell.
+
+    Django renders a ``list_editable`` field in place of the normal column
+    value, so the widget owns both pieces of presentation while preserving
+    the original input name, value and POST semantics.
+    """
+
+    def render(self, name, value, attrs=None, renderer=None):
+        input_html = super().render(name, value, attrs, renderer)
+        try:
+            quantity = int(value or 0)
+        except (TypeError, ValueError):
+            quantity = 0
+
+        if quantity <= 0:
+            badge_class, label = "stock-out", "ناموجود"
+        elif quantity <= getattr(self, "low_stock_threshold", settings.LOW_STOCK_THRESHOLD):
+            badge_class = "stock-low"
+            label = f"{fa_digits(quantity)} موجودی کم"
+        else:
+            return format_html('<div class="cusin-stock-edit">{}</div>', input_html)
+
+        return format_html(
+            '<div class="cusin-stock-edit">{}'
+            '<span class="cusin-badge {}">{}</span></div>',
+            input_html,
+            badge_class,
+            label,
+        )
 
 
 class LowStockFilter(admin.SimpleListFilter):
@@ -329,18 +377,17 @@ class HasImageFilter(admin.SimpleListFilter):
 
 
 @admin.register(Product)
-class ProductAdmin(admin.ModelAdmin):
-    # Same columns as before PLUS compare_at_price and stock_quantity so
-    # the owner can edit price / sale price / stock / active / featured
-    # straight from the list (B4a). The changelist formset is built from
-    # the SAME ModelForm as the change form, so Product.clean()
-    # (compare-at >= price) validates identically in both places.
+class ProductAdmin(
+    AdminSkuDirectionMixin, NumericChangelistAdminMixin, admin.ModelAdmin
+):
+    # The owner edits prices, stock and flags inline as before. Product name,
+    # image and identifying metadata share one compact, sortable link cell;
+    # the stock widget keeps its status badge beside the editable value.
     list_display = (
-        "thumbnail_column", "name", "sku", "category", "brand", "price",
-        "compare_at_price", "stock_column", "stock_quantity",
-        "is_active", "is_featured",
+        "product_summary", "price", "compare_at_price", "stock_quantity",
+        "is_active", "is_featured", "storefront_data",
     )
-    list_display_links = ("thumbnail_column", "name")
+    list_display_links = ("product_summary",)
     list_editable = ("price", "compare_at_price", "stock_quantity", "is_active", "is_featured")
     list_filter = (
         "is_active", "is_featured", "is_new", "is_best_seller", "category",
@@ -949,15 +996,38 @@ class ProductAdmin(admin.ModelAdmin):
     # --- Changelist columns ---------------------------------------------------
 
     def get_queryset(self, request):
-        # One query for every product's primary image (its thumbnail is
-        # what the changelist shows) -- no N+1 on the list page.
-        return super().get_queryset(request).prefetch_related(
+        # Load the product metadata and primary thumbnail in batches -- no
+        # per-row queries for category, brand or image.
+        return super().get_queryset(request).select_related(
+            "category", "brand"
+        ).prefetch_related(
             Prefetch(
                 "images",
                 queryset=ProductImage.objects.filter(is_primary=True),
                 to_attr="primary_images",
             )
         )
+
+    def get_changelist_formset(self, request, **kwargs):
+        formset = super().get_changelist_formset(request, **kwargs)
+        stock_field = formset.form.base_fields["stock_quantity"]
+        attrs = dict(stock_field.widget.attrs)
+        attrs.update({"dir": "ltr", "inputmode": "numeric"})
+        stock_field.widget = ProductStockChangelistWidget(attrs=attrs)
+
+        form_class = formset.form
+        base_init = form_class.__init__
+
+        def init_with_product_threshold(form, *args, **form_kwargs):
+            base_init(form, *args, **form_kwargs)
+            form.fields["stock_quantity"].widget.low_stock_threshold = getattr(
+                form.instance,
+                "low_stock_threshold",
+                settings.LOW_STOCK_THRESHOLD,
+            )
+
+        form_class.__init__ = init_with_product_threshold
+        return formset
 
     def thumbnail_column(self, obj):
         # Part S4 item 1: same shared placeholder markup as the inline
@@ -969,6 +1039,43 @@ class ProductAdmin(admin.ModelAdmin):
         return image_or_placeholder_html(primary and (primary.thumbnail or primary.image))
 
     thumbnail_column.short_description = ""
+
+    @admin.display(description="محصول", ordering="name")
+    def product_summary(self, obj):
+        """One linked, sortable cell for the product identity and metadata."""
+        category_name = obj.category.name if obj.category_id else "—"
+        brand_name = obj.brand.name if obj.brand_id else "—"
+        return format_html(
+            '<span class="cusin-product-summary" dir="rtl">'
+            '<span class="cusin-product-summary__thumbnail">{}</span>'
+            '<span class="cusin-product-summary__details">'
+            '<span class="cusin-product-summary__name" title="{}">{}</span>'
+            '<bdi class="cusin-product-summary__sku" dir="ltr" title="{}">{}</bdi>'
+            '<span class="cusin-product-summary__meta">'
+            '<span class="cusin-product-summary__category" title="{}">{}</span>'
+            '<span class="cusin-product-summary__separator" aria-hidden="true">·</span>'
+            '<span class="cusin-product-summary__brand" title="{}">{}</span>'
+            '</span></span></span>',
+            self.thumbnail_column(obj),
+            obj.name,
+            obj.name,
+            obj.sku,
+            obj.sku,
+            category_name,
+            category_name,
+            brand_name,
+            brand_name,
+        )
+
+    @admin.display(description="", ordering="name")
+    def storefront_data(self, obj):
+        """Expose the existing public product URL to the row-action menu.
+
+        This empty presentation-only cell is hidden by the admin theme; it
+        neither changes routes nor grants access to the storefront.
+        """
+        store_url = f"{settings.FRONTEND_URL.rstrip('/')}/products/{obj.slug}/"
+        return format_html('<span data-cusin-store-url="{}" hidden></span>', store_url)
 
     def stock_column(self, obj):
         # Same Persian wording as before, now rendered with the theme's
@@ -987,7 +1094,7 @@ class ProductAdmin(admin.ModelAdmin):
             '<span class="cusin-badge stock-ok">{}</span>', obj.stock_quantity
         )
 
-    stock_column.short_description = "موجودی"
+    stock_column.short_description = "وضعیت"
     stock_column.admin_order_field = "stock_quantity"
 
     # --- Bulk actions ----------------------------------------------------------
@@ -1314,7 +1421,7 @@ class ProductAttributeValueAdmin(admin.ModelAdmin):
 
 
 @admin.register(ProductVariant)
-class ProductVariantAdmin(admin.ModelAdmin):
+class ProductVariantAdmin(AdminSkuDirectionMixin, admin.ModelAdmin):
     """
     Registered standalone (in addition to being inlined under
     ProductAdmin) purely so `search_fields` exists here -- Django's

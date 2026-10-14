@@ -153,19 +153,27 @@ class OrderItemInline(admin.TabularInline):
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
-    # Same columns as before, upgraded to branded badges / Persian-digit
-    # totals / Jalali dates (B3a). Every original column is still here --
-    # each new method carries admin_order_field so sorting is unchanged.
+    # Preserve every operational value and its sort key, but present the
+    # order number compactly and put the amount's currency unit in its header.
     list_display = (
-        "order_number", "user", "status_badge", "payment_badge", "total_fa",
+        "order_number_cell", "user", "status_badge", "payment_badge", "total_fa",
         "shipping_method_cell", "stock_restored_badge", "refund_badge",
         "created_at_jalali",
     )
+    list_display_links = ("order_number_cell",)
     # refund_status in the filter list is the owner's daily "which orders
     # still owe a refund?" view: «نیازمند بازپرداخت» (Phase C).
     # OrderQueueFilter (B3a) is purely additive and powers the tabs.
     list_filter = (OrderQueueFilter, "status", "payment_status", "refund_status", "created_at")
     change_list_template = "admin/orders/order_change_list.html"
+
+    @admin.display(description="شماره", ordering="order_number")
+    def order_number_cell(self, obj):
+        return format_html(
+            '<span class="cusin-order-number" dir="ltr" title="{}">{}</span>',
+            obj.order_number,
+            obj.order_number,
+        )
 
     @admin.display(description="وضعیت", ordering="status")
     def status_badge(self, obj):
@@ -181,34 +189,36 @@ class OrderAdmin(admin.ModelAdmin):
             obj.payment_status, obj.get_payment_status_display(),
         )
 
-    @admin.display(description="مبلغ نهایی", ordering="total")
+    @admin.display(description="مبلغ (تومان)", ordering="total")
     def total_fa(self, obj):
-        # title keeps the raw ASCII figure for quick copy/paste into
-        # spreadsheets; the visible text is grouped Persian digits + «تومان».
+        # Keep the copyable ASCII figure in the title. The unit is in the
+        # compact heading, so each Persian-digit amount stays on one line.
         return format_html(
-            '<span class="cusin-nowrap" title="{}">{}</span>',
-            f"{obj.total:,}", toman_filter(obj.total),
+            '<span class="cusin-order-amount" dir="ltr" title="{}">{}</span>',
+            f"{obj.total:,}",
+            toman_filter(obj.total, suffix=""),
         )
 
     @admin.display(description="تاریخ", ordering="created_at")
     def created_at_jalali(self, obj):
         local = timezone.localtime(obj.created_at)
         return format_html(
-            '<span class="cusin-nowrap" title="{}">{}</span>',
+            '<span class="cusin-order-date" title="{}">{}</span>',
             local.strftime("%Y-%m-%d %H:%M"),
             format_jalali_datetime(local),
         )
 
     _SHIP_ICONS = {"standard": "truck", "express": "zap", "pickup": "store"}
 
-    @admin.display(description="روش ارسال", ordering="shipping_method")
+    @admin.display(description="روش", ordering="shipping_method")
     def shipping_method_cell(self, obj):
         icon = self._SHIP_ICONS.get(obj.shipping_method, "truck")
+        label = shipping_method_label(obj.shipping_method)
         return format_html(
             '<span class="cusin-ship" title="{}">'
             '<svg class="cusin-icon" aria-hidden="true"><use href="#cusin-i-{}"></use></svg>'
             "{}</span>",
-            obj.shipping_method, icon, shipping_method_label(obj.shipping_method),
+            label, icon, label,
         )
 
     @admin.display(description="روش ارسال")

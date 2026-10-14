@@ -1,9 +1,8 @@
-"""A7 contrast guard: parse the brand/semantic color tokens straight out
-of static/admin_theme/css/theme.css and assert WCAG 2.1 contrast >= 4.5:1
-for every main text/background pair the panel actually renders.
+"""WCAG source guards for the light-only admin palette.
 
-No browser involved -- this is a pure CSS-source computation, the same
-relative-luminance formula screen readers' contrast checkers use.
+Every token used for text is checked against each surface/state in which it
+appears. Olive is allowed only for explicit accent roles (links, selection,
+focus and primary controls); gold remains decorative and is never text.
 """
 import re
 from pathlib import Path
@@ -11,150 +10,159 @@ from pathlib import Path
 from django.conf import settings
 from django.test import SimpleTestCase
 
+from .test_responsive_css import _strip_comments, _without_media
+
 CSS_PATH = Path(settings.BASE_DIR) / "static" / "admin_theme" / "css" / "theme.css"
+WHITE = "#ffffff"
+PAGE = "#f5f6f8"
+ACTIVE_TINT = "#f1f2f4"
 
 
-def _channel(c: float) -> float:
-    c = c / 255.0
-    return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+def _channel(channel):
+    channel = int(channel, 16) / 255
+    return channel / 12.92 if channel <= 0.04045 else ((channel + 0.055) / 1.055) ** 2.4
 
 
-def luminance(hex_color: str) -> float:
-    hex_color = hex_color.lstrip("#")
-    if len(hex_color) == 3:
-        hex_color = "".join(ch * 2 for ch in hex_color)
-    r, g, b = (int(hex_color[i:i + 2], 16) for i in (0, 2, 4))
-    return 0.2126 * _channel(r) + 0.7152 * _channel(g) + 0.0722 * _channel(b)
+def luminance(color):
+    color = color.lstrip("#")
+    if len(color) == 3:
+        color = "".join(part * 2 for part in color)
+    red, green, blue = (color[index:index + 2] for index in (0, 2, 4))
+    return 0.2126 * _channel(red) + 0.7152 * _channel(green) + 0.0722 * _channel(blue)
 
 
-def contrast(fg: str, bg: str) -> float:
-    l1, l2 = luminance(fg), luminance(bg)
-    if l1 < l2:
-        l1, l2 = l2, l1
-    return (l1 + 0.05) / (l2 + 0.05)
+def contrast(foreground, background):
+    light, dark = sorted((luminance(foreground), luminance(background)), reverse=True)
+    return (light + 0.05) / (dark + 0.05)
+
+
+def _tokens(css):
+    """Collect literal custom-property values (the palette keeps these direct)."""
+    return {
+        name: value.lower()
+        for name, value in re.findall(
+            r"(--(?:cg|cusin)-[a-z0-9-]+)\s*:\s*(#[0-9a-fA-F]{3,8})\s*;", css
+        )
+    }
 
 
 class CssContrastTests(SimpleTestCase):
-    maxDiff = None
-
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
         cls.css = CSS_PATH.read_text(encoding="utf-8")
-        # theme.css redefines tokens for dark mode; the LIGHT palette is
-        # everything before the first dark-scheme media query, the DARK
-        # palette everything after it. Parse them separately (first
-        # occurrence wins inside each half).
-        split = cls.css.index("@media (prefers-color-scheme: dark)")
-        cls.light_css, cls.dark_css = cls.css[:split], cls.css[split:]
-        cls.tokens = cls._first_tokens(cls.light_css)
-        cls.dark_tokens = cls._first_tokens(cls.dark_css)
-
-    @staticmethod
-    def _first_tokens(css_text):
-        tokens = {}
-        for name, value in re.findall(
-            r"(--(?:cg|cusin)-[a-z0-9-]+)\s*:\s*(#[0-9a-fA-F]{3,8})\s*;", css_text
-        ):
-            tokens.setdefault(name, value)
-        return tokens
+        cls.flat_css = _without_media(_strip_comments(cls.css))
+        cls.tokens = _tokens(cls.flat_css)
 
     def token(self, name):
-        value = self.tokens.get(name)
-        self.assertIsNotNone(value, f"token {name} missing from theme.css")
-        return value
+        self.assertIn(name, self.tokens, f"missing color token {name}")
+        return self.tokens[name]
 
-    def assert_ratio(self, fg_hex, bg_hex, minimum=4.5, label=""):
-        ratio = contrast(fg_hex, bg_hex)
+    def assert_ratio(self, foreground, background, minimum=4.5, label=""):
+        ratio = contrast(foreground, background)
         self.assertGreaterEqual(
             ratio, minimum,
-            f"{label}: contrast {ratio:.2f}:1 below {minimum}:1 "
-            f"({fg_hex} on {bg_hex})",
+            f"{label}: {ratio:.2f}:1 ({foreground} on {background}) is below {minimum}:1",
         )
 
-    def test_brand_tokens_are_the_agreed_palette(self):
-        """The palette is a hard project constraint (storefront variables
-        match): olive #637037, dark green #2F3A18, gold #CEB464, ivory
-        #FAF7F0, ink #1E2412."""
-        self.assertEqual(self.token("--cg-olive").lower(), "#637037")
-        self.assertEqual(self.token("--cg-green-dark").lower(), "#2f3a18")
-        self.assertEqual(self.token("--cg-gold").lower(), "#ceb464")
-        self.assertEqual(self.token("--cg-ivory").lower(), "#faf7f0")
-        self.assertEqual(self.token("--cg-ink").lower(), "#1e2412")
+    def test_light_palette_tokens_are_the_requested_values(self):
+        self.assertEqual(self.token("--cusin-bg"), PAGE)
+        self.assertEqual(self.token("--cusin-surface"), WHITE)
+        self.assertEqual(self.token("--cusin-text"), "#111827")
+        self.assertEqual(self.token("--cusin-muted"), "#4b5563")
+        self.assertEqual(self.token("--cg-olive"), "#637037")
+        self.assertEqual(self.token("--cg-olive-hover"), "#4f5a2c")
+        self.assertEqual(self.token("--cg-gold"), "#ceb464")
+        self.assertEqual(self.token("--cusin-accent-bg"), ACTIVE_TINT)
+        for old_color in ("#faf7f0", "#f1eee4", "#f0ead4", "#2f3a18", "#242c12"):
+            with self.subTest(old_color=old_color):
+                self.assertNotIn(old_color, self.css.lower(), "legacy dark/ivory surfaces must be gone")
 
-    def test_main_text_pairs_pass_wcag_aa(self):
-        ivory = self.token("--cg-ivory")
-        ink = self.token("--cg-ink")
-        olive = self.token("--cg-olive")
-        dark = self.token("--cg-green-dark")
-        gold = self.token("--cg-gold")
+    def test_body_and_secondary_text_meet_seven_to_one_on_white(self):
+        self.assert_ratio(self.token("--cusin-text"), WHITE, 7, "body text on white")
+        self.assert_ratio(self.token("--cusin-text"), PAGE, 7, "body text on page background")
+        self.assert_ratio(self.token("--cusin-muted"), WHITE, 7, "secondary/help text on white")
+        self.assert_ratio(self.token("--cusin-muted"), PAGE, 4.5, "secondary text on page background")
 
-        self.assert_ratio(ink, ivory, 4.5, "ink on ivory (body text)")
-        self.assert_ratio(olive, ivory, 4.5, "olive on ivory (links/headings)")
-        self.assert_ratio("#ffffff", olive, 4.5, "white on olive (buttons)")
-        self.assert_ratio("#ffffff", dark, 4.5, "white on dark green (topbar)")
-        # gold is only ever used on dark green (brand rule) --
-        # it must be legible there and is never small text on light bg
-        self.assert_ratio(gold, dark, 4.5, "gold on dark green (decor/accents)")
+    def test_accent_links_focus_and_selected_states_meet_aa(self):
+        for text_token in ("--cusin-link", "--cusin-link-hover", "--cg-olive", "--cg-olive-hover"):
+            for surface_name, surface in (("white", WHITE), ("page", PAGE), ("active tint", ACTIVE_TINT)):
+                with self.subTest(token=text_token, surface=surface_name):
+                    self.assert_ratio(self.token(text_token), surface, 4.5, f"{text_token} on {surface_name}")
+        # Sidebar normal and hover use near-black; active text uses the dark
+        # olive hover tone on the pale accent tint.
+        self.assert_ratio(self.token("--cusin-text"), WHITE, 7, "sidebar normal")
+        self.assert_ratio(self.token("--cusin-text"), PAGE, 7, "sidebar hover")
+        self.assert_ratio(self.token("--cg-olive-hover"), ACTIVE_TINT, 4.5, "sidebar active")
+        self.assert_ratio(self.token("--cg-olive"), WHITE, 4.5, "focus ring on white")
 
-    def test_semantic_text_tokens_pass_on_light_surfaces(self):
-        """Every semantic text token claims >=4.5:1 on ivory AND white
-        surfaces in the CSS comment -- enforce it."""
-        for name in (
-            "--cg-success-text", "--cg-danger-text", "--cg-warning-text",
-            "--cg-info-text", "--cg-muted-text",
-        ):
-            for bg_name, bg in (
-                ("ivory", self.token("--cg-ivory")),
-                ("white surface", "#ffffff"),
-                ("surface-2", self.token("--cusin-surface-2")),
-            ):
-                with self.subTest(token=name, on=bg_name):
-                    self.assert_ratio(self.token(name), bg, 4.5, f"{name} on {bg_name}")
-
-    def test_badge_text_on_badge_backgrounds(self):
-        """Stock/refund/payment badges put semantic text on pastel chips;
-        the literal backgrounds come from theme.css (asserted present so
-        the test fails loudly if they change)."""
+    def test_buttons_in_every_state_have_readable_text(self):
         pairs = {
-            "stock-ok": ("--cg-success-text", "#e4f1e9"),
-            "stock-low": ("--cg-warning-text", "#fbf3de"),
-            "stock-out": ("--cg-danger-text", "#f9e7e3"),
+            "primary normal": (WHITE, self.token("--cg-olive")),
+            "primary hover": (WHITE, self.token("--cg-olive-hover")),
+            "ghost normal": (self.token("--cusin-text"), WHITE),
+            "ghost hover": (self.token("--cusin-text"), PAGE),
+            "danger normal": (WHITE, self.token("--cg-danger")),
+            "danger hover": (WHITE, "#8f1d14"),
+            "print normal": (self.token("--cusin-text"), WHITE),
+            "print hover": (self.token("--cusin-text"), PAGE),
         }
-        for chip, (token_name, bg) in pairs.items():
-            with self.subTest(badge=chip):
-                self.assertIn(bg, self.css, f"badge background {bg} changed in theme.css")
-                self.assert_ratio(self.token(token_name), bg, 4.5, f"{chip} badge")
+        for label, (foreground, background) in pairs.items():
+            with self.subTest(state=label):
+                self.assert_ratio(foreground, background, 4.5, label)
 
-    def test_gold_is_not_used_as_small_text_on_light_backgrounds(self):
-        """Brand rule: gold only on dark green or as decoration. Guard the
-        obvious violation pattern -- gold as a text color on a light
-        surface selector."""
-        offenders = re.findall(
-            r"color:\s*var\(--cg-gold\)\s*;[^}]*background:\s*(?:var\(--cg-ivory\)|#fff|#ffffff|var\(--cusin-surface\))",
-            self.css,
+    def test_table_header_help_and_breadcrumb_text_are_readable(self):
+        muted = self.token("--cusin-muted")
+        self.assert_ratio(muted, PAGE, 4.5, "table header on light header row")
+        self.assert_ratio(muted, WHITE, 7, "help text on white form card")
+        self.assert_ratio(muted, WHITE, 7, "breadcrumb secondary text on white")
+        self.assertIn("#result_list thead th", self.flat_css)
+        self.assertIn(".form-row .help", self.flat_css)
+
+    def test_all_status_pills_keep_semantic_color_and_aa_contrast(self):
+        pairs = (
+            ("--cg-warning-text", "#fbf3de", "warning"),
+            ("--cg-info-text", "#e7eef6", "information"),
+            ("#49357a", "#eee9f6", "processing"),
+            ("--cg-success-text", "#e4f1e9", "success"),
+            ("--cg-danger-text", "#f9e7e3", "danger"),
+            ("--cusin-muted", "#f1f2f4", "neutral"),
+            ("--cg-olive-hover", ACTIVE_TINT, "shipped/selected"),
         )
-        self.assertEqual(offenders, [], "gold text on a light background found")
+        for foreground, background, label in pairs:
+            if foreground.startswith("--"):
+                foreground = self.token(foreground)
+            with self.subTest(status=label):
+                self.assert_ratio(foreground, background, 4.5, f"{label} badge")
 
-    def test_dark_mode_main_pairs_pass_wcag_aa(self):
-        """The dark palette must be legible too: body text, muted text
-        and the semantic colors on the dark surfaces."""
-        bg = self.dark_tokens["--cusin-bg"]
-        surface = self.dark_tokens["--cusin-surface"]
-        for text_token in ("--cusin-text", "--cusin-muted", "--cusin-link",
-                           "--cg-success-text", "--cg-danger-text",
-                           "--cg-warning-text", "--cg-gold"):
-            # tokens the dark block does not override keep their light value
-            fg = self.dark_tokens.get(text_token) or self.tokens[text_token]
-            for bg_name, bg_hex in (("bg", bg), ("surface", surface)):
-                with self.subTest(token=text_token, on=bg_name):
-                    self.assert_ratio(
-                        fg, bg_hex, 4.5,
-                        f"dark {text_token} on {bg_name}",
-                    )
+    def test_text_tokens_never_resolve_to_olive_or_gold(self):
+        """Only explicit accent roles (links/focus/selected states) use olive.
+        Body, secondary and semantic status text can never collapse to either
+        brand color, and gold is forbidden in every CSS text declaration."""
+        forbidden = {self.token("--cg-olive"), self.token("--cg-gold")}
+        body_and_status_tokens = (
+            "--cusin-text", "--cusin-muted", "--cg-ink", "--cg-muted-text",
+            "--cg-success-text", "--cg-danger-text", "--cg-warning-text", "--cg-info-text",
+        )
+        for name in body_and_status_tokens:
+            with self.subTest(token=name):
+                self.assertNotIn(self.token(name), forbidden)
+        self.assertNotRegex(self.css, r"(?i)color\s*:\s*var\(\s*--cg-gold\s*\)")
+        self.assertNotRegex(self.css, r"(?i)text-(?:fill|stroke)\s*:\s*var\(\s*--cg-gold\s*\)")
 
-    def test_luminance_math_is_correct_on_known_values(self):
-        # sanity check of the implementation itself (WCAG reference values)
+    def test_admin_has_no_dark_mode_or_theme_toggle_source(self):
+        self.assertNotRegex(self.css, r"(?is)@media\s*\(\s*prefers-color-scheme\s*:\s*dark\s*\)")
+        self.assertNotRegex(self.css, r"(?is):root\s*\[\s*data-theme\s*=\s*['\"]dark['\"]\s*\]")
+        self.assertNotIn("admin/css/dark_mode.css", self.css)
+        self.assertNotIn("theme-toggle", self.css)
+        base_template = (Path(settings.BASE_DIR) / "templates" / "admin" / "base.html").read_text(encoding="utf-8")
+        theme_script = (Path(settings.BASE_DIR) / "static" / "admin_theme" / "js" / "theme.js").read_text(encoding="utf-8")
+        self.assertIn('meta name="color-scheme" content="light"', base_template)
+        self.assertNotIn("color_theme_toggle", base_template)
+        self.assertNotIn("theme-toggle", base_template)
+        self.assertNotRegex(theme_script, r"(?i)dark.?mode|color_theme_toggle")
+
+    def test_luminance_math_on_reference_values(self):
         self.assertAlmostEqual(luminance("#000000"), 0.0, places=4)
         self.assertAlmostEqual(luminance("#ffffff"), 1.0, places=4)
         self.assertAlmostEqual(contrast("#000000", "#ffffff"), 21.0, places=1)

@@ -2,6 +2,8 @@
 the quick-status endpoint (valid transitions only, tracking-code rule,
 pickup exemption, permissions, CSRF, LogEntry audit).
 """
+import re
+
 from django.contrib.admin.models import LogEntry
 from django.core.exceptions import PermissionDenied
 from django.test import Client, TestCase, override_settings
@@ -47,6 +49,26 @@ class OrdersChangelistTests(TestCase):
         html = response.content.decode()
         self.assertIn("cusin-tab", html)
         self.assertIn("cusin-badge", html)
+
+    def test_order_number_and_amount_are_compact_and_keep_unit_in_heading(self):
+        self.paid_open.total = 123456789
+        self.paid_open.save(update_fields=["total"])
+        response = self.client.get(reverse("admin:orders_order_changelist"))
+        html = response.content.decode()
+
+        self.assertIn(
+            f'class="cusin-order-number" dir="ltr" title="{self.paid_open.order_number}"',
+            html,
+        )
+        self.assertIn("column-order_number_cell", html)
+        self.assertIn("مبلغ (تومان)", html)
+        amount = re.search(
+            r'<span class="cusin-order-amount" dir="ltr" title="123,456,789">([^<]+)</span>',
+            html,
+        )
+        self.assertIsNotNone(amount)
+        self.assertEqual(amount.group(1), "۱۲۳٬۴۵۶٬۷۸۹")
+        self.assertNotIn("تومان", amount.group(1))
 
     def test_queue_param_narrows_result_set(self):
         for queue, expected in (

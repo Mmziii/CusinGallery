@@ -76,6 +76,74 @@ class DashboardWidthTests(TestCase):
         self.assertRegex(response.content.decode("utf-8"), r'<body class="[^"]*\bdashboard\b')
 
 
+class DashboardLatestOrdersLayoutTests(SimpleTestCase):
+    """Item 6: keep all five order columns visible at desktop widths and
+    render labeled stacked order cards on phones."""
+
+    def test_order_number_cell_is_ltr_nonbreaking_and_monospace(self):
+        rule = _base_rules()[".cusin-orders-table .cusin-order-number"]
+        self.assertEqual(rule["direction"], "ltr")
+        self.assertEqual(rule["unicode-bidi"], "isolate")
+        self.assertEqual(rule["white-space"], "nowrap")
+        self.assertIn("monospace", rule["font-family"])
+        self.assertEqual(rule["font-size"], "14px")
+
+    def test_recent_orders_table_has_sized_columns_and_card_local_scrolling(self):
+        rules = _base_rules()
+        self.assertEqual(rules[".cusin-table-scroll"]["overflow-x"], "auto")
+        self.assertEqual(rules[".cusin-table-scroll"]["max-width"], "100%")
+        self.assertEqual(rules[".cusin-orders-table"]["min-width"], "52rem")
+        self.assertEqual(rules[".cusin-orders-table"]["table-layout"], "fixed")
+        for index, width in enumerate(("14rem", "8rem", "8rem", "10rem", "12rem"), start=1):
+            with self.subTest(column=index):
+                column = rules[f".cusin-orders-table th:nth-child({index})"]
+                self.assertEqual(column["width"], width)
+                self.assertEqual(column["min-width"], width)
+
+    def test_desktop_card_spans_grid_so_all_five_columns_fit_at_1280px_plus(self):
+        css = _strip_comments(THEME_CSS.read_text(encoding="utf-8"))
+        wide = _rules(_media_block(css, "(min-width: 1280px)"))
+        card = 'body.cusin-admin #container .cusin-dash-cols > section[aria-label="آخرین سفارش‌ها"]'
+        table = "body.cusin-admin #container .cusin-orders-table"
+        self.assertEqual(wide[card]["grid-column"], "1 / -1")
+        self.assertEqual(wide[table]["width"], "100%")
+        self.assertEqual(wide[table]["max-width"], "100%")
+
+    def test_phone_order_rows_are_stacked_and_labeled_without_a_scrollport(self):
+        css = _strip_comments(THEME_CSS.read_text(encoding="utf-8"))
+        phone = _rules(_media_block(css, "(max-width: 767px)"))
+        scroll = "body.cusin-admin #container .cusin-orders-scroll"
+        table = "body.cusin-admin #container .cusin-orders-table"
+        body = "body.cusin-admin #container .cusin-orders-table tbody"
+        row = "body.cusin-admin #container .cusin-orders-table tbody tr"
+        label = "body.cusin-admin #container .cusin-orders-table tbody tr > td::before"
+        self.assertEqual(phone[scroll]["overflow-x"], "visible")
+        self.assertEqual(phone[table]["display"], "block")
+        self.assertEqual(phone[table]["min-width"], "0")
+        self.assertEqual(phone[body]["display"], "grid")
+        self.assertEqual(phone[row]["display"], "grid")
+        self.assertEqual(phone[label]["content"], "attr(data-label)")
+        self.assertEqual(phone[label]["font-size"], "14px")
+
+    def test_dashboard_template_marks_ltr_order_numbers_and_every_card_label(self):
+        template = (BASE / "templates" / "admin" / "index.html").read_text(encoding="utf-8")
+        self.assertIn('class="cusin-mini-table cusin-orders-table"', template)
+        self.assertIn('class="cusin-order-number" data-label="شماره" dir="ltr" scope="row"', template)
+        self.assertIn('class="cusin-table-scroll cusin-orders-scroll"', template)
+        for label in ("شماره", "وضعیت", "پرداخت", "مبلغ", "تاریخ"):
+            with self.subTest(label=label):
+                self.assertIn(f'data-label="{label}"', template)
+
+
+class ProductStockHeadingTests(SimpleTestCase):
+    """Follow-up 4: the stock badge's heading is distinct from raw quantity."""
+
+    def test_product_stock_badge_uses_a_distinct_heading(self):
+        from apps.products.admin import ProductAdmin
+
+        self.assertEqual(ProductAdmin.stock_column.short_description, "وضعیت")
+
+
 PRODUCT_CHANGELIST_TEMPLATE = (
     BASE / "apps" / "products" / "templates" / "admin" / "products" / "product_change_list.html"
 )
@@ -83,7 +151,7 @@ PRODUCT_CHANGELIST_TEMPLATE = (
 
 def _resolve_light_tokens(css_text):
     """Light-palette custom properties, with var() references resolved."""
-    light = css_text[: css_text.index("@media (prefers-color-scheme: dark)")]
+    light = _without_media(_strip_comments(css_text))
     raw = {}
     for name, value in re.findall(r"(--[a-z0-9-]+)\s*:\s*([^;]+);", light):
         raw.setdefault(name, value.strip())

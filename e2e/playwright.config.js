@@ -26,6 +26,14 @@ module.exports = defineConfig({
   reporter: [["list"]],
   use: {
     baseURL: BASE_URL,
+    ...(process.env.E2E_CHROMIUM_EXECUTABLE_PATH
+      ? {
+          launchOptions: {
+            executablePath: process.env.E2E_CHROMIUM_EXECUTABLE_PATH,
+            args: ["--no-sandbox", "--disable-dev-shm-usage"],
+          },
+        }
+      : {}),
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     locale: "fa-IR",

@@ -14,6 +14,17 @@ from .base import env
 
 DEBUG = False
 
+# Production static assets are collected into STATIC_ROOT with hashed names.
+# Keep the strict manifest backend out of base.py: local development and the
+# test suite render templates without collectstatic and must not require a
+# manifest to exist.
+STORAGES = {
+    **STORAGES,
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
+
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["cusin.ir", "www.cusin.ir"])
 
 CSRF_TRUSTED_ORIGINS = env.list(
