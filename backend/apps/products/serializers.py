@@ -91,7 +91,7 @@ class ProductVariantSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductVariant
         fields = [
-            "id", "sku", "price_info", "stock_status", "is_in_stock",
+            "id", "sku", "price_info", "stock_status", "is_in_stock", "stock_quantity",
             "is_active", "attribute_values", "image",
         ]
 
@@ -127,7 +127,7 @@ class ProductListSerializer(serializers.ModelSerializer):
         model = Product
         fields = [
             "id", "name", "slug", "short_description", "category", "brand",
-            "price_info", "primary_image", "stock_status", "is_in_stock",
+            "price_info", "primary_image", "stock_status", "is_in_stock", "stock_quantity",
             "is_featured", "is_new", "is_best_seller",
         ]
 

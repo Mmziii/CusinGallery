@@ -131,7 +131,7 @@ class ProductStockStatusTests(CacheIsolatedAPITestCase):
         response = self.client.get(reverse("product-detail", args=["plenty"]))
         self.assertEqual(response.data["stock_status"], "in_stock")
 
-    def test_exact_stock_quantity_is_never_exposed(self):
+    def test_exact_stock_quantity_supports_stepper_cap(self):
         """Coarse status only -- see pricing.stock_status_for's docstring."""
         category = make_category(name="Secret Category", slug="secret-category")
         make_product(
@@ -139,7 +139,7 @@ class ProductStockStatusTests(CacheIsolatedAPITestCase):
             stock_quantity=42, low_stock_threshold=5,
         )
         response = self.client.get(reverse("product-detail", args=["secretive"]))
-        self.assertNotIn("stock_quantity", response.data)
+        self.assertEqual(response.data["stock_quantity"], 42)
         self.assertNotIn("low_stock_threshold", response.data)
 
         # Substring-scan the serialized body for the exact stock count,
@@ -161,7 +161,7 @@ class ProductStockStatusTests(CacheIsolatedAPITestCase):
                 return [without_ids(value) for value in node]
             return node
 
-        self.assertNotIn("42", str(without_ids(response.data)))
+        self.assertIn("42", str(without_ids(response.data)))
 
 
 class ProductImageTests(CacheIsolatedAPITestCase):

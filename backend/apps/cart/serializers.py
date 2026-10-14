@@ -58,6 +58,12 @@ class CartItemSerializer(serializers.Serializer):
     is_available = serializers.BooleanField()
     unavailable_reason = serializers.CharField(allow_null=True)
 
+    available_stock = serializers.SerializerMethodField()
+
+    def get_available_stock(self, obj):
+        target = obj.item.variant if obj.item.variant_id else obj.item.product
+        return target.stock_quantity
+
     def get_id(self, obj):
         return obj.item.id
 

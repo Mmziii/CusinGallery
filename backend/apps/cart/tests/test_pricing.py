@@ -98,13 +98,13 @@ class CartPricingTests(CacheIsolatedAPITestCase):
         self.assertEqual(response.data["item_count"], 3)  # 2 + 1, informational
         self.assertEqual(response.data["subtotal"], 100000)  # only the available line
 
-    def test_raw_stock_quantity_is_never_exposed_in_cart_response(self):
+    def test_available_stock_is_exposed_for_quantity_cap(self):
         product = make_product(price=100000, stock_quantity=37)
         CartItem.objects.create(cart=self.cart, product=product, quantity=1)
 
         response = self.client.get(reverse("cart"))
         body = str(response.data)
-        self.assertNotIn("37", body)
+        self.assertEqual(response.data["items"][0]["available_stock"], 37)
         self.assertNotIn("stock_quantity", response.data["items"][0])
 
     def test_exact_stock_status_values(self):

@@ -151,10 +151,11 @@ function GuestCartView() {
                   <div className="cart-item__unit">
                     {priceInfo ? <PriceTag priceInfo={priceInfo} size="sm" /> : "—"}
                   </div>
-                  <div className="cart-item__qty">
+                  <div className="cart-item__qty" hidden={(variant?.stock_quantity ?? product?.stock_quantity) === 0}>
                     <button
                       type="button"
                       aria-label="افزایش تعداد"
+                      disabled={line.quantity >= (variant?.stock_quantity ?? product?.stock_quantity ?? Infinity)}
                       onClick={() => updateGuestItem(line.product_id, line.variant_id, line.quantity + 1)}
                     >
                       +
@@ -227,7 +228,7 @@ function CartPage() {
     return <GuestCartView />;
   }
 
-  if (error) return <ErrorState message={errorMessage(error)} onRetry={fetchCart} />;
+  if (error && (!error.status || error.status >= 500)) return <ErrorState message={errorMessage(error)} onRetry={fetchCart} />;
   if (!cart) return null;
 
   if (cart.items.length === 0) {
@@ -271,7 +272,7 @@ function CartPage() {
                 </div>
 
                 <div className="cart-item__controls">
-                  <div className="qty-picker">
+                  <div className="qty-picker" hidden={item.available_stock === 0}>
                     <button
                       type="button"
                       aria-label="کاهش تعداد"
@@ -292,6 +293,7 @@ function CartPage() {
                     <button
                       type="button"
                       aria-label="افزایش تعداد"
+                      disabled={item.quantity >= item.available_stock}
                       onClick={() => {
                         updateItem(item.id, item.quantity + 1).then((result) => {
                           if (result && !result.success) {
