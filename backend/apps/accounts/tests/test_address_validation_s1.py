@@ -163,12 +163,12 @@ class AddressNormalizationTests(CacheIsolatedAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
         self.assertEqual(response.data["phone"], "09123456789")
 
-    def test_landline_with_area_code_is_accepted(self):
+    def test_landline_with_area_code_is_rejected(self):
         response = self.client.post(
             self.url, payload(phone="02112345678"), format="json"
         )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
-        self.assertEqual(response.data["phone"], "02112345678")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, response.data)
+        self.assertIn("فقط شمارهٔ موبایل", str(response.data))
 
 
 class AddressRejectionTests(CacheIsolatedAPITestCase):
@@ -191,7 +191,7 @@ class AddressRejectionTests(CacheIsolatedAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("phone", response.data)
         message = str(response.data["phone"][0])
-        self.assertIn("موبایل ایرانی", message)
+        self.assertIn("فقط شمارهٔ موبایل", message)
 
     def test_non_digit_phone_is_rejected(self):
         response = self.client.post(

@@ -33,7 +33,7 @@ class RegisterSerializer(NullToBlankTextMixin, serializers.Serializer):
     accepted as input (see models.py's module docstring for why).
     """
 
-    phone = serializers.CharField(max_length=20, validators=[phone_validator])
+    phone = serializers.CharField(max_length=20)
     email = serializers.EmailField(required=False, allow_blank=True)
     first_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
     last_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
@@ -41,7 +41,8 @@ class RegisterSerializer(NullToBlankTextMixin, serializers.Serializer):
     password_confirm = serializers.CharField(write_only=True)
 
     def validate_phone(self, value):
-        if User.objects.filter(phone=value).exists():
+        value = validators.validate_address_phone(value)
+        if User.objects.filter(phone__in=[value, "+98" + value[1:], "0098" + value[1:]]).exists():
             raise serializers.ValidationError("حساب کاربری با این شماره موبایل قبلاً ساخته شده است.")
         return value
 

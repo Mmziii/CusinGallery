@@ -18,7 +18,7 @@ const OTHER_CITY = "__other__";
 
 const FIELDS = [
   { key: "recipient_name", label: "نام گیرنده", required: true, maxLength: 150, autoComplete: "name" },
-  { key: "phone", label: "شماره تماس", required: true, maxLength: 20, numeric: true, inputMode: "tel", autoComplete: "tel", helper: "موبایل (مانند 09123456789) یا ثابت با کد شهر (مانند 02112345678)" },
+  { key: "phone", label: "شماره تماس", required: true, maxLength: 20, numeric: true, inputMode: "tel", autoComplete: "tel", helper: "فقط شمارهٔ موبایل (مثل ۰۹۱۲۳۴۵۶۷۸۹) قابل قبول است." },
   { key: "province", label: "استان", required: true, maxLength: 100 },
   { key: "city", label: "شهر", required: true, maxLength: 100 },
   { key: "address", label: "آدرس کامل", required: true, textarea: true, autoComplete: "street-address" },

@@ -281,7 +281,7 @@ function CheckoutPage() {
       if (!String(pickupContact.phone || "").trim()) {
         push("pickup-phone", "address", "شماره تماس تحویل‌گیرنده را وارد کنید.", "pickup-phone");
       } else if (!isValidIranianPhone(pickupContact.phone)) {
-        push("pickup-phone-format", "address", "شماره تماس معتبر نیست (مانند 09123456789).", "pickup-phone");
+        push("pickup-phone-format", "address", "فقط شمارهٔ موبایل (مثل ۰۹۱۲۳۴۵۶۷۸۹) قابل قبول است.", "pickup-phone");
       }
     } else if (addressesStatus !== "loading") {
       if (addressMode === "saved") {
@@ -329,7 +329,7 @@ function CheckoutPage() {
         ? "شماره تماس را وارد کنید."
         : isValidIranianPhone(pickupContact.phone)
           ? null
-          : "شماره تماس معتبر نیست (مانند 09123456789).",
+          : "فقط شمارهٔ موبایل (مثل ۰۹۱۲۳۴۵۶۷۸۹) قابل قبول است.",
     });
     setIssues(found);
     if (found.length) {

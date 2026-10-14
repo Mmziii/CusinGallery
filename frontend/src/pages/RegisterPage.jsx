@@ -33,7 +33,7 @@ function RegisterPage() {
     if (key === "phone") {
       setPhoneError(
         value && !isValidIranianPhone(value)
-          ? "شماره موبایل معتبر نیست (مانند 09123456789)."
+          ? "فقط شمارهٔ موبایل (مثل ۰۹۱۲۳۴۵۶۷۸۹) قابل قبول است."
           : null
       );
     }
@@ -47,7 +47,7 @@ function RegisterPage() {
       return;
     }
     if (!isValidIranianPhone(form.phone)) {
-      setPhoneError("شماره موبایل معتبر نیست (مانند 09123456789).");
+      setPhoneError("فقط شمارهٔ موبایل (مثل ۰۹۱۲۳۴۵۶۷۸۹) قابل قبول است.");
       return;
     }
     // Part S2 item 5: trim stray whitespace from every text value.
