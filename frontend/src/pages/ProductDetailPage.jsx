@@ -1,3 +1,4 @@
+import { normalizePhone, isValidIranianPhone } from "../utils/iranianFields";
 import { usePageMeta } from "../hooks/usePageMeta";
 import PropTypes from "prop-types";
 import { useEffect, useMemo, useState } from "react";
@@ -485,15 +486,15 @@ function ProductDetailPage() {
                 dir="ltr"
                 inputMode="numeric"
                 placeholder="09xxxxxxxxx"
-                maxLength={11}
+                maxLength={20}
                 value={bisPhone}
-                onChange={(e) => setBisPhone(e.target.value)}
+                onChange={(e) => setBisPhone(normalizePhone(e.target.value))}
                 aria-label="شماره موبایل برای اطلاع‌رسانی موجودی"
               />
               <button
                 type="button"
                 className="btn btn--outline"
-                disabled={bisState === "busy"}
+                disabled={bisState === "busy" || !isValidIranianPhone(bisPhone)}
                 onClick={async () => {
                   setBisState("busy");
                   try {

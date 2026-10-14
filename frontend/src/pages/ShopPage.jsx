@@ -1,3 +1,4 @@
+import { digitInput } from "../utils/iranianFields";
 import PropTypes from "prop-types";
 import { usePageMeta } from "../hooks/usePageMeta";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -204,7 +205,8 @@ function ShopPage() {
     max_price: searchParams.get("max_price") || "",
   });
   const debouncedSetParam = useDebouncedCallback((key, value) => setParam(key, value), PRICE_DEBOUNCE_MS);
-  const applyPrice = (key, value) => {
+  const applyPrice = (key, raw) => {
+    const value = digitInput(raw);
     setPriceText((current) => ({ ...current, [key]: value }));
     debouncedSetParam(key, value);
   };
@@ -294,26 +296,27 @@ function ShopPage() {
             <FilterGroup title="محدوده قیمت (تومان)">
               <div className="filter-group__row">
                 <input
-                  type="number"
-                  min="0"
+                  type="text"
+                  inputMode="numeric"
                   placeholder="از"
                   aria-label="کمترین قیمت"
-                  value={priceText.min_price}
+                  value={priceText.min_price ? formatPrice(priceText.min_price) : ""}
                   onChange={(e) => applyPrice("min_price", e.target.value)}
-                  onBlur={(e) => setParam("min_price", e.target.value)}
+                  onBlur={(e) => setParam("min_price", digitInput(e.target.value))}
                 />
                 <input
-                  type="number"
-                  min="0"
+                  type="text"
+                  inputMode="numeric"
                   placeholder="تا"
                   aria-label="بیشترین قیمت"
-                  value={priceText.max_price}
+                  value={priceText.max_price ? formatPrice(priceText.max_price) : ""}
                   onChange={(e) => applyPrice("max_price", e.target.value)}
-                  onBlur={(e) => setParam("max_price", e.target.value)}
+                  onBlur={(e) => setParam("max_price", digitInput(e.target.value))}
                 />
               </div>
             </FilterGroup>
 
+            {priceText.min_price && priceText.max_price && Number(priceText.min_price) > Number(priceText.max_price) ? <p role="alert">کمترین قیمت نباید بیشتر از بیشترین قیمت باشد.</p> : null}
             <FilterGroup title="موجودی">
               <label className="checkbox">
                 <input
