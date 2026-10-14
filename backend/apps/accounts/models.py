@@ -51,7 +51,7 @@ from apps.core.models import TimeStampedModel
 
 phone_validator = RegexValidator(
     regex=r"^\+?\d{7,15}$",
-    message="Enter a valid phone number (digits only, optionally prefixed with +).",
+    message="فقط شمارهٔ موبایل (مثل ۰۹۱۲۳۴۵۶۷۸۹) قابل قبول است.",
 )
 
 

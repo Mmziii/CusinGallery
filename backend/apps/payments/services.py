@@ -113,12 +113,12 @@ def initiate_payment(user, order_id, callback_url=None) -> dict:
         # Ownership and existence collapse into one 404 -- another user's
         # order must not be distinguishable from a nonexistent one, same
         # pattern as every other ownership-scoped endpoint in this project.
-        raise PaymentError({"order": ["Order not found."]}, http_status=404)
+        raise PaymentError({"order": ["سفارش پیدا نشد."]}, http_status=404)
 
     if order.payment_status == Order.PaymentStatus.PAID:
-        raise PaymentError({"order": ["This order is already paid."]}, http_status=409)
+        raise PaymentError({"order": ["این سفارش قبلاً پرداخت شده است."]}, http_status=409)
     if order.status == Order.Status.CANCELLED:
-        raise PaymentError({"order": ["A cancelled order cannot be paid."]}, http_status=409)
+        raise PaymentError({"order": ["امکان پرداخت سفارش لغوشده وجود ندارد."]}, http_status=409)
 
     gateway = get_gateway()
 
@@ -149,7 +149,7 @@ def initiate_payment(user, order_id, callback_url=None) -> dict:
         order.save(update_fields=["payment_status", "updated_at"])
         logger.error("Gateway initiation failed for payment %s: %s", payment.pk, exc)
         raise PaymentError(
-            {"gateway": ["The payment gateway is unavailable. Please try again later."]},
+            {"gateway": ["درگاه پرداخت در دسترس نیست. کمی بعد دوباره تلاش کنید."]},
             http_status=502,
         )
 
@@ -173,17 +173,17 @@ def handle_callback(callback_data: dict) -> Payment:
     # a row lock, and an unknown callback must not block anything.
     gateway_transaction_id = _extract_gateway_reference(callback_data)
     if not gateway_transaction_id:
-        raise PaymentError({"callback": ["Missing gateway transaction reference."]}, http_status=400)
+        raise PaymentError({"callback": ["شناسهٔ تراکنش پرداخت دریافت نشد."]}, http_status=400)
 
     try:
         payment = Payment.objects.select_related("order").get(
             gateway_transaction_id=gateway_transaction_id
         )
     except Payment.DoesNotExist:
-        raise PaymentError({"callback": ["Unknown gateway transaction reference."]}, http_status=404)
+        raise PaymentError({"callback": ["شناسهٔ تراکنش پرداخت معتبر نیست."]}, http_status=404)
     except Payment.MultipleObjectsReturned:  # pragma: no cover - index makes this near-impossible
         logger.error("Duplicate gateway_transaction_id %s", gateway_transaction_id)
-        raise PaymentError({"callback": ["Ambiguous gateway transaction reference."]}, http_status=400)
+        raise PaymentError({"callback": ["شناسهٔ تراکنش پرداخت قابل تشخیص نیست."]}, http_status=400)
 
     # Idempotency fast path: an attempt that already left PENDING is
     # terminal. A SUCCESS obviously must never be re-processed (that's
@@ -266,7 +266,7 @@ def handle_callback(callback_data: dict) -> Payment:
                     locked.pk, order.order_number,
                 )
                 locked.status = Payment.Status.FAILED
-                locked.failure_reason = "Order already paid via another payment attempt."
+                locked.failure_reason = "این سفارش با تراکنش دیگری پرداخت شده است."
                 locked.save(update_fields=["status", "failure_reason", "updated_at"])
                 # The customer was charged TWICE (both attempts verified)
                 # -- the duplicate is real money owed back; flag it.
@@ -286,7 +286,7 @@ def handle_callback(callback_data: dict) -> Payment:
                     locked.pk, order.order_number,
                 )
                 locked.status = Payment.Status.FAILED
-                locked.failure_reason = "Order already paid via another payment attempt."
+                locked.failure_reason = "این سفارش با تراکنش دیگری پرداخت شده است."
                 locked.save(update_fields=["status", "failure_reason", "updated_at"])
                 # Same duplicate-capture money story as the branch above.
                 _flag_duplicate_capture(order, locked)
@@ -345,7 +345,7 @@ def _complete_successful_payment(payment: Payment, verification) -> Payment:
     # snapshot; this compares the snapshot against the order.
     if payment.amount != order.total:
         payment.status = Payment.Status.FAILED
-        payment.failure_reason = "Amount mismatch between payment and order."
+        payment.failure_reason = "مبلغ پرداخت با مبلغ سفارش یکسان نیست."
         payment.save(update_fields=["status", "failure_reason", "updated_at"])
         _set_order_payment_status(order, Order.PaymentStatus.FAILED)
         logger.error(

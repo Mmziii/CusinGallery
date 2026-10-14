@@ -1,3 +1,4 @@
+from apps.core.digits import fa_digits
 """
 Coupon business logic (built on the Phase 2 schema).
 
@@ -61,7 +62,7 @@ def validate_and_calculate(user, code: str, cart_view: dict) -> CouponEvaluation
     coupon must never resurrect value for something that can't be sold.
     """
     if not code or not code.strip():
-        raise CouponError({"coupon_code": ["Enter a coupon code."]})
+        raise CouponError({"coupon_code": ["کد تخفیف را وارد کنید."]})
 
     coupon = _find_active_coupon(code)
     _validate_time_window(coupon)
@@ -69,7 +70,7 @@ def validate_and_calculate(user, code: str, cart_view: dict) -> CouponEvaluation
 
     available_lines = [line for line in cart_view["lines"] if line.is_available]
     if not available_lines:
-        raise CouponError({"coupon_code": ["Your cart has no available items."]})
+        raise CouponError({"coupon_code": ["هیچ کالای موجودی در سبد خرید شما نیست."]})
 
     eligible_subtotal = _eligible_subtotal(coupon, available_lines)
 
@@ -77,14 +78,13 @@ def validate_and_calculate(user, code: str, cart_view: dict) -> CouponEvaluation
         raise CouponError(
             {
                 "coupon_code": [
-                    f"This coupon requires a minimum order of {coupon.minimum_order_amount} Toman "
-                    "for eligible items."
+                    f"حداقل خرید برای این کد تخفیف {fa_digits(coupon.minimum_order_amount)} تومان از کالاهای مشمول است."
                 ]
             }
         )
 
     if eligible_subtotal <= 0:
-        raise CouponError({"coupon_code": ["This coupon does not apply to your cart items."]})
+        raise CouponError({"coupon_code": ["این کد تخفیف برای کالاهای سبد شما قابل استفاده نیست."]})
 
     discount_amount = _calculate_discount(coupon, eligible_subtotal)
     return CouponEvaluation(
@@ -118,26 +118,26 @@ def _find_active_coupon(code: str) -> Coupon:
     try:
         coupon = Coupon.objects.get(code__iexact=code.strip())
     except Coupon.DoesNotExist:
-        raise CouponError({"coupon_code": ["This coupon code is not valid."]})
+        raise CouponError({"coupon_code": ["این کد تخفیف معتبر نیست."]})
 
     if not coupon.is_active:
         # Same generic wording as an unknown code -- no reason to tell a
         # client the difference between "disabled" and "never existed".
-        raise CouponError({"coupon_code": ["This coupon code is not valid."]})
+        raise CouponError({"coupon_code": ["این کد تخفیف معتبر نیست."]})
     return coupon
 
 
 def _validate_time_window(coupon: Coupon) -> None:
     now = timezone.now()
     if coupon.start_date is not None and now < coupon.start_date:
-        raise CouponError({"coupon_code": ["This coupon is not active yet."]})
+        raise CouponError({"coupon_code": ["زمان استفاده از این کد تخفیف هنوز نرسیده است."]})
     if coupon.expiration_date is not None and now > coupon.expiration_date:
-        raise CouponError({"coupon_code": ["This coupon has expired."]})
+        raise CouponError({"coupon_code": ["مهلت استفاده از این کد تخفیف تمام شده است."]})
 
 
 def _validate_usage_limits(coupon: Coupon, user) -> None:
     if not usage_within_limits(coupon, user):
-        raise CouponError({"coupon_code": ["This coupon can no longer be used."]})
+        raise CouponError({"coupon_code": ["امکان استفادهٔ دوباره از این کد تخفیف وجود ندارد."]})
 
 
 def _applicable_category_ids(coupon: Coupon) -> set:

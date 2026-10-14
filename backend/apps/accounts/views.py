@@ -68,7 +68,7 @@ class CsrfTokenView(APIView):
 
     @method_decorator(ensure_csrf_cookie)
     def get(self, request):
-        return Response({"detail": "CSRF cookie set."})
+        return Response({"detail": "آمادهٔ دریافت درخواست."})
 
 
 class RegisterView(generics.CreateAPIView):
@@ -101,7 +101,7 @@ class LogoutView(APIView):
 
     def post(self, request):
         logout(request)  # flushes the session server-side, not just the cookie
-        return Response({"detail": "Logged out."})
+        return Response({"detail": "از حساب کاربری خارج شدید."})
 
 
 class MeView(generics.GenericAPIView):
@@ -121,7 +121,7 @@ class MeView(generics.GenericAPIView):
 
     def get(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
-            return Response({"user": None, "detail": "Not logged in."})
+            return Response({"user": None, "detail": "وارد حساب کاربری نشده‌اید."})
         return Response(UserSerializer(request.user).data)
 
     def get_serializer_class(self):
@@ -147,7 +147,7 @@ class ChangePasswordView(APIView):
         # *current* session the moment the password changes, forcing an
         # unnecessary immediate re-login right after a successful change.
         update_session_auth_hash(request, user)
-        return Response({"detail": "Password changed successfully."})
+        return Response({"detail": "رمز عبور با موفقیت تغییر کرد."})
 
 
 class PasswordResetRequestView(APIView):
@@ -185,7 +185,7 @@ class PasswordResetRequestView(APIView):
         # deliberately never confirms/denies that a given phone/email is
         # registered (a common account-enumeration vector otherwise).
         generic_response = Response(
-            {"detail": "If an account matches, reset instructions have been sent."}
+            {"detail": "اگر حسابی با این مشخصات وجود داشته باشد، راهنمای بازیابی ارسال شده است."}
         )
 
         if user is None or not user.is_active:
@@ -230,7 +230,7 @@ class PasswordResetConfirmView(APIView):
         serializer = PasswordResetConfirmSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        return Response({"detail": "Password has been reset. You can now log in."})
+        return Response({"detail": "رمز عبور تغییر کرد. اکنون می‌توانید وارد شوید."})
 
 
 class AddressViewSet(viewsets.ModelViewSet):

@@ -1,3 +1,4 @@
+from apps.core.digits import fa_digits
 """
 Checkout / order business logic (Phase 6; coupon application added with
 the discounts work).
@@ -113,7 +114,7 @@ def _resolve_shipping_fields(user, validated_data):
         try:
             address = Address.objects.get(pk=address_id, user=user)
         except Address.DoesNotExist:
-            raise CheckoutError({"address_id": ["This address does not exist."]})
+            raise CheckoutError({"address_id": ["این آدرس پیدا نشد."]})
         return {
             "shipping_recipient_name": address.recipient_name,
             "shipping_phone": address.phone,
@@ -172,15 +173,14 @@ def checkout(user, validated_data) -> Order:
         lines = cart_view["lines"]
 
         if not lines:
-            raise CheckoutError({"cart": ["Your cart is empty."]})
+            raise CheckoutError({"cart": ["سبد خرید شما خالی است."]})
 
         unavailable = [line for line in lines if not line.is_available]
         if unavailable:
             raise CheckoutError(
                 {
                     "cart": [
-                        f"'{line.item.product.name}' is no longer available in the requested "
-                        f"quantity. Please update your cart before checking out."
+                        f"کالای «{fa_digits(line.item.product.name)}» به تعداد درخواستی موجود نیست. سبد خرید را اصلاح کنید."
                         for line in unavailable
                     ]
                 }

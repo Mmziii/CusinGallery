@@ -83,7 +83,7 @@ class ReviewCreateView(generics.CreateAPIView):
                 review = serializer.save()
         except IntegrityError:
             return Response(
-                {"non_field_errors": ["You have already reviewed this product."]},
+                {"non_field_errors": ["قبلاً برای این کالا نظر ثبت کرده‌اید."]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         return Response(ReviewSerializer(review).data, status=status.HTTP_201_CREATED)

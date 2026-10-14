@@ -170,7 +170,7 @@ class AmountMismatchTests(CallbackBase):
 
         result = handle_callback(signed_params(self.authority, "ok"))
         self.assertEqual(result.status, Payment.Status.FAILED)
-        self.assertIn("mismatch", result.failure_reason.lower())
+        self.assertIn("یکسان نیست", result.failure_reason.lower())
 
         self.order.refresh_from_db()
         self.assertEqual(self.order.payment_status, Order.PaymentStatus.FAILED)
@@ -243,7 +243,7 @@ class SecondAttemptRaceTests(CallbackBase):
 
         self.assertEqual(first_result.status, Payment.Status.SUCCESS)
         self.assertEqual(loser_result.status, Payment.Status.FAILED)
-        self.assertIn("already paid", loser_result.failure_reason)
+        self.assertIn("پرداخت شده", loser_result.failure_reason)
 
         self.assertEqual(
             Payment.objects.filter(order=self.order, status=Payment.Status.SUCCESS).count(), 1

@@ -1,3 +1,4 @@
+from apps.core.digits import fa_digits
 """
 Cart business logic (Phase 5).
 
@@ -40,16 +41,16 @@ def _resolve_product_and_variant(product_id, variant_id):
     try:
         product = Product.objects.get(pk=product_id, is_active=True)
     except (Product.DoesNotExist, ValueError, TypeError):
-        raise CartError({"product": ["This product is unavailable."]})
+        raise CartError({"product": ["این کالا موجود نیست."]})
 
     variant = None
     if variant_id is not None:
         try:
             variant = ProductVariant.objects.get(pk=variant_id, is_active=True)
         except (ProductVariant.DoesNotExist, ValueError, TypeError):
-            raise CartError({"variant": ["This variant is unavailable."]})
+            raise CartError({"variant": ["این تنوع موجود نیست."]})
         if variant.product_id != product.id:
-            raise CartError({"variant": ["This variant does not belong to the selected product."]})
+            raise CartError({"variant": ["این تنوع متعلق به کالای انتخاب‌شده نیست."]})
 
     return product, variant
 
@@ -68,7 +69,7 @@ def add_item(user, product_id, variant_id, quantity):
     constraints for the NULL- vs non-NULL-variant cases).
     """
     if quantity < 1:
-        raise CartError({"quantity": ["Quantity must be at least 1."]})
+        raise CartError({"quantity": ["تعداد باید دست‌کم ۱ باشد."]})
 
     product, variant = _resolve_product_and_variant(product_id, variant_id)
     # `available` is read here, before the lock below -- deliberately not
@@ -102,7 +103,7 @@ def add_item(user, product_id, variant_id, quantity):
         new_quantity = (existing.quantity if existing else 0) + quantity
 
         if new_quantity > available:
-            raise CartError({"quantity": [f"Only {available} available for this item."]})
+            raise CartError({"quantity": [f"فقط {fa_digits(available)} عدد از این کالا موجود است."]})
 
         if existing:
             existing.quantity = new_quantity
@@ -132,7 +133,7 @@ def update_item_quantity(cart_item, quantity):
     inactive item can only ever go down to zero, never up.
     """
     if quantity < 0:
-        raise CartError({"quantity": ["Quantity cannot be negative."]})
+        raise CartError({"quantity": ["تعداد نمی‌تواند منفی باشد."]})
 
     if quantity == 0:
         cart_item.delete()
@@ -140,16 +141,16 @@ def update_item_quantity(cart_item, quantity):
 
     if not cart_item.product.is_active:
         raise CartError(
-            {"quantity": ["This product is no longer available. Remove it from your cart."]}
+            {"quantity": ["این کالا دیگر در دسترس نیست. آن را از سبد خرید حذف کنید."]}
         )
     if cart_item.variant_id and not cart_item.variant.is_active:
         raise CartError(
-            {"quantity": ["This variant is no longer available. Remove it from your cart."]}
+            {"quantity": ["این تنوع دیگر در دسترس نیست. آن را از سبد خرید حذف کنید."]}
         )
 
     available = _available_stock(cart_item.product, cart_item.variant)
     if quantity > available:
-        raise CartError({"quantity": [f"Only {available} available for this item."]})
+        raise CartError({"quantity": [f"فقط {fa_digits(available)} عدد از این کالا موجود است."]})
 
     with transaction.atomic():
         locked = CartItem.objects.select_for_update().get(pk=cart_item.pk)

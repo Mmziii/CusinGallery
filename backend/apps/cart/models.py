@@ -83,4 +83,4 @@ class CartItem(TimeStampedModel):
 
     def clean(self):
         if self.variant_id and self.variant.product_id != self.product_id:
-            raise ValidationError({"variant": "This variant does not belong to the selected product."})
+            raise ValidationError({"variant": "این تنوع متعلق به کالای انتخاب‌شده نیست."})
