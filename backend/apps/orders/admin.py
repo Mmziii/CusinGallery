@@ -589,16 +589,21 @@ class OrderAdmin(NormalizedSearchMixin, admin.ModelAdmin):
                 "value": status, "label": Order.Status(status).label,
                 "icon": icon, "tone": tone,
             })
-        # The single sentence the owner needs on an unpaid order.
+        # The single sentence the owner needs on an unpaid order -- and only
+        # while there is still something to decide. On a cancelled or
+        # returned order the sentence is noise AND wrong: there is nothing
+        # left to cancel, so «فقط می‌توان آن را لغو کرد» describes an
+        # action the page no longer offers.
         unpaid_warning = ""
-        if order.payment_status != Order.PaymentStatus.PAID:
+        if (
+            order.payment_status != Order.PaymentStatus.PAID
+            and order.status == Order.Status.PENDING
+        ):
             unpaid_warning = (
                 "پرداخت نشده — این سفارش هنوز پرداخت نشده است و تا زمانی که "
                 "پرداخت آن تأیید نشود، فقط می‌توان آن را لغو کرد "
                 "(تأیید، آماده‌سازی، ارسال و تحویل نیازمند پرداخت است)."
             )
-        elif order.status == Order.Status.PENDING:
-            unpaid_warning = ""
         method_config = shipping_module.get_shipping_methods().get(order.shipping_method, {})
         quick_needs_tracking = (
             Order.Status.SHIPPED in allowed

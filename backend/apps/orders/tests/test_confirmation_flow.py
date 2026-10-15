@@ -165,6 +165,40 @@ class ConfirmationAdminTests(TestCase):
         self.assertIn("cusin-quick-warning", html)
         self.assertIn("پرداخت نشده", html)
 
+    def test_a_cancelled_unpaid_order_does_not_warn_about_cancelling(self):
+        """The red «فقط می‌توان آن را لغو کرد» banner stayed on terminal
+        orders, describing an action the page no longer offers."""
+        cancelled = make_order(
+            status=S.CANCELLED, payment_status=Order.PaymentStatus.UNPAID
+        )
+        html = self._page(cancelled).content.decode()
+        self.assertNotIn("cusin-quick-warning", html)
+        self.assertNotIn("فقط می‌توان آن را لغو کرد", html)
+
+    def test_a_returned_unpaid_order_does_not_warn_either(self):
+        returned = make_order(
+            status=S.RETURNED, payment_status=Order.PaymentStatus.UNPAID
+        )
+        html = self._page(returned).content.decode()
+        self.assertNotIn("فقط می‌توان آن را لغو کرد", html)
+
+    def test_the_warning_covers_every_pending_unpaid_order(self):
+        """Pending is the one status where the sentence is true."""
+        for status in (S.PENDING,):
+            order = make_order(status=status, payment_status=Order.PaymentStatus.UNPAID)
+            context = self._page(order).context
+            with self.subTest(status=status):
+                self.assertTrue(context["unpaid_warning"])
+
+    def test_no_other_status_warns_about_payment(self):
+        """Context-level, so every status is covered, not just two."""
+        for status in (S.CONFIRMED, S.PROCESSING, S.SHIPPED, S.DELIVERED,
+                       S.CANCELLED, S.RETURNED):
+            order = make_order(status=status, payment_status=Order.PaymentStatus.UNPAID)
+            context = self._page(order).context
+            with self.subTest(status=status):
+                self.assertEqual(context["unpaid_warning"], "")
+
     def test_unpaid_order_offers_only_cancel(self):
         context = self._page(self.unpaid).context
         allowed = [action["value"] for action in context["quick_allowed"]]
