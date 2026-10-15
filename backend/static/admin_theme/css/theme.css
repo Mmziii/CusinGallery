@@ -2343,6 +2343,36 @@ body.cusin-admin.app-orders.model-order #result_list .cusin-ship {
   white-space: normal;
 }
 
+/* Last gateway attempt on the order list: «موفق / ناموفق / لغو توسط مشتری»
+   plus its Jalali time, small and on one line. */
+.cusin-attempt {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+.cusin-attempt small { font-size: 0.75rem; }
+.cusin-attempt.attempt-success { color: var(--cg-success-text, #1e6b34); }
+.cusin-attempt.attempt-failed { color: var(--cg-danger-text, #a4262c); }
+.cusin-attempt.attempt-cancelled { color: #8a6d00; }
+
+/* "N abandoned orders are hidden here" note on the default order list. */
+.cusin-hidden-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 8px 12px;
+  border: 1px dashed var(--cusin-border, #d8d3c8);
+  border-radius: var(--cusin-radius-sm);
+  background: #fbfaf7;
+  font-size: 0.8125rem;
+  color: var(--cusin-muted, #6b6b6b);
+  line-height: 1.8;
+}
+.cusin-hidden-note .cusin-icon { flex: 0 0 auto; margin-top: 2px; }
+
 /* product form enhancement shell */
 .cusin-product-enh {
   display: grid;

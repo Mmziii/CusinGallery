@@ -352,6 +352,15 @@ PAYMENT_GATEWAY_TIMEOUT = env.int("PAYMENT_GATEWAY_TIMEOUT", default=15)
 # "pending" forever. Safe to run as often as the cron schedule likes.
 ORDER_EXPIRY_HOURS = env.int("ORDER_EXPIRY_HOURS", default=24)
 
+# An unpaid order older than this is "abandoned": the customer walked out
+# of the gateway and is not coming back. The admin's DEFAULT order list
+# hides those (they are noise in the owner's work queue -- the cron above
+# cancels them eventually); every one of them stays reachable through the
+# «سفارش‌های رهاشده» tab and through any explicit filter.
+ORDER_ABANDONED_UNPAID_AFTER_HOURS = env.int(
+    "ORDER_ABANDONED_UNPAID_AFTER_HOURS", default=ORDER_EXPIRY_HOURS
+)
+
 # ---------------------------------------------------------------------------
 # Notifications / SMS (Phase D; see apps/notifications and both
 # .env.example files for the full variable documentation)

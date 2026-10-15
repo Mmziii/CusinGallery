@@ -59,6 +59,17 @@ AND without the visual theme (ADMIN_THEME_ENABLED=False).
         <span class="v" title="{{ original.created_at|date:'Y-m-d H:i' }}">{{ original.created_at|jdatetime }}</span></span>
       <span class="cusin-summary-item"><span class="k">روش ارسال</span>
         <span class="v">{{ shipping_method_label_text }}</span></span>
+      {% if summary_last_attempt %}
+      <span class="cusin-summary-item"><span class="k">آخرین تلاش پرداخت</span>
+        <span class="v">
+          <span class="cusin-attempt attempt-{{ summary_last_attempt.status }}"
+                title="{{ summary_last_attempt.raw_label }}">{{ summary_last_attempt.label }}</span>
+          <small class="cusin-muted">
+            — <span title="{{ summary_last_attempt.at|date:'Y-m-d H:i' }}">{{ summary_last_attempt.at|jdatetime }}</span>
+            {% if summary_last_attempt.reason %}({{ summary_last_attempt.reason }}){% endif %}
+          </small>
+        </span></span>
+      {% endif %}
       {% if original.tracking_code %}
       <span class="cusin-summary-item"><span class="k">کد رهگیری</span>
         <span class="v">{{ original.tracking_code }}

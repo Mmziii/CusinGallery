@@ -38,7 +38,10 @@ class Order(models.Model):
 
     class PaymentStatus(models.TextChoices):
         UNPAID = "unpaid", "پرداخت نشده"
-        PENDING = "pending", "در انتظار پرداخت"
+        # "در انتظار پرداخت" read as "the shop is waiting for the money",
+        # which is not what this value means: the customer has already
+        # been handed to the gateway and their attempt is IN FLIGHT there.
+        PENDING = "pending", "در حال پرداخت در درگاه"
         PAID = "paid", "پرداخت شده"
         FAILED = "failed", "پرداخت ناموفق"
         REFUNDED = "refunded", "مسترد شده"

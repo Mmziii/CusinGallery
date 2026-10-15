@@ -20,7 +20,9 @@ export const ORDER_STATUS_LABELS = {
 
 export const PAYMENT_STATUS_LABELS = {
   unpaid: "پرداخت نشده",
-  pending: "در انتظار پرداخت",
+  // The customer's attempt is IN FLIGHT at the gateway -- not "we are
+  // waiting for your money".
+  pending: "در حال پرداخت در درگاه",
   paid: "پرداخت شده",
   failed: "پرداخت ناموفق",
   refunded: "بازپرداخت شده",
