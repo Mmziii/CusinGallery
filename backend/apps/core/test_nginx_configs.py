@@ -15,6 +15,8 @@ were found the hard way on a live server:
   ``^/static/(.+\\.[a-f0-9]{12`` as a regex, dying at startup with
   ``pcre2_compile() failed: missing closing parenthesis``. Quoting the
   pattern (``"..."``) makes the parser treat the whole thing as one token.
+* The security headers every storefront response must carry, and the
+  absence of the nginx version banner.
 """
 import re
 from pathlib import Path
@@ -201,3 +203,96 @@ class NginxRegexQuotingTests(SimpleTestCase):
                     ),
                     f"{path.name}: no hashed /static/ location found in {patterns}",
                 )
+
+
+class NginxSecurityHeaderTests(SimpleTestCase):
+    """The storefront shipped no X-Frame-Options / X-Content-Type-Options /
+    Referrer-Policy at all, and nginx happily printed its own version.
+
+    Both are fixed at the edge, because the SPA's HTML never reaches
+    Django -- Django's own SECURE_* settings cannot cover it.
+    """
+
+    def test_server_tokens_off(self):
+        for path in NGINX_FILES:
+            with self.subTest(config=path.name):
+                self.assertIn(
+                    "server_tokens off;",
+                    strip_comments(path.read_text(encoding="utf-8")),
+                )
+
+    def test_security_headers_present_with_always(self):
+        for path in NGINX_FILES:
+            source = strip_comments(path.read_text(encoding="utf-8"))
+            for header in SECURITY_HEADERS:
+                with self.subTest(config=path.name, header=header):
+                    self.assertRegex(
+                        source,
+                        rf"add_header\s+{header}\s+[^;]*\balways\b\s*;",
+                        f"{path.name}: '{header}' must be added with `always` "
+                        f"(otherwise nginx drops it on error responses)",
+                    )
+
+    def test_hsts_only_in_tls_configs(self):
+        for path in NGINX_FILES:
+            source = strip_comments(path.read_text(encoding="utf-8"))
+            has_hsts = "Strict-Transport-Security" in source
+            with self.subTest(config=path.name):
+                if path in TLS_CONFIGS:
+                    self.assertTrue(has_hsts, f"{path.name}: TLS server must send HSTS")
+                else:
+                    self.assertFalse(
+                        has_hsts,
+                        f"{path.name}: HSTS over plain HTTP is meaningless and must "
+                        f"stay out of the non-TLS configs",
+                    )
+
+    def test_hsts_only_in_the_tls_server_block(self):
+        """prod.d/cusin.conf has an :80 redirect server too -- no HSTS there."""
+        source = strip_comments((NGINX_ROOT / "prod.d" / "cusin.conf").read_text(encoding="utf-8"))
+        for block, tls in server_blocks(source):
+            with self.subTest(server=block.splitlines()[0]):
+                if tls:
+                    self.assertIn("Strict-Transport-Security", block)
+                else:
+                    self.assertNotIn("Strict-Transport-Security", block)
+
+    def test_every_location_owning_add_headers_repeats_the_security_headers(self):
+        """nginx's add_header inheritance trap.
+
+        `add_header` is inherited by a nested block ONLY when that block
+        defines none of its own. Every location that sets Cache-Control
+        therefore has to repeat the security headers, or a static asset
+        (or the SPA shell, via the frontend container's own headers) goes
+        out with no X-Frame-Options at all.
+        """
+        for path in NGINX_FILES:
+            source = strip_comments(path.read_text(encoding="utf-8"))
+            for header, body in location_blocks(source):
+                if "add_header" not in body:
+                    continue  # inherits the server-level headers -- fine
+                for name in SECURITY_HEADERS:
+                    with self.subTest(config=path.name, location=header, header=name):
+                        self.assertRegex(
+                            body,
+                            rf"add_header\s+{name}\s+[^;]*\balways\b\s*;",
+                            f"{path.name}: location '{header}' sets its own add_header "
+                            f"and so drops the server-level '{name}'",
+                        )
+
+    def test_seo_routes_reach_the_backend_in_every_config(self):
+        """/robots.txt and /sitemap.xml are rendered by Django, not the SPA.
+
+        Without an exact-match location the SPA fallback answers them with
+        index.html, so crawlers were served an HTML shell instead of the
+        robots policy / the product sitemap.
+        """
+        for path in NGINX_FILES:
+            source = strip_comments(path.read_text(encoding="utf-8"))
+            for route in ("/robots.txt", "/sitemap.xml"):
+                with self.subTest(config=path.name, route=route):
+                    self.assertRegex(
+                        source,
+                        rf"location\s+=\s+{route}\s*\{{[^}}]*backend_upstream",
+                        f"{path.name}: {route} must be proxied to the backend",
+                    )
