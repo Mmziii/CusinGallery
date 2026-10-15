@@ -1,3 +1,4 @@
+import { ContentSkeleton } from "../components/Skeletons";
 import NotFound from "./NotFound";
 import { normalizePhone, isValidIranianPhone } from "../utils/iranianFields";
 import { usePageMeta } from "../hooks/usePageMeta";
@@ -372,7 +373,7 @@ function ProductDetailPage() {
     wishlistApi.checkWishlisted(product.id).then(setWishlisted).catch(() => {});
   }, [isAuthenticated, product]);
 
-  if (isLoading) return <Spinner label="در حال دریافت محصول…" />;
+  if (isLoading) return <ContentSkeleton label="در حال دریافت محصول…" />;
   if (error?.response?.status === 404) return <NotFound />;
   if (error) return <ErrorState message={errorMessage(normalizeApiError(error))} onRetry={refetch} />;
   if (!product) return null;

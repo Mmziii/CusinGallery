@@ -1341,8 +1341,8 @@ html.js-reveal .reveal.is-revealed, .reveal.is-revealed { opacity: 1; transform:
 /* --- route transition fade ---
    Keep this opacity-only: .route-fade sits above pages that can contain fixed
    controls, and a transform here would turn it into their containing block. */
-.route-fade { animation: route-in .3s ease; }
-@keyframes route-in { from { opacity: 0; } to { opacity: 1; } }
+.route-fade { position: relative; animation: route-in .2s ease; }
+@keyframes route-in { from { opacity: 0; top: 8px; } to { opacity: 1; top: 0; } }
 
 /* SmartImage wrappers fill their boxes like plain <img> did */
 .hero__slide picture, .hero__slide picture img { width: 100%; height: 100%; object-fit: cover; }
@@ -1695,4 +1695,18 @@ input, select, textarea { min-width: 0; max-width: 100%; }
   .product-card__footer { gap: 6px; }
   .product-card__body { padding: 10px; }
   .price { flex-wrap: wrap; }
+}
+
+.smart-image { opacity: 0; transition: opacity .18s ease; }
+.smart-image.is-loaded { opacity: 1; }
+.content-skeleton { display: grid; gap: 16px; padding-block: 20px; }
+.related-grid > *, .recently-viewed .product-grid > * { animation: audit-card-in .2s ease both; }
+.related-grid > :nth-child(2), .recently-viewed .product-grid > :nth-child(2) { animation-delay: 35ms; }
+.related-grid > :nth-child(3), .recently-viewed .product-grid > :nth-child(3) { animation-delay: 70ms; }
+.related-grid > :nth-child(n+4), .recently-viewed .product-grid > :nth-child(n+4) { animation-delay: 105ms; }
+@keyframes audit-card-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .route-fade, .related-grid > *, .recently-viewed .product-grid > * { animation: none; }
+  .smart-image { transition: none; }
+  html { scroll-behavior: auto; }
 }

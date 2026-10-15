@@ -1,3 +1,4 @@
+import { ContentSkeleton } from "../../components/Skeletons";
 import { useCallback, useEffect, useState } from "react";
 
 import AddressForm from "../../components/AddressForm";
@@ -69,7 +70,7 @@ function AddressesPage() {
     }
   };
 
-  if (isLoading) return <Spinner label="در حال دریافت آدرس‌ها…" />;
+  if (isLoading) return <ContentSkeleton label="در حال دریافت آدرس‌ها…" />;
 
   return (
     <div className="addresses-page">

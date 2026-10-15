@@ -1,3 +1,4 @@
+import { ContentSkeleton } from "../components/Skeletons";
 import { digitInput } from "../utils/iranianFields";
 import PropTypes from "prop-types";
 import { usePageMeta } from "../hooks/usePageMeta";
@@ -432,7 +433,7 @@ function ShopPage() {
             spinner only covers the very first load; from then on the previous
             results stay on screen -- dimmed and aria-busy -- until the new
             page replaces them, so the layout never jumps. */}
-        {!products && productsState.isLoading ? <Spinner label="در حال دریافت محصولات…" /> : null}
+        {!products && productsState.isLoading ? <ContentSkeleton label="در حال دریافت محصولات…" /> : null}
         {productsState.error ? <ErrorState message={errorMessage(normalizeApiError(productsState.error))} onRetry={productsState.refetch} /> : null}
 
         {products ? (

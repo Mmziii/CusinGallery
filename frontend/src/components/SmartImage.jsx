@@ -38,9 +38,10 @@ function SmartImage({ image, alt, className, eager = false, sizes }) {
   // placeholder (and the onError fallback below) applies everywhere.
   const src = (typeof image === "string" ? image : image?.image) || null;
   const [failed, setFailed] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
   // A new src (e.g. switching gallery image) gets a fresh chance.
-  useEffect(() => setFailed(false), [src]);
+  useEffect(() => { setFailed(false); setLoaded(false); }, [src]);
 
   if (!src || failed) {
     // Context CSS (storefront.css) sizes the placeholder exactly like the
@@ -70,7 +71,7 @@ function SmartImage({ image, alt, className, eager = false, sizes }) {
       <img
         src={src}
         alt={alt || ""}
-        className={className}
+        className={`${className || ""} smart-image ${loaded ? "is-loaded" : ""}`}
         loading={eager ? "eager" : "lazy"}
         /* Part S2 item 8: reserve the intrinsic size when the API ever
            provides it, so the browser can prevent layout shift. The
@@ -78,6 +79,7 @@ function SmartImage({ image, alt, className, eager = false, sizes }) {
            attributes render only when present, never fabricated. */
         width={image?.width || undefined}
         height={image?.height || undefined}
+        onLoad={() => setLoaded(true)}
         onError={() => setFailed(true)}
       />
     </picture>

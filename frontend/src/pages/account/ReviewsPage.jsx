@@ -1,3 +1,4 @@
+import { ContentSkeleton } from "../../components/Skeletons";
 import { Link } from "react-router-dom";
 
 import StarRating from "../../components/StarRating";
@@ -14,7 +15,7 @@ const STATUS_LABELS = {
 function ReviewsPage() {
   const { data, isLoading, error, refetch } = useAsync(() => reviewsApi.fetchMyReviews(), []);
 
-  if (isLoading) return <Spinner label="در حال دریافت نظرات…" />;
+  if (isLoading) return <ContentSkeleton label="در حال دریافت نظرات…" />;
   if (error) return <ErrorState message={errorMessage(error)} onRetry={refetch} />;
 
   const reviews = Array.isArray(data) ? data : [];

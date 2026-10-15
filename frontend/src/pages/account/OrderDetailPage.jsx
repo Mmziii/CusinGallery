@@ -1,3 +1,4 @@
+import { ContentSkeleton } from "../../components/Skeletons";
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
@@ -17,7 +18,7 @@ function OrderDetailPage() {
   const [paying, setPaying] = useState(false);
   const [payError, setPayError] = useState(null);
 
-  if (isLoading) return <Spinner label="در حال دریافت سفارش…" />;
+  if (isLoading) return <ContentSkeleton label="در حال دریافت سفارش…" />;
   if (error) return <ErrorState message={errorMessage(error)} onRetry={refetch} />;
   if (!order) return null;
 

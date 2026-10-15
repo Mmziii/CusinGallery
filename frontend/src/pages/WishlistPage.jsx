@@ -1,3 +1,4 @@
+import { ContentSkeleton } from "../components/Skeletons";
 import { usePageMeta } from "../hooks/usePageMeta";
 import { useState } from "react";
 import { Link } from "react-router-dom";
@@ -34,7 +35,7 @@ function WishlistPage() {
     }
   };
 
-  if (isLoading) return <Spinner label="در حال دریافت علاقه‌مندی‌ها…" />;
+  if (isLoading) return <ContentSkeleton label="در حال دریافت علاقه‌مندی‌ها…" />;
   if (error) return <ErrorState message={errorMessage(error)} onRetry={refetch} />;
 
   if (!items.length) {

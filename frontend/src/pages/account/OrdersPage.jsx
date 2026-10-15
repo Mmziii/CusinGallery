@@ -1,3 +1,4 @@
+import { ContentSkeleton } from "../../components/Skeletons";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -28,7 +29,7 @@ function OrdersPage() {
   const [page, setPage] = useState(1);
   const { data, isLoading, error, refetch } = useAsync(() => fetchOrders({ page }), [page]);
 
-  if (isLoading) return <Spinner label="در حال دریافت سفارش‌ها…" />;
+  if (isLoading) return <ContentSkeleton label="در حال دریافت سفارش‌ها…" />;
   if (error) return <ErrorState message={errorMessage(error)} onRetry={refetch} />;
   if (!data?.results?.length) {
     return (
