@@ -74,7 +74,7 @@ function GuestCartView() {
 
   if (guestLines.length === 0) {
     return (
-      <EmptyState title="سبد خرید شما خالی است.">
+      <EmptyState heading="h1" title="سبد خرید شما خالی است.">
         <Link className="btn btn--primary" to="/shop/">مشاهده فروشگاه</Link>
       </EmptyState>
     );
@@ -234,7 +234,7 @@ function CartPage() {
 
   if (cart.items.length === 0) {
     return (
-      <EmptyState title="سبد خرید شما خالی است.">
+      <EmptyState heading="h1" title="سبد خرید شما خالی است.">
         <Link className="btn btn--primary" to="/shop/">مشاهده فروشگاه</Link>
       </EmptyState>
     );

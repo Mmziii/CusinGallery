@@ -43,6 +43,7 @@ function RatingInput({ value, onChange }) {
           type="button"
           role="radio"
           aria-checked={value === n}
+          aria-label={`${faDigits(n)} ستاره`}
           className={n <= value ? "star star--on" : "star"}
           onClick={() => onChange(n)}
         >

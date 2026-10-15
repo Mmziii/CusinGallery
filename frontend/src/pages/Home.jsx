@@ -80,7 +80,7 @@ function HeroSlider({ banners, isLoading }) {
             />
             <div className="hero__overlay">
               <div className="hero__copy container">
-                <h1>{banner.title}</h1>
+                <h2>{banner.title}</h2>
                 {banner.subtitle ? <p>{banner.subtitle}</p> : null}
                 {banner.cta_url ? (
                   <Link className="btn btn--gold" to={banner.cta_url}>
@@ -291,6 +291,7 @@ function Home() {
 
   return (
     <div className="home">
+      <h1 className="sr-only">کازین گالری؛ فروشگاه لوازم خانه و آشپزخانه</h1>
       <HeroSlider banners={bannersState.data || []} isLoading={bannersState.isLoading} />
       <TrustStrip />
 

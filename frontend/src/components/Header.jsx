@@ -289,6 +289,8 @@ function Header() {
           type="button"
           className="site-header__burger"
           aria-label="بازکردن منو"
+          aria-expanded={menuOpen}
+          aria-controls="mobile-navigation"
           onClick={() => setMenuOpen((open) => !open)}
         >
           <span />
@@ -453,7 +455,7 @@ function Header() {
           all shell stacking/containing-block changes while the header scrolls. */}
       {menuOpen ? (
         <Portal>
-          <div className="site-header__drawer" role="dialog" aria-modal="true" aria-label="منوی اصلی" ref={drawerRef}>
+          <div id="mobile-navigation" className="site-header__drawer" role="dialog" aria-modal="true" aria-label="منوی اصلی" ref={drawerRef}>
             <div className="site-header__drawer-head">
               <Link
                 to="/"

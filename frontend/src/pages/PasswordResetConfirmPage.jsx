@@ -1,3 +1,4 @@
+import { usePageMeta } from "../hooks/usePageMeta";
 import PasswordHint from "../components/PasswordHint.jsx";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -21,6 +22,7 @@ import { normalizeApiError } from "../utils/apiError";
  *              the same generic Persian error as unknown phones.
  */
 function PasswordResetConfirmPage() {
+  usePageMeta({ title: "تعیین رمز عبور جدید", path: "/reset-password/confirm/", noindex: true });
   const [searchParams] = useSearchParams();
   const mode = searchParams.get("mode") === "code" ? "code" : "link";
   const uid = searchParams.get("uid") || "";

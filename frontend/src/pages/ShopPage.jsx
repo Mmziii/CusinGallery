@@ -4,7 +4,7 @@ import { digitInput } from "../utils/iranianFields";
 import PropTypes from "prop-types";
 import { usePageMeta } from "../hooks/usePageMeta";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigationType, useSearchParams } from "react-router-dom";
+import { Link, useNavigationType, useSearchParams } from "react-router-dom";
 
 import Breadcrumbs from "../components/Breadcrumbs";
 import Icon from "../components/Icon";
@@ -252,6 +252,7 @@ function ShopPage() {
 
             <FilterGroup title="دسته‌بندی">
               <select
+                aria-label="دسته‌بندی"
                 value={searchParams.get("category") || ""}
                 onChange={(e) => setParam("category", e.target.value)}
               >
@@ -264,6 +265,7 @@ function ShopPage() {
 
             <FilterGroup title="برند">
               <select
+                aria-label="برند"
                 value={searchParams.get("brand") || ""}
                 onChange={(e) => setParam("brand", e.target.value)}
               >
@@ -470,21 +472,13 @@ function ShopPage() {
 
         {totalPages > 1 ? (
           <nav className="pagination" aria-label="صفحه‌بندی">
-            <button
-              type="button"
-              disabled={!products.previous}
-              onClick={() => setParam("page", Number(params.page || 1) - 1)}
-            >
-              قبلی
-            </button>
+            {Number(params.page || 1) > 1 ? <Link to={`?${new URLSearchParams({ ...Object.fromEntries(searchParams), page: Number(params.page || 1) - 1 })}`}>قبلی</Link> : <span aria-disabled="true">قبلی</span>}
+            {Array.from({length: totalPages}, (_, index) => index + 1)
+              .filter(page => page === 1 || page === totalPages || Math.abs(page - Number(params.page || 1)) <= 2)
+              .map(page => <Link key={page} aria-current={page === Number(params.page || 1) ? "page" : undefined}
+                to={`?${new URLSearchParams({ ...Object.fromEntries(searchParams), page })}`}>{faDigits(page)}</Link>)}
             <span>صفحه {faDigits(params.page || 1)} از {faDigits(totalPages)}</span>
-            <button
-              type="button"
-              disabled={!products.next}
-              onClick={() => setParam("page", Number(params.page || 1) + 1)}
-            >
-              بعدی
-            </button>
+            {Number(params.page || 1) < totalPages ? <Link to={`?${new URLSearchParams({ ...Object.fromEntries(searchParams), page: Number(params.page || 1) + 1 })}`}>بعدی</Link> : <span aria-disabled="true">بعدی</span>}
           </nav>
         ) : null}
       </div>

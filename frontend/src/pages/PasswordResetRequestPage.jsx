@@ -1,3 +1,4 @@
+import { usePageMeta } from "../hooks/usePageMeta";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -18,6 +19,7 @@ import { toAsciiDigits } from "../utils/iranianFields";
  *     mode: /reset-password/confirm/?mode=code&phone=...).
  */
 function PasswordResetRequestPage() {
+  usePageMeta({ title: "بازیابی رمز عبور", path: "/reset-password/", noindex: true });
   const [identifier, setIdentifier] = useState("");
   const [submittedIdentifier, setSubmittedIdentifier] = useState("");
   const [sent, setSent] = useState(false);
