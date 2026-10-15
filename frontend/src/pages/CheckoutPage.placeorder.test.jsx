@@ -214,7 +214,7 @@ describe("Place-order button (Part S5 item 4)", () => {
 
     renderPage();
     await screen.findByRole("heading", { name: "ثبت سفارش" });
-    fireEvent.change(screen.getByPlaceholderText(/WELCOME10/), { target: { value: "OFF10" } });
+    fireEvent.change(screen.getByLabelText("کد تخفیف"), { target: { value: "OFF10" } });
 
     submit();
 

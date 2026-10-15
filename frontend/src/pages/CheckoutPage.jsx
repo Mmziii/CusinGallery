@@ -709,11 +709,13 @@ function CheckoutPage() {
                       />
                       <span className="shipping-method__body">
                         <strong>{method.label || methodLabel(method.id)}</strong>
+                        {method.id === "pickup" && siteSettings.pickup_address ? <span>نشانی دریافت: {siteSettings.pickup_address}</span> : null}
+                        {method.id === "pickup" && siteSettings.pickup_hours ? <span>ساعات دریافت: {siteSettings.pickup_hours}</span> : null}
                         <span className="muted">
                           {method.requires_address === false
                             ? "آمادهٔ تحویل حضوری پس از پرداخت"
                             : method.min_days === method.max_days
-                              ? `تحویل ${method.min_days} روزه`
+                              ? deliveryDays(method.min_days, method.max_days)
                               : deliveryDays(method.min_days, method.max_days)}
                         </span>
                       </span>
@@ -740,13 +742,13 @@ function CheckoutPage() {
             tabIndex={-1}
             className={`checkout__section ${sectionIssues("coupon").length ? "checkout__section--attention" : ""}`}
           >
-            <h2>کد تخفیف</h2>
+            <h2><label htmlFor="checkout-coupon">کد تخفیف</label></h2>
             <div className="coupon-row">
               <input
                 type="text"
                 dir="ltr"
                 value={couponCode}
-                placeholder="مثلاً: WELCOME10"
+                id="checkout-coupon"
                 onChange={(e) => {
                   setCouponCode(e.target.value);
                   setCouponError(null);
@@ -814,8 +816,7 @@ function CheckoutPage() {
             </ul>
           ) : null}
           <p className="checkout__note">
-            مبلغ قابل پرداخت از جمع کالاها، هزینه ارسال و تخفیف محاسبه شده است؛ مبلغ نهایی
-            پس از ثبت سفارش توسط سرور تأیید و پیش از انتقال به درگاه نمایش داده می‌شود.
+            مبلغ نهایی را پس از ثبت سفارش و پیش از رفتن به درگاه پرداخت ببینید.
           </p>
         </aside>
         </div>
