@@ -136,10 +136,14 @@ button below is the only thing that writes (one transaction, all-or-nothing).
   <input type="hidden" name="mode" value="{{ plan.mode }}">
   {% if plan.skip_existing %}<input type="hidden" name="skip_existing" value="1">{% endif %}
   <div class="submit-row">
-    <input id="cusin-image-import-confirm-button" type="submit" name="confirm"
-           value="تأیید و ذخیره" class="default">
-    <input id="cusin-image-import-cancel-button" type="submit" name="cancel"
-           value="انصراف (بدون تغییر)">
+    {# Submit BUTTONS, not <input type="submit">: an input posts its own
+       label as the value, so the view (which compares the value to "1")
+       never saw the confirm and fell through to the upload branch --
+       «فایلی انتخاب نشده است». A button carries the value we choose. #}
+    <button type="submit" id="cusin-image-import-confirm-button"
+            name="confirm" value="1" class="default">تأیید و ذخیره</button>
+    <button type="submit" id="cusin-image-import-cancel-button"
+            name="cancel" value="1">انصراف (بدون تغییر)</button>
     <span id="cusin-image-import-waiting" style="display:none;margin-inline-start:10px;color:#666">
       در حال آماده‌سازی… لطفاً صبر کنید.
     </span>
@@ -166,12 +170,16 @@ button below is the only thing that writes (one transaction, all-or-nothing).
   // batch lands, and a second POST would restart the same job twice.
   form.addEventListener("submit", function (event) {
     var pressed = event.submitter || document.activeElement;
-    if (pressed === confirmButton) {
+    if (pressed !== confirmButton) { return; }
+    // Disable only AFTER the browser has read the form: a disabled
+    // submitter is left out of the submission entirely, which would drop
+    // the very «confirm=1» the view is waiting for.
+    window.setTimeout(function () {
       confirmButton.disabled = true;
       if (cancelButton) { cancelButton.disabled = true; }
-      confirmButton.value = "در حال آماده‌سازی…";
+      confirmButton.textContent = "در حال آماده‌سازی…";
       if (waiting) { waiting.style.display = "inline"; }
-    }
+    }, 0);
   });
 
   // A reload must not leave a dead button behind.
@@ -179,7 +187,7 @@ button below is the only thing that writes (one transaction, all-or-nothing).
     if (!event.persisted) { return; }
     confirmButton.disabled = false;
     if (cancelButton) { cancelButton.disabled = false; }
-    confirmButton.value = "تأیید و ذخیره";
+    confirmButton.textContent = "تأیید و ذخیره";
     if (waiting) { waiting.style.display = "none"; }
   });
 })();

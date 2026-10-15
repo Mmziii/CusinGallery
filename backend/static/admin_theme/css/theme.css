@@ -524,7 +524,8 @@ kbd.cusin-kbd {
 /* --------------------------------------------------------------------------
    7. Buttons & forms (A5)
    -------------------------------------------------------------------------- */
-.button, input[type="submit"], input[type="button"], .submit-row input, .submit-row a, .button[disabled] {
+.button, input[type="submit"], input[type="button"], .submit-row input,
+.submit-row button, .submit-row a, .button[disabled] {
   border-radius: var(--cusin-radius-sm);
   font-weight: 600;
   min-height: 42px;
@@ -3296,6 +3297,7 @@ fieldset.module > h2,
 input[type="submit"],
 input[type="button"],
 .submit-row input,
+.submit-row button,
 .submit-row a,
 .object-tools a,
 .object-tools button,
