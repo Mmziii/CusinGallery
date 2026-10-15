@@ -1710,3 +1710,8 @@ input, select, textarea { min-width: 0; max-width: 100%; }
   .smart-image { transition: none; }
   html { scroll-behavior: auto; }
 }
+.wishlist-badge { display: inline-grid; place-items: center; min-width: 20px; padding-inline: 5px; border-radius: 12px; background: var(--brand-green-dark); color: var(--brand-ivory); font-size: var(--font-size-xs); animation: badge-pop .2s ease; }
+.icon-btn[aria-pressed="true"] .icon { animation: badge-pop .2s ease; }
+@media (prefers-reduced-motion: reduce) {
+  .wishlist-badge, .icon-btn[aria-pressed="true"] .icon { animation: none; }
+}

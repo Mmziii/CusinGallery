@@ -1,3 +1,4 @@
+import useWishlistStore from "../store/useWishlistStore";
 import { ContentSkeleton } from "../components/Skeletons";
 import NotFound from "./NotFound";
 import { normalizePhone, isValidIranianPhone } from "../utils/iranianFields";
@@ -18,7 +19,6 @@ import { useAsync } from "../hooks/useAsync";
 import { getProduct } from "../services/catalogApi";
 import { subscribeBackInStock } from "../services/productsApi";
 import * as reviewsApi from "../services/reviewsApi";
-import * as wishlistApi from "../services/wishlistApi";
 import useAuthStore from "../store/useAuthStore";
 import useCartStore from "../store/useCartStore";
 import { normalizeApiError } from "../utils/apiError";
@@ -268,7 +268,9 @@ function ProductDetailPage() {
   const [quantity, setQuantity] = useState(1);
   const [selected, setSelected] = useState({}); // attribute name -> value
   const [added, setAdded] = useState(null);
-  const [wishlisted, setWishlisted] = useState(false);
+  const wishlist = useWishlistStore();
+  const wishlisted = wishlist.items.some(item => item.product.id === product?.id);
+  const [wishlistBusy, setWishlistBusy] = useState(false);
   const [bisPhone, setBisPhone] = useState("");
   const [bisState, setBisState] = useState(null); // null | busy | done | error
 
@@ -368,10 +370,7 @@ function ProductDetailPage() {
     setAdded(null);
   }, [slug]);
 
-  useEffect(() => {
-    if (!isAuthenticated || !product) return;
-    wishlistApi.checkWishlisted(product.id).then(setWishlisted).catch(() => {});
-  }, [isAuthenticated, product]);
+
 
   if (isLoading) return <ContentSkeleton label="در حال دریافت محصول…" />;
   if (error?.response?.status === 404) return <NotFound />;
@@ -389,13 +388,10 @@ function ProductDetailPage() {
   };
 
   const handleWishlist = async () => {
-    if (!isAuthenticated || wishlisted) return;
-    try {
-      await wishlistApi.addWishlistItem(product.id);
-      setWishlisted(true);
-    } catch {
-      /* surfaced via cart-style toasts elsewhere; keep silent here */
-    }
+    if (!isAuthenticated || wishlistBusy) return;
+    setWishlistBusy(true);
+    await wishlist.toggle(product.id);
+    setWishlistBusy(false);
   };
 
   return (
@@ -523,7 +519,8 @@ function ProductDetailPage() {
             type="button"
             className={`icon-btn icon-btn--lg ${wishlisted ? "icon-btn--active" : ""}`}
             onClick={handleWishlist}
-            disabled={!isAuthenticated || wishlisted}
+            aria-pressed={wishlisted}
+            disabled={!isAuthenticated || wishlistBusy}
             title="علاقه‌مندی"
           >
             <Icon name="heart" filled={wishlisted} size={20} />

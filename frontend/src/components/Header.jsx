@@ -1,3 +1,4 @@
+import useWishlistStore from "../store/useWishlistStore";
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 
@@ -26,9 +27,11 @@ import { formatPrice } from "../utils/formatPrice";
  * guest lines hydrated from the products API).
  */
 function Header() {
+  const wishlist = useWishlistStore();
   const location = useLocation();
   const navigate = useNavigate();
   const { user, isAuthenticated, isLoading, logout, fetchMe } = useAuthStore();
+  useEffect(() => { if (isAuthenticated) wishlist.refetch(); else wishlist.reset(); }, [isAuthenticated, wishlist.refetch, wishlist.reset]);
   const cart = useCartStore((s) => s.cart);
   const guestLines = useCartStore((s) => s.guestLines);
   const guestProducts = useCartStore((s) => s.guestProducts);
@@ -396,7 +399,7 @@ function Header() {
             ) : null}
           </div>
           <NavLink to="/shop/">فروشگاه</NavLink>
-          {isAuthenticated ? <NavLink to="/wishlist/">علاقه‌مندی‌ها</NavLink> : null}
+          {isAuthenticated ? <NavLink to="/wishlist/">علاقه‌مندی‌ها {wishlist.items.length > 0 ? <span key={wishlist.revision} className="wishlist-badge">{formatPrice(wishlist.items.length)}</span> : null}</NavLink> : null}
         </nav>
 
         <div className="site-header__actions">

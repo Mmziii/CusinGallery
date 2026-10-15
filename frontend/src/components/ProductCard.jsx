@@ -1,10 +1,10 @@
+import useWishlistStore from "../store/useWishlistStore";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
 import useAuthStore from "../store/useAuthStore";
 import { productShape } from "../utils/shapes";
 import useCartStore from "../store/useCartStore";
-import * as wishlistApi from "../services/wishlistApi";
 import { toast } from "../utils/toast";
 import Icon from "./Icon";
 import PriceTag from "./PriceTag";
@@ -21,7 +21,9 @@ function ProductCard({ product }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const addItem = useCartStore((s) => s.addItem);
   const [adding, setAdding] = useState(false);
-  const [addedToWishlist, setAddedToWishlist] = useState(false);
+  const wishlist = useWishlistStore();
+  const addedToWishlist = wishlist.items.some(item => item.product.id === product.id);
+  const [wishlistBusy, setWishlistBusy] = useState(false);
   // Part S4 item 1: the hover cross-fade image is decorative -- when its
   // file is missing it hides itself silently (no broken-image icon, no
   // placeholder: the primary image above it is the real one).
@@ -49,10 +51,10 @@ function ProductCard({ product }) {
   // the product page and the wishlist page, which hold the item ids
   // removal requires). Adding twice is idempotent server-side.
   const handleWishlist = async () => {
-    if (!isAuthenticated || addedToWishlist) return;
-    await wishlistApi.addWishlistItem(product.id);
-    setAddedToWishlist(true);
-    toast("به علاقه‌مندی‌ها اضافه شد");
+    if (!isAuthenticated || wishlistBusy) return;
+    setWishlistBusy(true);
+    await wishlist.toggle(product.id);
+    setWishlistBusy(false);
   };
 
   return (
@@ -121,7 +123,8 @@ function ProductCard({ product }) {
             title="افزودن به علاقه‌مندی‌ها"
             aria-label="افزودن به علاقه‌مندی‌ها"
             onClick={handleWishlist}
-            disabled={!isAuthenticated || addedToWishlist}
+            aria-pressed={addedToWishlist}
+            disabled={!isAuthenticated || wishlistBusy}
           >
             <Icon name="heart" filled={addedToWishlist} size={18} />
           </button>
