@@ -15,6 +15,14 @@
 # an explicit one-shot deploy step (docker compose run --rm backend
 # python manage.py migrate) BEFORE rolling the replicas.
 #
+# Tuning: GUNICORN_WORKERS, GUNICORN_TIMEOUT (seconds -- the hard ceiling on
+# how long one request may run before its worker is killed) and
+# GUNICORN_GRACEFUL_TIMEOUT are read from the environment, so a slow box can
+# be given more headroom without rebuilding the image. The timeout default
+# is 120s, not the old 60s: the admin's bulk operations (notably the image
+# ZIP import) legitimately run longer than a minute on the 1-vCPU server,
+# and a killed worker used to surface as a bare 502 with no explanation.
+#
 # Failure policy: `set -e` -- a failed migration or collectstatic must
 # stop the container (restart policy will retry and the operator sees it
 # in `docker compose logs backend`). Serving traffic against a
@@ -31,6 +39,7 @@ echo "[entrypoint] starting gunicorn..."
 exec gunicorn config.wsgi:application \
     --bind 0.0.0.0:8000 \
     --workers "${GUNICORN_WORKERS:-3}" \
-    --timeout 60 \
+    --timeout "${GUNICORN_TIMEOUT:-120}" \
+    --graceful-timeout "${GUNICORN_GRACEFUL_TIMEOUT:-30}" \
     --access-logfile - \
     --error-logfile -

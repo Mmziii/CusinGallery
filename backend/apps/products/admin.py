@@ -25,6 +25,7 @@ from apps.adminui.admin_forms import NumericChangelistAdminMixin
 import csv
 import glob
 import io
+import json
 import os
 import re
 import shutil
@@ -49,11 +50,15 @@ from .importing import (
     update_products_from_rows,
 )
 from .image_import import (
+    DEFAULT_BATCH_SIZE,
     ImageImportLimits,
     ZipImageSource,
+    apply_job_batch,
     apply_plan,
     build_plan,
     fa_digits,
+    job_progress,
+    new_job,
     report_csv as image_report_csv,
 )
 from .models import Brand, Product, ProductAttribute, ProductAttributeValue, ProductImage, ProductVariant
@@ -558,11 +563,19 @@ class ProductAdmin(
         )
 
     def image_import_view(self, request):
-        """One page, two steps: upload the ZIP and see exactly what would
-        happen (dry run, nothing written), then confirm to write it.
+        """
+        Upload the ZIP, see exactly what would happen (dry run, nothing
+        written), then confirm -- and the save runs in BATCHES.
 
-        All-or-nothing, one transaction; the ZIP is streamed to a temp file
-        and removed afterwards either way.
+        A 176-image ZIP took ~27s on a fast core and blew gunicorn's 60s
+        worker timeout on the 1-vCPU server, which killed the worker
+        mid-import: the browser got a bare 502 and nothing was saved.
+        The confirm step therefore only STARTS a resumable job
+        (apps.products.image_import.new_job / apply_job_batch); the page
+        then drives it 20 images per request, each batch its own
+        transaction, with a progress bar and a resume-if-reloaded job
+        file. Failures come back as Persian text on this page, never as a
+        502.
         """
         context = self._image_context(
             request,
@@ -583,13 +596,15 @@ class ProductAdmin(
 
         if request.method == "POST":
             if request.POST.get("cancel") == "1":
-                self._drop_stashed(self._stashed_image_path(request.POST.get("token")))
-                request.session.pop(self._IMAGE_PENDING_KEY, None)
+                self._forget_image_job(request)
                 self.message_user(request, "عملیات لغو شد؛ چیزی ذخیره نشد.", messages.INFO)
                 return HttpResponseRedirect(reverse("admin:products_product_changelist"))
 
             if request.POST.get("confirm") == "1":
-                return self._confirm_image_import(request, context)
+                return self._start_image_job(request, context)
+
+            if request.POST.get("step") == "1":
+                return self._apply_image_batch(request, context)
 
             upload = request.FILES.get("zip")
             if upload is None:
@@ -627,6 +642,10 @@ class ProductAdmin(
                     request, "admin/products/product_image_import.html", context
                 )
 
+            # The dry run already knows the whole work list -- remember it,
+            # so confirming is instant and the save can be batched.
+            job = new_job(plan, token)
+            self._save_image_job(job)
             request.session[self._IMAGE_PENDING_KEY] = {
                 "token": token,
                 "mode": plan.mode,
@@ -638,54 +657,224 @@ class ProductAdmin(
                 request, "admin/products/product_image_import_preview.html", context
             )
 
+        # GET: an unfinished job survives a reload -- show it and carry on.
+        job = self._load_image_job(request)
+        if job is not None:
+            return self._image_progress_response(request, context, job)
         return TemplateResponse(request, "admin/products/product_image_import.html", context)
 
-    def _confirm_image_import(self, request, context):
-        pending = request.session.get(self._IMAGE_PENDING_KEY)
-        path = self._stashed_image_path(pending and pending.get("token"))
-        if not pending or path is None:
+    # -- resumable job plumbing -------------------------------------------
+
+    def _image_job_path(self, token):
+        if not token or not re.fullmatch(r"[0-9a-f]{32}", str(token)):
+            return None
+        return os.path.join(self._image_stash_dir(), str(token) + ".json")
+
+    def _save_image_job(self, job):
+        """Atomic write: a half-written job file must never be reloadable."""
+        path = self._image_job_path(job.get("token"))
+        if path is None:
+            return
+        os.makedirs(self._image_stash_dir(), exist_ok=True)
+        temporary = path + ".tmp"
+        with open(temporary, "w", encoding="utf-8") as handle:
+            json.dump(job, handle, ensure_ascii=False)
+        os.replace(temporary, path)
+
+    def _load_image_job(self, request):
+        pending = request.session.get(self._IMAGE_PENDING_KEY) or {}
+        path = self._image_job_path(pending.get("token"))
+        if not path or not os.path.exists(path):
+            return None
+        try:
+            with open(path, encoding="utf-8") as handle:
+                job = json.load(handle)
+        except (OSError, ValueError):
+            return None
+        return job if isinstance(job, dict) and job.get("version") == 1 else None
+
+    def _forget_image_job(self, request):
+        pending = request.session.get(self._IMAGE_PENDING_KEY) or {}
+        for candidate in (
+            self._stashed_image_path(pending.get("token")),
+            self._image_job_path(pending.get("token")),
+        ):
+            self._drop_stashed(candidate)
+        request.session.pop(self._IMAGE_PENDING_KEY, None)
+
+    def _start_image_job(self, request, context):
+        job = self._load_image_job(request)
+        if job is None:
             self.message_user(
                 request,
                 "پیش‌نمایشی برای تأیید وجود ندارد؛ فایل را دوباره بارگذاری کنید.",
                 messages.WARNING,
             )
             return HttpResponseRedirect(reverse("admin:products_product_image_import"))
+        if job["status"] == "error":
+            # Let the owner retry the very same job (only the failed batch
+            # was lost; committed batches are already on disk).
+            job["status"] = "running"
+            job["error"] = ""
+            self._save_image_job(job)
+        elif job["status"] == "done":
+            return self._finish_image_job(request, context, job)
+        elif job["status"] == "preview":
+            job["status"] = "running"
+            self._save_image_job(job)
+        return self._image_progress_response(request, context, job)
 
-        request.POST = request.POST.copy()
-        request.POST["mode"] = pending.get("mode") or "add"
-        if pending.get("skip_existing"):
-            request.POST["skip_existing"] = "1"
+    def _apply_image_batch(self, request, context):
+        """Write ONE batch (its own transaction) and report progress."""
+        job = self._load_image_job(request)
+        if job is None:
+            return self._image_progress_response(
+                request,
+                context,
+                None,
+                error="نشستِ ورود تصاویر پیدا نشد (یا منقضی شده است)؛ "
+                "فایل زیپ را دوباره بارگذاری کنید.",
+            )
+        zip_path = self._stashed_image_path(job.get("token"))
+        if zip_path is None:
+            return self._image_progress_response(
+                request,
+                context,
+                job,
+                error="فایل زیپ دیگر روی سرور نیست؛ آن را دوباره بارگذاری کنید.",
+            )
+
+        job["status"] = "running"
+        job["error"] = ""
         extract_dir = tempfile.mkdtemp(prefix="cusin-image-import-")
         try:
-            plan = self._build_image_plan(request, path, extract_dir=extract_dir, thumbs=False)
+            source = ZipImageSource(zip_path, limits=ImageImportLimits.from_settings())
             try:
-                result = apply_plan(plan)
-            except Exception as exc:  # rollback already cleaned the files up
-                self._drop_stashed(path)
-                request.session.pop(self._IMAGE_PENDING_KEY, None)
-                context["errors"] = [f"ذخیره انجام نشد و هیچ تغییری اعمال نشد: {exc}"]
-                return TemplateResponse(
-                    request, "admin/products/product_image_import.html", context
+                apply_job_batch(job, source, extract_dir=extract_dir)
+            except Exception as exc:  # a batch failure must not become a 502
+                job["status"] = "error"
+                job["error"] = (
+                    "ذخیره‌سازی متوقف شد: "
+                    f"{exc}. تصاویر این مرحله ذخیره نشدند؛ دکمهٔ «ادامهٔ ذخیره‌سازی» "
+                    "را بزنید تا از همان‌جا دنبال شود."
                 )
+        except (ValueError, OSError) as exc:
+            job["status"] = "error"
+            job["error"] = f"فایل زیپ خوانده نشد: {exc}"
         finally:
             shutil.rmtree(extract_dir, ignore_errors=True)
+            self._save_image_job(job)
 
-        self._drop_stashed(path)
-        request.session.pop(self._IMAGE_PENDING_KEY, None)
-        # The report describes what really happened (applied rows included).
-        request.session[self._IMAGE_REPORT_KEY] = plan.report_rows()
-        self.message_user(
-            request,
-            f"تصاویر ذخیره شد: {fa_digits(result['created'])} تصویر برای "
-            f"{fa_digits(result['products'])} محصول"
-            + (
-                f" (و {fa_digits(result['replaced'])} تصویر قبلی جایگزین شد)."
-                if result["replaced"]
-                else "."
-            ),
-            messages.SUCCESS,
-        )
+        if job["status"] == "done":
+            return self._finish_image_job(request, context, job)
+        return self._image_progress_response(request, context, job)
+
+    def _finish_image_job(self, request, context, job):
+        request.session[self._IMAGE_REPORT_KEY] = self._image_report_rows(request, job)
+        if job["created"]:
+            self.message_user(
+                request,
+                f"تصاویر ذخیره شد: {fa_digits(job['created'])} تصویر برای "
+                f"{fa_digits(job['products'])} محصول"
+                + (
+                    f" (و {fa_digits(job['replaced'])} تصویر قبلی جایگزین شد)."
+                    if job["replaced"]
+                    else "."
+                ),
+                messages.SUCCESS,
+            )
+        else:
+            self.message_user(
+                request,
+                "هیچ تصویری ذخیره نشد (احتمالاً همه تکراری یا نامعتبر بودند).",
+                messages.WARNING,
+            )
+        if self._wants_json(request):
+            return self._image_progress_json(
+                job, redirect=reverse("admin:products_product_changelist")
+            )
+        self._forget_image_job(request)
         return HttpResponseRedirect(reverse("admin:products_product_changelist"))
+
+    @staticmethod
+    def _wants_json(request):
+        return (
+            request.headers.get("X-Requested-With") == "XMLHttpRequest"
+            or request.GET.get("format") == "json"
+            or "application/json" in (request.headers.get("Accept") or "")
+        )
+
+    def _image_report_rows(self, request, job):
+        """The CSV report, updated with what the job actually did.
+
+        The dry run wrote one row per member into the session; this marks
+        the members the batches saved as «ذخیره شد» and the ones that
+        failed as «تصویر نامعتبر» with the Persian reason, so the
+        downloaded report describes the run, not just the plan.
+        """
+        rows = [dict(row) for row in (request.session.get(self._IMAGE_REPORT_KEY) or [])]
+        applied = {}
+        for step in job.get("steps") or []:
+            for member in step["members"][: step["cursor"]]:
+                applied[member] = step["sku"]
+        problems = {item["member"]: item["reason"] for item in (job.get("problems") or [])}
+        for row in rows:
+            member = row.get("file", "")
+            if member in problems:
+                row["status"] = "invalid"
+                row["reason"] = problems[member]
+            elif member in applied:
+                row["status"] = "applied"
+        return rows
+
+    def _image_progress_json(self, job, redirect=None):
+        payload = job_progress(job)
+        payload["finished"] = job["status"] == "done"
+        payload["failed"] = job["status"] == "error"
+        payload["redirect"] = redirect or ""
+        payload["summary"] = {
+            "created": job["created"],
+            "replaced": job["replaced"],
+            "products": job["products"],
+            "problems": job.get("problems") or [],
+        }
+        from django.http import JsonResponse
+
+        return JsonResponse(payload)
+
+    def _image_progress_response(self, request, context, job, error=""):
+        """"The page shown while the job runs: progress bar, resume button,
+        or the final summary."""
+        if job is None:
+            context.update(
+                {
+                    "job": None,
+                    "progress": {"done": 0, "total": 0, "percent": 0, "status": "error", "label": ""},
+                    "error_message": error or "هیچ عملیاتی در حال انجام نیست.",
+                    "step": "progress",
+                }
+            )
+            return TemplateResponse(
+                request, "admin/products/product_image_import_progress.html", context
+            )
+
+        if error:
+            job["error"] = error
+        context.update(
+            {
+                "job": job,
+                "progress": job_progress(job),
+                "error_message": job.get("error") or "",
+                "token": job.get("token") or "",
+                "step": "progress",
+                "batch_size": job.get("batch_size") or DEFAULT_BATCH_SIZE,
+            }
+        )
+        if self._wants_json(request):
+            return self._image_progress_json(job)
+        return TemplateResponse(
+            request, "admin/products/product_image_import_progress.html", context
+        )
 
     # --- Import / update / export (Part R4 item 6 + Part S5 item 8) -----------
 

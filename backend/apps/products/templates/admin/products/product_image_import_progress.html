@@ -1,0 +1,208 @@
+{% extends "admin/base_site.html" %}
+{% load i18n order_extras %}
+
+{% comment %}
+Step 3 of 3: saving.
+
+A 176-image ZIP takes far longer than a web request may run on the
+production server (gunicorn's worker timeout), so the confirm step only
+STARTS a job: this page then drives it batch by batch (20 images per
+request, each batch its own transaction) and shows
+
+    در حال ذخیره: ۴۰ از ۱۷۶
+
+The job lives on the server next to the uploaded ZIP, so reloading this
+page (or losing the connection) resumes from the last committed batch
+instead of starting over -- and every failure is shown here in Persian,
+never as a bare 502.
+{% endcomment %}
+{% block bodyclass %}{{ block.super }} cusin-import-page{% endblock %}
+
+{% block content %}
+<h1>{% if job.status == 'done' %}پایان ورود گروهی تصاویر{% else %}در حال ذخیرهٔ تصاویر{% endif %}</h1>
+
+{% if error_message %}
+<div id="cusin-image-import-error"
+     style="border:1px solid #b30000;background:#fff2f2;border-radius:6px;padding:10px 14px;margin:12px 0">
+  <strong style="color:#b30000">ذخیره‌سازی کامل نشد:</strong>
+  <p style="margin:8px 0 0;color:#8a1f1f">{{ error_message }}</p>
+  <p style="margin:8px 0 0;color:#666;font-size:12px">
+    تصاویری که تا این لحظه ذخیره شده‌اند، ذخیره می‌مانند؛ با زدن دکمهٔ پایین،
+    بقیه از همان‌جا ادامه پیدا می‌کنند.
+  </p>
+</div>
+{% endif %}
+
+<div id="cusin-image-import-progress"
+     data-total="{{ progress.total }}"
+     data-done="{{ progress.done }}"
+     data-status="{{ job.status|default:'error' }}"
+     style="margin:16px 0;padding:14px 16px;border:1px solid #ddd;border-radius:8px;background:#fafafa">
+  <div id="cusin-image-import-label" style="font-weight:bold;margin-bottom:8px">
+    {% if job.status == 'done' %}
+      ذخیرهٔ {{ progress.done|fa_digits }} تصویر از {{ progress.total|fa_digits }} تصویر انجام شد.
+    {% else %}
+      {{ progress.label|default:'در حال آماده‌سازی…' }}
+    {% endif %}
+  </div>
+  <div style="background:#e6e6e6;border-radius:999px;height:18px;overflow:hidden">
+    <div id="cusin-image-import-bar"
+         style="height:100%;width:{% if job.status == 'done' %}100{% else %}{{ progress.percent }}{% endif %}%;background:#2b6e2b;transition:width .2s"></div>
+  </div>
+  <div id="cusin-image-import-hint" style="color:#666;font-size:12px;margin-top:6px">
+    {% if job.status == 'done' %}
+      کار تمام شد.
+    {% else %}
+      هر بار {{ batch_size|fa_digits }} تصویر ذخیره می‌شود. صفحه را نبندید؛ اگر اتصال قطع شود،
+      با بازکردن دوبارهٔ همین صفحه از همان‌جا ادامه می‌دهید.
+    {% endif %}
+  </div>
+</div>
+
+{% if job.status == 'done' %}
+  <h2>خلاصه</h2>
+  <table style="margin:10px 0;border-collapse:collapse;font-size:13px">
+    <tr>
+      <td style="padding:3px 10px">تصویرهای ذخیره‌شده:</td>
+      <td style="padding:3px 10px"><strong>{{ job.created|fa_digits }}</strong></td>
+    </tr>
+    <tr>
+      <td style="padding:3px 10px">کالاهایی که تصویر گرفتند:</td>
+      <td style="padding:3px 10px"><strong>{{ job.products|fa_digits }}</strong></td>
+    </tr>
+    {% if job.replaced %}
+    <tr>
+      <td style="padding:3px 10px">تصویرهای قبلی که جایگزین شد:</td>
+      <td style="padding:3px 10px">{{ job.replaced|fa_digits }}</td>
+    </tr>
+    {% endif %}
+    {% if job.problems %}
+    <tr>
+      <td style="padding:3px 10px;color:#b30000">تصویرهای ذخیره‌نشده:</td>
+      <td style="padding:3px 10px;color:#b30000">{{ job.problems|length|fa_digits }}</td>
+    </tr>
+    {% endif %}
+  </table>
+  {% if job.problems %}
+    <ul style="font-size:13px;max-height:200px;overflow:auto">
+      {% for item in job.problems %}
+        <li>{{ item.member }} — <span style="color:#b30000">{{ item.reason }}</span></li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+  <p>
+    <a href="{% url 'admin:products_product_changelist' %}">بازگشت به فهرست محصولات</a>
+    ·
+    <a href="{% url 'admin:products_product_image_import' %}?report=csv">دانلود گزارش (CSV)</a>
+  </p>
+{% else %}
+  <form id="cusin-image-import-form" method="post">
+    {% csrf_token %}
+    <input type="hidden" name="step" value="1">
+    <div class="submit-row">
+      <input id="cusin-image-import-next" type="submit" class="default"
+             value="ادامهٔ ذخیره‌سازی">
+      <a href="{% url 'admin:products_product_image_import' %}" style="margin-inline-start:10px">توقف</a>
+    </div>
+    <noscript>
+      <p style="color:#666;font-size:12px">
+        جاوااسکریپت غیرفعال است: برای ذخیرهٔ هر دسته، دکمهٔ بالا را بزنید.
+      </p>
+    </noscript>
+  </form>
+
+  <script>
+  (function () {
+    "use strict";
+    var box = document.getElementById("cusin-image-import-progress");
+    var bar = document.getElementById("cusin-image-import-bar");
+    var label = document.getElementById("cusin-image-import-label");
+    var hint = document.getElementById("cusin-image-import-hint");
+    var form = document.getElementById("cusin-image-import-form");
+    var button = document.getElementById("cusin-image-import-next");
+    if (!box || !form || !button) { return; }
+
+    var total = parseInt(box.getAttribute("data-total"), 10) || 0;
+    var status = box.getAttribute("data-status");
+    var running = false;
+    var formAction = form.getAttribute("action") || window.location.href;
+    var token = document.querySelector('input[name="csrfmiddlewaretoken"]');
+    var csrf = token ? token.value : "";
+
+    var PERSIAN = ["۰", "۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸", "۹"];
+    function fa(value) {
+      return String(value).replace(/[0-9]/g, function (digit) {
+        return PERSIAN[Number(digit)];
+      });
+    }
+
+    function paint(done, message) {
+      var percent = total ? Math.min(100, Math.round(done * 100 / total)) : 0;
+      bar.style.width = percent + "%";
+      label.textContent = "در حال ذخیره: " + fa(done) + " از " + fa(total);
+      if (message) { hint.textContent = message; }
+    }
+
+    function finish(payload) {
+      running = false;
+      button.disabled = false;
+      var redirect = payload && payload.redirect;
+      if (redirect) {
+        hint.textContent = "ذخیره انجام شد — در حال بازگشت به فهرست محصولات…";
+        window.location.href = redirect;
+        return;
+      }
+      window.location.reload();
+    }
+
+    function fail(message) {
+      running = false;
+      button.disabled = false;
+      hint.textContent = message;
+      // Show the failure as a Persian box on this page, never a bare 502.
+      window.location.reload();
+    }
+
+    function step() {
+      if (running) { return; }
+      running = true;
+      button.disabled = true;
+      var body = new FormData();
+      body.append("csrfmiddlewaretoken", csrf);
+      body.append("step", "1");
+      fetch(formAction, {
+        method: "POST",
+        headers: {"X-Requested-With": "XMLHttpRequest"},
+        body: body,
+        credentials: "same-origin"
+      }).then(function (response) {
+        if (!response.ok) { throw new Error("HTTP " + response.status); }
+        return response.json();
+      }).then(function (payload) {
+        paint(payload.done);
+        if (payload.finished) { finish(payload); return; }
+        if (payload.failed) { fail(payload.error || "ذخیره‌سازی ناموفق بود."); return; }
+        running = false;
+        button.disabled = false;
+        step();
+      }).catch(function () {
+        fail("ارتباط با سرور قطع شد. صفحه دوباره بارگیری می‌شود؛ "
+             + "ذخیره از آخرین دستهٔ موفق ادامه می‌یابد.");
+      });
+    }
+
+    // Disable the button the moment it is clicked (a double submit would
+    // start two batches against the same job) and take over from there.
+    form.addEventListener("submit", function (event) {
+      event.preventDefault();
+      step();
+    });
+
+    if (status === "running" || status === "error") {
+      button.disabled = true;
+      step();
+    }
+  })();
+  </script>
+{% endif %}
+{% endblock %}

@@ -941,3 +941,259 @@ def apply_plan(plan):
         "replaced": replaced,
         "products": products_touched,
     }
+
+
+# --------------------------------------------------------- resumable batches
+#
+# Why this exists: applying a 176-image ZIP inside a single web request took
+# ~27s on a fast core and well over gunicorn's 60s `--timeout` on the 1-vCPU
+# production box, so the worker was killed mid-import and the browser got a
+# bare 502 -- with nothing saved (one transaction) and no explanation.
+#
+# The fix is to make the apply step a RESUMABLE JOB: the plan is turned into
+# a JSON work list (one step per product, each with a cursor), and the admin
+# page drives it batch by batch (20 images per request by default). Each
+# batch is its own transaction, so a killed worker can only ever lose the
+# batch it was working on -- reloading the page picks the job up where it
+# stopped.
+
+DEFAULT_BATCH_SIZE = 20
+
+
+def plan_steps(plan):
+    """Turn a dry-run plan into a plain, JSON-serializable work list.
+
+    One step per product that will actually receive images, in the same
+    order ``apply_plan`` used. ``cursor`` is how many of the step's members
+    have already been written -- that is the whole resumability mechanism.
+    """
+    steps = []
+    for group in plan.groups:
+        if group.effect == "skip" or not group.files:
+            continue
+        steps.append(
+            {
+                "product_id": group.product.pk,
+                "sku": group.product.sku,
+                "name": getattr(group.product, "name", ""),
+                "effect": group.effect,
+                "keeps_primary": bool(group.keeps_primary),
+                "members": [item.member for item in group.files if item.writes],
+                "cursor": 0,
+                # Both are resolved when the step first runs, under the row
+                # lock, and then carried across batches.
+                "ordering": None,
+                "has_primary": None,
+                "finished": False,
+            }
+        )
+    return steps
+
+
+def new_job(plan, token, batch_size=None):
+    """A fresh job dict for ``plan``. Pure data -- it is stored as JSON."""
+    steps = plan_steps(plan)
+    size = batch_size or getattr(
+        settings, "PRODUCT_IMAGE_IMPORT_BATCH_SIZE", DEFAULT_BATCH_SIZE
+    )
+    try:
+        size = max(1, int(size))
+    except (TypeError, ValueError):
+        size = DEFAULT_BATCH_SIZE
+    total = sum(len(step["members"]) for step in steps)
+    return {
+        "version": 1,
+        "token": str(token),
+        "mode": plan.mode,
+        "skip_existing": bool(plan.skip_existing),
+        "batch_size": size,
+        "steps": steps,
+        "total": total,
+        "done": 0,
+        "created": 0,
+        "replaced": 0,
+        "products": 0,
+        "problems": [],
+        # preview -> running -> done | error
+        "status": "preview" if total else "done",
+        "error": "",
+    }
+
+
+def job_progress(job):
+    """"۴۰ از ۱۷۶" -- the pieces the progress bar needs, already Persian."""
+    total = int(job.get("total") or 0)
+    done = int(job.get("done") or 0)
+    return {
+        "done": done,
+        "total": total,
+        "label": f"در حال ذخیره: {fa_digits(done)} از {fa_digits(total)}",
+        "percent": 0 if not total else min(100, round(done * 100 / total)),
+        "status": job.get("status", ""),
+        "error": job.get("error", ""),
+    }
+
+
+def _starting_ordering(product, effect):
+    """Where a step's images start numbering (matches apply_plan)."""
+    if effect != "add":
+        return 0
+    last = product.images.order_by("-ordering").values_list("ordering", flat=True).first()
+    return 0 if last is None else last + 1
+
+
+def _collect_image_files(image):
+    names = []
+    for candidate in (image.image, image.thumbnail):
+        name = getattr(candidate, "name", "")
+        if name:
+            names.append(name)
+    for name in (image.webp_400, image.webp_800, image.webp_1200):
+        if name:
+            names.append(name)
+    return names
+
+
+def apply_job_batch(job, source, *, extract_dir, batch_size=None):
+    """
+    Write the next batch of ``job`` and return the mutated job.
+
+    * At most ``batch_size`` images (default ``PRODUCT_IMAGE_IMPORT_BATCH_SIZE``,
+      fallback 20) are written, so a request stays far below any worker timeout.
+    * Everything written in this call shares ONE transaction: a batch commits
+      or rolls back as a unit, and files written before the failure are
+      deleted from storage again.
+    * The job dict is updated in place (cursors, counters, status) so the
+      caller can persist it and the next request continues from there.
+    """
+    if job.get("status") not in ("preview", "running"):
+        return job
+
+    job["status"] = "running"
+    budget = batch_size or job.get("batch_size") or DEFAULT_BATCH_SIZE
+    try:
+        budget = max(1, int(budget))
+    except (TypeError, ValueError):
+        budget = DEFAULT_BATCH_SIZE
+
+    extracted = {}
+    written_paths = []
+    old_paths = list(job.get("old_paths") or [])
+    job.pop("old_paths", None)
+
+    def remember(names):
+        written_paths.extend(names)
+
+    try:
+        with transaction.atomic():
+            for step in job["steps"]:
+                if budget <= 0:
+                    break
+                if step.get("finished") or step["cursor"] >= len(step["members"]):
+                    continue
+
+                try:
+                    product = Product.objects.select_for_update().get(pk=step["product_id"])
+                except Product.DoesNotExist:
+                    step["finished"] = True
+                    job.setdefault("problems", []).append(
+                        {
+                            "member": step["members"][step["cursor"]],
+                            "reason": "این کالا دیگر در فروشگاه وجود ندارد",
+                        }
+                    )
+                    job["done"] += len(step["members"]) - step["cursor"]
+                    step["cursor"] = len(step["members"])
+                    continue
+
+                if step["ordering"] is None:
+                    step["ordering"] = _starting_ordering(product, step["effect"])
+                if step["has_primary"] is None:
+                    step["has_primary"] = bool(step["keeps_primary"]) or (
+                        step["effect"] == "add"
+                        and product.images.filter(is_primary=True).exists()
+                    )
+
+                if step["effect"] == "replace" and step["cursor"] == 0:
+                    for old in product.images.all():
+                        old_paths.extend(_collect_image_files(old))
+                    deleted, _ = product.images.all().delete()
+                    job["replaced"] += deleted
+
+                while budget > 0 and step["cursor"] < len(step["members"]):
+                    member = step["members"][step["cursor"]]
+                    path = extracted.get(member)
+                    if path is None:
+                        suffix = os.path.splitext(member)[1].lower()
+                        target = os.path.join(
+                            extract_dir, f"batch-{len(extracted):05d}{suffix}"
+                        )
+                        path, _size, _digest = source.extract_member(member, target)
+                        extracted[member] = path
+
+                    ok, why = _validate_extracted(path)
+                    if not ok:
+                        job.setdefault("problems", []).append({"member": member, "reason": why})
+                        step["cursor"] += 1
+                        job["done"] += 1
+                        budget -= 1
+                        continue
+
+                    with open(path, "rb") as handle:
+                        payload = handle.read()
+                    image = ProductImage(
+                        product=product,
+                        alt_text=product.name,
+                        ordering=step["ordering"],
+                        is_primary=not step["has_primary"],
+                    )
+                    image.image.save(
+                        f"{product.sku.lower()[:40]}-{step['ordering']}"
+                        f"{os.path.splitext(member)[1].lower()}",
+                        ContentFile(payload),
+                        save=False,
+                    )
+                    remember([image.image.name])
+                    image.save()
+                    remember(_collect_image_files(image))
+                    step["has_primary"] = True
+                    step["ordering"] += 1
+                    step["cursor"] += 1
+                    job["done"] += 1
+                    job["created"] += 1
+                    budget -= 1
+
+                if step["cursor"] >= len(step["members"]):
+                    step["finished"] = True
+                    job["products"] += 1
+    except Exception:
+        # The rows are gone (rollback); the bytes must be too.
+        for name in written_paths:
+            try:
+                default_storage.delete(name)
+            except Exception:  # pragma: no cover - storage hiccup
+                pass
+        raise
+    finally:
+        for path in extracted.values():
+            try:
+                os.remove(path)
+            except OSError:  # pragma: no cover
+                pass
+
+    if old_paths:
+        # Replace mode deletes the OLD files only after the batch commits,
+        # so a rollback can never lose pictures the shop was still showing.
+        transaction.on_commit(lambda paths=tuple(old_paths): _drop_files(paths))
+
+    if all(step.get("finished") for step in job["steps"]):
+        job["status"] = "done"
+    return job
+
+
+def _drop_files(paths):
+    for name in paths:
+        try:
+            default_storage.delete(name)
+        except Exception:  # pragma: no cover - storage hiccup
+            pass

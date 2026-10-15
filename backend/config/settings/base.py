@@ -609,6 +609,14 @@ PRODUCT_IMAGE_IMPORT_MAX_RATIO = env.int("PRODUCT_IMAGE_IMPORT_MAX_RATIO", defau
 PRODUCT_IMAGE_IMPORT_MAX_FILE_SIZE = env.int(
     "PRODUCT_IMAGE_IMPORT_MAX_FILE_SIZE", default=5 * 1024 * 1024
 )
+# How many images ONE request writes while the admin page is saving the
+# confirmed import. The apply step used to run as a single request, which
+# blew gunicorn's worker timeout on the 1-vCPU production box (a 176-image
+# ZIP saved nothing and the browser got a bare 502). 20 images per request
+# keeps every request short and makes the job resumable.
+PRODUCT_IMAGE_IMPORT_BATCH_SIZE = env.int(
+    "PRODUCT_IMAGE_IMPORT_BATCH_SIZE", default=20
+)
 
 # Optional hyperlink to the owner guide shown on the image-import page
 # (the admin always shows the naming rules inline). Leave empty to show
