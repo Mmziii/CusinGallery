@@ -169,13 +169,22 @@
     var useSheet = viewportWidth <= 480;
     var panelHeight = 0;
     if (!useSheet) {
-      // Keep the popover attached to its trigger even when there is not room
-      // for its preferred width on the trigger's RTL start edge.
-      var anchoredWidth = rtl ? triggerRect.right - margin : viewportWidth - triggerRect.left - margin;
-      panelWidth = Math.min(panelWidth, Math.max(0, anchoredWidth));
-      panel.style.minWidth = Math.min(220, panelWidth) + "px";
-      // Width changes can wrap long filter labels, so measure the actual
-      // bounded box only after applying its final desktop width.
+      // Measure the panel's NATURAL width before constraining it. Squeezing
+      // the panel down to the gap left beside its trigger (the old
+      // `anchoredWidth` clamp) is what clipped the changelist row menu to
+      // «وی / چا / حذ»: the box really was ~40px wide, so the Persian
+      // labels had nowhere to go. A menu may be narrower than it would
+      // like, never narrower than its longest label.
+      panel.style.minWidth = "0px";
+      panel.style.width = "auto";
+      var natural = Math.max(
+        panel.getBoundingClientRect().width,
+        panel.scrollWidth || 0
+      );
+      panelWidth = Math.min(
+        natural || 220,
+        Math.max(120, viewportWidth - margin * 2)
+      );
       panel.style.width = panelWidth + "px";
       panelHeight = Math.min(panel.getBoundingClientRect().height, maxPanelHeight);
     }
@@ -208,11 +217,29 @@
       menu.scrollLocked = true;
       if (!wasLocked) lockBodyScroll();
     } else {
-      var left = rtl ? triggerRect.right - panelWidth : triggerRect.left;
+      /* Preferred side: aligned to the trigger's RTL start edge (so in RTL
+         it opens leftward, matching how the menu reads). When that side has
+         no room -- the «کارها» column sits at the far left in RTL and its
+         menu used to be pushed off-screen -- FLIP to the trigger's other
+         side instead of shrinking or overflowing. */
+      var startRoom = rtl
+        ? triggerRect.right - margin
+        : viewportWidth - triggerRect.left - margin;
+      var endRoom = rtl
+        ? viewportWidth - triggerRect.right - margin
+        : triggerRect.left - margin;
+      var useStartSide = startRoom >= panelWidth || startRoom >= endRoom;
+      var left;
+      if (rtl) {
+        left = useStartSide ? triggerRect.right - panelWidth : triggerRect.left;
+      } else {
+        left = useStartSide ? triggerRect.left : triggerRect.right - panelWidth;
+      }
       var top = triggerRect.bottom + 6;
       if (top + panelHeight > viewportHeight - margin && triggerRect.top - panelHeight - 6 >= margin) {
         top = triggerRect.top - panelHeight - 6;
       }
+      // Last resort: keep it inside the viewport whatever happened above.
       left = Math.max(margin, Math.min(left, viewportWidth - panelWidth - margin));
       top = Math.max(margin, Math.min(top, viewportHeight - panelHeight - margin));
       panel.style.left = left + "px";

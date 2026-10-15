@@ -4093,3 +4093,112 @@ body.cusin-admin.app-discounts.model-coupon #container #changelist #result_list 
   unicode-bidi: isolate;
   white-space: nowrap;
 }
+
+/* ==========================================================================
+   Zoomed desktops (Windows 125% / 150%) -- one step down
+   ==========================================================================
+   At 125% a 1366px screen reports 1092 CSS px and a 1920px screen 1536;
+   at 150% they report 911 and 1280. Those are NOT small screens -- they
+   still get the two-column desktop layout -- but the fixed type scale and
+   paddings that fit at 1920 CSS px overflow their cards and clip their
+   labels there. Everything below is one step smaller: the layout is
+   unchanged, the furniture around it just takes less room.
+
+   Deliberately scoped to <= 1600px so a genuine 1920@100% desktop keeps
+   the full scale. */
+@media (min-width: 769px) and (max-width: 1600px) {
+  :root {
+    --cusin-topbar-h: 52px;
+    --cusin-crumbs-h: 34px;
+    --cusin-sidebar-w: 232px;
+    --cusin-radius: 10px;
+    --cusin-radius-sm: 6px;
+  }
+
+  body.cusin-admin {
+    font-size: 0.9375rem;
+  }
+  /* Cards: 16px/18px padding squeezed a two-line title out of the box. */
+  body.cusin-admin #container .cusin-card,
+  body.cusin-admin #container .dashboard .cusin-card,
+  body.cusin-admin #container .cusin-dash .cusin-card {
+    padding: 12px 14px;
+  }
+  body.cusin-admin #container .cusin-card-head {
+    margin-bottom: 8px;
+    gap: 8px;
+  }
+  body.cusin-admin #container .cusin-card-head h2 { font-size: 0.9375rem; }
+
+  /* Content gutters. */
+  body.cusin-admin #container .content { padding: 16px 16px 40px; }
+  body.cusin-admin #container .cusin-topbar { padding: 4px 12px; gap: 10px; }
+
+  /* Sidebar rows: 48px min-height per row pushed the menu past the fold. */
+  body.cusin-admin #container .cusin-drawer { padding: 10px 8px 14px; }
+  body.cusin-admin #container .cusin-drawer-dash,
+  body.cusin-admin #container .cusin-nav-group > summary,
+  body.cusin-admin #container .cusin-nav-link,
+  body.cusin-admin #container .cusin-drawer-foot a {
+    min-height: 40px;
+    padding: 6px 10px;
+    gap: 8px;
+    font-size: 0.9rem;
+  }
+  body.cusin-admin #container .cusin-drawer-head { padding: 2px 6px 8px; }
+
+  /* Changelists: tighter rows and cells so more columns survive. */
+  body.cusin-admin #container #changelist #result_list td,
+  body.cusin-admin #container #changelist #result_list th {
+    padding: 7px 8px;
+    font-size: 0.875rem;
+  }
+  body.cusin-admin #container #changelist #result_list thead th {
+    font-size: 0.8125rem;
+  }
+  body.cusin-admin #container #changelist .cusin-row-actions .cusin-row-edit,
+  body.cusin-admin #container #changelist .cusin-row-actions .cusin-menu-trigger {
+    width: 32px;
+    height: 32px;
+  }
+
+  /* Change forms: the field rows and their help text. */
+  body.cusin-admin #container .form-row { padding: 8px 10px; }
+  body.cusin-admin #container .aligned label { padding-top: 4px; }
+  body.cusin-admin #container .help,
+  body.cusin-admin #container .form-row .help { font-size: 0.78rem; }
+  body.cusin-admin #container input[type="text"],
+  body.cusin-admin #container input[type="number"],
+  body.cusin-admin #container input[type="email"],
+  body.cusin-admin #container input[type="password"],
+  body.cusin-admin #container select,
+  body.cusin-admin #container textarea {
+    padding: 6px 8px;
+    font-size: 0.9rem;
+  }
+  body.cusin-admin #container .submit-row { padding: 10px 12px; }
+
+  /* KPI numbers are the widest text on the dashboard. */
+  body.cusin-admin #container .cusin-kpi-value,
+  body.cusin-admin #container .cusin-kpi strong { font-size: 1.125rem; }
+  body.cusin-admin #container .cusin-kpi-label { font-size: 0.78rem; }
+
+  /* Chips / buttons. */
+  body.cusin-admin #container .cusin-chip { padding: 5px 10px; font-size: 0.8125rem; }
+  body.cusin-admin #container .cusin-btn { padding: 7px 12px; font-size: 0.875rem; }
+}
+
+/* 911-1100 CSS px (150% on 1366, 125% on a small laptop): go one more
+   step on the things that still collide. */
+@media (min-width: 769px) and (max-width: 1100px) {
+  body.cusin-admin #container .content { padding: 12px 12px 32px; }
+  body.cusin-admin #container .cusin-dash-cols { gap: 10px; }
+  body.cusin-admin #container .cusin-kpis { gap: 10px; }
+  body.cusin-admin #container .cusin-card-note { font-size: 0.6875rem; }
+  body.cusin-admin #container #changelist #result_list td,
+  body.cusin-admin #container #changelist #result_list th {
+    padding: 6px 6px;
+    font-size: 0.8125rem;
+  }
+  body.cusin-admin #container .cusin-topbar .cusin-search-trigger-label { display: none; }
+}
