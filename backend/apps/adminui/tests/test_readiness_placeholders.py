@@ -218,12 +218,22 @@ class ReadinessCardMarkupTests(CacheIsolationMixin, TestCase):
         return response.content.decode()
 
     @staticmethod
+    def css_block(selector):
+        """The body of one rule in the theme stylesheet."""
+        css = open(
+            "static/admin_theme/css/theme.css", encoding="utf-8"
+        ).read()
+        return css.split(selector + " {", 1)[1].split("}", 1)[0]
+
+    @staticmethod
     def listed_labels(row):
         return re.findall(r"<b>([^<]+)</b>", row)
 
     @staticmethod
     def sentence(row):
-        return re.search(r"<span>(.*?)</span>", row, re.S).group(1)
+        return re.search(
+            r'<span class="cusin-readiness-detail">(.*?)</span>', row, re.S
+        ).group(1)
 
     def assert_named_once(self, row, expected):
         """The items are in the sub-list -- and nowhere else in the row."""
@@ -250,21 +260,61 @@ class ReadinessCardMarkupTests(CacheIsolationMixin, TestCase):
         row = outer_li(self.dashboard(), "legal_pages")
         self.assert_named_once(row, [])
 
-    def test_the_sub_list_is_a_block_under_the_sentence_not_beside_it(self):
-        """A flex sibling would be squeezed into a narrow column; the text
-        is wrapped in .cusin-readiness-body so the list spans the row."""
+    def test_the_item_is_one_full_width_block_not_a_row_of_columns(self):
+        """Icon + title on the first row, then the sentence, then the
+        missing items -- each of them a block, none of them a column
+        fighting the others for width."""
         row = outer_li(self.dashboard(), "site_profile")
-        self.assertIn('<div class="cusin-readiness-body">', row)
-        body = row.index("cusin-readiness-body")
-        sentence = row.index("<span>", body)
-        listing = row.index('class="cusin-readiness-missing"', body)
-        self.assertLess(sentence, listing, "the sentence must come first")
-        self.assertNotIn(
-            "</div>", row[body:listing], "the list must stay inside the body"
-        )
-        # ...and the icon is a sibling of the body, not of the list
+        head = row.index('class="cusin-readiness-head"')
         icon = row.index("<svg")
-        self.assertLess(icon, body)
+        sentence = row.index('class="cusin-readiness-detail"')
+        listing = row.index('class="cusin-readiness-missing"')
+        self.assertGreater(icon, head, "the icon belongs to the head row")
+        self.assertLess(head, sentence, "the title comes before the sentence")
+        self.assertLess(sentence, listing, "the sentence comes before the items")
+        # the sub-list is NOT inside the head row: it is a block below it
+        self.assertIn("</div>", row[head:sentence])
+        # ...and the head holds nothing but the icon and the title
+        head_block = row[head:row.index("</div>", head)]
+        self.assertNotIn("cusin-readiness-missing", head_block)
+
+    def test_no_loose_text_sits_between_the_items_elements(self):
+        """A leaked template comment became anonymous text inside the flex
+        container, so it took a share of the row's width and squeezed the
+        sub-list below its own minimum. Every word must live in a tag."""
+        from html.parser import HTMLParser
+
+        class Loose(HTMLParser):
+            """Text that is a DIRECT child of the row (depth 1)."""
+
+            def __init__(self):
+                super().__init__()
+                self.depth = 0
+                self.loose = []
+
+            def handle_starttag(self, tag, attrs):
+                # A self-closing <use/> is reported by HTMLParser as a
+                # start tag AND an end tag, so plain counting stays
+                # balanced for both spellings.
+                self.depth += 1
+
+            def handle_endtag(self, tag):
+                self.depth = max(0, self.depth - 1)
+
+            def handle_data(self, data):
+                if self.depth == 1 and data.strip():
+                    self.loose.append(data.strip()[:60])
+
+        page = self.dashboard()
+        for check in ("gateway", "site_profile", "legal_pages", "https"):
+            parser = Loose()
+            parser.feed(outer_li(page, check))
+            parser.close()
+            with self.subTest(check=check):
+                self.assertEqual(
+                    parser.loose, [],
+                    "text outside any element in the readiness row",
+                )
 
     def test_the_sub_list_spans_the_row_instead_of_forming_a_column(self):
         css = open(
@@ -274,12 +324,44 @@ class ReadinessCardMarkupTests(CacheIsolationMixin, TestCase):
         rule = rule[: rule.index("}")]
         self.assertIn("grid", rule)
         self.assertIn("auto-fit", rule)
-        # wide cells: never one or two words per line at 1280-1920
-        self.assertIn("minmax(15rem, 1fr)", rule)
+        # min() is what keeps a 15rem track from overflowing a narrower
+        # row -- without it the track floors at 240px and pushes the page.
+        self.assertIn("minmax(min(15rem, 100%), 1fr)", rule)
 
-    def test_the_body_is_allowed_to_shrink_so_the_row_stays_one_column(self):
-        css = open(
-            "static/admin_theme/css/theme.css", encoding="utf-8"
-        ).read()
-        self.assertIn(".cusin-readiness-body { flex: 1 1 auto; min-width: 0; }", css)
+    SHRINKABLE = (
+        ".cusin-readiness-list li",
+        ".cusin-readiness-head",
+        ".cusin-readiness-head strong",
+        ".cusin-readiness-detail",
+        ".cusin-readiness-missing",
+        ".cusin-readiness-missing li",
+    )
+
+    def test_every_flex_and_grid_child_may_shrink_to_zero(self):
+        """A grid/flex item's automatic minimum size is its min-content
+        size; without min-width: 0 a wide child pushes the row past the
+        viewport (readiness items were measured starting at x = -57)."""
+        for selector in self.SHRINKABLE:
+            with self.subTest(selector=selector):
+                self.assertIn("min-width: 0", self.css_block(selector))
+
+    def test_the_row_box_never_grows_by_its_own_padding(self):
+        block = self.css_block(".cusin-readiness-list li")
+        self.assertIn("box-sizing: border-box", block)
+        self.assertIn("flex-direction: column", block)
+        self.assertIsNone(
+            re.search(r"(?<![\w-])width\s*:", block),
+            "the row must not pin a width",
+        )
+
+    def test_no_readiness_rule_pins_a_pixel_width(self):
+        for selector in self.SHRINKABLE + (".cusin-readiness-list",):
+            with self.subTest(selector=selector):
+                self.assertIsNone(
+                    re.search(
+                        r"(?<![\w-])(min-)?width\s*:\s*\d+px",
+                        self.css_block(selector),
+                    ),
+                    f"{selector} pins a px width",
+                )
 

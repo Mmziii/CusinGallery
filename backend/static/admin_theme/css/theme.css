@@ -1560,41 +1560,72 @@ body.login #footer { display: none; }
 .cusin-log-time { margin-inline-start: auto; color: var(--cusin-muted); font-size: 0.75rem; white-space: nowrap; }
 
 /* readiness */
-.cusin-readiness-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.cusin-readiness-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  /* Columns follow the card, never the other way round: min() keeps a
+     track from being wider than the row even when the row is narrow. */
+  grid-template-columns: repeat(auto-fit, minmax(min(22rem, 100%), 1fr));
+  gap: 8px;
+}
 .cusin-readiness-list li {
+  /* One full-width block: icon + title on the first row, the sentence
+     under it, the missing items under that -- never a row of columns
+     that has to fight over the width.
+     min-width: 0 is load-bearing: a grid item's automatic minimum size is
+     its min-content size, which lets a wide child push the whole row past
+     the viewport (and with it the sidebar). */
   display: flex;
-  align-items: flex-start;
-  gap: 10px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  min-width: 0;
+  box-sizing: border-box;
   padding: 10px 12px;
   border-radius: var(--cusin-radius-sm);
   border: 1px solid var(--cusin-border);
   font-size: 0.8125rem;
   background: var(--cusin-surface-2);
 }
-.cusin-readiness-list li .cusin-icon { margin-top: 3px; }
-/* The icon is one flex item; everything else is this single column, so the
-   sub-list below spans the row instead of being squeezed next to it. */
-.cusin-readiness-body { flex: 1 1 auto; min-width: 0; }
-.cusin-readiness-list li strong { display: block; }
-.cusin-readiness-list li span { display: block; color: var(--cusin-muted); }
-/* The per-item "what exactly is missing" list (readiness). Kept tight --
-   it lives inside an already-bordered card row, so no extra chrome. It is
-   the ONLY place the missing items are named, and it uses the full width
-   of the row (a grid of readable cells, never one or two words a line). */
+.cusin-readiness-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+.cusin-readiness-head .cusin-icon { margin-top: 3px; }
+.cusin-readiness-head strong { min-width: 0; overflow-wrap: break-word; }
+.cusin-readiness-detail {
+  display: block;
+  min-width: 0;
+  color: var(--cusin-muted);
+  overflow-wrap: break-word;
+}
+/* The per-item "what exactly is missing" list: the only place the missing
+   items are named, and it spans the full width of the block (a grid of
+   readable cells, never one or two words a line). */
 .cusin-readiness-missing {
   list-style: none;
-  margin: 6px 0 0;
+  margin: 2px 0 0;
   padding: 0;
+  min-width: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(15rem, 100%), 1fr));
   gap: 3px 14px;
 }
-.cusin-readiness-missing li { font-size: 0.86rem; color: var(--cusin-muted); }
+.cusin-readiness-missing li {
+  min-width: 0;
+  font-size: 0.86rem;
+  color: var(--cusin-muted);
+  overflow-wrap: anywhere;
+}
 .cusin-readiness-missing li b { color: var(--cusin-text, inherit); font-weight: 600; }
 .cusin-readiness-list li.is-ok { border-inline-start: 4px solid var(--cg-success); }
-.cusin-readiness-list li.is-ok > .cusin-icon { color: var(--cg-success-text); }
+.cusin-readiness-list li.is-ok .cusin-icon { color: var(--cg-success-text); }
 .cusin-readiness-list li.is-bad { border-inline-start: 4px solid var(--cg-danger); }
-.cusin-readiness-list li.is-bad > .cusin-icon { color: var(--cg-danger-text); }
+.cusin-readiness-list li.is-bad .cusin-icon { color: var(--cg-danger-text); }
 
 /* stock app list inside dashboard card */
 .cusin-appsections #content-main { margin: 0; }
