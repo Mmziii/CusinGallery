@@ -131,9 +131,9 @@ AND without the visual theme (ADMIN_THEME_ENABLED=False).
             {% cusin_icon action.icon %} {{ action.label }}
           </button>
           {% endfor %}
-          {# Transitions the DAG allows but the payment rule forbids are
+          {% comment %} Transitions the DAG allows but the payment rule forbids are
              SHOWN as disabled with their Persian reason, never hidden
-             silently -- the owner must see why the button is dead. #}
+             silently -- the owner must see why the button is dead. {% endcomment %}
           {% for action in quick_blocked %}
           <button role="menuitem" type="button" disabled aria-disabled="true"
                   class="cusin-menu-item is-disabled"

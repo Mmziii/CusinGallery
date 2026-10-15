@@ -136,10 +136,10 @@ button below is the only thing that writes (one transaction, all-or-nothing).
   <input type="hidden" name="mode" value="{{ plan.mode }}">
   {% if plan.skip_existing %}<input type="hidden" name="skip_existing" value="1">{% endif %}
   <div class="submit-row">
-    {# Submit BUTTONS, not <input type="submit">: an input posts its own
+    {% comment %} Submit BUTTONS, not <input type="submit">: an input posts its own
        label as the value, so the view (which compares the value to "1")
        never saw the confirm and fell through to the upload branch --
-       «فایلی انتخاب نشده است». A button carries the value we choose. #}
+       «فایلی انتخاب نشده است». A button carries the value we choose. {% endcomment %}
     <button type="submit" id="cusin-image-import-confirm-button"
             name="confirm" value="1" class="default">تأیید و ذخیره</button>
     <button type="submit" id="cusin-image-import-cancel-button"
