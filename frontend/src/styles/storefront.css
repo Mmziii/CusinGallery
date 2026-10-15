@@ -1669,3 +1669,30 @@ input.is-invalid, select.is-invalid, textarea.is-invalid { border-color: var(--c
 .product-card__brand { height: 1.9em; min-height: 1.9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .product-card__body > .price-tag { margin-top: auto; }
 .product-card__footer { margin-top: 6px; flex-wrap: wrap; }
+
+/* Audit 8: modestly denser, same brand family and palette. */
+:root {
+  --font-size-base: .9375rem;
+  --font-size-md: 1.0625rem;
+  --font-size-lg: 1.25rem;
+  --font-size-xl: 1.625rem;
+  --font-size-2xl: 2.25rem;
+  --space-3: 14px;
+  --space-4: 22px;
+  --space-5: 28px;
+}
+.product-card__body > .price { margin-top: auto; }
+.product-card__badges { max-width: calc(100% - 20px); }
+.badge { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+.btn { height: auto; min-height: 38px; white-space: normal; overflow-wrap: anywhere; line-height: 1.7; }
+.product-card__footer .btn { flex: 1 1 100px; }
+.product-card__actions { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+h1, h2, h3, .cart-item__name, .order-item__name, .address-card { overflow-wrap: anywhere; }
+input, select, textarea { min-width: 0; max-width: 100%; }
+.product-detail__info, .cart-item__body, .checkout-page__body { min-width: 0; }
+@media (max-width: 640px) {
+  input, select, textarea { font-size: 16px; }
+  .product-card__footer { gap: 6px; }
+  .product-card__body { padding: 10px; }
+  .price { flex-wrap: wrap; }
+}
