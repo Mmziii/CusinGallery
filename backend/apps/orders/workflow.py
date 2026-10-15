@@ -148,10 +148,18 @@ def validate_transition(current_status, new_status, payment_status=None):
     if new_status not in allowed_next_statuses(current_status):
         current_label = Order.Status(current_status).label
         new_label = Order.Status(new_status).label
+        allowed_labels = sorted(
+            s.label for s in allowed_next_statuses(current_status)
+        )
         raise OrderWorkflowError(
-            f"Cannot change an order from '{current_label}' to '{new_label}'. "
-            f"Allowed next statuses: "
-            f"{', '.join(sorted(s.label for s in allowed_next_statuses(current_status))) or 'none (terminal status)'}."
+            f"طبق گردش کار سفارش نمی‌توان وضعیت را از «{current_label}» به "
+            f"«{new_label}» برد. "
+            + (
+                f"وضعیت‌های مجاز پس از «{current_label}»: "
+                f"{'، '.join(allowed_labels)}."
+                if allowed_labels
+                else f"«{current_label}» وضعیت پایانی است و وضعیت بعدی ندارد."
+            )
         )
     reason = payment_block_reason(new_status=new_status, payment_status=payment_status)
     if reason:
@@ -180,7 +188,7 @@ def check_transition(current_status, new_status, tracking_code, shipping_method=
 
         if shipping.get_shipping_methods()[shipping_method].get("requires_address", True):
             raise OrderWorkflowError(
-                "Enter the carrier tracking code before marking the order as shipped."
+                "پیش از ثبت وضعیت «ارسال شده»، کد رهگیری مرسوله را وارد کنید."
             )
 
 
