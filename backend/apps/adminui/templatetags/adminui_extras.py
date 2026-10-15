@@ -12,7 +12,8 @@ from django import template
 from django.utils import timezone
 from django.utils.html import format_html
 
-from apps.adminui import jalali
+from apps.adminui import admin_dates, jalali
+from apps.adminui.breadcrumbs import build_crumbs
 from apps.adminui.nav import build_sidebar
 
 register = template.Library()
@@ -83,6 +84,17 @@ def jweekday_filter(value) -> str:
     return jalali.JALALI_WEEKDAY_NAMES[jd.weekday()] if jd else "—"
 
 
+@register.filter(name="jdate_range")
+def jdate_range_filter(start, end) -> str:
+    """A Jalali window: ``۱۴۰۵/۰۷/۲۶`` when both ends are the same day,
+    ``۱۴۰۵/۰۷/۲۶ تا ۱۴۰۵/۰۷/۲۸`` otherwise.
+
+    The order change page's «بازهٔ تحویل» used to print the raw ISO dates
+    and append a stray «روز», because «تا» was read as a duration.
+    """
+    return admin_dates.jalali_range(start, end)
+
+
 @register.filter(name="fanum")
 def fanum_filter(value) -> str:
     """Convert digits of a number/string to Persian digits."""
@@ -133,6 +145,19 @@ def numfa_filter(value) -> str:
 # ---------------------------------------------------------------------------
 
 @register.simple_tag
+def changelist_page_href(cl, page) -> str:
+    """The href for one page of the changelist paginator.
+
+    The overridden admin/pagination.html renders the page links itself so
+    the numbers can be Persian; Django has no template tag for exactly
+    this URL, and rebuilding it by hand is how query parameters get lost.
+    """
+    from django.contrib.admin.templatetags.admin_list import PAGE_VAR
+
+    return cl.get_query_string({PAGE_VAR: page})
+
+
+@register.simple_tag
 def cusin_icon(name: str, css_class: str = "cusin-icon") -> str:
     """Render ``<svg><use href="#cusin-i-NAME"/></svg>`` from the inline sprite."""
     return format_html(
@@ -142,18 +167,35 @@ def cusin_icon(name: str, css_class: str = "cusin-icon") -> str:
     )
 
 
+@register.inclusion_tag("adminui/_breadcrumbs.html", takes_context=True)
+def cusin_breadcrumbs(context) -> dict:
+    """«شروع › سفارش‌ها › CG-…» -- one trail, no repeated label.
+
+    Django's own admin templates each render their own trail, and a
+    single-model app (orders, products, banners) is named after the model
+    it contains, so the trail read «سفارش‌ها › سفارش‌ها». The theme builds
+    the trail itself and drops the app crumb when it would only repeat
+    the model crumb -- see apps/adminui/breadcrumbs.py.
+    """
+    return {"crumbs": build_crumbs(context)}
+
+
 @register.inclusion_tag("adminui/_sidebar.html", takes_context=True)
 def cusin_sidebar(context) -> dict:
-    """Grouped sidebar navigation built from the admin's ``available_apps``.
+    """Sidebar navigation built from the admin's ``available_apps``.
 
     ``available_apps`` comes from ``AdminSite.each_context()`` and is already
     permission-filtered, so the menu respects per-user access automatically.
+
+    The result is the owner-ordered flat list plus the collapsed
+    «سایر / پیشرفته» bucket -- see apps/adminui/nav.py.
     """
     request = context.get("request")
     available_apps = context.get("available_apps") or []
-    is_index_active = bool(request) and request.path == context.get("cusin_index_url", "/admin/")
+    index_url = context.get("cusin_index_url") or "/admin/"
+    is_index_active = bool(request) and request.path == index_url
     return {
-        "sidebar_groups": build_sidebar(available_apps, request),
+        "sidebar": build_sidebar(available_apps, request),
         "is_index_active": is_index_active,
         "request": request,
     }

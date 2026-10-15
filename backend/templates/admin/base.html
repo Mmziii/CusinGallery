@@ -107,12 +107,13 @@ Lowest-risk overlay strategy:
         </div>
         {% block nav-breadcrumbs %}
           <nav aria-label="{% translate 'Breadcrumbs' %}" class="cusin-breadcrumbs-wrap">
-            {% block breadcrumbs %}
-              <div class="breadcrumbs">
-                <a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
-                {% if title %} &rsaquo; {{ title }}{% endif %}
-              </div>
-            {% endblock %}
+            {% comment %}No `breadcrumbs` block on purpose: Django's
+            change_form / change_list / delete_* templates each define one,
+            and every one of them repeats the app name for a single-model
+            app («سفارش‌ها › سفارش‌ها»). With no block to override they are
+            simply not rendered, and {% cusin_breadcrumbs %} builds the one
+            trail -- see apps/adminui/breadcrumbs.py.{% endcomment %}
+            {% cusin_breadcrumbs %}
           </nav>
         {% endblock %}
       </header>

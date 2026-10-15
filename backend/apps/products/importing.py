@@ -211,9 +211,52 @@ class ImportResult:
 
 
 def _normalize(value):
+    """A cell whose digits are part of an IDENTIFIER or a NUMBER.
+
+    «۱۲۳» and «123» mean the same thing in a price, a SKU, a slug or a
+    category slug, because those values are compared against something
+    already stored in ASCII.
+    """
     if value is None:
         return ""
     return str(value).translate(_PERSIAN_DIGITS).strip()
+
+
+def _text(value):
+    """A FREE-TEXT cell: stripped, but with its digits left alone.
+
+    The importer used to translate Persian digits in every column, which
+    silently rewrote what the owner had written -- «ست ۳ عددی» came back
+    as «ست 3 عددی» in the name and in the description, and the same
+    happened to any number a customer reads inside a product text. Text
+    columns keep the digits they were typed with; only the identifier and
+    numeric columns are normalised.
+    """
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def _resolve_named(model, *values, name_first=False):
+    """Find a category/brand by a cell that may be a slug or a name.
+
+    Each candidate is tried as typed and then with its digits normalised
+    («برند ۱» و «برند 1» both land on the same stored row), so the
+    free-text columns no longer have to be rewritten to match the DB.
+    """
+    slug_field, name_field = ("slug", "name")
+    order = (name_field, slug_field) if name_first else (slug_field, name_field)
+    for value in values:
+        if not value:
+            continue
+        for candidate in (value, _normalize(value)):
+            if not candidate:
+                continue
+            for field in order:
+                found = model.objects.filter(**{field: candidate}).first()
+                if found is not None:
+                    return found
+    return None
 
 
 # Thousands separators the owner's Excel may contain (ASCII, Arabic,
@@ -380,9 +423,10 @@ def _validate_row(number, row, categories, brands):
     on failure. ``number`` is the spreadsheet row number (header = 1)."""
     errors = []
 
-    def need(column, parser=None, *, required=True, default=None, minimum=0):
+    def need(column, parser=None, *, required=True, default=None, minimum=0,
+             as_text=False):
         raw = row.get(column)
-        text = _normalize(raw)
+        text = _text(raw) if as_text else _normalize(raw)
         if text == "":
             if required:
                 errors.append(f"ردیف {number}: ستون «{column}» الزامی است.")
@@ -395,7 +439,8 @@ def _validate_row(number, row, categories, brands):
             errors.append(f"ردیف {number}: ستون «{column}» -- {exc}.")
             return default
 
-    name = need("name")
+    # name is text the customers read; slug is an identifier.
+    name = need("name", as_text=True)
     slug = need("slug")
     # SKU is text, not a number: leading zeros survive and a numeric
     # Excel cell (1234.0) becomes "1234".
@@ -408,8 +453,8 @@ def _validate_row(number, row, categories, brands):
     discount_percentage = need("discount_percentage", _to_int, required=False, default=0, minimum=0) or 0
     stock_quantity = need("stock_quantity", _to_int, required=False, default=0) or 0
     low_stock_threshold = need("low_stock_threshold", _to_int, required=False, default=5) or 0
-    short_description = _normalize(row.get("short_description"))
-    description = _normalize(row.get("description"))
+    short_description = _text(row.get("short_description"))
+    description = _text(row.get("description"))
 
     try:
         is_active = _to_bool(row.get("is_active"), default=True)
@@ -422,7 +467,7 @@ def _validate_row(number, row, categories, brands):
         errors.append(f"Row {number}: 'is_featured' -- {exc}.")
         is_featured = False
 
-    brand_name = _normalize(row.get("brand_name"))
+    brand_name = _text(row.get("brand_name"))
     category = None
     if category_slug:
         category = categories.get(category_slug)
@@ -433,7 +478,9 @@ def _validate_row(number, row, categories, brands):
             )
     brand = None
     if brand_name:
-        brand = brands.get(brand_name)
+        # The name is matched as typed first, then with its digits
+        # normalised, so «برند ۱» finds a brand stored either way.
+        brand = brands.get(brand_name) or brands.get(_normalize(brand_name))
         if brand is None:
             errors.append(
                 f"ردیف {number}: برند «{brand_name}» وجود ندارد. "
@@ -720,7 +767,7 @@ def _validate_update_row(number, row, existing_by_sku, *, stock_mode="replace"):
                 f"(موجودی فعلی {product.stock_quantity}، تغییر {values[column]})."
             )
 
-    name = _normalize(row.get("name"))
+    name = _text(row.get("name"))
     if name:
         values["name"] = name
 
@@ -731,10 +778,9 @@ def _validate_update_row(number, row, existing_by_sku, *, stock_mode="replace"):
         except ValueError as exc:
             errors.append(f"ردیف {number}: ستون «active» -- {exc}.")
 
-    category_text = _normalize(row.get("category"))
+    category_text = _text(row.get("category"))
     if category_text:
-        category = Category.objects.filter(slug=category_text).first() or \
-            Category.objects.filter(name=category_text).first()
+        category = _resolve_named(Category, category_text)
         if category is None:
             errors.append(
                 f"ردیف {number}: دسته‌بندی «{category_text}» وجود ندارد "
@@ -743,10 +789,9 @@ def _validate_update_row(number, row, existing_by_sku, *, stock_mode="replace"):
         else:
             values["category"] = category
 
-    brand_text = _normalize(row.get("brand"))
+    brand_text = _text(row.get("brand"))
     if brand_text:
-        brand = Brand.objects.filter(name=brand_text).first() or \
-            Brand.objects.filter(slug=brand_text).first()
+        brand = _resolve_named(Brand, brand_text, name_first=True)
         if brand is None:
             errors.append(
                 f"ردیف {number}: برند «{brand_text}» وجود ندارد "

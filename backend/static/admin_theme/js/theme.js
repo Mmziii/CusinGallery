@@ -169,13 +169,22 @@
     var useSheet = viewportWidth <= 480;
     var panelHeight = 0;
     if (!useSheet) {
-      // Keep the popover attached to its trigger even when there is not room
-      // for its preferred width on the trigger's RTL start edge.
-      var anchoredWidth = rtl ? triggerRect.right - margin : viewportWidth - triggerRect.left - margin;
-      panelWidth = Math.min(panelWidth, Math.max(0, anchoredWidth));
-      panel.style.minWidth = Math.min(220, panelWidth) + "px";
-      // Width changes can wrap long filter labels, so measure the actual
-      // bounded box only after applying its final desktop width.
+      // Measure the panel's NATURAL width before constraining it. Squeezing
+      // the panel down to the gap left beside its trigger (the old
+      // `anchoredWidth` clamp) is what clipped the changelist row menu to
+      // «وی / چا / حذ»: the box really was ~40px wide, so the Persian
+      // labels had nowhere to go. A menu may be narrower than it would
+      // like, never narrower than its longest label.
+      panel.style.minWidth = "0px";
+      panel.style.width = "auto";
+      var natural = Math.max(
+        panel.getBoundingClientRect().width,
+        panel.scrollWidth || 0
+      );
+      panelWidth = Math.min(
+        natural || 220,
+        Math.max(120, viewportWidth - margin * 2)
+      );
       panel.style.width = panelWidth + "px";
       panelHeight = Math.min(panel.getBoundingClientRect().height, maxPanelHeight);
     }
@@ -208,11 +217,29 @@
       menu.scrollLocked = true;
       if (!wasLocked) lockBodyScroll();
     } else {
-      var left = rtl ? triggerRect.right - panelWidth : triggerRect.left;
+      /* Preferred side: aligned to the trigger's RTL start edge (so in RTL
+         it opens leftward, matching how the menu reads). When that side has
+         no room -- the «کارها» column sits at the far left in RTL and its
+         menu used to be pushed off-screen -- FLIP to the trigger's other
+         side instead of shrinking or overflowing. */
+      var startRoom = rtl
+        ? triggerRect.right - margin
+        : viewportWidth - triggerRect.left - margin;
+      var endRoom = rtl
+        ? viewportWidth - triggerRect.right - margin
+        : triggerRect.left - margin;
+      var useStartSide = startRoom >= panelWidth || startRoom >= endRoom;
+      var left;
+      if (rtl) {
+        left = useStartSide ? triggerRect.right - panelWidth : triggerRect.left;
+      } else {
+        left = useStartSide ? triggerRect.left : triggerRect.right - panelWidth;
+      }
       var top = triggerRect.bottom + 6;
       if (top + panelHeight > viewportHeight - margin && triggerRect.top - panelHeight - 6 >= margin) {
         top = triggerRect.top - panelHeight - 6;
       }
+      // Last resort: keep it inside the viewport whatever happened above.
       left = Math.max(margin, Math.min(left, viewportWidth - panelWidth - margin));
       top = Math.max(margin, Math.min(top, viewportHeight - panelHeight - margin));
       panel.style.left = left + "px";
@@ -453,38 +480,190 @@
     }, true);
   }
 
-  /* ------------------------------------------------------------------ *
-   * 2a. Sidebar group state (per-user, resilient to blocked storage)
+  /* ------------------------------------------------------------------ *\
+   * 2a. Sidebar: group state + scroll offset, per user, per browser tab
    * ------------------------------------------------------------------ */
-  function initSidebarGroups() {
-    var groups = document.querySelectorAll("[data-cusin-nav-group]");
-    if (!groups.length) return;
-    var userId = document.body.getAttribute("data-cusin-user-id") || "guest";
-    var key = "cusin-admin-nav:v1:" + userId;
-    var state = {};
+  /* sessionStorage, not localStorage: which groups are expanded is "where
+     I am right now", not a preference -- a shared shop computer must not
+     inherit the previous user's layout, and a fresh tab should start
+     clean. Every access is wrapped because privacy modes THROW on
+     sessionStorage access, and a menu that breaks there is far worse
+     than a menu that forgets. */
+  function sidebarStore() {
+    var store = null;
     try {
-      state = JSON.parse(window.localStorage.getItem(key) || "{}") || {};
+      store = window.sessionStorage;
     } catch (error) {
-      state = {};
+      store = null;
     }
+    var userId = document.body.getAttribute("data-cusin-user-id") || "guest";
+    var key = "cusin-admin-nav:v2:" + userId;
+    return {
+      read: function () {
+        if (!store) return {};
+        try {
+          return JSON.parse(store.getItem(key) || "{}") || {};
+        } catch (error) {
+          return {};
+        }
+      },
+      write: function (state) {
+        if (!store) return;
+        try {
+          store.setItem(key, JSON.stringify(state));
+        } catch (error) {
+          /* quota or private mode: the menu still works, it just forgets */
+        }
+      }
+    };
+  }
+
+  function initSidebarGroups() {
+    var drawer = document.getElementById("cusin-drawer");
+    var store = sidebarStore();
+    var state = store.read();
+    var openState = state.groups || {};
+    var groups = document.querySelectorAll("#cusin-drawer [data-cusin-nav-group]");
 
     groups.forEach(function (group) {
       var id = group.getAttribute("data-cusin-nav-group");
       var summary = group.querySelector("summary");
       if (!summary) return;
-      if (Object.prototype.hasOwnProperty.call(state, id)) group.open = Boolean(state[id]);
+      if (Object.prototype.hasOwnProperty.call(openState, id)) {
+        group.open = Boolean(openState[id]);
+      }
       summary.setAttribute("aria-expanded", group.open ? "true" : "false");
       group.addEventListener("toggle", function () {
         summary.setAttribute("aria-expanded", group.open ? "true" : "false");
-        try {
-          var stored = JSON.parse(window.localStorage.getItem(key) || "{}") || {};
-          stored[id] = group.open;
-          window.localStorage.setItem(key, JSON.stringify(stored));
-        } catch (error) {
-          // Storage may be disabled by privacy settings; the group still works.
-        }
+        var current = store.read();
+        current.groups = current.groups || {};
+        current.groups[id] = group.open;
+        store.write(current);
       });
     });
+
+    if (!drawer) return;
+
+    /* Remember WHERE the drawer was scrolled. Without this every save
+       (a full page load) snapped the menu back to the top and the owner
+       lost their place in a long list. */
+    if (typeof state.scrollTop === "number" && state.scrollTop > 0) {
+      drawer.scrollTop = state.scrollTop;
+    }
+    var scrollTimer = null;
+    drawer.addEventListener("scroll", function () {
+      if (scrollTimer) window.clearTimeout(scrollTimer);
+      scrollTimer = window.setTimeout(function () {
+        var current = store.read();
+        current.scrollTop = drawer.scrollTop;
+        store.write(current);
+      }, 120);
+    }, { passive: true });
+
+    /* Bring the current row into view WITHOUT scrolling the page itself,
+       and only when it is actually out of sight -- the menu must not
+       jump under the cursor on every navigation. */
+    var active = drawer.querySelector(
+      ".cusin-nav-link.is-active, .cusin-nav-group.is-active > summary"
+    );
+    if (active && typeof active.scrollIntoView === "function") {
+      try {
+        active.scrollIntoView({ block: "nearest", inline: "nearest" });
+      } catch (error) {
+        /* old browsers: keep the default behaviour */
+      }
+    }
+  }
+
+  /* ------------------------------------------------------------------ *\
+   * 2a-2. Header height -> --cusin-header-h (the drawer stays below it)
+   * ------------------------------------------------------------------ */
+  function initHeaderHeightVar() {
+    var header = document.getElementById("header");
+    var root = document.documentElement;
+    if (!header || !root) return;
+    var apply = function () {
+      var height = Math.round(header.getBoundingClientRect().height);
+      if (height > 0) root.style.setProperty("--cusin-header-h", height + "px");
+    };
+    apply();
+    if (typeof window.ResizeObserver === "function") {
+      new window.ResizeObserver(apply).observe(header);
+    }
+    window.addEventListener("resize", apply);
+    /* Late-loading fonts change the topbar's height, and at 125%/150%
+       zoom it wraps to two lines -- re-measure once they are in. */
+    if (document.fonts && document.fonts.ready && typeof document.fonts.ready.then === "function") {
+      document.fonts.ready.then(apply, function () {});
+    }
+  }
+
+  /* ------------------------------------------------------------------ *\
+   * 2c. Dashboard: chart tooltip
+   *
+   * The period switcher needs no JavaScript: the chips are plain
+   * ?days= links and the SERVER remembers the choice in the owner's
+   * session, so the first paint already shows the right range (a
+   * cookie could only be written after a click, and never reached a
+   * browser that blocks cookies or a second device).
+   * ------------------------------------------------------------------ */
+
+  /* A bar's numbers on hover AND on tap. <title> alone never fires on
+     touch, and the owner checks the shop from a phone more often than
+     from a desk. */
+  function initChartTooltip() {
+    var chart = document.querySelector("[data-cusin-chart]");
+    if (!chart) return;
+    var scroll = chart.closest(".cusin-chart-scroll") || chart.parentNode;
+    var tip = scroll.querySelector("[data-cusin-chart-tip]");
+    if (!tip) return;
+
+    var show = function (bar) {
+      var date = bar.getAttribute("data-date") || "";
+      var amount = bar.getAttribute("data-amount") || "";
+      var orders = bar.getAttribute("data-orders") || "0";
+      tip.innerHTML = "";
+      var head = document.createElement("span");
+      head.textContent = date;
+      var value = document.createElement("b");
+      value.textContent = amount;
+      var tail = document.createElement("span");
+      tail.textContent = " — " + orders + " سفارش";
+      tip.appendChild(head);
+      tip.appendChild(document.createElement("br"));
+      tip.appendChild(value);
+      tip.appendChild(tail);
+      tip.hidden = false;
+
+      var scrollRect = scroll.getBoundingClientRect();
+      var barRect = bar.getBoundingClientRect();
+      var x = barRect.left - scrollRect.left + scroll.scrollLeft + barRect.width / 2;
+      var y = barRect.top - scrollRect.top;
+      tip.style.left = Math.max(0, x) + "px";
+      tip.style.top = Math.max(0, y - 8) + "px";
+    };
+    var hide = function () {
+      tip.hidden = true;
+    };
+
+    chart.addEventListener("mouseover", function (event) {
+      var bar = event.target.closest && event.target.closest("[data-cusin-chart-bar]");
+      if (bar) show(bar);
+    });
+    chart.addEventListener("mouseout", function (event) {
+      if (event.target.closest && event.target.closest("[data-cusin-chart-bar]")) hide();
+    });
+    chart.addEventListener("click", function (event) {
+      var bar = event.target.closest && event.target.closest("[data-cusin-chart-bar]");
+      if (bar) show(bar);
+    });
+    // Touch: a tap anywhere else dismisses it.
+    document.addEventListener("touchstart", function (event) {
+      if (!tip.hidden && !(event.target.closest && event.target.closest("[data-cusin-chart]"))) {
+        hide();
+      }
+    }, { passive: true });
+    scroll.addEventListener("scroll", hide, { passive: true });
   }
 
   /* ------------------------------------------------------------------ *
@@ -732,7 +911,11 @@
       var current = paginator.querySelector(".this-page");
       if (!pageLinks.length) return;
       paginator.dataset.cusinPaginationReady = "true";
-      var currentLabel = current ? current.textContent.trim() : "۱";
+      // The page numbers arrive from the server already Persian-ised; be
+      // defensive for a template rendered without the filter.
+      var currentLabel = current
+        ? persianDigits(current.textContent.trim())
+        : "۱";
       var menu = makeMenu("صفحهٔ " + currentLabel, "pagination-" + index, "chevron-down", "cusin-pagination-menu");
       pageLinks.forEach(function (link) {
         var item = addMenuItem(menu.panel, link.textContent.trim(), link.href, null);
@@ -1088,6 +1271,90 @@
   }
 
   /* ------------------------------------------------------------------ *
+   * 6b. Persian digits in Django's own chrome
+   *
+   * Django counts in ASCII: «0 از 1 انتخاب شده‌اند»، «صفحهٔ 1»، «165
+   * محصولات». The server-rendered ones are fixed in the overridden
+   * admin/actions.html, admin/pagination.html and admin/search_form.html;
+   * this handles the two that Django's own JavaScript rewrites AFTER the
+   * page has loaded (the action counter and the pagination menu label),
+   * because there is no hook to intercept them.
+   * ------------------------------------------------------------------ */
+  var PERSIAN_DIGITS = ["\u06f0", "\u06f1", "\u06f2", "\u06f3", "\u06f4",
+    "\u06f5", "\u06f6", "\u06f7", "\u06f8", "\u06f9"];
+
+  function persianDigits(text) {
+    if (!text) return text;
+    return String(text).replace(/[0-9]/g, function (digit) {
+      return PERSIAN_DIGITS[Number(digit)];
+    });
+  }
+
+  function persianDigitsIn(node) {
+    if (!node || node.dataset.cusinDigitsDone === "true") return;
+    var next = persianDigits(node.textContent);
+    if (next !== node.textContent) {
+      // Only ever touch the text: the counter also carries
+      // data-attributes that Django's actions.js reads back.
+      node.textContent = next;
+    }
+    node.dataset.cusinDigitsDone = "true";
+  }
+
+  /* ------------------------------------------------------------------ *
+   * 6b-bis. Price hints on the editable product list
+   *
+   * A list_editable cell can only carry the raw number («910000»), so the
+   * server renders the readable amount («۹۱۰٬۰۰۰ تومان») beside it. Keep
+   * that hint in step with what the owner types, otherwise the row keeps
+   * showing the price it had when the page loaded.
+   * ------------------------------------------------------------------ */
+  var PRICE_GROUP_SEP = "\u066c";  /* «٬» Persian thousands separator */
+  var EMPTY_HINT = "\u2014";      /* «—» */
+
+  function priceHintText(raw) {
+    var digits = String(raw == null ? "" : raw).replace(/[^0-9]/g, "");
+    if (!digits || Number(digits) === 0) return EMPTY_HINT;
+    var grouped = digits.replace(/\B(?=(\d{3})+(?!\d))/g, PRICE_GROUP_SEP);
+    return persianDigits(grouped) + " \u062a\u0648\u0645\u0627\u0646";  /* « تومان» */
+  }
+
+  function initPriceHints() {
+    var wraps = document.querySelectorAll(".cusin-price-edit");
+    if (!wraps.length) return;
+    wraps.forEach(function (wrap) {
+      var input = wrap.querySelector("input");
+      var hint = wrap.querySelector("[data-cusin-price-hint]");
+      if (!input || !hint) return;
+      var sync = function () {
+        var text = priceHintText(input.value);
+        hint.textContent = text;
+        hint.setAttribute(
+          "data-cusin-empty", text === EMPTY_HINT ? "true" : "false"
+        );
+      };
+      input.addEventListener("input", sync);
+      sync();
+    });
+  }
+
+  function initPersianDigits() {
+    var nodes = document.querySelectorAll(".action-counter, .all, .question");
+    if (!nodes.length) return;
+    nodes.forEach(persianDigitsIn);
+    // Django's actions.js replaces the counter's text on every checkbox
+    // change, so re-run whenever it does.
+    if (typeof MutationObserver !== "function") return;
+    nodes.forEach(function (node) {
+      var observer = new MutationObserver(function () {
+        node.dataset.cusinDigitsDone = "false";
+        persianDigitsIn(node);
+      });
+      observer.observe(node, { childList: true, characterData: true, subtree: true });
+    });
+  }
+
+  /* ------------------------------------------------------------------ *
    * 7. Misc polish
    * ------------------------------------------------------------------ */
   function initMisc() {
@@ -1101,7 +1368,9 @@
 
   document.addEventListener("DOMContentLoaded", function () {
     initDrawer();
+    initHeaderHeightVar();
     initSidebarGroups();
+    initChartTooltip();
     initChangelistToolbar();
     initRelatedControls();
     initCardLabels();
@@ -1109,6 +1378,8 @@
     initPalette();
     initCopyButtons();
     initQuickStatusGuard();
+    initPersianDigits();
+    initPriceHints();
     initMisc();
   });
 })();

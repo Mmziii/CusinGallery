@@ -34,6 +34,20 @@ server {
     listen 80;
     listen [::]:80;
     server_name cusin.ir www.cusin.ir;
+    # nginx's version banner has no business on a public shop.
+    server_tokens off;
+
+    # Security headers, on every response of this server block.
+    # NOTE: `add_header` is inherited by a nested block ONLY if that block
+    # defines none of its own -- so these are repeated inside each location
+    # below that sets its own Cache-Control. The `always` flag is required:
+    # without it nginx drops them on 4xx/5xx responses, which is exactly
+    # where clickjacking and MIME-sniffing attempts aim.
+    # HSTS is deliberately NOT part of this list in the plain-HTTP configs:
+    # it is meaningless over http and misleading in logs.
+    add_header X-Frame-Options "DENY" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 
     client_max_body_size 10m;
 
@@ -43,15 +57,32 @@ server {
 
     # Even during the HTTP bootstrap, only collectstatic's content-hashed
     # names receive a long cache lifetime. Unhashed admin URLs are revalidated.
-    location ~* ^/static/(.+\.[a-f0-9]{12}\.[^/]+)$ {
+    # The pattern is QUOTED on purpose: it contains `{12}`, and nginx
+    # ends an unquoted token at the first `{`, so pcre2 would receive
+    # `^/static/(.+\.[a-f0-9]` and fail at startup with
+    # "pcre2_compile() failed: missing closing parenthesis".
+    # apps/core/test_nginx_configs.py enforces this rule.
+    location ~* "^/static/(.+\.[a-f0-9]{12}\.[^/]+)$" {
         alias /app/staticfiles/$1;
         expires 30d;
+        # Repeated: nginx drops the server-level add_headers as soon as a
+        # location defines one of its own (see the note in the server block).
+        add_header X-Frame-Options "DENY" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
         add_header Cache-Control "public, immutable" always;
     }
 
     location /static/ {
         alias /app/staticfiles/;
         expires off;
+        # Repeated: nginx drops the server-level add_headers as soon as a
+        # location defines one of its own (see the note in the server block).
+        add_header X-Frame-Options "DENY" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
         add_header Cache-Control "no-cache, must-revalidate" always;
     }
 
@@ -86,7 +117,22 @@ server {
     location = /healthz {
         proxy_pass http://backend_upstream;
         proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
         access_log off;
+    }
+
+    # SEO files are rendered by Django (dynamic product sitemap, robots
+    # policy) -- without these two exact matches the SPA fallback below
+    # would answer /robots.txt and /sitemap.xml with index.html.
+    location = /robots.txt {
+        proxy_pass http://backend_upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+    location = /sitemap.xml {
+        proxy_pass http://backend_upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
 
     location / {

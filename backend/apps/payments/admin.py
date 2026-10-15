@@ -25,7 +25,7 @@ class PaymentAdmin(admin.ModelAdmin):
     # admin_order_field; inputs, filters and the read-only stance are
     # untouched.
     list_display = (
-        "id", "order_number", "customer", "amount_fa", "gateway",
+        "id", "order_number", "customer", "amount_fa", "gateway_name",
         "status_badge", "paid_at_jalali", "created_at_jalali",
     )
 
@@ -93,11 +93,18 @@ class PaymentAdmin(admin.ModelAdmin):
         ("زمان‌ها", {"fields": ("paid_at", "created_at", "updated_at")}),
     )
 
+    @admin.display(description="شماره سفارش")
     def order_number(self, obj):
         return obj.order.order_number
 
+    @admin.display(description="مشتری")
     def customer(self, obj):
         return obj.order.user.get_full_name() or obj.order.user.username
+
+    @admin.display(description="درگاه", ordering="gateway")
+    def gateway_name(self, obj):
+        """The gateway's human name, not its raw code (``zarinpal``)."""
+        return obj.get_gateway_display() if hasattr(obj, "get_gateway_display") else obj.gateway
 
     def has_add_permission(self, request):
         return False

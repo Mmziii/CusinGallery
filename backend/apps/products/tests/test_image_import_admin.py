@@ -108,8 +108,10 @@ class ImageImportAdminTests(TestCase):
         ])
         self.client.post(self.add_url, {"zip": zip_upload(payload), "mode": "add"})
         response = self.client.post(self.add_url, {"confirm": "1"}, follow=True)
-        content = response.content.decode()
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(ProductImage.objects.count(), 0, "confirm must not write yet")
+        response = self.drain_job()
+        content = response.content.decode()
         self.assertIn("تصاویر ذخیره شد", content)
         self.assertEqual(product.images.count(), 2)
         self.assertTrue(product.images.order_by("ordering").first().is_primary)
@@ -128,6 +130,7 @@ class ImageImportAdminTests(TestCase):
         )
         self.assertIn("جایگزینی تصاویر موجود", preview.content.decode())
         self.client.post(self.add_url, {"confirm": "1"})
+        self.drain_job()
         product.refresh_from_db()
         self.assertEqual(product.images.count(), 1)
         self.assertNotIn("old.jpg", product.images.get().image.name)
@@ -145,6 +148,7 @@ class ImageImportAdminTests(TestCase):
         )
         self.assertIn("نادیده گرفته می‌شوند", preview.content.decode())
         self.client.post(self.add_url, {"confirm": "1"})
+        self.drain_job()
         self.assertEqual(with_image.images.count(), 1)
         self.assertEqual(without.images.count(), 1)
 
@@ -193,11 +197,31 @@ class ImageImportAdminTests(TestCase):
         first = build_zip([("ONE-9.jpg", png_bytes((1, 1, 1)))])
         self.client.post(self.add_url, {"zip": zip_upload(first), "mode": "add"})
         stash = os.path.join(tempfile.gettempdir(), "cusin-product-image-imports")
-        self.assertEqual(len(os.listdir(stash)), 1)
+        self.assertEqual(len(self.stashed_zips(stash)), 1)
 
         second = build_zip([("ONE-9-2.jpg", png_bytes((2, 2, 2)))])
         self.client.post(self.add_url, {"zip": zip_upload(second), "mode": "add"})
-        self.assertEqual(len(os.listdir(stash)), 1)
+        self.assertEqual(len(self.stashed_zips(stash)), 1)
+
+    @staticmethod
+    def stashed_zips(stash):
+        """Only the uploaded ZIPs (the job file is not an upload)."""
+        if not os.path.isdir(stash):
+            return []
+        return [name for name in os.listdir(stash) if name.endswith(".zip")]
+
+    def drain_job(self, limit=500):
+        """Drive the job the way the page's JavaScript does: POST `step=1`
+        until the job reports it is finished (or fails).
+
+        Returns the LAST response, so callers can assert on the final page.
+        """
+        response = None
+        for _ in range(limit):
+            response = self.client.post(self.add_url, {"step": "1"}, follow=True)
+            if "در حال ذخیره" not in response.content.decode():
+                return response
+        self.fail("the batched import never finished")
 
     def test_no_file_selected_shows_a_friendly_error(self):
         response = self.client.post(self.add_url, {"mode": "add"})

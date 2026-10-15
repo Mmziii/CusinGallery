@@ -21,7 +21,8 @@ WHICH event happened for WHICH object; everything else lives here:
       numbers and email addresses never enter the audit log.
 
 Channels per event:
-    order_confirmed / order_shipped   SMS (to the account phone) + email
+    order_paid / order_confirmed /
+    order_shipped                     SMS (to the account phone) + email
                                       (to the account email, if any)
     password_reset                    email link (accounts with an email)
                                       OR SMS one-time code (phone-only
@@ -46,11 +47,29 @@ class Events:
     """The event vocabulary. Machine names stored in NotificationLog.event."""
 
     PASSWORD_RESET = "password_reset"
+    # Two DISTINCT customer events now that confirming is the OWNER's job:
+    # ORDER_PAID fires when the gateway confirms the money (the order stays
+    # «در انتظار تأیید»); ORDER_CONFIRMED fires when the shop accepts it.
+    ORDER_PAID = "order_paid"
     ORDER_CONFIRMED = "order_confirmed"
     ORDER_SHIPPED = "order_shipped"
     # Part R4 item 3: OWNER-facing alerts (never sent to customers).
     OWNER_PAID_ORDER = "owner_paid_order"
     OWNER_LOW_STOCK = "owner_low_stock"
+
+
+#: Persian display names for the machine codes above. The admin's
+#: notification log used to print the raw code («order_confirmed»), which
+#: is the one place in the panel a non-technical owner meets English.
+#: Anything not listed here falls back to its stored value.
+EVENT_LABELS = {
+    Events.PASSWORD_RESET: "بازنشانی رمز عبور",
+    Events.ORDER_PAID: "پرداخت سفارش",
+    Events.ORDER_CONFIRMED: "تأیید سفارش",
+    Events.ORDER_SHIPPED: "ارسال سفارش",
+    Events.OWNER_PAID_ORDER: "آگاه‌سازی مدیر: سفارش پرداخت‌شده",
+    Events.OWNER_LOW_STOCK: "آگاه‌سازی مدیر: موجودی کم",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -309,11 +328,19 @@ def _order_sms_content(notice: _OrderNotice):
     """(direct_message, template_name, template_tokens) for an order event.
     Template names come from env; when one is empty the provider falls
     back to the locally-composed direct message."""
-    if notice.event == Events.ORDER_CONFIRMED:
+    if notice.event == Events.ORDER_PAID:
+        template = (settings.SMS_TEMPLATE_ORDER_PAID or "").strip()
+        tokens = {"token": notice.order_number, "token2": f"{notice.total}"}
+        message = (
+            f"پرداخت سفارش {notice.order_number} در کازین گالری با موفقیت انجام شد "
+            f"(مبلغ: {notice.total:,} تومان). "
+            "سفارش شما در انتظار تأیید فروشگاه است و پس از تأیید، آماده‌سازی و ارسال می‌شود."
+        )
+    elif notice.event == Events.ORDER_CONFIRMED:
         template = (settings.SMS_TEMPLATE_ORDER_CONFIRMED or "").strip()
         tokens = {"token": notice.order_number, "token2": f"{notice.total}"}
         message = (
-            f"سفارش {notice.order_number} در کازین گالری با موفقیت پرداخت و ثبت شد. "
+            f"سفارش {notice.order_number} تأیید شد و در حال آماده‌سازی است. "
             f"مبلغ: {notice.total:,} تومان"
         )
     elif notice.event == Events.ORDER_SHIPPED and notice.shipping_method == "pickup":
@@ -322,14 +349,19 @@ def _order_sms_content(notice: _OrderNotice):
         # tracking code (Part 1). Template mode is deliberately skipped
         # here -- panel templates are built for courier tracking codes.
         from apps.core.models import SiteSettings
+        from apps.core.placeholders import clean_value
 
         site = SiteSettings.load()
         template = ""
         tokens = {}
         message = (
             f"سفارش {notice.order_number} کازین گالری آمادهٔ دریافت حضوری است. "
-            f"نشانی: {site.pickup_address or '-'}"
-            + (f" | ساعات دریافت: {site.pickup_hours}" if site.pickup_hours else "")
+            f"نشانی: {clean_value(site.pickup_address) or '-'}"
+            + (
+                f" | ساعات دریافت: {clean_value(site.pickup_hours)}"
+                if clean_value(site.pickup_hours)
+                else ""
+            )
         )
     elif notice.event == Events.ORDER_SHIPPED:
         template = (settings.SMS_TEMPLATE_ORDER_SHIPPED or "").strip()
@@ -345,12 +377,34 @@ def _order_sms_content(notice: _OrderNotice):
 
 def _order_email_content(notice: _OrderNotice):
     shipping_label = "اکسپرس" if notice.shipping_method == "express" else "استاندارد"
-    if notice.event == Events.ORDER_CONFIRMED:
-        subject = f"تأیید سفارش {notice.order_number} — کازین گالری"
+    if notice.event == Events.ORDER_PAID:
+        subject = f"پرداخت سفارش {notice.order_number} دریافت شد — کازین گالری"
         lines = [
             "سلام،",
             "",
-            f"سفارش {notice.order_number} با موفقیت پرداخت و ثبت شد.",
+            f"پرداخت سفارش {notice.order_number} با موفقیت دریافت شد.",
+            f"مبلغ کل: {notice.total:,} تومان",
+            f"روش ارسال: {shipping_label}",
+            "",
+            "سفارش شما در انتظار تأیید فروشگاه است؛ پس از تأیید، آماده‌سازی و ارسال "
+            "می‌شود و کد رهگیری برای شما پیامک خواهد شد.",
+        ]
+        if notice.estimated_delivery_min and notice.estimated_delivery_max:
+            lines.append(
+                "بازهٔ تحویل تخمینی: "
+                f"{notice.estimated_delivery_min:%Y/%m/%d} تا {notice.estimated_delivery_max:%Y/%m/%d}"
+            )
+        lines += [
+            "",
+            "می‌توانید وضعیت سفارش را در حساب کاربری خود پیگیری کنید.",
+            "با تشکر — کازین گالری (cusin.ir)",
+        ]
+    elif notice.event == Events.ORDER_CONFIRMED:
+        subject = f"سفارش {notice.order_number} تأیید شد — کازین گالری"
+        lines = [
+            "سلام،",
+            "",
+            f"سفارش {notice.order_number} توسط فروشگاه تأیید شد و در حال آماده‌سازی است.",
             f"مبلغ کل: {notice.total:,} تومان",
             f"روش ارسال: {shipping_label}",
         ]
@@ -366,6 +420,7 @@ def _order_email_content(notice: _OrderNotice):
         ]
     elif notice.event == Events.ORDER_SHIPPED and notice.shipping_method == "pickup":
         from apps.core.models import SiteSettings
+        from apps.core.placeholders import clean_value
 
         site = SiteSettings.load()
         subject = f"سفارش {notice.order_number} آمادهٔ دریافت حضوری — کازین گالری"
@@ -373,10 +428,10 @@ def _order_email_content(notice: _OrderNotice):
             "سلام،",
             "",
             f"سفارش {notice.order_number} آمادهٔ تحویل حضوری است.",
-            f"نشانی دریافت: {site.pickup_address or '-'}",
+            f"نشانی دریافت: {clean_value(site.pickup_address) or '-'}",
         ]
-        if site.pickup_hours:
-            lines.append(f"ساعات دریافت: {site.pickup_hours}")
+        if clean_value(site.pickup_hours):
+            lines.append(f"ساعات دریافت: {clean_value(site.pickup_hours)}")
         lines += ["", "با تشکر — کازین گالری (cusin.ir)"]
     elif notice.event == Events.ORDER_SHIPPED:
         subject = f"سفارش {notice.order_number} ارسال شد — کازین گالری"
@@ -521,8 +576,13 @@ def _deliver_owner_paid_order(notice: _OwnerOrderNotice) -> None:
 
 def notify_owner_low_stock(order, crossings) -> None:
     """Queue ONE owner alert for every stock crossing detected by this
-    order's decrement. `crossings` is a list of (label, remaining) tuples
-    captured while the row locks are held; delivery is on_commit."""
+    order's decrement.
+
+    `crossings` is a list of (label, remaining, threshold) tuples captured
+    while the row locks are held; delivery is on_commit. The threshold is
+    per product -- the alert names the number that actually fired, instead
+    of the global default.
+    """
     if not crossings:
         return
     snapshot = (order.pk, order.order_number, tuple(crossings))
@@ -530,11 +590,24 @@ def notify_owner_low_stock(order, crossings) -> None:
 
 
 def _owner_low_stock_text(order_number, crossings) -> str:
+    """Persian low-stock alert.
+
+    Each crossing carries its OWN threshold, because «موجودی کم» is a
+    per-product setting. An alert that quotes the global default quietly
+    lies about why it fired.
+    """
     lines = ["هشدار موجودی کم - کازین گالری"]
-    for label, remaining in crossings:
-        lines.append(f"- {label}: موجودی {remaining}")
+    for crossing in crossings:
+        label, remaining = crossing[0], crossing[1]
+        threshold = crossing[2] if len(crossing) > 2 else None
+        if threshold is None:
+            lines.append(f"- {label}: موجودی {remaining}")
+        else:
+            lines.append(
+                f"- {label}: موجودی {remaining} "
+                f"(آستانهٔ هشدار این کالا: {threshold})"
+            )
     lines.append(f"سفارش مربوط: {order_number}")
-    lines.append(f"آستانه هشدار: {settings.LOW_STOCK_THRESHOLD}")
     return "\n".join(lines)
 
 

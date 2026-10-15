@@ -31,20 +31,30 @@ context processor was removed) this page degrades to the stock app list.
         امروز: {{ cusin_dashboard.today|jweekday }} {{ cusin_dashboard.today|jdate }}
       </p>
       <p class="cusin-dash-meta">
-        آخرین به‌روزرسانی اعداد: {{ cusin_dashboard.generated_at|time:"H:i" }}
+        آخرین به‌روزرسانی اعداد: {{ cusin_dashboard.generated_at|time:"H:i"|fanum }}
         <span class="cusin-muted">(هر ۶۰ ثانیه تازه می‌شود)</span>
       </p>
     </div>
-    {% if cusin_perms.orders %}
-    <div class="cusin-days-toggle" role="group" aria-label="بازهٔ نمودار">
-      <a href="?days=14" class="cusin-chip{% if cusin_dashboard_days == 14 %} is-active{% endif %}">۱۴ روز</a>
-      <a href="?days=30" class="cusin-chip{% if cusin_dashboard_days == 30 %} is-active{% endif %}">۳۰ روز</a>
-    </div>
-    {% endif %}
   </div>
 
   {% if cusin_perms.orders or cusin_perms.customers %}
-  <section class="cusin-kpis" aria-label="شاخص‌های کلیدی">
+  {% comment %}The switcher belongs with the numbers it changes: up in the
+  page header it sat a full row away from the KPI cards, over on the far
+  side of a right-to-left page.{% endcomment %}
+  <div class="cusin-kpis-block">
+    <div class="cusin-kpis-head">
+      <h2 class="cusin-section-title">شاخص‌های کلیدی</h2>
+      {% if cusin_perms.orders %}
+      <div class="cusin-days-toggle" role="group" aria-label="بازهٔ زمانی داشبورد">
+        {% for period in cusin_dashboard.periods %}
+        <a href="?days={{ period.days }}" data-cusin-period="{{ period.days }}"
+           class="cusin-chip{% if period.active %} is-active{% endif %}"
+           {% if period.active %}aria-current="true"{% endif %}>{{ period.label }}</a>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    <section class="cusin-kpis" aria-label="شاخص‌های کلیدی">
     {% for kpi in cusin_dashboard.kpi_list %}
     <article class="cusin-card cusin-kpi-card">
       <header class="cusin-card-head">
@@ -99,7 +109,8 @@ context processor was removed) this page degrades to the stock app list.
       </div>
     </article>
     {% endfor %}
-  </section>
+    </section>
+  </div>
   {% endif %}
 
   {% if cusin_actions %}
@@ -124,24 +135,30 @@ context processor was removed) this page degrades to the stock app list.
   <div class="cusin-dash-cols">
     <section class="cusin-card cusin-chart-card" aria-label="نمودار فروش">
       <header class="cusin-card-head">
-        <h2>فروش روزانهٔ {{ cusin_dashboard.chart_days|fanum }} روز اخیر</h2>
+        <h2>{% if cusin_dashboard.chart_hourly %}فروش ساعتیِ امروز{% else %}فروش در {{ cusin_dashboard.period_label }} اخیر{% endif %}</h2>
         <span class="cusin-card-note">فروش ناخالص (سفارش‌های پرداخت‌شده)</span>
       </header>
       {% if cusin_dashboard.chart_max %}
       <div class="cusin-chart-scroll" dir="ltr">
         <svg class="cusin-chart" viewBox="0 0 {{ cusin_dashboard.chart_width }} 170" role="img"
-             aria-label="نمودار ستونی فروش روزانه؛ جدول اعداد زیر نمودار آمده است.">
+             data-cusin-chart
+             aria-label="نمودار ستونی فروش؛ جدول اعداد زیر نمودار آمده است.">
           {% for p in cusin_dashboard.chart %}
           <g class="cusin-chart-col">
-            <rect x="{{ p.x }}" y="{{ p.bar_y }}" width="24" height="{{ p.bar_h }}" rx="4">
+            <rect x="{{ p.x }}" y="{{ p.bar_y }}" width="{{ p.bar_w }}" height="{{ p.bar_h }}" rx="4"
+                  data-cusin-chart-bar
+                  data-date="{{ p.jfull }}"
+                  data-amount="{{ p.gross_toman }}"
+                  data-orders="{{ p.orders }}">
               <title>{{ p.jfull }} — {{ p.gross|toman }} ({{ p.orders|fanum }} سفارش)</title>
             </rect>
-            {% if cusin_dashboard.chart_days == 14 or forloop.counter0|divisibleby:2 %}
-            <text x="{{ p.x|add:12 }}" y="162" text-anchor="middle">{{ p.jlabel }}</text>
-            {% endif %}
           </g>
           {% endfor %}
+          {% for tick in cusin_dashboard.chart_ticks %}
+          <text class="cusin-chart-tick" x="{{ tick.x }}" y="162" text-anchor="middle">{{ tick.label }}</text>
+          {% endfor %}
         </svg>
+        <div class="cusin-chart-tip" data-cusin-chart-tip hidden role="status" aria-live="polite"></div>
       </div>
       {% else %}
       <p class="cusin-empty">{% cusin_icon "chart-bar" %} در این بازه فروشی ثبت نشده است.</p>
@@ -162,7 +179,7 @@ context processor was removed) this page degrades to the stock app list.
 
     <section class="cusin-card" aria-label="پرفروش‌ترین محصولات">
       <header class="cusin-card-head">
-        <h2>پرفروش‌های {{ cusin_dashboard.chart_days|fanum }} روز</h2>
+        <h2>پرفروش‌های {{ cusin_dashboard.period_label }} اخیر</h2>
         <span class="cusin-card-note">بر پایهٔ تعداد قلم</span>
       </header>
       {% if cusin_dashboard.top_products %}
@@ -239,20 +256,26 @@ context processor was removed) this page degrades to the stock app list.
     </header>
     <ul class="cusin-readiness-list">
       {% for item in cusin_readiness %}
-      <li class="{% if item.ok %}is-ok{% else %}is-bad{% endif %}">
-        {% if item.ok %}{% cusin_icon "check" %}{% else %}{% cusin_icon "x" %}{% endif %}
-        <strong>{{ item.label }}</strong>
-        <span>{{ item.detail }}</span>
+      <li class="{% if item.ok %}is-ok{% else %}is-bad{% endif %}" data-check="{{ item.id }}">
+        {# One full-width block: icon and title on the first row, then the #}
+        {# sentence, then the missing items -- each of them named ONCE. #}
+        <div class="cusin-readiness-head">
+          {% if item.ok %}{% cusin_icon "check" %}{% else %}{% cusin_icon "x" %}{% endif %}
+          <strong>{{ item.label }}</strong>
+        </div>
+        <span class="cusin-readiness-detail">{{ item.detail }}</span>
+        {% if item.missing %}
+        <ul class="cusin-readiness-missing">
+          {% for miss in item.missing %}
+          <li><b>{{ miss.label }}</b> — {{ miss.reason }}</li>
+          {% endfor %}
+        </ul>
+        {% endif %}
       </li>
       {% endfor %}
     </ul>
   </section>
   {% endif %}
-
-  <section class="cusin-card cusin-appsections" aria-label="بخش‌های مدیریت">
-    <header class="cusin-card-head"><h2>بخش‌های مدیریت</h2></header>
-    {% include "admin/app_list.html" with app_list=app_list show_changelinks=True %}
-  </section>
 
 </div>
 {% else %}

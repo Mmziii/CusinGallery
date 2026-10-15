@@ -38,7 +38,10 @@ class Order(models.Model):
 
     class PaymentStatus(models.TextChoices):
         UNPAID = "unpaid", "پرداخت نشده"
-        PENDING = "pending", "در انتظار پرداخت"
+        # "در انتظار پرداخت" read as "the shop is waiting for the money",
+        # which is not what this value means: the customer has already
+        # been handed to the gateway and their attempt is IN FLIGHT there.
+        PENDING = "pending", "در حال پرداخت در درگاه"
         PAID = "paid", "پرداخت شده"
         FAILED = "failed", "پرداخت ناموفق"
         REFUNDED = "refunded", "مسترد شده"
@@ -78,7 +81,8 @@ class Order(models.Model):
     gift_wrap = models.BooleanField("بسته‌بندی هدیه", default=False)
     gift_message = models.TextField(
         "پیام هدیه", blank=True, default="",
-        help_text="حداکثر ۲۰۰ کاراکتر؛ متن ساده -- در همهٔ نمایش‌ها escape می‌شود.",
+        help_text="حداکثر ۲۰۰ کاراکتر. متن ساده بنویسید (بدون لینک و ایموجی)؛ "
+        "همراه بسته برای گیرنده چاپ می‌شود.",
     )
     gift_wrap_fee = models.PositiveBigIntegerField("هزینهٔ بسته‌بندی هدیه (تومان)", default=0)
 

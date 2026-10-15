@@ -212,19 +212,33 @@ class ProductListEditableTests(TestCase):
         self.assertEqual(self.product.price, 100000)
 
     def test_stock_filters_legacy_and_new(self):
-        # threshold is LOW_STOCK_THRESHOLD=3 by default
+        # The rule is each product's OWN «آستانهٔ هشدار موجودی کم»
+        # (Product.low_stock_threshold, default 5) -- not the global
+        # LOW_STOCK_THRESHOLD, which is only the default for a new product.
         make_product(name="کتری", stock_quantity=0)     # out
         make_product(name="فنجان", stock_quantity=2)    # low, in stock
-        # self.product has stock 5 -> above threshold
+        # self.product has stock 5 -> at its threshold of 5, so "low".
         url = reverse(CHANGELIST)
         r = self.client.get(url, {"low_stock": "1"})   # legacy: <= threshold
-        self.assertEqual(r.context["cl"].result_count, 2)
+        self.assertEqual(r.context["cl"].result_count, 3)
         r = self.client.get(url, {"low_stock": "2"})   # new: exactly zero
         self.assertEqual(r.context["cl"].result_count, 1)
         r = self.client.get(url, {"low_stock": "3"})   # new: low but in stock
-        self.assertEqual(r.context["cl"].result_count, 1)
+        self.assertEqual(r.context["cl"].result_count, 2)
         r = self.client.get(url, {"low_stock": "0"})   # legacy: above threshold
-        self.assertEqual(r.context["cl"].result_count, 1)
+        self.assertEqual(r.context["cl"].result_count, 0)
+
+    def test_stock_filter_uses_each_products_own_threshold(self):
+        """A product can raise or lower its own warning line."""
+        strict = make_product(name="ست ظروف", stock_quantity=8, low_stock_threshold=10)
+        lax = make_product(name="پیش‌بند", stock_quantity=4, low_stock_threshold=2)
+        url = reverse(CHANGELIST)
+        low = self.client.get(url, {"low_stock": "3"}).context["cl"]
+        self.assertIn(strict, low.queryset)
+        self.assertNotIn(lax, low.queryset)
+        # ...and the same rows read as «موجودی کافی»/«موجودی کم» on the list.
+        html = self.client.get(url).content.decode()
+        self.assertIn("ست ظروف", html)
 
     def test_has_image_filter(self):
         url = reverse(CHANGELIST)

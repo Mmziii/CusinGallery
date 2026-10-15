@@ -2,6 +2,7 @@
 from rest_framework import serializers
 
 from .models import SiteSettings
+from .placeholders import clean_value
 
 
 class NullToBlankTextMixin:
@@ -43,6 +44,15 @@ class NullToBlankTextMixin:
 
 
 class SiteSettingsSerializer(serializers.ModelSerializer):
+    """Public contact/branding payload.
+
+    Every field passes through ``placeholders.clean_value``: the seeded
+    «+98 21 0000 0000» and the bracketed «[… را از پنل مدیریت وارد کنید]»
+    sentences are INSTRUCTIONS, not content, and used to be rendered
+    verbatim on the storefront. A storefront that receives "" shows its
+    own empty state instead of lying to customers.
+    """
+
     class Meta:
         model = SiteSettings
         fields = [
@@ -51,3 +61,14 @@ class SiteSettingsSerializer(serializers.ModelSerializer):
             "enamad_html",
         ]
         read_only_fields = fields
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        for name in self.Meta.fields:
+            if name == "enamad_html":
+                # Raw HTML snippet from the e-namad panel: emptiness is the
+                # only test that applies, and blanking it is already the
+                # documented "show the marked placeholder slot" behaviour.
+                continue
+            data[name] = clean_value(data.get(name))
+        return data

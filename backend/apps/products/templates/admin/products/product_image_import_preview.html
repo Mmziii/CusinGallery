@@ -130,18 +130,66 @@ button below is the only thing that writes (one transaction, all-or-nothing).
   </ul>
 {% endif %}
 
-<form method="post" style="margin-top:18px">
+<form id="cusin-image-import-confirm" method="post" style="margin-top:18px">
   {% csrf_token %}
   <input type="hidden" name="token" value="{{ token }}">
   <input type="hidden" name="mode" value="{{ plan.mode }}">
   {% if plan.skip_existing %}<input type="hidden" name="skip_existing" value="1">{% endif %}
   <div class="submit-row">
-    <input type="submit" name="confirm" value="تأیید و ذخیره" class="default">
-    <input type="submit" name="cancel" value="انصراف (بدون تغییر)">
+    {% comment %} Submit BUTTONS, not <input type="submit">: an input posts its own
+       label as the value, so the view (which compares the value to "1")
+       never saw the confirm and fell through to the upload branch --
+       «فایلی انتخاب نشده است». A button carries the value we choose. {% endcomment %}
+    <button type="submit" id="cusin-image-import-confirm-button"
+            name="confirm" value="1" class="default">تأیید و ذخیره</button>
+    <button type="submit" id="cusin-image-import-cancel-button"
+            name="cancel" value="1">انصراف (بدون تغییر)</button>
+    <span id="cusin-image-import-waiting" style="display:none;margin-inline-start:10px;color:#666">
+      در حال آماده‌سازی… لطفاً صبر کنید.
+    </span>
   </div>
   <p style="color:#666;font-size:12px">
-    ذخیره در یک تراکنش انجام می‌شود: اگر هر تصویری ذخیره نشود، هیچ‌کدام ذخیره نمی‌شود و
-    فایل‌های نوشته‌شده هم پاک می‌شوند.
+    ذخیره دسته‌دسته انجام می‌شود (هر بار {{ plan.batch_size|default:20 }} تصویر):
+    هر دسته جداگانه در پایگاه داده ثبت می‌شود، بنابراین اگر ارتباط قطع شود با
+    بازکردن دوبارهٔ همان صفحه از همان‌جا ادامه می‌دهید.
+    تصاویر هر دسته با هم ذخیره می‌شوند: اگر دسته‌ای با خطا روبه‌رو شود، فقط همان
+    دسته ذخیره نمی‌شود و بقیه دست‌نخورده می‌مانند.
   </p>
 </form>
+
+<script>
+(function () {
+  "use strict";
+  var form = document.getElementById("cusin-image-import-confirm");
+  var confirmButton = document.getElementById("cusin-image-import-confirm-button");
+  var cancelButton = document.getElementById("cusin-image-import-cancel-button");
+  var waiting = document.getElementById("cusin-image-import-waiting");
+  if (!form || !confirmButton) { return; }
+
+  // Block double submits: the owner sees no response until the first
+  // batch lands, and a second POST would restart the same job twice.
+  form.addEventListener("submit", function (event) {
+    var pressed = event.submitter || document.activeElement;
+    if (pressed !== confirmButton) { return; }
+    // Disable only AFTER the browser has read the form: a disabled
+    // submitter is left out of the submission entirely, which would drop
+    // the very «confirm=1» the view is waiting for.
+    window.setTimeout(function () {
+      confirmButton.disabled = true;
+      if (cancelButton) { cancelButton.disabled = true; }
+      confirmButton.textContent = "در حال آماده‌سازی…";
+      if (waiting) { waiting.style.display = "inline"; }
+    }, 0);
+  });
+
+  // A reload must not leave a dead button behind.
+  window.addEventListener("pageshow", function (event) {
+    if (!event.persisted) { return; }
+    confirmButton.disabled = false;
+    if (cancelButton) { cancelButton.disabled = false; }
+    confirmButton.textContent = "تأیید و ذخیره";
+    if (waiting) { waiting.style.display = "none"; }
+  });
+})();
+</script>
 {% endblock %}

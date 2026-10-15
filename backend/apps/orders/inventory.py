@@ -56,7 +56,6 @@ def decrement_stock_for_order(order) -> None:
     TransactionManagementError -- a deliberate fail-loud guard against
     someone ever invoking it from a non-atomic context.
     """
-    threshold = settings.LOW_STOCK_THRESHOLD
     crossings = []
     for item in order.items.select_related("product", "variant"):
         if item.variant_id is not None:
@@ -77,8 +76,16 @@ def decrement_stock_for_order(order) -> None:
         # Part R4 item 3: a DOWNWARD crossing of the low-stock threshold
         # alerts the owner exactly once per crossing (re-arms only after
         # stock goes back above the threshold).
+        # Per-product rule, not the global one: a variant borrows its
+        # parent product's threshold, exactly like
+        # products.pricing.stock_status_for() does for the storefront.
+        threshold = getattr(row, "low_stock_threshold", None)
+        if threshold is None:
+            threshold = getattr(getattr(row, "product", None), "low_stock_threshold", 0)
         if old_stock > threshold >= row.stock_quantity:
-            crossings.append((_crossing_label(row, item), row.stock_quantity))
+            crossings.append(
+                (_crossing_label(row, item), row.stock_quantity, int(threshold))
+            )
     if crossings:
         from apps.notifications.services import notify_owner_low_stock
 

@@ -411,7 +411,8 @@ class ZarinpalServiceFlowTests(CacheIsolatedAPITestCase):
 
         self.order.refresh_from_db()
         self.assertEqual(self.order.payment_status, Order.PaymentStatus.PAID)
-        self.assertEqual(self.order.status, Order.Status.CONFIRMED)
+        # Paid, but «در انتظار تأیید»: only the owner may confirm.
+        self.assertEqual(self.order.status, Order.Status.PENDING)
 
         self.product.refresh_from_db()
         self.assertEqual(self.product.stock_quantity, stock_before - self.quantity)

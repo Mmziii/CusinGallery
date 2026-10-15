@@ -15,7 +15,7 @@ the empty table body in that case (see cusin-empty-state in theme.css).
   <p>
     {% if cl.query %}جستجوی «{{ cl.query }}» {% endif %}با فیلترهای فعلی هیچ
     {{ cl.opts.verbose_name_plural }} پیدا نشد.
-    {% if cl.full_result_count %}در مجموع {{ cl.full_result_count }} مورد ثبت شده است.{% endif %}
+    {% if cl.full_result_count %}در مجموع {{ cl.full_result_count|numfa }} مورد ثبت شده است.{% endif %}
   </p>
   <a class="cusin-btn cusin-btn--ghost cusin-btn--sm" href="?">پاک‌کردن جستجو و فیلترها</a>
   {% else %}
@@ -26,12 +26,25 @@ the empty table body in that case (see cusin-empty-state in theme.css).
 </div>
 {% endif %}
 <p class="paginator">
+{% comment %}
+Cusin: Django prints page numbers and the result count in ASCII digits
+(«صفحهٔ 1»، «165 محصولات»). Same markup as the stock template, Persian
+digits throughout -- including the page links, which theme.js reads back
+to build the «صفحهٔ …» menu.
+{% endcomment %}
 {% if pagination_required %}
 {% for i in page_range %}
-    {% paginator_number cl i %}
+    {% if i == cl.paginator.ELLIPSIS %}
+        <span class="cusin-paginator-gap">{{ cl.paginator.ELLIPSIS }}</span>
+    {% elif i == cl.page_num %}
+        <span class="this-page">{{ i|numfa }}</span>
+    {% else %}
+        <a href="{% changelist_page_href cl i %}"{% if i == cl.paginator.num_pages %} class="end"{% endif %}>{{ i|numfa }}</a>
+    {% endif %}
 {% endfor %}
 {% endif %}
-{{ cl.result_count }} {% if cl.result_count == 1 %}{{ cl.opts.verbose_name }}{% else %}{{ cl.opts.verbose_name_plural }}{% endif %}
+{% comment %}Persian counts with the SINGULAR: «۱۶۵ محصول»، «۱ سفارش» -- not «۱۶۵ محصولات».{% endcomment %}
+{{ cl.result_count|numfa }} {{ cl.opts.verbose_name }}
 {% if show_all_url %}<a href="{{ show_all_url }}" class="showall">{% translate 'Show all' %}</a>{% endif %}
 {% if cl.formset and cl.result_count %}<input type="submit" name="_save" class="default" value="{% translate 'Save' %}">{% endif %}
 </p>

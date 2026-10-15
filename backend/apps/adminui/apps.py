@@ -17,6 +17,8 @@ class AdminuiConfig(AppConfig):
     def ready(self):
         # Persian titles for the django-otp admins (see third_party_admin.py).
         # Runs after django.contrib.admin's autodiscover, which registers them.
+        from .admin_actions import install_persian_admin_actions
         from .third_party_admin import register_persian_otp_admins
 
         register_persian_otp_admins()
+        install_persian_admin_actions()

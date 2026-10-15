@@ -59,6 +59,17 @@ AND without the visual theme (ADMIN_THEME_ENABLED=False).
         <span class="v" title="{{ original.created_at|date:'Y-m-d H:i' }}">{{ original.created_at|jdatetime }}</span></span>
       <span class="cusin-summary-item"><span class="k">روش ارسال</span>
         <span class="v">{{ shipping_method_label_text }}</span></span>
+      {% if summary_last_attempt %}
+      <span class="cusin-summary-item"><span class="k">آخرین تلاش پرداخت</span>
+        <span class="v">
+          <span class="cusin-attempt attempt-{{ summary_last_attempt.status }}"
+                title="{{ summary_last_attempt.raw_label }}">{{ summary_last_attempt.label }}</span>
+          <small class="cusin-muted">
+            — <span title="{{ summary_last_attempt.at|date:'Y-m-d H:i' }}">{{ summary_last_attempt.at|jdatetime }}</span>
+            {% if summary_last_attempt.reason %}({{ summary_last_attempt.reason }}){% endif %}
+          </small>
+        </span></span>
+      {% endif %}
       {% if original.tracking_code %}
       <span class="cusin-summary-item"><span class="k">کد رهگیری</span>
         <span class="v">{{ original.tracking_code }}
@@ -67,11 +78,26 @@ AND without the visual theme (ADMIN_THEME_ENABLED=False).
       {% endif %}
       {% if original.estimated_delivery_min is not None %}
       <span class="cusin-summary-item"><span class="k">بازهٔ تحویل</span>
-        <span class="v">{{ original.estimated_delivery_min|fanum }} تا {{ original.estimated_delivery_max|fanum }} روز</span></span>
+        <span class="v">{{ original.estimated_delivery_min|jdate_range:original.estimated_delivery_max }}</span></span>
       {% endif %}
       <span class="cusin-summary-item"><span class="k">مبلغ نهایی</span>
         <span class="v" title="{{ original.total }} تومان">{{ original.total|toman }}</span></span>
     </div>
+
+    {% if unpaid_warning %}
+    <div class="cusin-quick-warning" role="alert">
+      {% cusin_icon "alert-triangle" %}
+      <span>{{ unpaid_warning }}</span>
+    </div>
+    {% elif awaiting_confirmation %}
+    <div class="cusin-quick-warning is-info" role="status">
+      {% cusin_icon "bell" %}
+      <span>
+        این سفارش <strong>پرداخت شده</strong> و در انتظار <strong>تأیید شما</strong> است.
+        پس از تأیید، مسیر «در حال پردازش ← ارسال شده ← تحویل شده» باز می‌شود.
+      </span>
+    </div>
+    {% endif %}
 
     <div class="cusin-print-actions">
       <a class="cusin-btn cusin-btn--dark" href="{{ order_print_url }}" target="_blank" rel="noopener">
@@ -103,6 +129,17 @@ AND without the visual theme (ADMIN_THEME_ENABLED=False).
                   class="cusin-menu-item{% if action.tone == 'danger' %} is-danger{% endif %}"
                   {% if action.tone == 'danger' %}data-cusin-confirm-message="از انجام این کار مطمئن هستید؟"{% endif %}>
             {% cusin_icon action.icon %} {{ action.label }}
+          </button>
+          {% endfor %}
+          {% comment %} Transitions the DAG allows but the payment rule forbids are
+             SHOWN as disabled with their Persian reason, never hidden
+             silently -- the owner must see why the button is dead. {% endcomment %}
+          {% for action in quick_blocked %}
+          <button role="menuitem" type="button" disabled aria-disabled="true"
+                  class="cusin-menu-item is-disabled"
+                  title="{{ action.reason }}">
+            {% cusin_icon "lock" %} {{ action.label }}
+            <small class="cusin-muted">{{ action.reason }}</small>
           </button>
           {% endfor %}
         </div>

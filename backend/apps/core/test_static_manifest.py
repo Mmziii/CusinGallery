@@ -67,7 +67,11 @@ class StaticManifestTests(SimpleTestCase):
                         self.assertTrue(asset.is_file(), f"hashed asset is missing: {asset}")
 
     def test_all_nginx_static_rules_cache_only_hashed_assets_for_30_days(self):
-        hashed_location = r"location ~* ^/static/(.+\.[a-f0-9]{12}\.[^/]+)$ {"
+        # The pattern is QUOTED: it contains `{12}`, and nginx's
+        # brace-counting config parser otherwise cuts the location at that
+        # brace (pcre2_compile() failed: missing closing parenthesis). See
+        # apps/core/test_nginx_configs.py, which enforces the quoting rule.
+        hashed_location = r'location ~* "^/static/(.+\.[a-f0-9]{12}\.[^/]+)$" {'
         for path in NGINX_FILES:
             source = path.read_text(encoding="utf-8")
             with self.subTest(config=path.name, parent=path.parent.name):

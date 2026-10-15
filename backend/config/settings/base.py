@@ -352,6 +352,15 @@ PAYMENT_GATEWAY_TIMEOUT = env.int("PAYMENT_GATEWAY_TIMEOUT", default=15)
 # "pending" forever. Safe to run as often as the cron schedule likes.
 ORDER_EXPIRY_HOURS = env.int("ORDER_EXPIRY_HOURS", default=24)
 
+# An unpaid order older than this is "abandoned": the customer walked out
+# of the gateway and is not coming back. The admin's DEFAULT order list
+# hides those (they are noise in the owner's work queue -- the cron above
+# cancels them eventually); every one of them stays reachable through the
+# «سفارش‌های رهاشده» tab and through any explicit filter.
+ORDER_ABANDONED_UNPAID_AFTER_HOURS = env.int(
+    "ORDER_ABANDONED_UNPAID_AFTER_HOURS", default=ORDER_EXPIRY_HOURS
+)
+
 # ---------------------------------------------------------------------------
 # Notifications / SMS (Phase D; see apps/notifications and both
 # .env.example files for the full variable documentation)
@@ -385,6 +394,9 @@ SMS_SENDER = env("SMS_SENDER", default="")
 # Empty = fall back to a direct send with locally-composed Persian text
 # (which then requires SMS_SENDER).
 SMS_TEMPLATE_PASSWORD_RESET = env("SMS_TEMPLATE_PASSWORD_RESET", default="")
+# ORDER_PAID = the gateway confirmed the money (order still awaiting the
+# shop's confirmation); ORDER_CONFIRMED = the shop accepted it.
+SMS_TEMPLATE_ORDER_PAID = env("SMS_TEMPLATE_ORDER_PAID", default="")
 SMS_TEMPLATE_ORDER_CONFIRMED = env("SMS_TEMPLATE_ORDER_CONFIRMED", default="")
 SMS_TEMPLATE_ORDER_SHIPPED = env("SMS_TEMPLATE_ORDER_SHIPPED", default="")
 
@@ -609,11 +621,38 @@ PRODUCT_IMAGE_IMPORT_MAX_RATIO = env.int("PRODUCT_IMAGE_IMPORT_MAX_RATIO", defau
 PRODUCT_IMAGE_IMPORT_MAX_FILE_SIZE = env.int(
     "PRODUCT_IMAGE_IMPORT_MAX_FILE_SIZE", default=5 * 1024 * 1024
 )
+# How many images ONE request writes while the admin page is saving the
+# confirmed import. The apply step used to run as a single request, which
+# blew gunicorn's worker timeout on the 1-vCPU production box (a 176-image
+# ZIP saved nothing and the browser got a bare 502). 20 images per request
+# keeps every request short and makes the job resumable.
+PRODUCT_IMAGE_IMPORT_BATCH_SIZE = env.int(
+    "PRODUCT_IMAGE_IMPORT_BATCH_SIZE", default=20
+)
 
 # Optional hyperlink to the owner guide shown on the image-import page
 # (the admin always shows the naming rules inline). Leave empty to show
 # the plain reference to docs/OWNER_GUIDE.fa.md.
 OWNER_GUIDE_URL = env("OWNER_GUIDE_URL", default="")
+
+# ---------------------------------------------------------------------------
+# Placeholder (sample) content -- see apps/core/placeholders.py
+# ---------------------------------------------------------------------------
+# The seeded store profile ships instructions to the owner, not content:
+# «+98 21 0000 0000», «[نشانی واقعی فروشگاه را از پنل مدیریت وارد کنید]».
+# Those must read as MISSING everywhere (readiness card, storefront,
+# invoices, SMS) instead of being shown to customers.
+#
+# The legal pages live in the frontend sources, which a deployed backend
+# container does not ship. Set LEGAL_PAGES_PLACEHOLDER to a comma-separated
+# list of still-unedited page slugs to drive that check from the
+# deployment instead of the repository:
+#   LEGAL_PAGES_PLACEHOLDER=about,terms,privacy,shipping-returns,contact
+LEGAL_PAGES_PLACEHOLDER = [
+    slug.strip()
+    for slug in env("LEGAL_PAGES_PLACEHOLDER", default="").split(",")
+    if slug.strip()
+]
 
 # ---------------------------------------------------------------------------
 # Error monitoring (Phase E) -- optional, env-driven Sentry

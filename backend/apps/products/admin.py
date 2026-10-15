@@ -11,7 +11,7 @@ from django.conf import settings
 from django.contrib import admin, messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.db.models import Count, Prefetch, Q
+from django.db.models import Count, F, Prefetch, Q
 from django.http import FileResponse, HttpResponse, HttpResponseRedirect
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
@@ -20,11 +20,15 @@ from django.utils.text import slugify
 
 from decimal import ROUND_HALF_UP, Decimal
 
-from apps.adminui.admin_forms import NumericChangelistAdminMixin
+from apps.adminui.admin_dates import jalali_column
+from apps.adminui.templatetags.adminui_extras import group_thousands, to_fa_digits
+from apps.adminui.admin_forms import AutoWebpVariantsMixin, NumericChangelistAdminMixin
+from apps.adminui.search import NormalizedSearchMixin
 
 import csv
 import glob
 import io
+import json
 import os
 import re
 import shutil
@@ -49,11 +53,15 @@ from .importing import (
     update_products_from_rows,
 )
 from .image_import import (
+    DEFAULT_BATCH_SIZE,
     ImageImportLimits,
     ZipImageSource,
+    apply_job_batch,
     apply_plan,
     build_plan,
     fa_digits,
+    job_progress,
+    new_job,
     report_csv as image_report_csv,
 )
 from .models import Brand, Product, ProductAttribute, ProductAttributeValue, ProductImage, ProductVariant
@@ -268,7 +276,7 @@ class ProductVariantInline(AdminSkuDirectionMixin, admin.TabularInline):
 
 
 @admin.register(Brand)
-class BrandAdmin(NumericChangelistAdminMixin, admin.ModelAdmin):
+class BrandAdmin(AutoWebpVariantsMixin, NumericChangelistAdminMixin, admin.ModelAdmin):
     # Part R2: featured tiles are managed right from the changelist --
     # tick is_featured and set display_order inline, or use bulk actions.
     list_display = ("name", "slug", "is_featured", "display_order", "is_active")
@@ -277,6 +285,27 @@ class BrandAdmin(NumericChangelistAdminMixin, admin.ModelAdmin):
     search_fields = ("name", "slug")
     prepopulated_fields = {"slug": ("name",)}
     actions = ("make_featured", "make_not_featured")
+
+    image_field = "tile_image"
+    image_help = (
+        "اندازهٔ پیشنهادی کاشی ۸۰۰×۸۰۰ پیکسل (مربع) و حداکثر ۲ مگابایت؛ "
+        "JPG یا PNG یا WebP."
+    )
+    fieldsets = (
+        (None, {"fields": ("name", "slug", "logo")}),
+        ("کاشی صفحهٔ اصلی", {
+            "fields": (
+                "is_featured", "display_order", "tile_image",
+                "webp_400_readonly", "webp_800_readonly", "webp_1200_readonly",
+            ),
+            "description": (
+                "سه نسخهٔ WebP هنگام ذخیرهٔ تصویر کاشی به‌طور خودکار ساخته "
+                "می‌شوند و قابل ویرایش نیستند."
+            ),
+        }),
+        (None, {"fields": ("is_active",)}),
+    )
+    readonly_fields = ("webp_400_readonly", "webp_800_readonly", "webp_1200_readonly")
 
     @admin.action(description="برند ویژه: بله")
     def make_featured(self, request, queryset):
@@ -304,7 +333,11 @@ class ProductStockChangelistWidget(forms.NumberInput):
 
         if quantity <= 0:
             badge_class, label = "stock-out", "ناموجود"
-        elif quantity <= getattr(self, "low_stock_threshold", settings.LOW_STOCK_THRESHOLD):
+        elif quantity <= getattr(
+            self,
+            "low_stock_threshold",
+            getattr(self, "_settings_threshold", settings.LOW_STOCK_THRESHOLD),
+        ):
             badge_class = "stock-low"
             label = f"{fa_digits(quantity)} موجودی کم"
         else:
@@ -319,13 +352,67 @@ class ProductStockChangelistWidget(forms.NumberInput):
         )
 
 
+def price_hint(value) -> str:
+    """``910000`` -> ``۹۱۰٬۰۰۰ تومان``.
+
+    The editable changelist cell can only hold the raw number (that is what
+    the form has to POST), so the amount the owner can actually read goes
+    underneath it, grouped and in Persian digits.
+    """
+    try:
+        amount = Decimal(str(value if value not in (None, "") else ""))
+    except (ArithmeticError, ValueError, TypeError):
+        return "—"
+    if amount <= 0:
+        return "—"
+    return f"{to_fa_digits(group_thousands(int(amount)))} تومان"
+
+
+class ProductPriceChangelistWidget(forms.NumberInput):
+    """Show the price the way an invoice does, under the bare number.
+
+    Same contract as ProductStockChangelistWidget: the input keeps its
+    original name, value and POST semantics, and only the presentation
+    around it changes.
+    """
+
+    def render(self, name, value, attrs=None, renderer=None):
+        input_html = super().render(name, value, attrs, renderer)
+        return format_html(
+            '<div class="cusin-price-edit">{}'
+            '<span class="cusin-price-hint" data-cusin-price-hint>{}</span>'
+            "</div>",
+            input_html,
+            price_hint(value),
+        )
+
+
+class BrandFilter(admin.RelatedFieldListFilter):
+    """Django's related filter labels its «no value» option with the admin's
+    empty-value marker, i.e. a bare «-». On the product list that reads as
+    a broken row; it means «بدون برند»."""
+
+    empty_choice_title = "بدون برند"
+
+    def choices(self, changelist):
+        original = self.empty_value_display
+        self.empty_value_display = self.empty_choice_title
+        try:
+            yield from super().choices(changelist)
+        finally:
+            self.empty_value_display = original
+
+
 class LowStockFilter(admin.SimpleListFilter):
     """Part R4 item 3: one-click view of everything at/below the owner
     low-stock threshold (env LOW_STOCK_THRESHOLD, default 3).
 
     Admin-panel work adds the «ناموجود» (exactly zero) lookup -- purely
-    additive: the existing "1"/"0" values and their querysets are
-    untouched (covered by apps/products/tests/test_admin_products.py).
+    additive: the existing "1"/"0" values are untouched (covered by
+    apps/products/tests/test_admin_products.py).
+
+    Every comparison is against each product's OWN low_stock_threshold,
+    never the global LOW_STOCK_THRESHOLD -- see the note in queryset().
     """
 
     title = "وضعیت موجودی"
@@ -340,12 +427,17 @@ class LowStockFilter(admin.SimpleListFilter):
         )
 
     def queryset(self, request, queryset):
-        from django.conf import settings
-
+        # ONE rule: a product's own «آستانهٔ هشدار موجودی کم». The env
+        # LOW_STOCK_THRESHOLD is only the default for a NEW product -- it
+        # is not a second, competing rule, and comparing against it made
+        # the filter disagree with the badge on the very same row (a
+        # product with stock 4 and threshold 5 was "موجودی کافی" here and
+        # "موجودی کم" there).
+        own_threshold = F("low_stock_threshold")
         if self.value() == "1":
-            return queryset.filter(stock_quantity__lte=settings.LOW_STOCK_THRESHOLD)
+            return queryset.filter(stock_quantity__lte=own_threshold)
         if self.value() == "0":
-            return queryset.filter(stock_quantity__gt=settings.LOW_STOCK_THRESHOLD)
+            return queryset.filter(stock_quantity__gt=own_threshold)
         if self.value() == "2":
             return queryset.filter(stock_quantity=0)
         if self.value() == "3":
@@ -353,7 +445,7 @@ class LowStockFilter(admin.SimpleListFilter):
             # (zero-stock rows live on their own «ناموجود» card), so its
             # link must land on exactly that set.
             return queryset.filter(
-                stock_quantity__lte=settings.LOW_STOCK_THRESHOLD,
+                stock_quantity__lte=own_threshold,
                 stock_quantity__gt=0,
             )
         return queryset
@@ -378,7 +470,10 @@ class HasImageFilter(admin.SimpleListFilter):
 
 @admin.register(Product)
 class ProductAdmin(
-    AdminSkuDirectionMixin, NumericChangelistAdminMixin, admin.ModelAdmin
+    AdminSkuDirectionMixin,
+    NumericChangelistAdminMixin,
+    NormalizedSearchMixin,
+    admin.ModelAdmin,
 ):
     # The owner edits prices, stock and flags inline as before. Product name,
     # image and identifying metadata share one compact, sortable link cell;
@@ -391,9 +486,18 @@ class ProductAdmin(
     list_editable = ("price", "compare_at_price", "stock_quantity", "is_active", "is_featured")
     list_filter = (
         "is_active", "is_featured", "is_new", "is_best_seller", "category",
-        "brand", LowStockFilter, HasImageFilter,
+        ("brand", BrandFilter), LowStockFilter, HasImageFilter,
     )
     search_fields = ("name", "sku", "slug")
+
+    # The changelist column must stay SHORT («SKU» is a narrow column and
+    # the table has to fit a 125%-scaled Windows screen), but the FORM
+    # should say what the code means -- «SKU:» alone is English jargon.
+    def get_form(self, request, obj=None, change=False, **kwargs):
+        form = super().get_form(request, obj, change=change, **kwargs)
+        if "sku" in form.base_fields:
+            form.base_fields["sku"].label = "کد کالا (SKU)"
+        return form
     prepopulated_fields = {"slug": ("name",)}
     # Part R5 item 9: complements is an M2M to Product itself -- the
     # autocomplete widget searches by ProductAdmin.search_fields above.
@@ -458,6 +562,7 @@ class ProductAdmin(
                 io.BytesIO(_template_xlsx()),
                 as_attachment=True,
                 filename="product_import_template.xlsx",
+                content_type=self.XLSX_CONTENT_TYPE,
             )
         buffer = io.BytesIO(template_csv().encode("utf-8-sig"))
         return FileResponse(
@@ -471,6 +576,7 @@ class ProductAdmin(
                 io.BytesIO(_update_template_xlsx()),
                 as_attachment=True,
                 filename="product_price_stock_template.xlsx",
+                content_type=self.XLSX_CONTENT_TYPE,
             )
         buffer = io.BytesIO(_update_template_csv().encode("utf-8-sig"))
         return FileResponse(
@@ -485,7 +591,10 @@ class ProductAdmin(
         if fmt == "xlsx":
             buffer = io.BytesIO(export_products_xlsx())
             return FileResponse(
-                buffer, as_attachment=True, filename="cusin_products_export.xlsx"
+                buffer,
+                as_attachment=True,
+                filename="cusin_products_export.xlsx",
+                content_type=self.XLSX_CONTENT_TYPE,
             )
         buffer = io.BytesIO(export_products_csv().encode("utf-8-sig"))
         return FileResponse(
@@ -558,11 +667,19 @@ class ProductAdmin(
         )
 
     def image_import_view(self, request):
-        """One page, two steps: upload the ZIP and see exactly what would
-        happen (dry run, nothing written), then confirm to write it.
+        """
+        Upload the ZIP, see exactly what would happen (dry run, nothing
+        written), then confirm -- and the save runs in BATCHES.
 
-        All-or-nothing, one transaction; the ZIP is streamed to a temp file
-        and removed afterwards either way.
+        A 176-image ZIP took ~27s on a fast core and blew gunicorn's 60s
+        worker timeout on the 1-vCPU server, which killed the worker
+        mid-import: the browser got a bare 502 and nothing was saved.
+        The confirm step therefore only STARTS a resumable job
+        (apps.products.image_import.new_job / apply_job_batch); the page
+        then drives it 20 images per request, each batch its own
+        transaction, with a progress bar and a resume-if-reloaded job
+        file. Failures come back as Persian text on this page, never as a
+        502.
         """
         context = self._image_context(
             request,
@@ -583,13 +700,15 @@ class ProductAdmin(
 
         if request.method == "POST":
             if request.POST.get("cancel") == "1":
-                self._drop_stashed(self._stashed_image_path(request.POST.get("token")))
-                request.session.pop(self._IMAGE_PENDING_KEY, None)
+                self._forget_image_job(request)
                 self.message_user(request, "عملیات لغو شد؛ چیزی ذخیره نشد.", messages.INFO)
                 return HttpResponseRedirect(reverse("admin:products_product_changelist"))
 
             if request.POST.get("confirm") == "1":
-                return self._confirm_image_import(request, context)
+                return self._start_image_job(request, context)
+
+            if request.POST.get("step") == "1":
+                return self._apply_image_batch(request, context)
 
             upload = request.FILES.get("zip")
             if upload is None:
@@ -627,6 +746,10 @@ class ProductAdmin(
                     request, "admin/products/product_image_import.html", context
                 )
 
+            # The dry run already knows the whole work list -- remember it,
+            # so confirming is instant and the save can be batched.
+            job = new_job(plan, token)
+            self._save_image_job(job)
             request.session[self._IMAGE_PENDING_KEY] = {
                 "token": token,
                 "mode": plan.mode,
@@ -638,54 +761,224 @@ class ProductAdmin(
                 request, "admin/products/product_image_import_preview.html", context
             )
 
+        # GET: an unfinished job survives a reload -- show it and carry on.
+        job = self._load_image_job(request)
+        if job is not None:
+            return self._image_progress_response(request, context, job)
         return TemplateResponse(request, "admin/products/product_image_import.html", context)
 
-    def _confirm_image_import(self, request, context):
-        pending = request.session.get(self._IMAGE_PENDING_KEY)
-        path = self._stashed_image_path(pending and pending.get("token"))
-        if not pending or path is None:
+    # -- resumable job plumbing -------------------------------------------
+
+    def _image_job_path(self, token):
+        if not token or not re.fullmatch(r"[0-9a-f]{32}", str(token)):
+            return None
+        return os.path.join(self._image_stash_dir(), str(token) + ".json")
+
+    def _save_image_job(self, job):
+        """Atomic write: a half-written job file must never be reloadable."""
+        path = self._image_job_path(job.get("token"))
+        if path is None:
+            return
+        os.makedirs(self._image_stash_dir(), exist_ok=True)
+        temporary = path + ".tmp"
+        with open(temporary, "w", encoding="utf-8") as handle:
+            json.dump(job, handle, ensure_ascii=False)
+        os.replace(temporary, path)
+
+    def _load_image_job(self, request):
+        pending = request.session.get(self._IMAGE_PENDING_KEY) or {}
+        path = self._image_job_path(pending.get("token"))
+        if not path or not os.path.exists(path):
+            return None
+        try:
+            with open(path, encoding="utf-8") as handle:
+                job = json.load(handle)
+        except (OSError, ValueError):
+            return None
+        return job if isinstance(job, dict) and job.get("version") == 1 else None
+
+    def _forget_image_job(self, request):
+        pending = request.session.get(self._IMAGE_PENDING_KEY) or {}
+        for candidate in (
+            self._stashed_image_path(pending.get("token")),
+            self._image_job_path(pending.get("token")),
+        ):
+            self._drop_stashed(candidate)
+        request.session.pop(self._IMAGE_PENDING_KEY, None)
+
+    def _start_image_job(self, request, context):
+        job = self._load_image_job(request)
+        if job is None:
             self.message_user(
                 request,
                 "پیش‌نمایشی برای تأیید وجود ندارد؛ فایل را دوباره بارگذاری کنید.",
                 messages.WARNING,
             )
             return HttpResponseRedirect(reverse("admin:products_product_image_import"))
+        if job["status"] == "error":
+            # Let the owner retry the very same job (only the failed batch
+            # was lost; committed batches are already on disk).
+            job["status"] = "running"
+            job["error"] = ""
+            self._save_image_job(job)
+        elif job["status"] == "done":
+            return self._finish_image_job(request, context, job)
+        elif job["status"] == "preview":
+            job["status"] = "running"
+            self._save_image_job(job)
+        return self._image_progress_response(request, context, job)
 
-        request.POST = request.POST.copy()
-        request.POST["mode"] = pending.get("mode") or "add"
-        if pending.get("skip_existing"):
-            request.POST["skip_existing"] = "1"
+    def _apply_image_batch(self, request, context):
+        """Write ONE batch (its own transaction) and report progress."""
+        job = self._load_image_job(request)
+        if job is None:
+            return self._image_progress_response(
+                request,
+                context,
+                None,
+                error="نشستِ ورود تصاویر پیدا نشد (یا منقضی شده است)؛ "
+                "فایل زیپ را دوباره بارگذاری کنید.",
+            )
+        zip_path = self._stashed_image_path(job.get("token"))
+        if zip_path is None:
+            return self._image_progress_response(
+                request,
+                context,
+                job,
+                error="فایل زیپ دیگر روی سرور نیست؛ آن را دوباره بارگذاری کنید.",
+            )
+
+        job["status"] = "running"
+        job["error"] = ""
         extract_dir = tempfile.mkdtemp(prefix="cusin-image-import-")
         try:
-            plan = self._build_image_plan(request, path, extract_dir=extract_dir, thumbs=False)
+            source = ZipImageSource(zip_path, limits=ImageImportLimits.from_settings())
             try:
-                result = apply_plan(plan)
-            except Exception as exc:  # rollback already cleaned the files up
-                self._drop_stashed(path)
-                request.session.pop(self._IMAGE_PENDING_KEY, None)
-                context["errors"] = [f"ذخیره انجام نشد و هیچ تغییری اعمال نشد: {exc}"]
-                return TemplateResponse(
-                    request, "admin/products/product_image_import.html", context
+                apply_job_batch(job, source, extract_dir=extract_dir)
+            except Exception as exc:  # a batch failure must not become a 502
+                job["status"] = "error"
+                job["error"] = (
+                    "ذخیره‌سازی متوقف شد: "
+                    f"{exc}. تصاویر این مرحله ذخیره نشدند؛ دکمهٔ «ادامهٔ ذخیره‌سازی» "
+                    "را بزنید تا از همان‌جا دنبال شود."
                 )
+        except (ValueError, OSError) as exc:
+            job["status"] = "error"
+            job["error"] = f"فایل زیپ خوانده نشد: {exc}"
         finally:
             shutil.rmtree(extract_dir, ignore_errors=True)
+            self._save_image_job(job)
 
-        self._drop_stashed(path)
-        request.session.pop(self._IMAGE_PENDING_KEY, None)
-        # The report describes what really happened (applied rows included).
-        request.session[self._IMAGE_REPORT_KEY] = plan.report_rows()
-        self.message_user(
-            request,
-            f"تصاویر ذخیره شد: {fa_digits(result['created'])} تصویر برای "
-            f"{fa_digits(result['products'])} محصول"
-            + (
-                f" (و {fa_digits(result['replaced'])} تصویر قبلی جایگزین شد)."
-                if result["replaced"]
-                else "."
-            ),
-            messages.SUCCESS,
-        )
+        if job["status"] == "done":
+            return self._finish_image_job(request, context, job)
+        return self._image_progress_response(request, context, job)
+
+    def _finish_image_job(self, request, context, job):
+        request.session[self._IMAGE_REPORT_KEY] = self._image_report_rows(request, job)
+        if job["created"]:
+            self.message_user(
+                request,
+                f"تصاویر ذخیره شد: {fa_digits(job['created'])} تصویر برای "
+                f"{fa_digits(job['products'])} محصول"
+                + (
+                    f" (و {fa_digits(job['replaced'])} تصویر قبلی جایگزین شد)."
+                    if job["replaced"]
+                    else "."
+                ),
+                messages.SUCCESS,
+            )
+        else:
+            self.message_user(
+                request,
+                "هیچ تصویری ذخیره نشد (احتمالاً همه تکراری یا نامعتبر بودند).",
+                messages.WARNING,
+            )
+        if self._wants_json(request):
+            return self._image_progress_json(
+                job, redirect=reverse("admin:products_product_changelist")
+            )
+        self._forget_image_job(request)
         return HttpResponseRedirect(reverse("admin:products_product_changelist"))
+
+    @staticmethod
+    def _wants_json(request):
+        return (
+            request.headers.get("X-Requested-With") == "XMLHttpRequest"
+            or request.GET.get("format") == "json"
+            or "application/json" in (request.headers.get("Accept") or "")
+        )
+
+    def _image_report_rows(self, request, job):
+        """The CSV report, updated with what the job actually did.
+
+        The dry run wrote one row per member into the session; this marks
+        the members the batches saved as «ذخیره شد» and the ones that
+        failed as «تصویر نامعتبر» with the Persian reason, so the
+        downloaded report describes the run, not just the plan.
+        """
+        rows = [dict(row) for row in (request.session.get(self._IMAGE_REPORT_KEY) or [])]
+        applied = {}
+        for step in job.get("steps") or []:
+            for member in step["members"][: step["cursor"]]:
+                applied[member] = step["sku"]
+        problems = {item["member"]: item["reason"] for item in (job.get("problems") or [])}
+        for row in rows:
+            member = row.get("file", "")
+            if member in problems:
+                row["status"] = "invalid"
+                row["reason"] = problems[member]
+            elif member in applied:
+                row["status"] = "applied"
+        return rows
+
+    def _image_progress_json(self, job, redirect=None):
+        payload = job_progress(job)
+        payload["finished"] = job["status"] == "done"
+        payload["failed"] = job["status"] == "error"
+        payload["redirect"] = redirect or ""
+        payload["summary"] = {
+            "created": job["created"],
+            "replaced": job["replaced"],
+            "products": job["products"],
+            "problems": job.get("problems") or [],
+        }
+        from django.http import JsonResponse
+
+        return JsonResponse(payload)
+
+    def _image_progress_response(self, request, context, job, error=""):
+        """"The page shown while the job runs: progress bar, resume button,
+        or the final summary."""
+        if job is None:
+            context.update(
+                {
+                    "job": None,
+                    "progress": {"done": 0, "total": 0, "percent": 0, "status": "error", "label": ""},
+                    "error_message": error or "هیچ عملیاتی در حال انجام نیست.",
+                    "step": "progress",
+                }
+            )
+            return TemplateResponse(
+                request, "admin/products/product_image_import_progress.html", context
+            )
+
+        if error:
+            job["error"] = error
+        context.update(
+            {
+                "job": job,
+                "progress": job_progress(job),
+                "error_message": job.get("error") or "",
+                "token": job.get("token") or "",
+                "step": "progress",
+                "batch_size": job.get("batch_size") or DEFAULT_BATCH_SIZE,
+            }
+        )
+        if self._wants_json(request):
+            return self._image_progress_json(job)
+        return TemplateResponse(
+            request, "admin/products/product_image_import_progress.html", context
+        )
 
     # --- Import / update / export (Part R4 item 6 + Part S5 item 8) -----------
 
@@ -1008,8 +1301,22 @@ class ProductAdmin(
             )
         )
 
+    # Excel files downloaded from the panel used to fall back to whatever
+    # the server's mime registry guessed (often application/zip), which
+    # some browsers then refused to open with Excel. Name the type.
+    XLSX_CONTENT_TYPE = (
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
     def get_changelist_formset(self, request, **kwargs):
         formset = super().get_changelist_formset(request, **kwargs)
+        # «910000» is hard to read; both money columns get a grouped,
+        # Persian-digit hint under the input.
+        for money_field in ("price", "compare_at_price"):
+            field = formset.form.base_fields[money_field]
+            attrs = dict(field.widget.attrs)
+            attrs.update({"dir": "ltr", "inputmode": "numeric"})
+            field.widget = ProductPriceChangelistWidget(attrs=attrs)
         stock_field = formset.form.base_fields["stock_quantity"]
         attrs = dict(stock_field.widget.attrs)
         attrs.update({"dir": "ltr", "inputmode": "numeric"})
@@ -1443,7 +1750,11 @@ from .models import BackInStockSubscription
 class BackInStockSubscriptionAdmin(admin.ModelAdmin):
     """Strictly read-only audit of "notify me" signups (Part 2)."""
 
-    list_display = ("phone", "product", "variant", "created_at", "notified_at")
+    list_display = (
+        "phone", "product", "variant",
+        jalali_column("created_at", "تاریخ ثبت", with_time=True),
+        jalali_column("notified_at", "زمان اطلاع‌رسانی", with_time=True),
+    )
     list_filter = ("notified_at", "created_at")
     search_fields = ("phone", "product__name")
     readonly_fields = tuple(f.name for f in BackInStockSubscription._meta.concrete_fields)

@@ -106,14 +106,15 @@ def _apply_refunded(order, previous_status: str, previous_reference: str) -> Non
     """
     if previous_status == Order.RefundStatus.NONE:
         raise RefundError(
-            "This order has no flagged refund. A refund becomes required when a paid "
-            "order is cancelled/returned (or flag it manually as 'required' first)."
+            "این سفارش هیچ مبلغی برای بازپرداخت ندارد. بازپرداخت وقتی لازم می‌شود که "
+            "یک سفارش پرداخت‌شده لغو یا مرجوع شود (یا نخست خودتان آن را به صورت دستی "
+            "«نیازمند بازپرداخت» بزنید)."
         )
     new_reference = (order.refund_reference or "").strip()
     if not new_reference or new_reference == (previous_reference or "").strip():
         raise RefundError(
-            "Enter the refund note/reference (e.g. the PSP panel's refund code) "
-            "before marking the order as refunded."
+            "پیش از ثبت «بازپرداخت شده»، یادداشت یا مرجع بازپرداخت (مثلاً کد "
+            "بازپرداخت در پنل درگاه) را وارد کنید؛ بدون آن ردیابی پول ممکن نیست."
         )
     order.refund_status = Order.RefundStatus.REFUNDED
     order.refunded_at = timezone.now()
@@ -141,7 +142,9 @@ def mark_refunded(order, note: str, amount=None) -> Order:
     merged into the journal textarea.
     """
     if not (note or "").strip():
-        raise RefundError("A refund note/reference is required to mark an order refunded.")
+        raise RefundError(
+            "برای ثبت «بازپرداخت شده»، یادداشت یا مرجع بازپرداخت الزامی است."
+        )
     previous_status = order.refund_status
     previous_reference = order.refund_reference
     _append_note(order, note)
@@ -174,12 +177,12 @@ def validate_admin_refund_change(db_obj, new_status: str) -> None:
     if new_status == Order.RefundStatus.REQUIRED:
         if old_status == Order.RefundStatus.REFUNDED:
             raise RefundError(
-                "A completed refund cannot be moved back to 'required'. New money "
-                "events are flagged by the system automatically."
+                "بازپرداختِ انجام‌شده را نمی‌توان دوباره به «نیازمند بازپرداخت» "
+                "برگرداند. رویدادهای تازهٔ مالی خودبه‌خود توسط سیستم ثبت می‌شوند."
             )
         return
     if new_status == Order.RefundStatus.NONE:
         raise RefundError(
-            "Refund state cannot be cleared once flagged -- it is part of the "
-            "financial audit trail. Correct the amount/note instead."
+            "پس از ثبت، وضعیت بازپرداخت را نمی‌توان پاک کرد؛ این بخش از ردیابی مالی "
+            "سفارش است. به‌جای آن مبلغ یا یادداشت را اصلاح کنید."
         )

@@ -325,6 +325,17 @@ kbd.cusin-kbd {
   background: transparent;
 }
 .cusin-breadcrumbs-wrap .breadcrumbs a { color: var(--cusin-link); }
+/* The trail is built by apps.adminui.breadcrumbs, where the separator is
+   its own element (and carries no surrounding whitespace of its own). */
+.cusin-breadcrumbs-wrap .breadcrumbs .cusin-crumb-sep {
+  display: inline-block;
+  margin: 0 6px;
+  color: var(--cusin-border-strong);
+}
+.cusin-breadcrumbs-wrap .breadcrumbs .cusin-crumb-current {
+  color: var(--cusin-text);
+  font-weight: 600;
+}
 
 /* --------------------------------------------------------------------------
    5. White RTL sidebar and groups
@@ -336,9 +347,14 @@ kbd.cusin-kbd {
   flex: 0 0 var(--cusin-sidebar-w);
   width: var(--cusin-sidebar-w);
   position: sticky;
-  top: var(--cusin-sticky-top);
+  /* --cusin-header-h is measured by theme.js (ResizeObserver) because the
+     topbar WRAPS at 125%/150% zoom and on narrow screens -- the old fixed
+     --cusin-sticky-top made the drawer's own header slide underneath the
+     topbar exactly when the owner needed it most. The fallback keeps the
+     pre-JS paint sane. */
+  top: calc(var(--cusin-header-h, var(--cusin-sticky-top)) + 6px);
   align-self: flex-start;
-  max-height: calc(100vh - var(--cusin-sticky-top));
+  max-height: calc(100vh - var(--cusin-header-h, var(--cusin-sticky-top)) - 12px);
   overflow-y: auto;
   background: var(--cusin-surface);
   color: var(--cusin-text);
@@ -393,7 +409,11 @@ kbd.cusin-kbd {
   font-weight: 700;
 }
 .cusin-nav-groups { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
-.cusin-nav-group { border-radius: var(--cusin-radius-sm); }
+/* The owner-ordered flat list: one row per destination, no group to open. */
+.cusin-nav-primary { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.cusin-nav-primary > li { display: block; }
+.cusin-nav-row { display: flex; align-items: stretch; gap: 4px; }
+.cusin-nav-group { border-radius: var(--cusin-radius-sm); margin-top: 2px; }
 .cusin-nav-group summary {
   cursor: pointer;
   list-style: none;
@@ -404,8 +424,19 @@ kbd.cusin-kbd {
 .cusin-nav-group[open] > summary .cusin-nav-caret { transform: rotate(180deg); }
 .cusin-nav-group.is-active > summary { color: var(--cg-olive-hover); }
 .cusin-nav-group ul { list-style: none; margin: 2px 0 8px; padding: 0; }
-.cusin-nav-group li { display: flex; align-items: stretch; gap: 4px; }
-.cusin-nav-link { flex: 1 1 auto; margin-inline-start: 18px; }
+.cusin-nav-group ul > li { display: flex; align-items: stretch; gap: 4px; }
+/* Top-level rows sit flush; only nested children are indented. */
+.cusin-nav-primary > li > .cusin-nav-row .cusin-nav-link { margin-inline-start: 0; }
+.cusin-nav-group ul .cusin-nav-link { margin-inline-start: 18px; }
+/* «سایر / پیشرفته»: reachable, but visually parked at the bottom. */
+.cusin-nav-group--advanced {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--cusin-border);
+  border-radius: 0;
+}
+.cusin-nav-group--advanced > summary { font-weight: 600; color: var(--cusin-muted); }
+.cusin-nav-link { flex: 1 1 auto; margin-inline-start: 0; }
 .cusin-nav-link .cusin-icon { color: currentColor; }
 .cusin-nav-add {
   display: inline-flex;
@@ -504,7 +535,8 @@ kbd.cusin-kbd {
 /* --------------------------------------------------------------------------
    7. Buttons & forms (A5)
    -------------------------------------------------------------------------- */
-.button, input[type="submit"], input[type="button"], .submit-row input, .submit-row a, .button[disabled] {
+.button, input[type="submit"], input[type="button"], .submit-row input,
+.submit-row button, .submit-row a, .button[disabled] {
   border-radius: var(--cusin-radius-sm);
   font-weight: 600;
   min-height: 42px;
@@ -923,6 +955,32 @@ body.cusin-admin.app-products.model-product #result_list td.field-stock_quantity
   word-break: normal;
   hyphens: none;
 }
+/* Issue #16: «910000» in an editable cell is unreadable -- the grouped,
+   Persian-digit amount («۹۱۰٬۰۰۰ تومان») sits under the input. */
+body.cusin-admin.app-products.model-product #result_list td.field-price .cusin-price-edit,
+body.cusin-admin.app-products.model-product #result_list td.field-compare_at_price .cusin-price-edit {
+  display: flex;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+body.cusin-admin.app-products.model-product #result_list .cusin-price-hint {
+  box-sizing: border-box;
+  display: block;
+  max-width: 100%;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--cusin-muted);
+  direction: rtl;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+body.cusin-admin.app-products.model-product #result_list .cusin-price-hint[data-cusin-empty="true"] {
+  visibility: hidden;
+}
 body.cusin-admin #container #changelist #result_list tbody td input[type="number"] {
   direction: ltr;
   text-align: left;
@@ -1163,8 +1221,26 @@ body.login #footer { display: none; }
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  /* Card titles are the FIRST thing that overflowed at 125%/150% zoom:
+     «فروش در ۹۰ روز اخیر» was clipped mid-word instead of wrapping. Give
+     them a real line box and let long ones wrap to a second line. */
+  min-width: 0;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }
-.cusin-card-note { font-size: 0.75rem; color: var(--cusin-muted); }
+/* The secondary line ("درصد تغییر نسبت به دورهٔ قبل", "بر پایهٔ تعداد
+   قلم") competes with the title for the same row; one step smaller and
+   it stops shoving the title out of the card. */
+.cusin-card-note {
+  font-size: 0.6875rem;
+  color: var(--cusin-muted);
+  flex: 0 1 auto;
+  min-width: 0;
+  line-height: 1.6;
+}
 .cusin-card-link {
   font-size: 0.8125rem;
   font-weight: 700;
@@ -1182,10 +1258,22 @@ body.login #footer { display: none; }
   margin: 6px 0 10px;
 }
 
-/* KPI row */
+/* KPI row. The columns follow the cards, not a fixed number of them: the
+   dashboard shows two («امروز» and the chosen range), and a fixed
+   3-column track left a third of the row empty -- in RTL that read as the
+   KPIs crowding the right half of the page with a hole on the left. */
+.cusin-kpis-block { display: flex; flex-direction: column; gap: 2px; }
+.cusin-kpis-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.cusin-kpis-head .cusin-section-title { margin: 6px 0 10px; }
 .cusin-kpis {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(19rem, 100%), 1fr));
   gap: 14px;
 }
 .cusin-kpi-card { padding: 14px 16px; }
@@ -1303,8 +1391,26 @@ body.login #footer { display: none; }
 .cusin-dash-cols > .cusin-card { min-width: 0; }
 
 /* chart */
-.cusin-chart-scroll { overflow-x: auto; padding-bottom: 4px; }
+.cusin-chart-scroll { overflow-x: auto; padding-bottom: 4px; position: relative; }
 .cusin-chart { width: 100%; min-width: 480px; height: 190px; display: block; }
+/* Hover OR tap tooltip: the SVG <title> only works on hover and only
+   after a delay, so a touch owner got no numbers at all. */
+.cusin-chart-tip {
+  position: absolute;
+  z-index: 5;
+  pointer-events: none;
+  padding: 6px 10px;
+  border-radius: var(--cusin-radius-sm);
+  background: var(--cusin-text, #1e2412);
+  color: var(--cusin-surface, #fff);
+  font-size: 0.75rem;
+  line-height: 1.7;
+  white-space: nowrap;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+  transform: translateX(-50%);
+}
+.cusin-chart-tip b { font-weight: 700; }
+.cusin-chart-tick { font-variant-numeric: tabular-nums; }
 .cusin-chart rect {
   fill: var(--cg-olive);
   transition: fill 160ms var(--cusin-ease);
@@ -1454,24 +1560,72 @@ body.login #footer { display: none; }
 .cusin-log-time { margin-inline-start: auto; color: var(--cusin-muted); font-size: 0.75rem; white-space: nowrap; }
 
 /* readiness */
-.cusin-readiness-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.cusin-readiness-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  /* Columns follow the card, never the other way round: min() keeps a
+     track from being wider than the row even when the row is narrow. */
+  grid-template-columns: repeat(auto-fit, minmax(min(22rem, 100%), 1fr));
+  gap: 8px;
+}
 .cusin-readiness-list li {
+  /* One full-width block: icon + title on the first row, the sentence
+     under it, the missing items under that -- never a row of columns
+     that has to fight over the width.
+     min-width: 0 is load-bearing: a grid item's automatic minimum size is
+     its min-content size, which lets a wide child push the whole row past
+     the viewport (and with it the sidebar). */
   display: flex;
-  align-items: flex-start;
-  gap: 10px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  min-width: 0;
+  box-sizing: border-box;
   padding: 10px 12px;
   border-radius: var(--cusin-radius-sm);
   border: 1px solid var(--cusin-border);
   font-size: 0.8125rem;
   background: var(--cusin-surface-2);
 }
-.cusin-readiness-list li .cusin-icon { margin-top: 3px; }
-.cusin-readiness-list li strong { display: block; }
-.cusin-readiness-list li span { color: var(--cusin-muted); }
+.cusin-readiness-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+.cusin-readiness-head .cusin-icon { margin-top: 3px; }
+.cusin-readiness-head strong { min-width: 0; overflow-wrap: break-word; }
+.cusin-readiness-detail {
+  display: block;
+  min-width: 0;
+  color: var(--cusin-muted);
+  overflow-wrap: break-word;
+}
+/* The per-item "what exactly is missing" list: the only place the missing
+   items are named, and it spans the full width of the block (a grid of
+   readable cells, never one or two words a line). */
+.cusin-readiness-missing {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(15rem, 100%), 1fr));
+  gap: 3px 14px;
+}
+.cusin-readiness-missing li {
+  min-width: 0;
+  font-size: 0.86rem;
+  color: var(--cusin-muted);
+  overflow-wrap: anywhere;
+}
+.cusin-readiness-missing li b { color: var(--cusin-text, inherit); font-weight: 600; }
 .cusin-readiness-list li.is-ok { border-inline-start: 4px solid var(--cg-success); }
-.cusin-readiness-list li.is-ok > .cusin-icon { color: var(--cg-success-text); }
+.cusin-readiness-list li.is-ok .cusin-icon { color: var(--cg-success-text); }
 .cusin-readiness-list li.is-bad { border-inline-start: 4px solid var(--cg-danger); }
-.cusin-readiness-list li.is-bad > .cusin-icon { color: var(--cg-danger-text); }
+.cusin-readiness-list li.is-bad .cusin-icon { color: var(--cg-danger-text); }
 
 /* stock app list inside dashboard card */
 .cusin-appsections #content-main { margin: 0; }
@@ -2301,6 +2455,77 @@ body.cusin-admin.app-orders.model-order #result_list .cusin-ship {
   border-inline-start: 4px solid var(--cg-success);
   color: var(--cg-success-text);
 }
+
+/* Order-page banner: «پرداخت نشده» / «در انتظار تأیید شما».
+   Same shape as the refund note so the page reads as one family. */
+.cusin-quick-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: var(--cusin-radius-sm);
+  font-size: 0.875rem;
+  background: #f9e7e3;
+  border: 1px solid #efc9bf;
+  border-inline-start: 4px solid var(--cg-danger);
+  color: var(--cg-danger-text);
+  line-height: 1.7;
+}
+.cusin-quick-warning.is-info {
+  background: #fdf6e3;
+  border-color: #ecd9a6;
+  border-inline-start-color: var(--cg-warning, #b8860b);
+  color: #6b4e00;
+}
+.cusin-quick-warning .cusin-icon { flex: 0 0 auto; margin-top: 2px; }
+
+/* A status the workflow forbids is shown disabled WITH its reason, never
+   hidden silently -- the owner must see why the button is dead. */
+.cusin-menu-item.is-disabled {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+  opacity: 0.55;
+  cursor: not-allowed;
+  text-align: start;
+}
+.cusin-menu-item.is-disabled small {
+  font-size: 0.75rem;
+  line-height: 1.5;
+  white-space: normal;
+}
+
+/* Last gateway attempt on the order list: «موفق / ناموفق / لغو توسط مشتری»
+   plus its Jalali time, small and on one line. */
+.cusin-attempt {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+.cusin-attempt small { font-size: 0.75rem; }
+.cusin-attempt.attempt-success { color: var(--cg-success-text, #1e6b34); }
+.cusin-attempt.attempt-failed { color: var(--cg-danger-text, #a4262c); }
+.cusin-attempt.attempt-cancelled { color: #8a6d00; }
+
+/* "N abandoned orders are hidden here" note on the default order list. */
+.cusin-hidden-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 8px 12px;
+  border: 1px dashed var(--cusin-border, #d8d3c8);
+  border-radius: var(--cusin-radius-sm);
+  background: #fbfaf7;
+  font-size: 0.8125rem;
+  color: var(--cusin-muted, #6b6b6b);
+  line-height: 1.8;
+}
+.cusin-hidden-note .cusin-icon { flex: 0 0 auto; margin-top: 2px; }
 
 /* product form enhancement shell */
 .cusin-product-enh {
@@ -3138,6 +3363,7 @@ fieldset.module > h2,
 input[type="submit"],
 input[type="button"],
 .submit-row input,
+.submit-row button,
 .submit-row a,
 .object-tools a,
 .object-tools button,
@@ -3960,4 +4186,113 @@ body.cusin-admin.app-discounts.model-coupon #container #changelist #result_list 
   direction: ltr;
   unicode-bidi: isolate;
   white-space: nowrap;
+}
+
+/* ==========================================================================
+   Zoomed desktops (Windows 125% / 150%) -- one step down
+   ==========================================================================
+   At 125% a 1366px screen reports 1092 CSS px and a 1920px screen 1536;
+   at 150% they report 911 and 1280. Those are NOT small screens -- they
+   still get the two-column desktop layout -- but the fixed type scale and
+   paddings that fit at 1920 CSS px overflow their cards and clip their
+   labels there. Everything below is one step smaller: the layout is
+   unchanged, the furniture around it just takes less room.
+
+   Deliberately scoped to <= 1600px so a genuine 1920@100% desktop keeps
+   the full scale. */
+@media (min-width: 769px) and (max-width: 1600px) {
+  :root {
+    --cusin-topbar-h: 52px;
+    --cusin-crumbs-h: 34px;
+    --cusin-sidebar-w: 232px;
+    --cusin-radius: 10px;
+    --cusin-radius-sm: 6px;
+  }
+
+  body.cusin-admin {
+    font-size: 0.9375rem;
+  }
+  /* Cards: 16px/18px padding squeezed a two-line title out of the box. */
+  body.cusin-admin #container .cusin-card,
+  body.cusin-admin #container .dashboard .cusin-card,
+  body.cusin-admin #container .cusin-dash .cusin-card {
+    padding: 12px 14px;
+  }
+  body.cusin-admin #container .cusin-card-head {
+    margin-bottom: 8px;
+    gap: 8px;
+  }
+  body.cusin-admin #container .cusin-card-head h2 { font-size: 0.9375rem; }
+
+  /* Content gutters. */
+  body.cusin-admin #container .content { padding: 16px 16px 40px; }
+  body.cusin-admin #container .cusin-topbar { padding: 4px 12px; gap: 10px; }
+
+  /* Sidebar rows: 48px min-height per row pushed the menu past the fold. */
+  body.cusin-admin #container .cusin-drawer { padding: 10px 8px 14px; }
+  body.cusin-admin #container .cusin-drawer-dash,
+  body.cusin-admin #container .cusin-nav-group > summary,
+  body.cusin-admin #container .cusin-nav-link,
+  body.cusin-admin #container .cusin-drawer-foot a {
+    min-height: 40px;
+    padding: 6px 10px;
+    gap: 8px;
+    font-size: 0.9rem;
+  }
+  body.cusin-admin #container .cusin-drawer-head { padding: 2px 6px 8px; }
+
+  /* Changelists: tighter rows and cells so more columns survive. */
+  body.cusin-admin #container #changelist #result_list td,
+  body.cusin-admin #container #changelist #result_list th {
+    padding: 7px 8px;
+    font-size: 0.875rem;
+  }
+  body.cusin-admin #container #changelist #result_list thead th {
+    font-size: 0.8125rem;
+  }
+  body.cusin-admin #container #changelist .cusin-row-actions .cusin-row-edit,
+  body.cusin-admin #container #changelist .cusin-row-actions .cusin-menu-trigger {
+    width: 32px;
+    height: 32px;
+  }
+
+  /* Change forms: the field rows and their help text. */
+  body.cusin-admin #container .form-row { padding: 8px 10px; }
+  body.cusin-admin #container .aligned label { padding-top: 4px; }
+  body.cusin-admin #container .help,
+  body.cusin-admin #container .form-row .help { font-size: 0.78rem; }
+  body.cusin-admin #container input[type="text"],
+  body.cusin-admin #container input[type="number"],
+  body.cusin-admin #container input[type="email"],
+  body.cusin-admin #container input[type="password"],
+  body.cusin-admin #container select,
+  body.cusin-admin #container textarea {
+    padding: 6px 8px;
+    font-size: 0.9rem;
+  }
+  body.cusin-admin #container .submit-row { padding: 10px 12px; }
+
+  /* KPI numbers are the widest text on the dashboard. */
+  body.cusin-admin #container .cusin-kpi-value,
+  body.cusin-admin #container .cusin-kpi strong { font-size: 1.125rem; }
+  body.cusin-admin #container .cusin-kpi-label { font-size: 0.78rem; }
+
+  /* Chips / buttons. */
+  body.cusin-admin #container .cusin-chip { padding: 5px 10px; font-size: 0.8125rem; }
+  body.cusin-admin #container .cusin-btn { padding: 7px 12px; font-size: 0.875rem; }
+}
+
+/* 911-1100 CSS px (150% on 1366, 125% on a small laptop): go one more
+   step on the things that still collide. */
+@media (min-width: 769px) and (max-width: 1100px) {
+  body.cusin-admin #container .content { padding: 12px 12px 32px; }
+  body.cusin-admin #container .cusin-dash-cols { gap: 10px; }
+  body.cusin-admin #container .cusin-kpis { gap: 10px; }
+  body.cusin-admin #container .cusin-card-note { font-size: 0.6875rem; }
+  body.cusin-admin #container #changelist #result_list td,
+  body.cusin-admin #container #changelist #result_list th {
+    padding: 6px 6px;
+    font-size: 0.8125rem;
+  }
+  body.cusin-admin #container .cusin-topbar .cusin-search-trigger-label { display: none; }
 }

@@ -320,9 +320,16 @@ def _complete_successful_payment(payment: Payment, verification) -> Payment:
     atomic block, under the caller's row lock:
 
         payment  PENDING -> SUCCESS (+ ref id, card receipt data, paid_at)
-        order    payment_status -> PAID, status -> CONFIRMED
+        order    payment_status -> PAID
         stock    decremented via apps.orders.inventory
         coupon   usage recorded (if the order used one)
+
+    The order's STATUS is deliberately NOT touched: money arriving is not
+    the same promise as the shop being able to fulfil the order, so a paid
+    order stays «در انتظار تأیید» until the owner confirms it in the admin
+    (apps/orders/workflow.py then walks confirmed -> processing ->
+    shipped -> delivered). Auto-confirming on payment used to tell the
+    customer the shop had accepted an order nobody had looked at yet.
 
     `verification` is the gateway's VerificationResult; beyond the
     boolean outcome it carries the PSP's receipt data (reference id,
@@ -367,8 +374,10 @@ def _complete_successful_payment(payment: Payment, verification) -> Payment:
     )
 
     order.payment_status = Order.PaymentStatus.PAID
-    order.status = Order.Status.CONFIRMED
-    order.save(update_fields=["payment_status", "status", "updated_at"])
+    # NOT status: see the docstring. A paid order waits for the owner's
+    # confirmation, and apps/orders/workflow.py refuses to move an unpaid
+    # order to «confirmed» or beyond.
+    order.save(update_fields=["payment_status", "updated_at"])
 
     # Inventory transition -- see apps/orders/inventory.py for why this
     # is exactly-once and where oversell is handled.
@@ -390,13 +399,16 @@ def _complete_successful_payment(payment: Payment, verification) -> Payment:
         notify_owner_new_paid_order,
     )
 
-    notify_order_event(order, Events.ORDER_CONFIRMED)
+    # ORDER_PAID, not ORDER_CONFIRMED: the message must not claim the shop
+    # has confirmed an order it has not even looked at. The confirmation
+    # notice is sent by apps/orders/workflow.py when the owner confirms.
+    notify_order_event(order, Events.ORDER_PAID)
     # Part R4 item 3: tell the OWNER a paid order arrived (on_commit,
     # idempotent, provider failures can never break this transition).
     notify_owner_new_paid_order(order)
 
     logger.info(
-        "Payment %s verified: order %s paid (%s Toman).",
+        "Payment %s verified: order %s paid (%s Toman); awaiting owner confirmation.",
         payment.pk, order.order_number, payment.amount,
     )
     return payment

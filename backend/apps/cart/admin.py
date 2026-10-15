@@ -4,6 +4,8 @@ Cart admin registration.
 from django.contrib import admin
 from django.db.models import Count
 
+from apps.adminui.admin_dates import jalali_column
+
 from .models import Cart, CartItem
 
 
@@ -15,7 +17,11 @@ class CartItemInline(admin.TabularInline):
 
 @admin.register(Cart)
 class CartAdmin(admin.ModelAdmin):
-    list_display = ("user", "item_count", "created_at", "updated_at")
+    list_display = (
+        "user", "item_count",
+        jalali_column("created_at", "تاریخ ایجاد", with_time=True),
+        jalali_column("updated_at", "آخرین تغییر", with_time=True),
+    )
     list_filter = ("updated_at",)
     search_fields = ("user__username", "user__email")
     autocomplete_fields = ("user",)
@@ -29,7 +35,7 @@ class CartAdmin(admin.ModelAdmin):
         # changelist, not per row -- see item_count() below.
         return super().get_queryset(request).select_related("user").annotate(_item_count=Count("items"))
 
-    @admin.display(description="Items", ordering="_item_count")
+    @admin.display(description="تعداد اقلام", ordering="_item_count")
     def item_count(self, obj):
         # A plain row count, not the storefront's own item_count (sum of
         # quantities) from apps.cart.services.build_cart_view --

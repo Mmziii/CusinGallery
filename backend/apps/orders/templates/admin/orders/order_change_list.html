@@ -20,4 +20,16 @@ from OrderAdmin._queue_tabs (one conditional-aggregate query).
   {% endfor %}
 </nav>
 {% endif %}
+
+{% if hidden_abandoned_count %}
+<p class="cusin-hidden-note">
+  {% cusin_icon "hourglass" %}
+  <span>
+    {{ hidden_abandoned_count|numfa }} سفارش پرداخت‌نشدهٔ قدیمی (رهاشده) در این نمای پیش‌فرض
+    پنهان است تا صف کار شما شلوغ نشود.
+    <a href="{{ hidden_abandoned_url }}">نمایش همهٔ سفارش‌ها</a>
+    یا از تب «سفارش‌های رهاشده» استفاده کنید.
+  </span>
+</p>
+{% endif %}
 {% endblock %}
