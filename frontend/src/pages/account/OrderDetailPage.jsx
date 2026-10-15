@@ -1,3 +1,4 @@
+import { formatAddress } from "../../utils/formatAddress";
 import { faDigits, faDateTime, deliveryRange } from "../../utils/faDigits";
 import { ContentSkeleton } from "../../components/Skeletons";
 import { useState } from "react";
@@ -160,9 +161,7 @@ function OrderDetailPage() {
           {order.shipping_recipient_name} — <bdi dir="ltr">{order.shipping_phone}</bdi>
         </p>
         <p>
-          {order.shipping_province}، {order.shipping_city}، {order.shipping_address}
-          {order.shipping_unit ? `، واحد ${order.shipping_unit}` : ""}
-          {order.shipping_building_number ? `، پلاک ${order.shipping_building_number}` : ""}
+          {formatAddress(order, "shipping_")}
         </p>
         <p className="muted">کد پستی: <bdi dir="ltr">{order.shipping_postal_code}</bdi></p>
       </div>

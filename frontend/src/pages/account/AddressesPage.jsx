@@ -1,3 +1,4 @@
+import { formatAddress } from "../../utils/formatAddress";
 import { ContentSkeleton } from "../../components/Skeletons";
 import { useCallback, useEffect, useState } from "react";
 
@@ -117,8 +118,7 @@ function AddressesPage() {
                 <strong>{address.recipient_name}</strong>
                 {address.is_default ? <em className="address-card__default">پیش‌فرض</em> : null}
                 <p>
-                  {address.province}، {address.city}، {address.address}
-                  {address.unit ? `، واحد ${address.unit}` : ""}
+                  {formatAddress(address)}
                 </p>
                 <p className="muted">کد پستی: <bdi dir="ltr">{address.postal_code}</bdi> — تماس: <bdi dir="ltr">{address.phone}</bdi></p>
               </div>

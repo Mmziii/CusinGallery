@@ -1,3 +1,4 @@
+import { formatAddress } from "../utils/formatAddress";
 import { faDigits, deliveryRange, deliveryDays } from "../utils/faDigits";
 import { usePageMeta } from "../hooks/usePageMeta";
 import PropTypes from "prop-types";
@@ -612,8 +613,7 @@ function CheckoutPage() {
                       onChange={() => setSelectedAddressId(address.id)}
                     />
                     <span>
-                      <strong>{address.recipient_name}</strong> — {address.province}، {address.city}،{" "}
-                      {address.address}
+                      <strong>{address.recipient_name}</strong> — {formatAddress(address)}
                       {address.is_default ? <em className="address-card__default">پیش‌فرض</em> : null}
                     </span>
                   </label>
