@@ -1,12 +1,15 @@
+import { faDigits } from "../utils/faDigits";
+import { ContentSkeleton } from "../components/Skeletons";
+import { digitInput } from "../utils/iranianFields";
 import PropTypes from "prop-types";
 import { usePageMeta } from "../hooks/usePageMeta";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigationType, useSearchParams } from "react-router-dom";
+import { Link, useNavigationType, useSearchParams } from "react-router-dom";
 
 import Breadcrumbs from "../components/Breadcrumbs";
 import Icon from "../components/Icon";
 import ProductCard from "../components/ProductCard";
-import { EmptyState, ErrorState, Spinner } from "../components/ui";
+import { EmptyState, ErrorState } from "../components/ui";
 import { useAsync } from "../hooks/useAsync";
 import { listBrands, listCategories, listFacets, listProducts } from "../services/catalogApi";
 import { errorMessage } from "../components/ui";
@@ -204,7 +207,8 @@ function ShopPage() {
     max_price: searchParams.get("max_price") || "",
   });
   const debouncedSetParam = useDebouncedCallback((key, value) => setParam(key, value), PRICE_DEBOUNCE_MS);
-  const applyPrice = (key, value) => {
+  const applyPrice = (key, raw) => {
+    const value = digitInput(raw);
     setPriceText((current) => ({ ...current, [key]: value }));
     debouncedSetParam(key, value);
   };
@@ -223,6 +227,26 @@ function ShopPage() {
 
   return (
     <div className="shop">
+      <div className="shop__heading">
+        {/* Part S2 item 7: breadcrumbs (category name once loaded) */}
+        <Breadcrumbs
+          items={[
+            { label: "خانه", to: "/" },
+            { label: "فروشگاه", to: "/shop/" },
+            ...(searchParams.get("category")
+              ? [
+                  {
+                    label:
+                      (categoriesState.data?.results || []).find(
+                        (c) => c.slug === searchParams.get("category")
+                      )?.name || searchParams.get("category"),
+                  },
+                ]
+              : []),
+          ]}
+        />
+        <h1>فروشگاه</h1>
+      </div>
       <aside className="shop__sidebar">
         {/* Part S5 item 7: on small screens the filter column folds into a
             drawer; the open/close motion is the same grid-template-rows
@@ -244,10 +268,10 @@ function ShopPage() {
           id="shop-filters"
         >
           <div className="shop__filters-inner">
-            <h2>فیلترها</h2>
 
             <FilterGroup title="دسته‌بندی">
               <select
+                aria-label="دسته‌بندی"
                 value={searchParams.get("category") || ""}
                 onChange={(e) => setParam("category", e.target.value)}
               >
@@ -260,6 +284,7 @@ function ShopPage() {
 
             <FilterGroup title="برند">
               <select
+                aria-label="برند"
                 value={searchParams.get("brand") || ""}
                 onChange={(e) => setParam("brand", e.target.value)}
               >
@@ -294,26 +319,27 @@ function ShopPage() {
             <FilterGroup title="محدوده قیمت (تومان)">
               <div className="filter-group__row">
                 <input
-                  type="number"
-                  min="0"
+                  type="text"
+                  inputMode="numeric"
                   placeholder="از"
                   aria-label="کمترین قیمت"
-                  value={priceText.min_price}
+                  value={priceText.min_price ? formatPrice(priceText.min_price) : ""}
                   onChange={(e) => applyPrice("min_price", e.target.value)}
-                  onBlur={(e) => setParam("min_price", e.target.value)}
+                  onBlur={(e) => setParam("min_price", digitInput(e.target.value))}
                 />
                 <input
-                  type="number"
-                  min="0"
+                  type="text"
+                  inputMode="numeric"
                   placeholder="تا"
                   aria-label="بیشترین قیمت"
-                  value={priceText.max_price}
+                  value={priceText.max_price ? formatPrice(priceText.max_price) : ""}
                   onChange={(e) => applyPrice("max_price", e.target.value)}
-                  onBlur={(e) => setParam("max_price", e.target.value)}
+                  onBlur={(e) => setParam("max_price", digitInput(e.target.value))}
                 />
               </div>
             </FilterGroup>
 
+            {priceText.min_price && priceText.max_price && Number(priceText.min_price) > Number(priceText.max_price) ? <p role="alert">کمترین قیمت نباید بیشتر از بیشترین قیمت باشد.</p> : null}
             <FilterGroup title="موجودی">
               <label className="checkbox">
                 <input
@@ -335,25 +361,7 @@ function ShopPage() {
       </aside>
 
       <div className="shop__main">
-        {/* Part S2 item 7: breadcrumbs (category name once loaded) */}
-        <Breadcrumbs
-          items={[
-            { label: "خانه", to: "/" },
-            { label: "فروشگاه", to: "/shop/" },
-            ...(searchParams.get("category")
-              ? [
-                  {
-                    label:
-                      (categoriesState.data?.results || []).find(
-                        (c) => c.slug === searchParams.get("category")
-                      )?.name || searchParams.get("category"),
-                  },
-                ]
-              : []),
-          ]}
-        />
         <div className="shop__toolbar">
-          <h1>فروشگاه</h1>
           {/* Part S2 item 7: result count, always derived from the server. */}
           {products ? <span className="shop__count">{formatPrice(products.count)} کالا</span> : null}
           <label>
@@ -429,7 +437,7 @@ function ShopPage() {
             spinner only covers the very first load; from then on the previous
             results stay on screen -- dimmed and aria-busy -- until the new
             page replaces them, so the layout never jumps. */}
-        {!products && productsState.isLoading ? <Spinner label="در حال دریافت محصولات…" /> : null}
+        {!products && productsState.isLoading ? <ContentSkeleton label="در حال دریافت محصولات…" /> : null}
         {productsState.error ? <ErrorState message={errorMessage(normalizeApiError(productsState.error))} onRetry={productsState.refetch} /> : null}
 
         {products ? (
@@ -465,21 +473,13 @@ function ShopPage() {
 
         {totalPages > 1 ? (
           <nav className="pagination" aria-label="صفحه‌بندی">
-            <button
-              type="button"
-              disabled={!products.previous}
-              onClick={() => setParam("page", Number(params.page || 1) - 1)}
-            >
-              قبلی
-            </button>
-            <span>صفحه {params.page || 1} از {totalPages}</span>
-            <button
-              type="button"
-              disabled={!products.next}
-              onClick={() => setParam("page", Number(params.page || 1) + 1)}
-            >
-              بعدی
-            </button>
+            {Number(params.page || 1) > 1 ? <Link to={`?${new URLSearchParams({ ...Object.fromEntries(searchParams), page: Number(params.page || 1) - 1 })}`}>قبلی</Link> : <span aria-disabled="true">قبلی</span>}
+            {Array.from({length: totalPages}, (_, index) => index + 1)
+              .filter(page => page === 1 || page === totalPages || Math.abs(page - Number(params.page || 1)) <= 2)
+              .map(page => <Link key={page} aria-current={page === Number(params.page || 1) ? "page" : undefined}
+                to={`?${new URLSearchParams({ ...Object.fromEntries(searchParams), page })}`}>{faDigits(page)}</Link>)}
+            <span>صفحه {faDigits(params.page || 1)} از {faDigits(totalPages)}</span>
+            {Number(params.page || 1) < totalPages ? <Link to={`?${new URLSearchParams({ ...Object.fromEntries(searchParams), page: Number(params.page || 1) + 1 })}`}>بعدی</Link> : <span aria-disabled="true">بعدی</span>}
           </nav>
         ) : null}
       </div>

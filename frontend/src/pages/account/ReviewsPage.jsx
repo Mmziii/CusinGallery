@@ -1,7 +1,9 @@
+import { faDigits } from "../../utils/faDigits";
+import { ContentSkeleton } from "../../components/Skeletons";
 import { Link } from "react-router-dom";
 
 import StarRating from "../../components/StarRating";
-import { EmptyState, ErrorState, Spinner, errorMessage } from "../../components/ui";
+import { EmptyState, ErrorState, errorMessage } from "../../components/ui";
 import { useAsync } from "../../hooks/useAsync";
 import * as reviewsApi from "../../services/reviewsApi";
 
@@ -14,7 +16,7 @@ const STATUS_LABELS = {
 function ReviewsPage() {
   const { data, isLoading, error, refetch } = useAsync(() => reviewsApi.fetchMyReviews(), []);
 
-  if (isLoading) return <Spinner label="در حال دریافت نظرات…" />;
+  if (isLoading) return <ContentSkeleton label="در حال دریافت نظرات…" />;
   if (error) return <ErrorState message={errorMessage(error)} onRetry={refetch} />;
 
   const reviews = Array.isArray(data) ? data : [];
@@ -42,7 +44,7 @@ function ReviewsPage() {
               <span className={`tag tag--review-${review.status}`}>
                 {STATUS_LABELS[review.status] || review.status}
               </span>
-              <StarRating rating={review.rating} />
+              <StarRating rating={faDigits(review.rating)} />
             </header>
             {review.title ? <h4>{review.title}</h4> : null}
             {review.body ? <p>{review.body}</p> : null}

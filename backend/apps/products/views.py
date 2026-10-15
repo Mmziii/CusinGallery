@@ -184,7 +184,11 @@ class BackInStockView(APIView):
         except (TypeError, ValueError):
             raise drf_exceptions.ValidationError({"product_id": ["product_id is required."]})
         variant_id = request.data.get("variant_id")
-        phone = (request.data.get("phone") or "").strip()
+        from apps.accounts.validators import validate_address_phone
+        try:
+            phone = validate_address_phone(request.data.get("phone") or "")
+        except drf_exceptions.ValidationError as exc:
+            raise drf_exceptions.ValidationError({"phone": exc.detail})
 
         try:
             iranian_mobile_validator(phone)
@@ -215,6 +219,6 @@ class BackInStockView(APIView):
             defaults={"notified_at": None},
         )
         return Response(
-            {"detail": "ثبت شد؛ به محض موجودشدن، پیامک اطلاع‌رسانی دریافت می‌کنید."},
+            {"detail": "درخواست اطلاع‌رسانی موجودی ثبت شد."},
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )

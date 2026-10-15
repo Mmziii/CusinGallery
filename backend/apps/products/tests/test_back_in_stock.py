@@ -33,7 +33,7 @@ class BackInStockEndpointTests(CacheIsolatedAPITestCase):
 
     def test_strict_iranian_mobile_validation(self):
         product = make_product(stock_quantity=0)
-        for bad in ["+989121112233", "0912", "091212345678", "08121234567", ""]:
+        for bad in ["02112345678", "0912", "091212345678", "08121234567", ""]:
             response = self.client.post(
                 self.url, {"product_id": product.pk, "phone": bad}, format="json"
             )

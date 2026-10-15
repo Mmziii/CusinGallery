@@ -13,10 +13,10 @@ import { useAsync } from "../hooks/useAsync";
 import { listProducts } from "../services/catalogApi";
 import { getRecentlyViewed } from "../utils/recentlyViewed";
 
-function RecentlyViewed({ limit = 8 }) {
+function RecentlyViewed({ limit = 8, excludeId = null }) {
   // Snapshot once per mount: the widget sits below the fold and must not
   // reshuffle while the visitor browses (the PDP records views on load).
-  const ids = useMemo(() => getRecentlyViewed().slice(0, limit), [limit]);
+  const ids = useMemo(() => getRecentlyViewed().filter(id => id !== excludeId).slice(0, limit), [limit, excludeId]);
 
   const state = useAsync(
     () =>
@@ -46,6 +46,6 @@ function RecentlyViewed({ limit = 8 }) {
   );
 }
 
-RecentlyViewed.propTypes = { limit: PropTypes.number };
+RecentlyViewed.propTypes = { limit: PropTypes.number, excludeId: PropTypes.number };
 
 export default RecentlyViewed;

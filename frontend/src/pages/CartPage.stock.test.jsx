@@ -1,0 +1,24 @@
+import { act, cleanup, render, screen, fireEvent } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
+import { afterEach, expect, it, vi } from "vitest";
+import useAuthStore from "../store/useAuthStore";
+import useCartStore from "../store/useCartStore";
+import apiClient from "../services/apiClient";
+import CartPage from "./CartPage";
+const adapter = apiClient.defaults.adapter;
+const fetchCart = useCartStore.getState().fetchCart;
+afterEach(() => { cleanup(); apiClient.defaults.adapter = adapter; useCartStore.setState({fetchCart}); });
+it("keeps both cart rows and rolls back a stock-limit 400 instead of showing the network page", async () => {
+ const items = [1,2].map(id => ({id, quantity:1, available_stock:2, is_available:true, product:{id,name:`کالای ${id}`,slug:`p${id}`}, price_info:{price:1000},line_total:1000}));
+ useAuthStore.setState({isAuthenticated:true,isLoading:false});
+ useCartStore.setState({cart:{items,item_count:2,subtotal:2000},error:null,isLoading:false,fetchCart:vi.fn()});
+ apiClient.defaults.adapter = async () => { throw {response:{status:400,data:{quantity:["فقط ۱ عدد از این کالا موجود است."]}}}; };
+ render(<MemoryRouter><CartPage /></MemoryRouter>);
+ await act(async () => { fireEvent.click(screen.getAllByRole("button",{name:"افزایش تعداد"})[0]); });
+ expect(screen.getByText("کالای ۱")).toBeTruthy();
+ expect(screen.getByText("کالای ۲")).toBeTruthy();
+ expect(useCartStore.getState().cart.items[0].quantity).toBe(1);
+ expect(screen.queryByText("ارتباط با سرور برقرار نشد.")).toBeNull();
+ act(() => useCartStore.setState({cart:{items:[{...items[0],quantity:2}],item_count:2,subtotal:2000}}));
+ expect(screen.getByRole("button",{name:"افزایش تعداد"}).disabled).toBe(true);
+});

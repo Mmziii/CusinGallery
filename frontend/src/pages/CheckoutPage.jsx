@@ -1,3 +1,5 @@
+import { formatAddress } from "../utils/formatAddress";
+import { faDigits, deliveryRange, deliveryDays } from "../utils/faDigits";
 import { usePageMeta } from "../hooks/usePageMeta";
 import PropTypes from "prop-types";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -93,9 +95,7 @@ function methodCostFor(method, subtotal) {
   return method.cost;
 }
 
-function formatDate(iso) {
-  return new Date(iso).toLocaleDateString("fa-IR");
-}
+
 
 /** Order in which address fields are focused when several are missing. */
 const ADDRESS_FIELD_ORDER = [
@@ -281,7 +281,7 @@ function CheckoutPage() {
       if (!String(pickupContact.phone || "").trim()) {
         push("pickup-phone", "address", "شماره تماس تحویل‌گیرنده را وارد کنید.", "pickup-phone");
       } else if (!isValidIranianPhone(pickupContact.phone)) {
-        push("pickup-phone-format", "address", "شماره تماس معتبر نیست (مانند 09123456789).", "pickup-phone");
+        push("pickup-phone-format", "address", "فقط شمارهٔ موبایل (مثل ۰۹۱۲۳۴۵۶۷۸۹) قابل قبول است.", "pickup-phone");
       }
     } else if (addressesStatus !== "loading") {
       if (addressMode === "saved") {
@@ -329,7 +329,7 @@ function CheckoutPage() {
         ? "شماره تماس را وارد کنید."
         : isValidIranianPhone(pickupContact.phone)
           ? null
-          : "شماره تماس معتبر نیست (مانند 09123456789).",
+          : "فقط شمارهٔ موبایل (مثل ۰۹۱۲۳۴۵۶۷۸۹) قابل قبول است.",
     });
     setIssues(found);
     if (found.length) {
@@ -404,7 +404,7 @@ function CheckoutPage() {
       <div className="checkout-done">
         <CheckoutSteps current={3} done={[0, 1, 2]} />
         <h1>سفارش شما ثبت شد</h1>
-        <p>شماره سفارش: <strong>{placedOrder.order_number}</strong></p>
+        <p>شماره سفارش: <strong><bdi dir="ltr">{placedOrder.order_number}</bdi></strong></p>
 
         <dl className="checkout-done__totals">
           <div><dt>جمع کالاها</dt><dd>{formatPrice(placedOrder.subtotal)} تومان</dd></div>
@@ -432,8 +432,7 @@ function CheckoutPage() {
 
         {placedOrder.estimated_delivery_min && placedOrder.estimated_delivery_max ? (
           <p className="checkout-done__later">
-            تحویل تخمینی: {formatDate(placedOrder.estimated_delivery_min)} تا{" "}
-            {formatDate(placedOrder.estimated_delivery_max)}
+            تحویل تخمینی: {deliveryRange(placedOrder.estimated_delivery_min, placedOrder.estimated_delivery_max)}
           </p>
         ) : null}
 
@@ -612,8 +611,7 @@ function CheckoutPage() {
                       onChange={() => setSelectedAddressId(address.id)}
                     />
                     <span>
-                      <strong>{address.recipient_name}</strong> — {address.province}، {address.city}،{" "}
-                      {address.address}
+                      <strong>{address.recipient_name}</strong> — {formatAddress(address)}
                       {address.is_default ? <em className="address-card__default">پیش‌فرض</em> : null}
                     </span>
                   </label>
@@ -709,12 +707,14 @@ function CheckoutPage() {
                       />
                       <span className="shipping-method__body">
                         <strong>{method.label || methodLabel(method.id)}</strong>
+                        {method.id === "pickup" && siteSettings.pickup_address ? <span>نشانی دریافت: {siteSettings.pickup_address}</span> : null}
+                        {method.id === "pickup" && siteSettings.pickup_hours ? <span>ساعات دریافت: {siteSettings.pickup_hours}</span> : null}
                         <span className="muted">
                           {method.requires_address === false
                             ? "آمادهٔ تحویل حضوری پس از پرداخت"
                             : method.min_days === method.max_days
-                              ? `تحویل ${method.min_days} روزه`
-                              : `تحویل ${method.min_days} تا ${method.max_days} روز کاری`}
+                              ? deliveryDays(method.min_days, method.max_days)
+                              : deliveryDays(method.min_days, method.max_days)}
                         </span>
                       </span>
                       <span className="shipping-method__cost">
@@ -740,13 +740,13 @@ function CheckoutPage() {
             tabIndex={-1}
             className={`checkout__section ${sectionIssues("coupon").length ? "checkout__section--attention" : ""}`}
           >
-            <h2>کد تخفیف</h2>
+            <h2><label htmlFor="checkout-coupon">کد تخفیف</label></h2>
             <div className="coupon-row">
               <input
                 type="text"
                 dir="ltr"
                 value={couponCode}
-                placeholder="مثلاً: WELCOME10"
+                id="checkout-coupon"
                 onChange={(e) => {
                   setCouponCode(e.target.value);
                   setCouponError(null);
@@ -774,7 +774,7 @@ function CheckoutPage() {
           <ul className="checkout__items">
             {cart.items.map((item) => (
               <li key={item.id}>
-                <span>{item.product.name} × {item.quantity}</span>
+                <span>{faDigits(item.product.name)} × {faDigits(item.quantity)}</span>
                 <span>{formatPrice(item.line_total)}</span>
               </li>
             ))}
@@ -814,8 +814,7 @@ function CheckoutPage() {
             </ul>
           ) : null}
           <p className="checkout__note">
-            مبلغ قابل پرداخت از جمع کالاها، هزینه ارسال و تخفیف محاسبه شده است؛ مبلغ نهایی
-            پس از ثبت سفارش توسط سرور تأیید و پیش از انتقال به درگاه نمایش داده می‌شود.
+            مبلغ نهایی را پس از ثبت سفارش و پیش از رفتن به درگاه پرداخت ببینید.
           </p>
         </aside>
         </div>

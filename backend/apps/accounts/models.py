@@ -49,10 +49,15 @@ from django.db.models import Q
 from apps.accounts import validators
 from apps.core.models import TimeStampedModel
 
-phone_validator = RegexValidator(
-    regex=r"^\+?\d{7,15}$",
-    message="Enter a valid phone number (digits only, optionally prefixed with +).",
-)
+def phone_validator(value):
+    """Validate all customer mobiles using the shared normalization rule."""
+    from django.core.exceptions import ValidationError
+    from rest_framework.exceptions import ValidationError as APIValidationError
+    try:
+        validators.validate_address_phone(value)
+    except APIValidationError:
+        raise ValidationError("فقط شمارهٔ موبایل (مثل ۰۹۱۲۳۴۵۶۷۸۹) قابل قبول است.")
+
 
 
 class User(AbstractUser):

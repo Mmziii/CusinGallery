@@ -1,3 +1,4 @@
+import SearchCombobox from "./SearchCombobox";
 import PropTypes from "prop-types";
 import { useEffect, useRef, useState } from "react";
 
@@ -18,7 +19,7 @@ const OTHER_CITY = "__other__";
 
 const FIELDS = [
   { key: "recipient_name", label: "نام گیرنده", required: true, maxLength: 150, autoComplete: "name" },
-  { key: "phone", label: "شماره تماس", required: true, maxLength: 20, numeric: true, inputMode: "tel", autoComplete: "tel", helper: "موبایل (مانند 09123456789) یا ثابت با کد شهر (مانند 02112345678)" },
+  { key: "phone", label: "شماره تماس", required: true, maxLength: 20, numeric: true, inputMode: "tel", autoComplete: "tel", helper: "فقط شمارهٔ موبایل (مثل ۰۹۱۲۳۴۵۶۷۸۹) قابل قبول است." },
   { key: "province", label: "استان", required: true, maxLength: 100 },
   { key: "city", label: "شهر", required: true, maxLength: 100 },
   { key: "address", label: "آدرس کامل", required: true, textarea: true, autoComplete: "street-address" },
@@ -204,20 +205,9 @@ function AddressForm({ value = {}, onChange, onSaved, compact = false, initial =
       );
     }
     return (
-      <select
-        id={`addr-${field.key}`}
-        value={current.province || ""}
-        onChange={(e) => changeProvince(e.target.value)}
-        aria-invalid={Boolean(errors.province)}
-        className={errors.province ? "is-invalid" : undefined}
-      >
-        <option value="">انتخاب استان…</option>
-        {provinces.map((p) => (
-          <option key={p.name} value={p.name}>
-            {p.name}
-          </option>
-        ))}
-      </select>
+      <SearchCombobox id={`addr-${field.key}`} label="استان" value={current.province || ""}
+        options={provinces.map(p => ({ value: p.name, label: p.name }))}
+        onChange={changeProvince} invalid={Boolean(errors.province)} placeholder="انتخاب استان…" />
     );
   };
 
@@ -238,22 +228,10 @@ function AddressForm({ value = {}, onChange, onSaved, compact = false, initial =
     const cities = provinceEntry ? provinceEntry.cities : [];
     return (
       <span className="field__city-combo">
-        <select
-          id={`addr-${field.key}`}
-          value={citySelectValue}
-          onChange={(e) => changeCitySelect(e.target.value)}
-          disabled={!current.province && !showCityText}
-          aria-invalid={Boolean(errors.city)}
-          className={errors.city ? "is-invalid" : undefined}
-        >
-          <option value="">{current.province ? "انتخاب شهر…" : "ابتدا استان را انتخاب کنید"}</option>
-          {cities.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-          <option value={OTHER_CITY}>شهر دیگر…</option>
-        </select>
+        <SearchCombobox id={`addr-${field.key}`} label="شهر" value={citySelectValue}
+          options={[...cities.map(city => ({ value: city, label: city })), { value: OTHER_CITY, label: "شهر دیگر…" }]}
+          onChange={changeCitySelect} disabled={!current.province && !showCityText}
+          invalid={Boolean(errors.city)} placeholder={current.province ? "انتخاب شهر…" : "ابتدا استان را انتخاب کنید"} />
         {showCityText ? (
           <input
             type="text"

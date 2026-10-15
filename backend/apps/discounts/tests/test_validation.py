@@ -85,7 +85,7 @@ class RejectionTests(TestCase):
         with self.assertRaises(services.CouponError) as ctx:
             services.validate_and_calculate(self.user, "DISABLED", self.cart_view)
         # Same wording as an unknown code -- no existence/disabled leak.
-        self.assertIn("not valid", str(ctx.exception.errors["coupon_code"][0]))
+        self.assertIn("معتبر نیست", str(ctx.exception.errors["coupon_code"][0]))
 
     def test_expired_coupon_is_rejected(self):
         make_coupon("OLD", expiration_date=in_past(days=1))
@@ -150,7 +150,7 @@ class MinimumOrderTests(TestCase):
         cart_view = make_cart_view([make_line(self.product, quantity=2)])  # 200000
         with self.assertRaises(services.CouponError) as ctx:
             services.validate_and_calculate(self.user, "MIN500K", cart_view)
-        self.assertIn("minimum", str(ctx.exception.errors["coupon_code"][0]))
+        self.assertIn("حداقل", str(ctx.exception.errors["coupon_code"][0]))
 
     def test_at_or_above_minimum_is_accepted(self):
         make_coupon("MIN100K", minimum_order_amount=100000)

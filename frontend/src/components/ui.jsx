@@ -30,10 +30,11 @@ export function errorMessage(error) {
   return "خطایی رخ داد. دوباره تلاش کنید.";
 }
 
-export function EmptyState({ title, children }) {
+export function EmptyState({ title, children, heading = "p" }) {
+  const Heading = heading;
   return (
     <div className="empty-state">
-      <p className="empty-state__title">{title}</p>
+      <Heading className="empty-state__title">{title}</Heading>
       {children}
     </div>
   );
@@ -60,4 +61,4 @@ ErrorState.propTypes = { message: PropTypes.node, onRetry: PropTypes.func, retry
 
 Spinner.propTypes = { label: PropTypes.string };
 Alert.propTypes = { kind: PropTypes.oneOf(["error", "success"]), children: PropTypes.node };
-EmptyState.propTypes = { title: PropTypes.string.isRequired, children: PropTypes.node };
+EmptyState.propTypes = { heading: PropTypes.string, title: PropTypes.string.isRequired, children: PropTypes.node };

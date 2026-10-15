@@ -1,3 +1,5 @@
+import { faDigits } from "../utils/faDigits";
+import useWishlistStore from "../store/useWishlistStore";
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 
@@ -26,9 +28,12 @@ import { formatPrice } from "../utils/formatPrice";
  * guest lines hydrated from the products API).
  */
 function Header() {
+  const wishlist = useWishlistStore();
+  const { refetch: refreshWishlist, reset: resetWishlist } = wishlist;
   const location = useLocation();
   const navigate = useNavigate();
   const { user, isAuthenticated, isLoading, logout, fetchMe } = useAuthStore();
+  useEffect(() => { if (isAuthenticated) refreshWishlist(); else resetWishlist(); }, [isAuthenticated, refreshWishlist, resetWishlist]);
   const cart = useCartStore((s) => s.cart);
   const guestLines = useCartStore((s) => s.guestLines);
   const guestProducts = useCartStore((s) => s.guestProducts);
@@ -285,6 +290,8 @@ function Header() {
           type="button"
           className="site-header__burger"
           aria-label="بازکردن منو"
+          aria-expanded={menuOpen}
+          aria-controls="mobile-navigation"
           onClick={() => setMenuOpen((open) => !open)}
         >
           <span />
@@ -327,7 +334,7 @@ function Header() {
                     }}
                   >
                     <SmartImage image={product.primary_image} alt="" />
-                    <span className="search-suggest__name">{product.name}</span>
+                    <span className="search-suggest__name">{faDigits(product.name)}</span>
                     <span className="search-suggest__price">
                       {product.price_info ? (
                         <PriceTag priceInfo={product.price_info} size="sm" />
@@ -396,14 +403,14 @@ function Header() {
             ) : null}
           </div>
           <NavLink to="/shop/">فروشگاه</NavLink>
-          {isAuthenticated ? <NavLink to="/wishlist/">علاقه‌مندی‌ها</NavLink> : null}
+          {isAuthenticated ? <NavLink to="/wishlist/">علاقه‌مندی‌ها {wishlist.items.length > 0 ? <span key={wishlist.revision} className="wishlist-badge">{formatPrice(wishlist.items.length)}</span> : null}</NavLink> : null}
         </nav>
 
         <div className="site-header__actions">
           <button
             type="button"
             className="cart-link"
-            aria-label={`سبد خرید (${itemCount} قلم)`}
+            aria-label={`سبد خرید (${faDigits(itemCount)} قلم)`}
             onClick={() => setCartOpen(true)}
           >
             <svg viewBox="0 0 24 24" className="cart-link__icon" aria-hidden="true">
@@ -428,13 +435,15 @@ function Header() {
                 className="user-menu__trigger"
                 onClick={() => setUserMenuOpen((open) => !open)}
               >
-                {user?.first_name || user?.phone || "حساب کاربری"}
+                {user?.first_name || (user?.phone ? <bdi dir="ltr">{user.phone}</bdi> : "حساب کاربری")}
               </button>
               {userMenuOpen ? (
                 <div className="user-menu__panel">
                   <Link to="/account/" onClick={() => setUserMenuOpen(false)}>پروفایل</Link>
                   <Link to="/account/orders/" onClick={() => setUserMenuOpen(false)}>سفارش‌ها</Link>
                   <Link to="/account/addresses/" onClick={() => setUserMenuOpen(false)}>آدرس‌ها</Link>
+                  <Link to="/account/reviews/" onClick={() => setUserMenuOpen(false)}>نظرات من</Link>
+                  <Link to="/wishlist/" onClick={() => setUserMenuOpen(false)}>علاقه‌مندی‌ها</Link>
                   <button type="button" onClick={handleLogout}>خروج</button>
                 </div>
               ) : null}
@@ -449,7 +458,7 @@ function Header() {
           all shell stacking/containing-block changes while the header scrolls. */}
       {menuOpen ? (
         <Portal>
-          <div className="site-header__drawer" role="dialog" aria-modal="true" aria-label="منوی اصلی" ref={drawerRef}>
+          <div id="mobile-navigation" className="site-header__drawer" role="dialog" aria-modal="true" aria-label="منوی اصلی" ref={drawerRef}>
             <div className="site-header__drawer-head">
               <Link
                 to="/"
@@ -466,6 +475,9 @@ function Header() {
             </div>
             <NavLink to="/" onClick={() => setMenuOpen(false)}>خانه</NavLink>
             <NavLink to="/shop/" onClick={() => setMenuOpen(false)}>فروشگاه</NavLink>
+            <NavLink to="/about/" onClick={() => setMenuOpen(false)}>درباره ما</NavLink>
+            <NavLink to="/contact/" onClick={() => setMenuOpen(false)}>تماس با ما</NavLink>
+            <NavLink to="/account/" onClick={() => setMenuOpen(false)}>حساب کاربری</NavLink>
             {categories.map((category) => (
               <NavLink
                 key={category.id}

@@ -1,10 +1,11 @@
+import { faDigits } from "../utils/faDigits";
+import useWishlistStore from "../store/useWishlistStore";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
 import useAuthStore from "../store/useAuthStore";
 import { productShape } from "../utils/shapes";
 import useCartStore from "../store/useCartStore";
-import * as wishlistApi from "../services/wishlistApi";
 import { toast } from "../utils/toast";
 import Icon from "./Icon";
 import PriceTag from "./PriceTag";
@@ -21,7 +22,9 @@ function ProductCard({ product }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const addItem = useCartStore((s) => s.addItem);
   const [adding, setAdding] = useState(false);
-  const [addedToWishlist, setAddedToWishlist] = useState(false);
+  const wishlist = useWishlistStore();
+  const addedToWishlist = wishlist.items.some(item => item.product.id === product.id);
+  const [wishlistBusy, setWishlistBusy] = useState(false);
   // Part S4 item 1: the hover cross-fade image is decorative -- when its
   // file is missing it hides itself silently (no broken-image icon, no
   // placeholder: the primary image above it is the real one).
@@ -45,14 +48,12 @@ function ProductCard({ product }) {
     }
   };
 
-  // Card-level wishlist action is add-only (the filled state lives on
-  // the product page and the wishlist page, which hold the item ids
-  // removal requires). Adding twice is idempotent server-side.
+  // Shared item ids let cards toggle the same state as the header and wishlist.
   const handleWishlist = async () => {
-    if (!isAuthenticated || addedToWishlist) return;
-    await wishlistApi.addWishlistItem(product.id);
-    setAddedToWishlist(true);
-    toast("به علاقه‌مندی‌ها اضافه شد");
+    if (!isAuthenticated || wishlistBusy) return;
+    setWishlistBusy(true);
+    await wishlist.toggle(product.id);
+    setWishlistBusy(false);
   };
 
   return (
@@ -84,7 +85,7 @@ function ProductCard({ product }) {
         <span className="product-card__badges">
           {product.is_new ? <span className="badge badge--new">جدید</span> : null}
           {product.price_info?.discount_percentage > 0 ? (
-            <span className="badge badge--sale">{product.price_info.discount_percentage}٪</span>
+            <span className="badge badge--sale">{faDigits(product.price_info.discount_percentage)}٪</span>
           ) : null}
           {lowStock ? <span className="badge badge--low">تعداد محدود</span> : null}
           {outOfStock ? <span className="badge badge--oos">ناموجود</span> : null}
@@ -108,9 +109,9 @@ function ProductCard({ product }) {
 
       <div className="product-card__body">
         <Link to={`/products/${product.slug}/`} className="product-card__name">
-          {product.name}
+          {faDigits(product.name)}
         </Link>
-        {product.brand ? <div className="product-card__brand">{product.brand.name}</div> : null}
+        <div className="product-card__brand">{product.brand?.name || "\u00a0"}</div>
 
         <PriceTag priceInfo={product.price_info} size="sm" />
 
@@ -121,7 +122,8 @@ function ProductCard({ product }) {
             title="افزودن به علاقه‌مندی‌ها"
             aria-label="افزودن به علاقه‌مندی‌ها"
             onClick={handleWishlist}
-            disabled={!isAuthenticated || addedToWishlist}
+            aria-pressed={addedToWishlist}
+            disabled={!isAuthenticated || wishlistBusy}
           >
             <Icon name="heart" filled={addedToWishlist} size={18} />
           </button>

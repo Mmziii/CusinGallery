@@ -456,7 +456,7 @@ class ZarinpalServiceFlowTests(CacheIsolatedAPITestCase):
             result = handle_callback({"Authority": AUTHORITY, "Status": "OK"})
 
         self.assertEqual(result.status, Payment.Status.FAILED)
-        self.assertIn("mismatch", result.failure_reason.lower())
+        self.assertIn("یکسان نیست", result.failure_reason.lower())
         self.order.refresh_from_db()
         self.assertEqual(self.order.payment_status, Order.PaymentStatus.FAILED)
         self.product.refresh_from_db()

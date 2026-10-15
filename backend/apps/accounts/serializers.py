@@ -33,7 +33,7 @@ class RegisterSerializer(NullToBlankTextMixin, serializers.Serializer):
     accepted as input (see models.py's module docstring for why).
     """
 
-    phone = serializers.CharField(max_length=20, validators=[phone_validator])
+    phone = serializers.CharField(max_length=20)
     email = serializers.EmailField(required=False, allow_blank=True)
     first_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
     last_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
@@ -41,7 +41,8 @@ class RegisterSerializer(NullToBlankTextMixin, serializers.Serializer):
     password_confirm = serializers.CharField(write_only=True)
 
     def validate_phone(self, value):
-        if User.objects.filter(phone=value).exists():
+        value = validators.validate_address_phone(value)
+        if User.objects.filter(phone__in=[value, "+98" + value[1:], "0098" + value[1:]]).exists():
             raise serializers.ValidationError("حساب کاربری با این شماره موبایل قبلاً ساخته شده است.")
         return value
 
@@ -83,7 +84,7 @@ class LoginSerializer(NullToBlankTextMixin, serializers.Serializer):
     docstring for the full reasoning behind this choice).
     """
 
-    identifier = serializers.CharField(help_text="Phone number or email address.")
+    identifier = serializers.CharField(help_text="شمارهٔ موبایل یا آدرس ایمیل.")
     password = serializers.CharField(write_only=True)
 
     def validate(self, attrs):
@@ -96,7 +97,7 @@ class LoginSerializer(NullToBlankTextMixin, serializers.Serializer):
         # phone/email is registered.
         if user is None or not user.check_password(password):
             raise serializers.ValidationError(
-                "No account matches those credentials, or the password is incorrect."
+                "شمارهٔ موبایل، ایمیل یا رمز عبور نادرست است."
             )
         if not user.is_active:
             raise serializers.ValidationError("این حساب کاربری غیرفعال است.")
@@ -174,7 +175,7 @@ class ChangePasswordSerializer(NullToBlankTextMixin, serializers.Serializer):
 
 
 class PasswordResetRequestSerializer(NullToBlankTextMixin, serializers.Serializer):
-    identifier = serializers.CharField(help_text="Phone number or email address.")
+    identifier = serializers.CharField(help_text="شمارهٔ موبایل یا آدرس ایمیل.")
 
 
 class PasswordResetConfirmSerializer(NullToBlankTextMixin, serializers.Serializer):
@@ -203,8 +204,8 @@ class PasswordResetConfirmSerializer(NullToBlankTextMixin, serializers.Serialize
     new_password_confirm = serializers.CharField(write_only=True)
 
     def validate(self, attrs):
-        generic_link_error = "Invalid or expired reset link."
-        generic_code_error = "Invalid or expired reset code."
+        generic_link_error = "پیوند بازیابی معتبر نیست یا مهلت آن تمام شده است."
+        generic_code_error = "کد بازیابی معتبر نیست یا مهلت آن تمام شده است."
         uid = (attrs.get("uid") or "").strip()
         token = (attrs.get("token") or "").strip()
         phone = (attrs.get("phone") or "").strip()
@@ -237,7 +238,7 @@ class PasswordResetConfirmSerializer(NullToBlankTextMixin, serializers.Serialize
                 raise serializers.ValidationError(generic_code_error)
         else:
             raise serializers.ValidationError(
-                "Provide either uid+token (reset link) or phone+code (SMS code)."
+                "از پیوند بازیابی یا شمارهٔ موبایل و کد بازیابی استفاده کنید."
             )
 
         if attrs["new_password"] != attrs["new_password_confirm"]:

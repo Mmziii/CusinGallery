@@ -1,6 +1,6 @@
 import { usePageMeta } from "../hooks/usePageMeta";
 import { useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Navigate, Link, useLocation, useNavigate } from "react-router-dom";
 
 import { Alert, errorMessage } from "../components/ui";
 import useAuthStore from "../store/useAuthStore";
@@ -10,7 +10,7 @@ function LoginPage() {
   usePageMeta({ title: "ورود به حساب کاربری", path: "/login/" });
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, isLoading, sessionExpired } = useAuthStore();
+  const { login, isLoading, sessionExpired, isAuthenticated } = useAuthStore();
 
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
@@ -28,6 +28,8 @@ function LoginPage() {
       setError(errorMessage(result.error));
     }
   };
+
+  if (isAuthenticated) return <Navigate to="/account/" replace />;
 
   return (
     <div className="auth-page">

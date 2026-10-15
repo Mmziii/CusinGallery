@@ -44,10 +44,10 @@ def validate_address_phone(value):
         cleaned = "0" + cleaned[4:]
     if cleaned.startswith("9") and len(cleaned) == 10:
         cleaned = "0" + cleaned
-    if len(cleaned) == 11 and cleaned.isdigit() and cleaned.startswith("0"):
+    if len(cleaned) == 11 and cleaned.isdigit() and cleaned.startswith("09"):
         return cleaned  # 09... mobile or 0<area-code>... landline
     raise serializers.ValidationError(
-        "شماره تماس باید موبایل ایرانی (مانند 09123456789) یا تلفن ثابت با کد شهر (مانند 02112345678) باشد."
+        "فقط شمارهٔ موبایل (مثل ۰۹۱۲۳۴۵۶۷۸۹) قابل قبول است."
     )
 
 

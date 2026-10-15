@@ -1,3 +1,4 @@
+import { faDigits } from "../utils/faDigits";
 import PropTypes from "prop-types";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
@@ -79,7 +80,7 @@ function HeroSlider({ banners, isLoading }) {
             />
             <div className="hero__overlay">
               <div className="hero__copy container">
-                <h1>{banner.title}</h1>
+                <h2>{banner.title}</h2>
                 {banner.subtitle ? <p>{banner.subtitle}</p> : null}
                 {banner.cta_url ? (
                   <Link className="btn btn--gold" to={banner.cta_url}>
@@ -254,8 +255,8 @@ function ReviewHighlights({ products }) {
           <blockquote key={product.id} className="review-highlight">
             <p>«{review.body || review.title}»</p>
             <footer>
-              {review.rating ? <StarRating rating={review.rating} /> : null}
-              <cite>خریدارِ {product.name}</cite>
+              {review.rating ? <StarRating rating={faDigits(review.rating)} /> : null}
+              <cite>خریدارِ {faDigits(product.name)}</cite>
             </footer>
           </blockquote>
         ))}
@@ -290,6 +291,7 @@ function Home() {
 
   return (
     <div className="home">
+      <h1 className="sr-only">کازین گالری؛ فروشگاه لوازم خانه و آشپزخانه</h1>
       <HeroSlider banners={bannersState.data || []} isLoading={bannersState.isLoading} />
       <TrustStrip />
 

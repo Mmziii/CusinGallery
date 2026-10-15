@@ -1,3 +1,5 @@
+import useWishlistStore from "../store/useWishlistStore";
+import { toast } from "../utils/toast";
 import { useCallback, useEffect, useState } from "react";
 
 import * as wishlistApi from "../services/wishlistApi";
@@ -34,7 +36,7 @@ export function useWishlist() {
     setError(null);
     wishlistApi
       .fetchWishlist()
-      .then((data) => setItems(Array.isArray(data) ? data : []))
+      .then((data) => { const items = Array.isArray(data) ? data : []; setItems(items); useWishlistStore.setState({ items }); })
       .catch((err) => setError(normalizeApiError(err)))
       .finally(() => setIsLoading(false));
   }, []);
@@ -59,6 +61,8 @@ export function useWishlist() {
     try {
       await wishlistApi.removeWishlistItem(itemId);
       setItems((current) => current.filter((item) => item.id !== itemId));
+      useWishlistStore.setState(state => ({ items: state.items.filter(item => item.id !== itemId), revision: state.revision + 1 }));
+      toast("از علاقه‌مندی‌ها حذف شد", "success");
       return { success: true };
     } catch (err) {
       const normalized = normalizeApiError(err);

@@ -29,3 +29,14 @@ CardRowSkeleton.propTypes = { count: PropTypes.number };
 export function HeroSkeleton() {
   return <div className="skeleton hero hero--skeleton" aria-hidden="true" />;
 }
+
+export function ContentSkeleton({ label = "در حال بارگذاری…" }) {
+  return <div role="status" aria-label={label} aria-busy="true" className="content-skeleton">
+    <span className="sr-only">{label}</span>
+    <div className="skeleton skeleton--line" style={{width: "55%"}} />
+    <div className="skeleton" style={{height: "180px", borderRadius: "12px"}} />
+    <div className="skeleton skeleton--line" />
+    <div className="skeleton skeleton--line" style={{width: "70%"}} />
+  </div>;
+}
+ContentSkeleton.propTypes = { label: PropTypes.string };

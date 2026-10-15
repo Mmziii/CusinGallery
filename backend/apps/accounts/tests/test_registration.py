@@ -28,12 +28,12 @@ class RegistrationTests(CacheIsolatedAPITestCase):
         response = self.client.post(self.url, self.valid_payload(), format="json")
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        user = User.objects.get(phone="+989121234567")
+        user = User.objects.get(phone="09121234567")
         # The stored value must be a hash, not the plaintext password --
         # this is the actual behavior guarantee, not just "a row exists".
         self.assertNotEqual(user.password, "a-strong-passw0rd!")
         self.assertTrue(user.check_password("a-strong-passw0rd!"))
-        self.assertEqual(user.username, "+989121234567")
+        self.assertEqual(user.username, "09121234567")
         self.assertEqual(user.email, "customer@example.com")
 
     def test_registration_auto_logs_in(self):
@@ -42,7 +42,7 @@ class RegistrationTests(CacheIsolatedAPITestCase):
         # now succeed without a separate login call.
         me = self.client.get(reverse("me"))
         self.assertEqual(me.status_code, status.HTTP_200_OK)
-        self.assertEqual(me.data["phone"], "+989121234567")
+        self.assertEqual(me.data["phone"], "09121234567")
 
     def test_duplicate_phone_is_rejected(self):
         make_user(phone="+989121234567")
@@ -74,8 +74,8 @@ class RegistrationTests(CacheIsolatedAPITestCase):
 
         self.assertEqual(first.status_code, status.HTTP_201_CREATED)
         self.assertEqual(second.status_code, status.HTTP_201_CREATED)
-        self.assertIsNone(User.objects.get(phone="+989120000001").email)
-        self.assertIsNone(User.objects.get(phone="+989120000002").email)
+        self.assertIsNone(User.objects.get(phone="09120000001").email)
+        self.assertIsNone(User.objects.get(phone="09120000002").email)
 
     def test_password_mismatch_is_rejected(self):
         response = self.client.post(

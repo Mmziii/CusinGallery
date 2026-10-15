@@ -102,8 +102,8 @@ describe("guest cart hydration (S1 item 2)", () => {
 
     await waitFor(() => expect(slowReleases.length).toBe(1));
     slowReleases[0]();
-    expect(await screen.findByText("کالای 101")).toBeTruthy();
-    expect(await screen.findByText("کالای 102")).toBeTruthy();
+    expect(await screen.findByText("کالای ۱۰۱")).toBeTruthy();
+    expect(await screen.findByText("کالای ۱۰۲")).toBeTruthy();
     // Part S5 follow-up 4 item 3: once every line is hydrated the summary
     // shows the products subtotal (and nothing else) with a real number.
     expect(await screen.findByText(/جمع کالاها/)).toBeTruthy();
@@ -116,10 +116,10 @@ describe("guest cart hydration (S1 item 2)", () => {
     renderCart();
 
     expect(await screen.findByText("دریافت اطلاعات کالاها با خطا مواجه شد.")).toBeTruthy();
-    expect(screen.queryByText("کالای 101")).toBeNull();
+    expect(screen.queryByText("کالای ۱۰۱")).toBeNull();
 
     fireEvent.click(screen.getByText("تلاش دوباره"));
-    expect(await screen.findByText("کالای 101")).toBeTruthy();
+    expect(await screen.findByText("کالای ۱۰۱")).toBeTruthy();
     expect(screen.queryByText("دریافت اطلاعات کالاها با خطا مواجه شد.")).toBeNull();
   });
 

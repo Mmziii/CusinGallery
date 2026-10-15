@@ -130,7 +130,7 @@ class AddCartItemTests(CacheIsolatedAPITestCase):
         product = make_product(stock_quantity=3)
         response = self.client.post(self.url, {"product_id": product.id, "quantity": 5}, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("3", str(response.data))
+        self.assertIn("۳", str(response.data))
         self.assertEqual(CartItem.objects.count(), 0)
 
     def test_incrementing_past_available_stock_is_rejected(self):

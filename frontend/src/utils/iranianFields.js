@@ -10,9 +10,8 @@ const FA_DIGITS = "۰۱۲۳۴۵۶۷۸۹";
 const AR_DIGITS = "٠١٢٣٤٥٦٧٨٩";
 
 /** ASCII digits to Persian, for messages shown to the customer. */
-export function toPersianDigits(value) {
-  return String(value ?? "").replace(/\d/g, (d) => FA_DIGITS[Number(d)]);
-}
+export { faDigits as toPersianDigits } from "./faDigits";
+import { faDigits as toPersianDigits } from "./faDigits";
 
 /** Map Persian/Arabic digits to ASCII; everything else passes through. */
 export function toAsciiDigits(value) {
@@ -36,7 +35,7 @@ export function normalizePhone(value) {
 /** Mobile 09xxxxxxxxx or landline 0 + area code (11 digits total). */
 export function isValidIranianPhone(value) {
   const v = normalizePhone(value);
-  return /^\d{11}$/.test(v) && v.startsWith("0");
+  return /^09\d{9}$/.test(v);
 }
 
 /** Exactly 10 digits (dashes/spaces tolerated, Persian digits mapped). */
@@ -94,7 +93,7 @@ export function validateAddressPayload(
     if (!get("phone")) errors.phone = "شماره تماس را وارد کنید.";
     else if (!isValidIranianPhone(get("phone"))) {
       errors.phone =
-        "شماره تماس باید موبایل ایرانی (مانند 09123456789) یا تلفن ثابت با کد شهر (مانند 02112345678) باشد.";
+        "فقط شمارهٔ موبایل (مثل ۰۹۱۲۳۴۵۶۷۸۹) قابل قبول است.";
     }
   }
   if (!get("province")) errors.province = "استان را انتخاب کنید.";

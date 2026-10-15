@@ -1,3 +1,9 @@
+import ProductCard from "../components/ProductCard";
+import { faDigits } from "../utils/faDigits";
+import useWishlistStore from "../store/useWishlistStore";
+import { ContentSkeleton } from "../components/Skeletons";
+import NotFound from "./NotFound";
+import { normalizePhone, isValidIranianPhone } from "../utils/iranianFields";
 import { usePageMeta } from "../hooks/usePageMeta";
 import PropTypes from "prop-types";
 import { useEffect, useMemo, useState } from "react";
@@ -15,7 +21,6 @@ import { useAsync } from "../hooks/useAsync";
 import { getProduct } from "../services/catalogApi";
 import { subscribeBackInStock } from "../services/productsApi";
 import * as reviewsApi from "../services/reviewsApi";
-import * as wishlistApi from "../services/wishlistApi";
 import useAuthStore from "../store/useAuthStore";
 import useCartStore from "../store/useCartStore";
 import { normalizeApiError } from "../utils/apiError";
@@ -38,6 +43,7 @@ function RatingInput({ value, onChange }) {
           type="button"
           role="radio"
           aria-checked={value === n}
+          aria-label={`${faDigits(n)} ستاره`}
           className={n <= value ? "star star--on" : "star"}
           onClick={() => onChange(n)}
         >
@@ -125,7 +131,7 @@ function ReviewSection({ product }) {
           <article key={review.id} className="review">
             <header>
               <strong>{review.username}</strong>
-              <Stars value={review.rating} size="sm" />
+              <Stars value={faDigits(review.rating)} size="sm" />
               {review.is_verified_purchase ? (
                 <span className="review__verified">خرید تأیید شده</span>
               ) : null}
@@ -265,7 +271,9 @@ function ProductDetailPage() {
   const [quantity, setQuantity] = useState(1);
   const [selected, setSelected] = useState({}); // attribute name -> value
   const [added, setAdded] = useState(null);
-  const [wishlisted, setWishlisted] = useState(false);
+  const wishlist = useWishlistStore();
+  const wishlisted = wishlist.items.some(item => item.product.id === product?.id);
+  const [wishlistBusy, setWishlistBusy] = useState(false);
   const [bisPhone, setBisPhone] = useState("");
   const [bisState, setBisState] = useState(null); // null | busy | done | error
 
@@ -288,7 +296,7 @@ function ProductDetailPage() {
   const shareSource = product ? product.primary_image || product.images?.[0] || null : null;
   const ogImage = product ? shareImageUrl(shareSource) : undefined;
   usePageMeta({
-    title: product?.name,
+    title: error?.response?.status === 404 ? "صفحه یافت نشد" : product?.name,
     description: product?.short_description || undefined,
     path: `/products/${slug}/`,
     image: ogImage,
@@ -356,7 +364,9 @@ function ProductDetailPage() {
   const hasVariants = Boolean(product?.variants?.length);
   const displayPrice = activeVariant ? activeVariant.price_info : product?.price_info;
   const stockStatus = activeVariant ? activeVariant.stock_status : product?.stock_status;
+  const availableStock = activeVariant?.stock_quantity ?? product?.stock_quantity ?? Infinity;
   const outOfStock = stockStatus === "out_of_stock";
+  useEffect(() => { setQuantity(q => Math.max(1, Math.min(q, availableStock))); }, [availableStock, activeVariant?.id]);
 
   useEffect(() => {
     setSelected({});
@@ -364,12 +374,10 @@ function ProductDetailPage() {
     setAdded(null);
   }, [slug]);
 
-  useEffect(() => {
-    if (!isAuthenticated || !product) return;
-    wishlistApi.checkWishlisted(product.id).then(setWishlisted).catch(() => {});
-  }, [isAuthenticated, product]);
 
-  if (isLoading) return <Spinner label="در حال دریافت محصول…" />;
+
+  if (isLoading) return <ContentSkeleton label="در حال دریافت محصول…" />;
+  if (error?.response?.status === 404) return <NotFound />;
   if (error) return <ErrorState message={errorMessage(normalizeApiError(error))} onRetry={refetch} />;
   if (!product) return null;
 
@@ -384,13 +392,10 @@ function ProductDetailPage() {
   };
 
   const handleWishlist = async () => {
-    if (!isAuthenticated || wishlisted) return;
-    try {
-      await wishlistApi.addWishlistItem(product.id);
-      setWishlisted(true);
-    } catch {
-      /* surfaced via cart-style toasts elsewhere; keep silent here */
-    }
+    if (!isAuthenticated || wishlistBusy) return;
+    setWishlistBusy(true);
+    await wishlist.toggle(product.id);
+    setWishlistBusy(false);
   };
 
   return (
@@ -410,24 +415,13 @@ function ProductDetailPage() {
         {/* Part S5 item 3: main image + thumbnail row (cross-fade, keyboard,
             swipe, scroll-snap) -- every image still goes through the shared
             SmartImage, so a broken one shows the placeholder. */}
-        <ProductGallery images={images} name={product.name} />
+        <ProductGallery images={images} name={faDigits(product.name)} />
       </div>
 
       <div className="product-detail__info">
-        <nav className="breadcrumb">
-          <Link to="/">خانه</Link> /{" "}
-          {product.category ? (
-            <>
-              <Link to={`/shop/?category=${encodeURIComponent(product.category.slug)}`}>
-                {product.category.name}
-              </Link>{" "}
-              /{" "}
-            </>
-          ) : null}
-          <span>{product.name}</span>
-        </nav>
 
-        <h1>{product.name}</h1>
+
+        <h1>{faDigits(product.name)}</h1>
         {product.brand ? <div className="product-detail__brand">برند: {product.brand.name}</div> : null}
         {product.short_description ? <p className="product-detail__short">{product.short_description}</p> : null}
 
@@ -461,10 +455,10 @@ function ProductDetailPage() {
         ) : null}
 
         <div className="product-detail__buy">
-          <div className="qty-picker">
+          <div className="qty-picker" hidden={outOfStock}>
             <button type="button" onClick={() => setQuantity((q) => Math.max(1, q - 1))} aria-label="کاهش"><Icon name="minus" size={16} /></button>
-            <span>{quantity}</span>
-            <button type="button" onClick={() => setQuantity((q) => q + 1)} aria-label="افزایش"><Icon name="plus" size={16} /></button>
+            <span>{faDigits(quantity)}</span>
+            <button type="button" disabled={quantity >= availableStock} onClick={() => setQuantity((q) => Math.min(availableStock, q + 1))} aria-label="افزایش"><Icon name="plus" size={16} /></button>
           </div>
 
           <button
@@ -477,22 +471,22 @@ function ProductDetailPage() {
           </button>
         {outOfStock ? (
           <div className="back-in-stock">
-            <p className="muted">کیف را جا نگذارید: شمارهٔ موبایل بگذارید تا به محض موجودشدن پیامک بزنیم.</p>
+            <p className="muted">این کالا فعلاً موجود نیست. شمارهٔ موبایل‌تان را بگذارید تا وقتی موجود شد خبرتان کنیم.</p>
             <div className="back-in-stock__row">
               <input
                 type="text"
                 dir="ltr"
                 inputMode="numeric"
                 placeholder="09xxxxxxxxx"
-                maxLength={11}
+                maxLength={20}
                 value={bisPhone}
-                onChange={(e) => setBisPhone(e.target.value)}
+                onChange={(e) => setBisPhone(normalizePhone(e.target.value))}
                 aria-label="شماره موبایل برای اطلاع‌رسانی موجودی"
               />
               <button
                 type="button"
                 className="btn btn--outline"
-                disabled={bisState === "busy"}
+                disabled={bisState === "busy" || !isValidIranianPhone(bisPhone)}
                 onClick={async () => {
                   setBisState("busy");
                   try {
@@ -518,7 +512,8 @@ function ProductDetailPage() {
             type="button"
             className={`icon-btn icon-btn--lg ${wishlisted ? "icon-btn--active" : ""}`}
             onClick={handleWishlist}
-            disabled={!isAuthenticated || wishlisted}
+            aria-pressed={wishlisted}
+            disabled={!isAuthenticated || wishlistBusy}
             title="علاقه‌مندی"
           >
             <Icon name="heart" filled={wishlisted} size={20} />
@@ -562,11 +557,7 @@ function ProductDetailPage() {
             <h2>محصولات مرتبط</h2>
             <div className="related-grid">
               {product.related_products.map((related) => (
-                <Link key={related.id} to={`/products/${related.slug}/`} className="related-card">
-                  <SmartImage image={related.primary_image || null} alt={related.name} />
-                  <span>{related.name}</span>
-                  <span className="related-card__price">{formatPrice(related.price_info.price)} تومان</span>
-                </Link>
+                <ProductCard key={related.id} product={related} />
               ))}
             </div>
           </section>
@@ -578,7 +569,7 @@ function ProductDetailPage() {
       <ReviewSection product={product} />
 
       {/* Part R5 item 10: browser-local, server knows nothing about it */}
-      <RecentlyViewed />
+      <RecentlyViewed excludeId={product.id} />
 
       <div className="product-detail__stickybar">
         <PriceTag priceInfo={displayPrice} size="md" />

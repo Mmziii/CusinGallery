@@ -64,7 +64,7 @@ function ProfilePage() {
   return (
     <div className="profile-page">
       <h1>پروفایل</h1>
-      <p className="muted">شماره موبایل (نام کاربری ورود): {user?.phone}</p>
+      <p className="muted">شماره موبایل (نام کاربری ورود): <bdi dir="ltr">{user?.phone}</bdi></p>
 
       <form className="card" onSubmit={submitProfile}>
         <h2>اطلاعات حساب</h2>

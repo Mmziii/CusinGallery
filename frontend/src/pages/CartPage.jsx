@@ -1,3 +1,4 @@
+import { faDigits } from "../utils/faDigits";
 import { usePageMeta } from "../hooks/usePageMeta";
 import PropTypes from "prop-types";
 import { useEffect } from "react";
@@ -73,7 +74,7 @@ function GuestCartView() {
 
   if (guestLines.length === 0) {
     return (
-      <EmptyState title="سبد خرید شما خالی است.">
+      <EmptyState heading="h1" title="سبد خرید شما خالی است.">
         <Link className="btn btn--primary" to="/shop/">مشاهده فروشگاه</Link>
       </EmptyState>
     );
@@ -144,17 +145,18 @@ function GuestCartView() {
                   alt={product?.name || ""}
                 />
                 <div className="cart-item__body">
-                  <div className="cart-item__name">{product ? product.name : "—"}</div>
+                  <div className="cart-item__name">{product ? faDigits(product.name) : "—"}</div>
                   {variantLabel(variant) ? (
                     <div className="cart-item__variant">{variantLabel(variant)}</div>
                   ) : null}
                   <div className="cart-item__unit">
                     {priceInfo ? <PriceTag priceInfo={priceInfo} size="sm" /> : "—"}
                   </div>
-                  <div className="cart-item__qty">
+                  <div className="cart-item__qty" hidden={(variant?.stock_quantity ?? product?.stock_quantity) === 0}>
                     <button
                       type="button"
                       aria-label="افزایش تعداد"
+                      disabled={line.quantity >= (variant?.stock_quantity ?? product?.stock_quantity ?? Infinity)}
                       onClick={() => updateGuestItem(line.product_id, line.variant_id, line.quantity + 1)}
                     >
                       +
@@ -227,12 +229,12 @@ function CartPage() {
     return <GuestCartView />;
   }
 
-  if (error) return <ErrorState message={errorMessage(error)} onRetry={fetchCart} />;
+  if (error && (!error.status || error.status >= 500)) return <ErrorState message={errorMessage(error)} onRetry={fetchCart} />;
   if (!cart) return null;
 
   if (cart.items.length === 0) {
     return (
-      <EmptyState title="سبد خرید شما خالی است.">
+      <EmptyState heading="h1" title="سبد خرید شما خالی است.">
         <Link className="btn btn--primary" to="/shop/">مشاهده فروشگاه</Link>
       </EmptyState>
     );
@@ -253,7 +255,7 @@ function CartPage() {
 
                 <div className="cart-item__info">
                   <Link to={`/products/${item.product.slug}/`} className="cart-item__name">
-                    {item.product.name}
+                    {faDigits(item.product.name)}
                   </Link>
                   {item.variant ? (
                     <div className="cart-item__variant">
@@ -271,7 +273,7 @@ function CartPage() {
                 </div>
 
                 <div className="cart-item__controls">
-                  <div className="qty-picker">
+                  <div className="qty-picker" hidden={item.available_stock === 0}>
                     <button
                       type="button"
                       aria-label="کاهش تعداد"
@@ -288,10 +290,11 @@ function CartPage() {
                     >
                       −
                     </button>
-                    <span>{item.quantity}</span>
+                    <span>{faDigits(item.quantity)}</span>
                     <button
                       type="button"
                       aria-label="افزایش تعداد"
+                      disabled={item.quantity >= item.available_stock}
                       onClick={() => {
                         updateItem(item.id, item.quantity + 1).then((result) => {
                           if (result && !result.success) {
@@ -332,7 +335,7 @@ function CartPage() {
             <h2>خلاصه سفارش</h2>
             <dl>
               <div>
-                <dt>جمع کالاها ({cart.item_count})</dt>
+                <dt>جمع کالاها ({faDigits(cart.item_count)})</dt>
                 <dd>{formatPrice(cart.subtotal)} تومان</dd>
               </div>
             </dl>
@@ -340,7 +343,7 @@ function CartPage() {
               ادامه و ثبت سفارش
             </button>
             <p className="cart-page__note">
-              مبلغ نهایی در مرحله ثبت سفارش توسط سرور محاسبه می‌شود.
+              هزینهٔ ارسال و مبلغ نهایی را در مرحلهٔ بعد ببینید.
             </p>
           </aside>
         </div>

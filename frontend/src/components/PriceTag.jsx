@@ -1,3 +1,4 @@
+import { faDigits } from "../utils/faDigits";
 import PropTypes from "prop-types";
 
 import { formatPrice } from "../utils/formatPrice";
@@ -19,7 +20,7 @@ function PriceTag({ priceInfo, size = "md" }) {
       ) : null}
       <span className="price__current">{formatPrice(price)}</span>
       <span className="price__unit">تومان</span>
-      {badge > 0 ? <span className="price__badge">{badge}٪ تخفیف</span> : null}
+      {badge > 0 ? <span className="price__badge">{faDigits(badge)}٪ تخفیف</span> : null}
     </div>
   );
 }

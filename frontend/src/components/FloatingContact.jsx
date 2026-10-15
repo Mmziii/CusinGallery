@@ -1,3 +1,4 @@
+import { useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 
 import Icon from "./Icon";
@@ -11,6 +12,7 @@ import useSiteSettings from "../hooks/useSiteSettings";
  */
 function FloatingContact() {
   const settings = useSiteSettings();
+  const { pathname } = useLocation();
   const [showTop, setShowTop] = useState(false);
   const links = [];
 
@@ -35,7 +37,7 @@ function FloatingContact() {
     links.push([`tel:${settings.phone.replace(/\s/g, "")}`, "phone", "تماس تلفنی"]);
   }
 
-  if (links.length === 0 && !showTop) return null;
+  if (pathname.startsWith("/products/") || (links.length === 0 && !showTop)) return null;
   return (
     <div className="floating-contact">
       {showTop ? (
@@ -44,7 +46,7 @@ function FloatingContact() {
           className="back-to-top"
           aria-label="بازگشت به بالای صفحه"
           title="بازگشت به بالای صفحه"
-          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          onClick={() => window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" })}
         >
           <Icon name="arrow-up" size={22} />
         </button>

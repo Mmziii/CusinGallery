@@ -1,7 +1,9 @@
+import { formatAddress } from "../../utils/formatAddress";
+import { ContentSkeleton } from "../../components/Skeletons";
 import { useCallback, useEffect, useState } from "react";
 
 import AddressForm from "../../components/AddressForm";
-import { Alert, EmptyState, Spinner, errorMessage } from "../../components/ui";
+import { Alert, EmptyState, errorMessage } from "../../components/ui";
 import * as authApi from "../../services/authApi";
 import { normalizeApiError } from "../../utils/apiError";
 
@@ -69,7 +71,7 @@ function AddressesPage() {
     }
   };
 
-  if (isLoading) return <Spinner label="در حال دریافت آدرس‌ها…" />;
+  if (isLoading) return <ContentSkeleton label="در حال دریافت آدرس‌ها…" />;
 
   return (
     <div className="addresses-page">
@@ -116,10 +118,9 @@ function AddressesPage() {
                 <strong>{address.recipient_name}</strong>
                 {address.is_default ? <em className="address-card__default">پیش‌فرض</em> : null}
                 <p>
-                  {address.province}، {address.city}، {address.address}
-                  {address.unit ? `، واحد ${address.unit}` : ""}
+                  {formatAddress(address)}
                 </p>
-                <p className="muted">کد پستی: {address.postal_code} — تماس: {address.phone}</p>
+                <p className="muted">کد پستی: <bdi dir="ltr">{address.postal_code}</bdi> — تماس: <bdi dir="ltr">{address.phone}</bdi></p>
               </div>
               <div className="address-card__actions">
                 {!address.is_default ? (

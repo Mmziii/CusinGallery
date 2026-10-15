@@ -1168,7 +1168,7 @@ h1, h2, h3, .section__head h2 {
 .hero__slide img { width: 100%; height: 100%; object-fit: cover; opacity: .8; }
 .hero__overlay { position: absolute; inset: 0; background: linear-gradient(to top, rgba(24,30,12,.85), rgba(24,30,12,.15) 60%); display: flex; align-items: flex-end; }
 .hero__copy { padding-bottom: var(--space-6); }
-.hero__copy h1 { color: var(--brand-ivory); font-size: var(--font-size-2xl); margin: 0 0 var(--space-2); text-shadow: 0 2px 18px rgba(0,0,0,.45); }
+.hero__copy h2 { color: var(--brand-ivory); font-size: var(--font-size-2xl); margin: 0 0 var(--space-2); text-shadow: 0 2px 18px rgba(0,0,0,.45); }
 .hero__copy p { color: var(--brand-gold); font-size: var(--font-size-md); margin: 0 0 var(--space-3); }
 .hero__arrow {
   position: absolute; top: 50%; transform: translateY(-50%);
@@ -1329,7 +1329,7 @@ html.js-reveal .reveal.is-revealed, .reveal.is-revealed { opacity: 1; transform:
   .site-header__nav, .site-header__search form .btn { display: none; }
   .site-header__burger { display: block; }
   .site-header__search { max-width: none; }
-  .hero__copy h1 { font-size: var(--font-size-xl); }
+  .hero__copy h2 { font-size: var(--font-size-xl); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1341,8 +1341,8 @@ html.js-reveal .reveal.is-revealed, .reveal.is-revealed { opacity: 1; transform:
 /* --- route transition fade ---
    Keep this opacity-only: .route-fade sits above pages that can contain fixed
    controls, and a transform here would turn it into their containing block. */
-.route-fade { animation: route-in .3s ease; }
-@keyframes route-in { from { opacity: 0; } to { opacity: 1; } }
+.route-fade { position: relative; animation: route-in .2s ease; }
+@keyframes route-in { from { opacity: 0; top: 8px; } to { opacity: 1; top: 0; } }
 
 /* SmartImage wrappers fill their boxes like plain <img> did */
 .hero__slide picture, .hero__slide picture img { width: 100%; height: 100%; object-fit: cover; }
@@ -1657,3 +1657,94 @@ input.is-invalid, select.is-invalid, textarea.is-invalid { border-color: var(--c
 
 /* --- Field helper text (item 5) --- */
 .field__hint { font-size: 0.78rem; }
+
+/* Audit 7: one shared card rhythm in grids and carousels. */
+.product-card { height: 100%; min-width: 0; display: flex; flex-direction: column; }
+.product-card__body { min-width: 0; }
+.product-card__name {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; overflow-wrap: anywhere; line-height: 1.8;
+  height: 3.6em; min-height: 3.6em; flex-shrink: 0;
+}
+.product-card__brand { height: 1.9em; min-height: 1.9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.product-card__body > .price-tag { margin-top: auto; }
+.product-card__footer { margin-top: 6px; flex-wrap: wrap; }
+
+/* Audit 8: modestly denser, same brand family and palette. */
+:root {
+  --font-size-base: .9375rem;
+  --font-size-md: 1.0625rem;
+  --font-size-lg: 1.25rem;
+  --font-size-xl: 1.625rem;
+  --font-size-2xl: 2.25rem;
+  --space-3: 14px;
+  --space-4: 22px;
+  --space-5: 28px;
+}
+.product-card__body > .price { margin-top: auto; }
+.product-card__badges { max-width: calc(100% - 20px); }
+.badge { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+.btn { height: auto; min-height: 38px; white-space: normal; overflow-wrap: anywhere; line-height: 1.7; }
+.product-card__footer .btn { flex: 1 1 100px; }
+.product-card__actions { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+h1, h2, h3, .cart-item__name, .order-item__name, .address-card { overflow-wrap: anywhere; }
+input, select, textarea { min-width: 0; max-width: 100%; }
+.product-detail__info, .cart-item__body, .checkout-page__body { min-width: 0; }
+@media (max-width: 640px) {
+  input, select, textarea { font-size: 16px; }
+  .product-card__footer { gap: 6px; }
+  .product-card__body { padding: 10px; }
+  .price { flex-wrap: wrap; }
+}
+
+.smart-image { opacity: 0; transition: opacity .18s ease; }
+.smart-image.is-loaded { opacity: 1; }
+.content-skeleton { display: grid; gap: 16px; padding-block: 20px; }
+.related-grid > *, .recently-viewed .product-grid > * { animation: audit-card-in .2s ease both; }
+.related-grid > :nth-child(2), .recently-viewed .product-grid > :nth-child(2) { animation-delay: 35ms; }
+.related-grid > :nth-child(3), .recently-viewed .product-grid > :nth-child(3) { animation-delay: 70ms; }
+.related-grid > :nth-child(n+4), .recently-viewed .product-grid > :nth-child(n+4) { animation-delay: 105ms; }
+@keyframes audit-card-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .route-fade, .related-grid > *, .recently-viewed .product-grid > * { animation: none; }
+  .smart-image { transition: none; }
+  html { scroll-behavior: auto; }
+}
+.wishlist-badge { display: inline-grid; place-items: center; min-width: 20px; padding-inline: 5px; border-radius: 12px; background: var(--brand-green-dark); color: var(--brand-ivory); font-size: var(--font-size-xs); animation: badge-pop .2s ease; }
+.icon-btn[aria-pressed="true"] .icon { animation: badge-pop .2s ease; }
+@media (prefers-reduced-motion: reduce) {
+  .wishlist-badge, .icon-btn[aria-pressed="true"] .icon { animation: none; }
+}
+.search-combobox { display: block; min-width: 0; }
+.search-combobox > input { width: 100%; cursor: text; }
+.combobox-panel { position: fixed; z-index: 200; display: flex; flex-direction: column; padding: 12px; background: var(--color-surface); color: var(--brand-ink); border: 1px solid var(--color-border); border-radius: 12px; box-shadow: var(--shadow-lg); animation: audit-card-in .15s ease; max-height: min(400px, 60dvh); }
+.combobox-panel__head { display: flex; justify-content: space-between; align-items: center; font-weight: 700; }
+.combobox-panel__head button { padding: 4px 12px; background: transparent; border: 0; font-size: 24px; }
+.combobox-panel__options { overflow-y: auto; display: flex; flex-direction: column; margin-top: 8px; }
+.combobox-panel [role="option"] { padding: 8px 12px; border-radius: 6px; cursor: pointer; }
+.combobox-panel [role="option"]:hover, .combobox-panel [role="option"].is-active { background: var(--brand-green-tint); }
+.combobox-panel [aria-selected="true"] { font-weight: 700; }
+@media (max-width: 640px) {
+ .combobox-panel { top: auto !important; left: 0 !important; right: 0; bottom: 0; width: auto !important; padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px)); border-radius: 18px 18px 0 0; max-height: 65dvh; }
+}
+@media (prefers-reduced-motion: reduce) { .combobox-panel { animation: none; } }
+/* Audit 15: image/placeholder must match the narrow cart grid track. */
+@media (max-width: 640px) {
+  .cart-item { grid-template-columns: 70px minmax(0, 1fr); }
+  .cart-item > picture, .cart-item img, .cart-item .img-placeholder, .cart-item__noimage,
+  .cart-item__skeleton-img { width: 70px; height: 70px; max-width: 100%; }
+}
+.pagination { flex-wrap: wrap; gap: 8px; }
+.pagination a { padding: 4px 10px; border: 1px solid var(--color-border); border-radius: 6px; }
+.pagination a[aria-current="page"] { background: var(--brand-green-dark); color: white; }
+/* Audit 18: retain gold/olive identity with readable text pairs. */
+.site-header__brand .site-header__brand-name { color: var(--brand-gold); }
+.badge--low { background: var(--brand-ivory); color: var(--brand-gold-deep); border-color: var(--brand-gold-deep); }
+.shop__heading { grid-column: 1 / -1; min-width: 0; }
+.shop__heading h1 { margin: 0; font-size: var(--font-size-xl); }
+
+[hidden] { display: none !important; }
+
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+.combobox-panel.is-closing { animation: audit-card-in .15s ease reverse both; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .combobox-panel.is-closing { animation: none; } }

@@ -172,7 +172,7 @@ describe("shop page filter transitions (Part S5 item 7)", () => {
       results: Array.from({ length: 13 }, (_, index) => makeProduct(100 + index, `کالای ${index}`)),
     };
     await resolvePending(many);
-    await screen.findByText("کالای 0");
+    await screen.findByText("کالای ۰");
 
     const delays = cells().map((cell) => cell.style.animationDelay);
     expect(delays[0]).toBe("0ms");
@@ -196,7 +196,7 @@ describe("shop page filter transitions (Part S5 item 7)", () => {
     // Nothing yet: the three keystrokes are still inside the debounce window.
     expect(productRequests.length).toBe(before);
     // The input itself stays responsive (controlled local state).
-    expect(min.value).toBe("123");
+    expect(min.value).toBe("۱۲۳");
 
     await waitFor(() => expect(productRequests.some((p) => p.min_price === "123")).toBe(true));
     // One request for the whole burst, not one per keystroke.

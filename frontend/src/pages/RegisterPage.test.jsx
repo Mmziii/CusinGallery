@@ -69,7 +69,7 @@ describe("RegisterPage form hygiene (S2.5)", () => {
     fireEvent.change(screen.getByLabelText(/^تکرار رمز عبور/), { target: { value: "a-strong-passw0rd!" } });
     fireEvent.click(screen.getByRole("button", { name: "ثبت‌نام" }));
 
-    expect(screen.getByText(/شماره موبایل معتبر نیست/)).toBeTruthy();
+    expect(screen.getByText(/فقط شمارهٔ موبایل/)).toBeTruthy();
     expect(registerCalls.length).toBe(0);
   });
 
