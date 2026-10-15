@@ -8,12 +8,17 @@ phases.
 """
 from django.contrib import admin
 
+from apps.adminui.admin_dates import jalali_column
+
 from .models import Review
 
 
 @admin.register(Review)
 class ReviewAdmin(admin.ModelAdmin):
-    list_display = ("product", "user", "rating", "status", "is_verified_purchase", "created_at")
+    list_display = (
+        "product", "user", "rating", "status", "is_verified_purchase",
+        jalali_column("created_at", "تاریخ ثبت", with_time=True),
+    )
     list_filter = ("status", "rating", "is_verified_purchase")
     search_fields = ("product__name", "user__username", "user__email", "title", "body")
     autocomplete_fields = ("product", "user")

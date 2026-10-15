@@ -78,7 +78,7 @@ AND without the visual theme (ADMIN_THEME_ENABLED=False).
       {% endif %}
       {% if original.estimated_delivery_min is not None %}
       <span class="cusin-summary-item"><span class="k">بازهٔ تحویل</span>
-        <span class="v">{{ original.estimated_delivery_min|fanum }} تا {{ original.estimated_delivery_max|fanum }} روز</span></span>
+        <span class="v">{{ original.estimated_delivery_min|jdate_range:original.estimated_delivery_max }}</span></span>
       {% endif %}
       <span class="cusin-summary-item"><span class="k">مبلغ نهایی</span>
         <span class="v" title="{{ original.total }} تومان">{{ original.total|toman }}</span></span>

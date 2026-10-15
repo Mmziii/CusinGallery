@@ -12,7 +12,7 @@ from django import template
 from django.utils import timezone
 from django.utils.html import format_html
 
-from apps.adminui import jalali
+from apps.adminui import admin_dates, jalali
 from apps.adminui.nav import build_sidebar
 
 register = template.Library()
@@ -81,6 +81,17 @@ def jweekday_filter(value) -> str:
         value = timezone.localtime(value)
     jd = jalali.to_jalali(value)
     return jalali.JALALI_WEEKDAY_NAMES[jd.weekday()] if jd else "—"
+
+
+@register.filter(name="jdate_range")
+def jdate_range_filter(start, end) -> str:
+    """A Jalali window: ``۱۴۰۵/۰۷/۲۶`` when both ends are the same day,
+    ``۱۴۰۵/۰۷/۲۶ تا ۱۴۰۵/۰۷/۲۸`` otherwise.
+
+    The order change page's «بازهٔ تحویل» used to print the raw ISO dates
+    and append a stray «روز», because «تا» was read as a duration.
+    """
+    return admin_dates.jalali_range(start, end)
 
 
 @register.filter(name="fanum")

@@ -28,6 +28,7 @@ from django.urls import path, reverse
 from django.utils import timezone
 from django.utils.html import format_html
 
+from apps.adminui.admin_dates import jalali_date as _jalali_date, jalali_range
 from apps.adminui.jalali import format_jalali_datetime
 from apps.adminui.search import NormalizedSearchMixin
 from apps.adminui.templatetags.adminui_extras import toman_filter
@@ -310,6 +311,21 @@ class OrderAdmin(NormalizedSearchMixin, admin.ModelAdmin):
     @admin.display(description="تاریخ ویرایش")
     def updated_at_detail(self, obj):
         return _jalali_stamp(obj.updated_at)
+
+    @admin.display(description="زودترین تاریخ تحویل")
+    def estimated_delivery_min_detail(self, obj):
+        # Read-only, so Django would otherwise render it with the fa
+        # locale's Gregorian DATE_FORMAT («۱۸ اکتبر ۲۰۲۶»).
+        return _jalali_date(obj.estimated_delivery_min)
+
+    @admin.display(description="دیرترین تاریخ تحویل")
+    def estimated_delivery_max_detail(self, obj):
+        return _jalali_date(obj.estimated_delivery_max)
+
+    @admin.display(description="بازهٔ تحویل")
+    def delivery_window(self, obj):
+        """«۱۴۰۵/۰۷/۲۶ تا ۱۴۰۵/۰۷/۲۸» -- one date when the window is a day."""
+        return jalali_range(obj.estimated_delivery_min, obj.estimated_delivery_max)
     search_fields = ("order_number", "user__username", "user__email", "shipping_phone", "tracking_code")
     autocomplete_fields = ("user", "coupon")
     date_hierarchy = "created_at"
@@ -327,7 +343,7 @@ class OrderAdmin(NormalizedSearchMixin, admin.ModelAdmin):
         "shipping_city", "shipping_address", "shipping_postal_code",
         "shipping_unit", "shipping_building_number",
         # Shipping method (shown as its Persian label) + delivery window snapshot
-        "shipping_method_label", "estimated_delivery_min", "estimated_delivery_max",
+        "shipping_method_label", "estimated_delivery_min_detail", "estimated_delivery_max_detail",
     )
     inlines = [OrderItemInline]
     actions = ["export_orders_csv"]
@@ -353,7 +369,7 @@ class OrderAdmin(NormalizedSearchMixin, admin.ModelAdmin):
                 "shipping_unit", "shipping_building_number",
             ),
         }),
-        ("روش ارسال", {"fields": ("shipping_method_label", "estimated_delivery_min", "estimated_delivery_max")}),
+        ("روش ارسال", {"fields": ("shipping_method_label", "estimated_delivery_min_detail", "estimated_delivery_max_detail")}),
         ("بسته‌بندی هدیه", {"fields": ("gift_wrap", "gift_wrap_fee", "gift_message")}),
         ("زمان‌ها", {"fields": ("created_at_detail", "updated_at_detail")}),
     )

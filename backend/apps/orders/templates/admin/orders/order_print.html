@@ -1,4 +1,4 @@
-{% load i18n %}<!DOCTYPE html>
+{% load i18n adminui_extras %}<!DOCTYPE html>
 <html lang="fa" dir="rtl">
 <head>
   <meta charset="utf-8">
@@ -33,7 +33,7 @@
 <button class="print-btn" onclick="window.print()">چاپ</button>
 <div class="sheet">
   <h1>کازین گالری — سفارش {{ order.order_number }}</h1>
-  <div class="muted">تاریخ ثبت: {{ order.created_at|date:"Y/m/d H:i" }}</div>
+  <div class="muted">تاریخ ثبت: {{ order.created_at|jdatetime }}</div>
 
   <div class="box">
     {% if order.shipping_method == "pickup" %}
@@ -55,7 +55,7 @@
       <div><b>روش ارسال:</b>
         {{ shipping_method_label }}
         {% if order.estimated_delivery_min and order.estimated_delivery_max %}
-          (تحویل: {{ order.estimated_delivery_min|date:"Y/m/d" }} تا {{ order.estimated_delivery_max|date:"Y/m/d" }})
+          (تحویل: {{ order.estimated_delivery_min|jdate_range:order.estimated_delivery_max }})
         {% endif %}
       </div>
       {% if order.tracking_code %}<div><b>کد رهگیری:</b> {{ order.tracking_code }}</div>{% endif %}

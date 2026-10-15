@@ -20,6 +20,7 @@ from django.utils.text import slugify
 
 from decimal import ROUND_HALF_UP, Decimal
 
+from apps.adminui.admin_dates import jalali_column
 from apps.adminui.admin_forms import NumericChangelistAdminMixin
 from apps.adminui.search import NormalizedSearchMixin
 
@@ -1648,7 +1649,11 @@ from .models import BackInStockSubscription
 class BackInStockSubscriptionAdmin(admin.ModelAdmin):
     """Strictly read-only audit of "notify me" signups (Part 2)."""
 
-    list_display = ("phone", "product", "variant", "created_at", "notified_at")
+    list_display = (
+        "phone", "product", "variant",
+        jalali_column("created_at", "تاریخ ثبت", with_time=True),
+        jalali_column("notified_at", "زمان اطلاع‌رسانی", with_time=True),
+    )
     list_filter = ("notified_at", "created_at")
     search_fields = ("phone", "product__name")
     readonly_fields = tuple(f.name for f in BackInStockSubscription._meta.concrete_fields)

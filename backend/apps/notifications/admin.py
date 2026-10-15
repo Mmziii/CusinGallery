@@ -9,13 +9,16 @@ event, not by hand-editing logs.
 """
 from django.contrib import admin
 
+from apps.adminui.admin_dates import jalali_column
+
 from .models import NotificationLog
 
 
 @admin.register(NotificationLog)
 class NotificationLogAdmin(admin.ModelAdmin):
     list_display = (
-        "created_at", "event", "channel", "status",
+        jalali_column("created_at", "زمان", with_time=True),
+        "event", "channel", "status",
         "recipient_masked", "order_link", "provider_message_id",
     )
     list_filter = ("event", "channel", "status", "created_at")

@@ -1,4 +1,4 @@
-{% load order_extras cusin_images site_extras %}<!doctype html>
+{% load order_extras cusin_images site_extras adminui_extras %}<!doctype html>
 <html lang="fa" dir="rtl">
 <head>
 <meta charset="utf-8">
@@ -43,7 +43,7 @@
     <div class="brand">کازین گالری<small>Cusin Gallery — cusin.ir</small></div>
     <div class="meta">
       <div>فاکتور سفارش: <b>{{ order.order_number|fa_digits }}</b></div>
-      <div>تاریخ ثبت: {{ order.created_at|date:"Y/m/d H:i"|fa_digits }}</div>
+      <div>تاریخ ثبت: {{ order.created_at|jdatetime }}</div>
       <div>وضعیت پرداخت: {{ order.get_payment_status_display }}</div>
     </div>
   </div>
