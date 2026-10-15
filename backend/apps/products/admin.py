@@ -21,6 +21,7 @@ from django.utils.text import slugify
 from decimal import ROUND_HALF_UP, Decimal
 
 from apps.adminui.admin_forms import NumericChangelistAdminMixin
+from apps.adminui.search import NormalizedSearchMixin
 
 import csv
 import glob
@@ -395,7 +396,10 @@ class HasImageFilter(admin.SimpleListFilter):
 
 @admin.register(Product)
 class ProductAdmin(
-    AdminSkuDirectionMixin, NumericChangelistAdminMixin, admin.ModelAdmin
+    AdminSkuDirectionMixin,
+    NumericChangelistAdminMixin,
+    NormalizedSearchMixin,
+    admin.ModelAdmin,
 ):
     # The owner edits prices, stock and flags inline as before. Product name,
     # image and identifying metadata share one compact, sortable link cell;

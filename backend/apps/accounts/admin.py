@@ -22,6 +22,7 @@ from django.utils import timezone
 from django.utils.html import format_html
 
 from apps.adminui.jalali import format_jalali
+from apps.adminui.search import NormalizedSearchMixin
 from apps.adminui.templatetags.adminui_extras import (
     group_thousands,
     to_fa_digits,
@@ -30,7 +31,7 @@ from apps.adminui.templatetags.adminui_extras import (
 from .models import Address, User
 
 
-class UserAdmin(DjangoUserAdmin):
+class UserAdmin(NormalizedSearchMixin, DjangoUserAdmin):
     fieldsets = DjangoUserAdmin.fieldsets + (
         ("تماس", {"fields": ("phone",)}),
     )

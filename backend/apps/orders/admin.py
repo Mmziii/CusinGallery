@@ -29,6 +29,7 @@ from django.utils import timezone
 from django.utils.html import format_html
 
 from apps.adminui.jalali import format_jalali_datetime
+from apps.adminui.search import NormalizedSearchMixin
 from apps.adminui.templatetags.adminui_extras import toman_filter
 from apps.payments.models import Payment
 
@@ -201,7 +202,7 @@ class OrderItemInline(admin.TabularInline):
 
 
 @admin.register(Order)
-class OrderAdmin(admin.ModelAdmin):
+class OrderAdmin(NormalizedSearchMixin, admin.ModelAdmin):
     # Preserve every operational value and its sort key, but present the
     # order number compactly and put the amount's currency unit in its header.
     list_display = (
