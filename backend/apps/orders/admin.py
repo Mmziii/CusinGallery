@@ -207,7 +207,7 @@ class OrderAdmin(NormalizedSearchMixin, admin.ModelAdmin):
     # Preserve every operational value and its sort key, but present the
     # order number compactly and put the amount's currency unit in its header.
     list_display = (
-        "order_number_cell", "user", "status_badge", "payment_badge",
+        "order_number_cell", "customer_cell", "status_badge", "payment_badge",
         "last_attempt_cell", "total_fa",
         "shipping_method_cell", "stock_restored_badge", "refund_badge",
         "created_at_jalali",
@@ -225,6 +225,32 @@ class OrderAdmin(NormalizedSearchMixin, admin.ModelAdmin):
             '<span class="cusin-order-number" dir="ltr" title="{}">{}</span>',
             obj.order_number,
             obj.order_number,
+        )
+
+    @admin.display(description="مشتری", ordering="user__last_name")
+    def customer_cell(self, obj):
+        """Name and mobile, not a login name.
+
+        The owner recognises a customer as «زهرا احمدی / ۰۹۱۲…» and it is
+        the mobile that gets dialled when a delivery needs confirming. The
+        account's username is an internal artifact -- for phone-only
+        accounts it is just the number typed again.
+        """
+        user = getattr(obj, "user", None)
+        if user is None:
+            return "—"
+        name = (user.get_full_name() or "").strip() or user.username
+        # The order's own shipping phone is the one the courier needs; the
+        # account phone is the fallback when the customer ordered for
+        # someone else.
+        mobile = obj.shipping_phone or getattr(user, "phone", "") or ""
+        return format_html(
+            '<span class="cusin-customer">'
+            '<span class="cusin-customer__name">{}</span>'
+            '<bdi class="cusin-customer__phone" dir="ltr">{}</bdi>'
+            "</span>",
+            name,
+            mobile or "—",
         )
 
     @admin.display(description="وضعیت", ordering="status")
@@ -396,7 +422,7 @@ class OrderAdmin(NormalizedSearchMixin, admin.ModelAdmin):
         return not any(key.startswith("created_at") for key in params)
 
     def get_queryset(self, request):
-        queryset = super().get_queryset(request).prefetch_related(
+        queryset = super().get_queryset(request).select_related("user").prefetch_related(
             Prefetch(
                 "payments",
                 queryset=Payment.objects.order_by("-created_at"),

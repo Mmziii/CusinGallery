@@ -1336,6 +1336,43 @@
     node.dataset.cusinDigitsDone = "true";
   }
 
+  /* ------------------------------------------------------------------ *
+   * 6b-bis. Price hints on the editable product list
+   *
+   * A list_editable cell can only carry the raw number («910000»), so the
+   * server renders the readable amount («۹۱۰٬۰۰۰ تومان») beside it. Keep
+   * that hint in step with what the owner types, otherwise the row keeps
+   * showing the price it had when the page loaded.
+   * ------------------------------------------------------------------ */
+  var PRICE_GROUP_SEP = "\u066c";  /* «٬» Persian thousands separator */
+  var EMPTY_HINT = "\u2014";      /* «—» */
+
+  function priceHintText(raw) {
+    var digits = String(raw == null ? "" : raw).replace(/[^0-9]/g, "");
+    if (!digits || Number(digits) === 0) return EMPTY_HINT;
+    var grouped = digits.replace(/\B(?=(\d{3})+(?!\d))/g, PRICE_GROUP_SEP);
+    return persianDigits(grouped) + " \u062a\u0648\u0645\u0627\u0646";  /* « تومان» */
+  }
+
+  function initPriceHints() {
+    var wraps = document.querySelectorAll(".cusin-price-edit");
+    if (!wraps.length) return;
+    wraps.forEach(function (wrap) {
+      var input = wrap.querySelector("input");
+      var hint = wrap.querySelector("[data-cusin-price-hint]");
+      if (!input || !hint) return;
+      var sync = function () {
+        var text = priceHintText(input.value);
+        hint.textContent = text;
+        hint.setAttribute(
+          "data-cusin-empty", text === EMPTY_HINT ? "true" : "false"
+        );
+      };
+      input.addEventListener("input", sync);
+      sync();
+    });
+  }
+
   function initPersianDigits() {
     var nodes = document.querySelectorAll(".action-counter, .all, .question");
     if (!nodes.length) return;
@@ -1378,6 +1415,7 @@
     initCopyButtons();
     initQuickStatusGuard();
     initPersianDigits();
+    initPriceHints();
     initMisc();
   });
 })();

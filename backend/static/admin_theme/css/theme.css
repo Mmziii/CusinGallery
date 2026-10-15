@@ -943,6 +943,32 @@ body.cusin-admin.app-products.model-product #result_list td.field-stock_quantity
   word-break: normal;
   hyphens: none;
 }
+/* Issue #16: «910000» in an editable cell is unreadable -- the grouped,
+   Persian-digit amount («۹۱۰٬۰۰۰ تومان») sits under the input. */
+body.cusin-admin.app-products.model-product #result_list td.field-price .cusin-price-edit,
+body.cusin-admin.app-products.model-product #result_list td.field-compare_at_price .cusin-price-edit {
+  display: flex;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+body.cusin-admin.app-products.model-product #result_list .cusin-price-hint {
+  box-sizing: border-box;
+  display: block;
+  max-width: 100%;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--cusin-muted);
+  direction: rtl;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+body.cusin-admin.app-products.model-product #result_list .cusin-price-hint[data-cusin-empty="true"] {
+  visibility: hidden;
+}
 body.cusin-admin #container #changelist #result_list tbody td input[type="number"] {
   direction: ltr;
   text-align: left;

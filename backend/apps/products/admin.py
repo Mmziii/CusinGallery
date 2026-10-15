@@ -21,6 +21,7 @@ from django.utils.text import slugify
 from decimal import ROUND_HALF_UP, Decimal
 
 from apps.adminui.admin_dates import jalali_column
+from apps.adminui.templatetags.adminui_extras import group_thousands, to_fa_digits
 from apps.adminui.admin_forms import AutoWebpVariantsMixin, NumericChangelistAdminMixin
 from apps.adminui.search import NormalizedSearchMixin
 
@@ -351,6 +352,41 @@ class ProductStockChangelistWidget(forms.NumberInput):
         )
 
 
+def price_hint(value) -> str:
+    """``910000`` -> ``۹۱۰٬۰۰۰ تومان``.
+
+    The editable changelist cell can only hold the raw number (that is what
+    the form has to POST), so the amount the owner can actually read goes
+    underneath it, grouped and in Persian digits.
+    """
+    try:
+        amount = Decimal(str(value if value not in (None, "") else ""))
+    except (ArithmeticError, ValueError, TypeError):
+        return "—"
+    if amount <= 0:
+        return "—"
+    return f"{to_fa_digits(group_thousands(int(amount)))} تومان"
+
+
+class ProductPriceChangelistWidget(forms.NumberInput):
+    """Show the price the way an invoice does, under the bare number.
+
+    Same contract as ProductStockChangelistWidget: the input keeps its
+    original name, value and POST semantics, and only the presentation
+    around it changes.
+    """
+
+    def render(self, name, value, attrs=None, renderer=None):
+        input_html = super().render(name, value, attrs, renderer)
+        return format_html(
+            '<div class="cusin-price-edit">{}'
+            '<span class="cusin-price-hint" data-cusin-price-hint>{}</span>'
+            "</div>",
+            input_html,
+            price_hint(value),
+        )
+
+
 class BrandFilter(admin.RelatedFieldListFilter):
     """Django's related filter labels its «no value» option with the admin's
     empty-value marker, i.e. a bare «-». On the product list that reads as
@@ -526,6 +562,7 @@ class ProductAdmin(
                 io.BytesIO(_template_xlsx()),
                 as_attachment=True,
                 filename="product_import_template.xlsx",
+                content_type=self.XLSX_CONTENT_TYPE,
             )
         buffer = io.BytesIO(template_csv().encode("utf-8-sig"))
         return FileResponse(
@@ -539,6 +576,7 @@ class ProductAdmin(
                 io.BytesIO(_update_template_xlsx()),
                 as_attachment=True,
                 filename="product_price_stock_template.xlsx",
+                content_type=self.XLSX_CONTENT_TYPE,
             )
         buffer = io.BytesIO(_update_template_csv().encode("utf-8-sig"))
         return FileResponse(
@@ -553,7 +591,10 @@ class ProductAdmin(
         if fmt == "xlsx":
             buffer = io.BytesIO(export_products_xlsx())
             return FileResponse(
-                buffer, as_attachment=True, filename="cusin_products_export.xlsx"
+                buffer,
+                as_attachment=True,
+                filename="cusin_products_export.xlsx",
+                content_type=self.XLSX_CONTENT_TYPE,
             )
         buffer = io.BytesIO(export_products_csv().encode("utf-8-sig"))
         return FileResponse(
@@ -1260,8 +1301,22 @@ class ProductAdmin(
             )
         )
 
+    # Excel files downloaded from the panel used to fall back to whatever
+    # the server's mime registry guessed (often application/zip), which
+    # some browsers then refused to open with Excel. Name the type.
+    XLSX_CONTENT_TYPE = (
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
     def get_changelist_formset(self, request, **kwargs):
         formset = super().get_changelist_formset(request, **kwargs)
+        # «910000» is hard to read; both money columns get a grouped,
+        # Persian-digit hint under the input.
+        for money_field in ("price", "compare_at_price"):
+            field = formset.form.base_fields[money_field]
+            attrs = dict(field.widget.attrs)
+            attrs.update({"dir": "ltr", "inputmode": "numeric"})
+            field.widget = ProductPriceChangelistWidget(attrs=attrs)
         stock_field = formset.form.base_fields["stock_quantity"]
         attrs = dict(stock_field.widget.attrs)
         attrs.update({"dir": "ltr", "inputmode": "numeric"})
