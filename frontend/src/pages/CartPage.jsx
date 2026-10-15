@@ -1,3 +1,4 @@
+import { faDigits } from "../utils/faDigits";
 import { usePageMeta } from "../hooks/usePageMeta";
 import PropTypes from "prop-types";
 import { useEffect } from "react";
@@ -144,7 +145,7 @@ function GuestCartView() {
                   alt={product?.name || ""}
                 />
                 <div className="cart-item__body">
-                  <div className="cart-item__name">{product ? product.name : "—"}</div>
+                  <div className="cart-item__name">{product ? faDigits(product.name) : "—"}</div>
                   {variantLabel(variant) ? (
                     <div className="cart-item__variant">{variantLabel(variant)}</div>
                   ) : null}
@@ -254,7 +255,7 @@ function CartPage() {
 
                 <div className="cart-item__info">
                   <Link to={`/products/${item.product.slug}/`} className="cart-item__name">
-                    {item.product.name}
+                    {faDigits(item.product.name)}
                   </Link>
                   {item.variant ? (
                     <div className="cart-item__variant">
@@ -289,7 +290,7 @@ function CartPage() {
                     >
                       −
                     </button>
-                    <span>{item.quantity}</span>
+                    <span>{faDigits(item.quantity)}</span>
                     <button
                       type="button"
                       aria-label="افزایش تعداد"
@@ -334,7 +335,7 @@ function CartPage() {
             <h2>خلاصه سفارش</h2>
             <dl>
               <div>
-                <dt>جمع کالاها ({cart.item_count})</dt>
+                <dt>جمع کالاها ({faDigits(cart.item_count)})</dt>
                 <dd>{formatPrice(cart.subtotal)} تومان</dd>
               </div>
             </dl>

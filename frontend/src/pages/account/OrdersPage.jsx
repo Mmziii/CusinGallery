@@ -1,3 +1,4 @@
+import { faDigits } from "../../utils/faDigits";
 import { ContentSkeleton } from "../../components/Skeletons";
 import { useState } from "react";
 import { Link } from "react-router-dom";
@@ -48,7 +49,7 @@ function OrdersPage() {
         {data.results.map((order) => (
           <Link key={order.id} to={`/account/orders/${order.id}/`} className="order-row">
             <div>
-              <strong>{order.order_number}</strong>
+              <strong><bdi dir="ltr">{order.order_number}</bdi></strong>
               <span className="muted">{new Date(order.created_at).toLocaleDateString("fa-IR")}</span>
             </div>
             <div className="order-row__meta">
@@ -67,7 +68,7 @@ function OrdersPage() {
       {totalPages > 1 ? (
         <nav className="pagination">
           <button type="button" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>قبلی</button>
-          <span>صفحه {page} از {totalPages}</span>
+          <span>صفحه {faDigits(page)} از {faDigits(totalPages)}</span>
           <button type="button" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>بعدی</button>
         </nav>
       ) : null}

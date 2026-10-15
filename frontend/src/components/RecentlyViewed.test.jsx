@@ -86,8 +86,8 @@ describe("recently viewed widget", () => {
 
     // 99 is absent server-side -> dropped silently; order stays 3 then 1.
     expect(screen.queryByText("کالا 99")).toBeNull();
-    const cards = screen.getAllByText(/^کالا \d+$/);
-    expect(cards.map((node) => node.textContent)).toEqual(["کالا 3", "کالا 1"]);
+    const cards = screen.getAllByText(/^کالا [۰-۹]+$/);
+    expect(cards.map((node) => node.textContent)).toEqual(["کالا ۳", "کالا ۱"]);
   });
 
   it("renders nothing when every stored id is unavailable", async () => {

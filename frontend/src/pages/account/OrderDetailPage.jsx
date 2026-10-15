@@ -1,3 +1,4 @@
+import { faDigits, faDateTime, deliveryRange } from "../../utils/faDigits";
 import { ContentSkeleton } from "../../components/Skeletons";
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
@@ -42,13 +43,13 @@ function OrderDetailPage() {
   return (
     <div className="order-detail">
       <div className="page-head">
-        <h1>سفارش {order.order_number}</h1>
+        <h1>سفارش <bdi dir="ltr">{order.order_number}</bdi></h1>
         <Link to="/account/orders/" className="link">بازگشت به سفارش‌ها</Link>
       </div>
 
       <div className="order-detail__meta card">
         <dl>
-          <div><dt>تاریخ ثبت</dt><dd>{new Date(order.created_at).toLocaleString("fa-IR")}</dd></div>
+          <div><dt>تاریخ ثبت</dt><dd>{faDateTime(order.created_at)}</dd></div>
           <div>
             <dt>وضعیت سفارش</dt>
             <dd>{ORDER_STATUS_LABELS[order.status] || order.status}</dd>
@@ -89,8 +90,7 @@ function OrderDetailPage() {
             <div>
               <dt>تحویل تخمینی</dt>
               <dd>
-                {new Date(order.estimated_delivery_min).toLocaleDateString("fa-IR")} تا{" "}
-                {new Date(order.estimated_delivery_max).toLocaleDateString("fa-IR")}
+                {deliveryRange(order.estimated_delivery_min, order.estimated_delivery_max)}
               </dd>
             </div>
           ) : null}
@@ -120,16 +120,16 @@ function OrderDetailPage() {
                     <SmartImage image={item.product_image || null} alt="" />
                     <span>
                       {item.product_slug ? (
-                        <Link to={`/products/${item.product_slug}/`}>{item.product_name}</Link>
+                        <Link to={`/products/${item.product_slug}/`}>{faDigits(item.product_name)}</Link>
                       ) : (
                         item.product_name
                       )}
-                      <div className="muted" dir="ltr">{item.sku}</div>
+                      <div className="muted" dir="ltr"><bdi dir="ltr">{item.sku}</bdi></div>
                     </span>
                   </span>
                 </td>
                 <td>{formatPrice(item.unit_price)}</td>
-                <td>{item.quantity}</td>
+                <td>{faDigits(item.quantity)}</td>
                 <td>{formatPrice(item.total_price)}</td>
               </tr>
             ))}
@@ -157,14 +157,14 @@ function OrderDetailPage() {
       <div className="order-detail__address card">
         <h2>آدرس ارسال</h2>
         <p>
-          {order.shipping_recipient_name} — {order.shipping_phone}
+          {order.shipping_recipient_name} — <bdi dir="ltr">{order.shipping_phone}</bdi>
         </p>
         <p>
           {order.shipping_province}، {order.shipping_city}، {order.shipping_address}
           {order.shipping_unit ? `، واحد ${order.shipping_unit}` : ""}
           {order.shipping_building_number ? `، پلاک ${order.shipping_building_number}` : ""}
         </p>
-        <p className="muted">کد پستی: {order.shipping_postal_code}</p>
+        <p className="muted">کد پستی: <bdi dir="ltr">{order.shipping_postal_code}</bdi></p>
       </div>
     </div>
   );

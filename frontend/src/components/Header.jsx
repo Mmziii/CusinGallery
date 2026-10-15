@@ -1,3 +1,4 @@
+import { faDigits } from "../utils/faDigits";
 import useWishlistStore from "../store/useWishlistStore";
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
@@ -330,7 +331,7 @@ function Header() {
                     }}
                   >
                     <SmartImage image={product.primary_image} alt="" />
-                    <span className="search-suggest__name">{product.name}</span>
+                    <span className="search-suggest__name">{faDigits(product.name)}</span>
                     <span className="search-suggest__price">
                       {product.price_info ? (
                         <PriceTag priceInfo={product.price_info} size="sm" />
@@ -406,7 +407,7 @@ function Header() {
           <button
             type="button"
             className="cart-link"
-            aria-label={`سبد خرید (${itemCount} قلم)`}
+            aria-label={`سبد خرید (${faDigits(itemCount)} قلم)`}
             onClick={() => setCartOpen(true)}
           >
             <svg viewBox="0 0 24 24" className="cart-link__icon" aria-hidden="true">

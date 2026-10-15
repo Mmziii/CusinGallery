@@ -1,3 +1,4 @@
+import { faDigits } from "../utils/faDigits";
 import PropTypes from "prop-types";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
@@ -254,8 +255,8 @@ function ReviewHighlights({ products }) {
           <blockquote key={product.id} className="review-highlight">
             <p>«{review.body || review.title}»</p>
             <footer>
-              {review.rating ? <StarRating rating={review.rating} /> : null}
-              <cite>خریدارِ {product.name}</cite>
+              {review.rating ? <StarRating rating={faDigits(review.rating)} /> : null}
+              <cite>خریدارِ {faDigits(product.name)}</cite>
             </footer>
           </blockquote>
         ))}

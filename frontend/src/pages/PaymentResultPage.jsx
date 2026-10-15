@@ -1,3 +1,4 @@
+import { faDateTime, deliveryRange } from "../utils/faDigits";
 import { usePageMeta } from "../hooks/usePageMeta";
 import { useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
@@ -114,21 +115,20 @@ function PaymentResultPage() {
       </p>
 
       <dl className="payment-result__details">
-        <div><dt>شماره سفارش</dt><dd>{payment.order_number}</dd></div>
+        <div><dt>شماره سفارش</dt><dd><bdi dir="ltr">{payment.order_number}</bdi></dd></div>
         <div><dt>مبلغ</dt><dd>{formatPrice(payment.amount)} تومان</dd></div>
         <div><dt>وضعیت</dt><dd>{statusLabel(status)}</dd></div>
         {payment.gateway_ref_id ? (
-          <div><dt>شماره مرجع درگاه</dt><dd dir="ltr">{payment.gateway_ref_id}</dd></div>
+          <div><dt>شماره مرجع درگاه</dt><dd><bdi dir="ltr">{payment.gateway_ref_id}</bdi></dd></div>
         ) : null}
         {payment.paid_at ? (
-          <div><dt>زمان پرداخت</dt><dd>{new Date(payment.paid_at).toLocaleString("fa-IR")}</dd></div>
+          <div><dt>زمان پرداخت</dt><dd>{faDateTime(payment.paid_at)}</dd></div>
         ) : null}
         {payment.estimated_delivery_min && payment.estimated_delivery_max ? (
           <div>
             <dt>تحویل تخمینی</dt>
             <dd>
-              {new Date(payment.estimated_delivery_min).toLocaleDateString("fa-IR")} تا{" "}
-              {new Date(payment.estimated_delivery_max).toLocaleDateString("fa-IR")}
+              {deliveryRange(payment.estimated_delivery_min, payment.estimated_delivery_max)}
               {" "}({payment.shipping_method === "express" ? "ارسال اکسپرس" : "ارسال استاندارد"})
             </dd>
           </div>

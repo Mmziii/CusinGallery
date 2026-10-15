@@ -1,3 +1,4 @@
+import { faDigits } from "../utils/faDigits";
 import useWishlistStore from "../store/useWishlistStore";
 import { useState } from "react";
 import { Link } from "react-router-dom";
@@ -86,7 +87,7 @@ function ProductCard({ product }) {
         <span className="product-card__badges">
           {product.is_new ? <span className="badge badge--new">جدید</span> : null}
           {product.price_info?.discount_percentage > 0 ? (
-            <span className="badge badge--sale">{product.price_info.discount_percentage}٪</span>
+            <span className="badge badge--sale">{faDigits(product.price_info.discount_percentage)}٪</span>
           ) : null}
           {lowStock ? <span className="badge badge--low">تعداد محدود</span> : null}
           {outOfStock ? <span className="badge badge--oos">ناموجود</span> : null}
@@ -110,7 +111,7 @@ function ProductCard({ product }) {
 
       <div className="product-card__body">
         <Link to={`/products/${product.slug}/`} className="product-card__name">
-          {product.name}
+          {faDigits(product.name)}
         </Link>
         <div className="product-card__brand">{product.brand?.name || "\u00a0"}</div>
 

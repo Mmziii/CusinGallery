@@ -172,7 +172,7 @@ describe("shop page filter transitions (Part S5 item 7)", () => {
       results: Array.from({ length: 13 }, (_, index) => makeProduct(100 + index, `کالای ${index}`)),
     };
     await resolvePending(many);
-    await screen.findByText("کالای 0");
+    await screen.findByText("کالای ۰");
 
     const delays = cells().map((cell) => cell.style.animationDelay);
     expect(delays[0]).toBe("0ms");

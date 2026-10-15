@@ -1,3 +1,4 @@
+import { faDigits } from "../../utils/faDigits";
 import { ContentSkeleton } from "../../components/Skeletons";
 import { Link } from "react-router-dom";
 
@@ -43,7 +44,7 @@ function ReviewsPage() {
               <span className={`tag tag--review-${review.status}`}>
                 {STATUS_LABELS[review.status] || review.status}
               </span>
-              <StarRating rating={review.rating} />
+              <StarRating rating={faDigits(review.rating)} />
             </header>
             {review.title ? <h4>{review.title}</h4> : null}
             {review.body ? <p>{review.body}</p> : null}

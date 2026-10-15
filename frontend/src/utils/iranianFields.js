@@ -10,9 +10,8 @@ const FA_DIGITS = "۰۱۲۳۴۵۶۷۸۹";
 const AR_DIGITS = "٠١٢٣٤٥٦٧٨٩";
 
 /** ASCII digits to Persian, for messages shown to the customer. */
-export function toPersianDigits(value) {
-  return String(value ?? "").replace(/\d/g, (d) => FA_DIGITS[Number(d)]);
-}
+export { faDigits as toPersianDigits } from "./faDigits";
+import { faDigits as toPersianDigits } from "./faDigits";
 
 /** Map Persian/Arabic digits to ASCII; everything else passes through. */
 export function toAsciiDigits(value) {

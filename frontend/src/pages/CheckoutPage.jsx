@@ -1,3 +1,4 @@
+import { faDigits, deliveryRange, deliveryDays } from "../utils/faDigits";
 import { usePageMeta } from "../hooks/usePageMeta";
 import PropTypes from "prop-types";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -404,7 +405,7 @@ function CheckoutPage() {
       <div className="checkout-done">
         <CheckoutSteps current={3} done={[0, 1, 2]} />
         <h1>سفارش شما ثبت شد</h1>
-        <p>شماره سفارش: <strong>{placedOrder.order_number}</strong></p>
+        <p>شماره سفارش: <strong><bdi dir="ltr">{placedOrder.order_number}</bdi></strong></p>
 
         <dl className="checkout-done__totals">
           <div><dt>جمع کالاها</dt><dd>{formatPrice(placedOrder.subtotal)} تومان</dd></div>
@@ -432,8 +433,7 @@ function CheckoutPage() {
 
         {placedOrder.estimated_delivery_min && placedOrder.estimated_delivery_max ? (
           <p className="checkout-done__later">
-            تحویل تخمینی: {formatDate(placedOrder.estimated_delivery_min)} تا{" "}
-            {formatDate(placedOrder.estimated_delivery_max)}
+            تحویل تخمینی: {deliveryRange(placedOrder.estimated_delivery_min, placedOrder.estimated_delivery_max)}
           </p>
         ) : null}
 
@@ -714,7 +714,7 @@ function CheckoutPage() {
                             ? "آمادهٔ تحویل حضوری پس از پرداخت"
                             : method.min_days === method.max_days
                               ? `تحویل ${method.min_days} روزه`
-                              : `تحویل ${method.min_days} تا ${method.max_days} روز کاری`}
+                              : deliveryDays(method.min_days, method.max_days)}
                         </span>
                       </span>
                       <span className="shipping-method__cost">
@@ -774,7 +774,7 @@ function CheckoutPage() {
           <ul className="checkout__items">
             {cart.items.map((item) => (
               <li key={item.id}>
-                <span>{item.product.name} × {item.quantity}</span>
+                <span>{faDigits(item.product.name)} × {faDigits(item.quantity)}</span>
                 <span>{formatPrice(item.line_total)}</span>
               </li>
             ))}

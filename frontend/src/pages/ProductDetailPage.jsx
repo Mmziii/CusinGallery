@@ -1,3 +1,4 @@
+import { faDigits } from "../utils/faDigits";
 import useWishlistStore from "../store/useWishlistStore";
 import { ContentSkeleton } from "../components/Skeletons";
 import NotFound from "./NotFound";
@@ -128,7 +129,7 @@ function ReviewSection({ product }) {
           <article key={review.id} className="review">
             <header>
               <strong>{review.username}</strong>
-              <Stars value={review.rating} size="sm" />
+              <Stars value={faDigits(review.rating)} size="sm" />
               {review.is_verified_purchase ? (
                 <span className="review__verified">خرید تأیید شده</span>
               ) : null}
@@ -411,7 +412,7 @@ function ProductDetailPage() {
         {/* Part S5 item 3: main image + thumbnail row (cross-fade, keyboard,
             swipe, scroll-snap) -- every image still goes through the shared
             SmartImage, so a broken one shows the placeholder. */}
-        <ProductGallery images={images} name={product.name} />
+        <ProductGallery images={images} name={faDigits(product.name)} />
       </div>
 
       <div className="product-detail__info">
@@ -425,10 +426,10 @@ function ProductDetailPage() {
               /{" "}
             </>
           ) : null}
-          <span>{product.name}</span>
+          <span>{faDigits(product.name)}</span>
         </nav>
 
-        <h1>{product.name}</h1>
+        <h1>{faDigits(product.name)}</h1>
         {product.brand ? <div className="product-detail__brand">برند: {product.brand.name}</div> : null}
         {product.short_description ? <p className="product-detail__short">{product.short_description}</p> : null}
 
@@ -464,7 +465,7 @@ function ProductDetailPage() {
         <div className="product-detail__buy">
           <div className="qty-picker">
             <button type="button" onClick={() => setQuantity((q) => Math.max(1, q - 1))} aria-label="کاهش"><Icon name="minus" size={16} /></button>
-            <span>{quantity}</span>
+            <span>{faDigits(quantity)}</span>
             <button type="button" disabled={quantity >= availableStock} onClick={() => setQuantity((q) => Math.min(availableStock, q + 1))} aria-label="افزایش"><Icon name="plus" size={16} /></button>
           </div>
 
@@ -565,8 +566,8 @@ function ProductDetailPage() {
             <div className="related-grid">
               {product.related_products.map((related) => (
                 <Link key={related.id} to={`/products/${related.slug}/`} className="related-card">
-                  <SmartImage image={related.primary_image || null} alt={related.name} />
-                  <span>{related.name}</span>
+                  <SmartImage image={related.primary_image || null} alt={faDigits(related.name)} />
+                  <span>{faDigits(related.name)}</span>
                   <span className="related-card__price">{formatPrice(related.price_info.price)} تومان</span>
                 </Link>
               ))}

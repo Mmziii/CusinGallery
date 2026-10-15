@@ -120,7 +120,7 @@ function AddressesPage() {
                   {address.province}، {address.city}، {address.address}
                   {address.unit ? `، واحد ${address.unit}` : ""}
                 </p>
-                <p className="muted">کد پستی: {address.postal_code} — تماس: {address.phone}</p>
+                <p className="muted">کد پستی: <bdi dir="ltr">{address.postal_code}</bdi> — تماس: <bdi dir="ltr">{address.phone}</bdi></p>
               </div>
               <div className="address-card__actions">
                 {!address.is_default ? (

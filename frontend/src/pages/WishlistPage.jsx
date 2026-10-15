@@ -1,3 +1,4 @@
+import { faDigits } from "../utils/faDigits";
 import { ContentSkeleton } from "../components/Skeletons";
 import { usePageMeta } from "../hooks/usePageMeta";
 import { useState } from "react";
@@ -58,10 +59,10 @@ function WishlistPage() {
           return (
             <div key={item.id} className="product-card">
               <Link to={`/products/${product.slug}/`} className="product-card__media">
-                <SmartImage image={product.primary_image || null} alt={product.name} />
+                <SmartImage image={product.primary_image || null} alt={faDigits(product.name)} />
               </Link>
               <div className="product-card__body">
-                <Link to={`/products/${product.slug}/`} className="product-card__name">{product.name}</Link>
+                <Link to={`/products/${product.slug}/`} className="product-card__name">{faDigits(product.name)}</Link>
                 <div className="product-card__brand">{product.brand?.name || "\u00a0"}</div>
                 <PriceTag priceInfo={product.price_info} size="sm" />
                 <div className="product-card__footer">

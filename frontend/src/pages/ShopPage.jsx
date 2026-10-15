@@ -1,3 +1,4 @@
+import { faDigits } from "../utils/faDigits";
 import { ContentSkeleton } from "../components/Skeletons";
 import { digitInput } from "../utils/iranianFields";
 import PropTypes from "prop-types";
@@ -476,7 +477,7 @@ function ShopPage() {
             >
               قبلی
             </button>
-            <span>صفحه {params.page || 1} از {totalPages}</span>
+            <span>صفحه {faDigits(params.page || 1)} از {faDigits(totalPages)}</span>
             <button
               type="button"
               disabled={!products.next}
