@@ -3,7 +3,7 @@ import { ContentSkeleton } from "../../components/Skeletons";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
-import { EmptyState, ErrorState, Spinner, errorMessage } from "../../components/ui";
+import { EmptyState, ErrorState, errorMessage } from "../../components/ui";
 import { useAsync } from "../../hooks/useAsync";
 import { fetchOrders } from "../../services/orderApi";
 import { formatPrice } from "../../utils/formatPrice";

@@ -3,15 +3,17 @@ import * as api from "../services/wishlistApi";
 import { normalizeApiError } from "../utils/apiError";
 import { toast } from "../utils/toast";
 let pending;
+let generation = 0;
 const useWishlistStore = create((set, get) => ({
   items: [], isLoading: true, error: null, revision: 0,
-  reset: () => set({ items: [], isLoading: false, error: null }),
+  reset: () => { generation += 1; pending = null; set({ items: [], isLoading: false, error: null }); },
   refetch: () => {
     if (pending) return pending;
+    const current = generation;
     set({ isLoading: true, error: null });
-    pending = api.fetchWishlist().then(items => set({ items, isLoading: false }))
-      .catch(error => set({ error: normalizeApiError(error), isLoading: false }))
-      .finally(() => { pending = null; });
+    pending = api.fetchWishlist().then(items => { if (current === generation) set({ items, isLoading: false }); })
+      .catch(error => { if (current === generation) set({ error: normalizeApiError(error), isLoading: false }); })
+      .finally(() => { if (current === generation) pending = null; });
     return pending;
   },
   async toggle(productId) {

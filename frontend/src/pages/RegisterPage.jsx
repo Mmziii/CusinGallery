@@ -1,7 +1,7 @@
 import PasswordHint from "../components/PasswordHint.jsx";
 import { usePageMeta } from "../hooks/usePageMeta";
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Navigate, Link, useNavigate } from "react-router-dom";
 
 import { Alert, errorMessage } from "../components/ui";
 import useAuthStore from "../store/useAuthStore";
@@ -10,7 +10,7 @@ import { isValidIranianPhone, normalizePhone } from "../utils/iranianFields";
 function RegisterPage() {
   usePageMeta({ title: "ثبت‌نام", path: "/register/" });
   const navigate = useNavigate();
-  const { register, isLoading } = useAuthStore();
+  const { register, isLoading, isAuthenticated } = useAuthStore();
 
   const [form, setForm] = useState({
     phone: "",
@@ -61,6 +61,8 @@ function RegisterPage() {
       setError(errorMessage(result.error));
     }
   };
+
+  if (isAuthenticated) return <Navigate to="/account/" replace />;
 
   return (
     <div className="auth-page">

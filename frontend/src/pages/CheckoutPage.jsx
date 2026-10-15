@@ -95,9 +95,7 @@ function methodCostFor(method, subtotal) {
   return method.cost;
 }
 
-function formatDate(iso) {
-  return new Date(iso).toLocaleDateString("fa-IR");
-}
+
 
 /** Order in which address fields are focused when several are missing. */
 const ADDRESS_FIELD_ORDER = [

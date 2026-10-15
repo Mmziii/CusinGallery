@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import SmartImage from "../../components/SmartImage";
-import { Alert, ErrorState, Spinner, errorMessage } from "../../components/ui";
+import { Alert, ErrorState, errorMessage } from "../../components/ui";
 import { useAsync } from "../../hooks/useAsync";
 import { fetchOrder } from "../../services/orderApi";
 import { initiatePayment } from "../../services/paymentsApi";

@@ -9,7 +9,7 @@ import { Link, useNavigationType, useSearchParams } from "react-router-dom";
 import Breadcrumbs from "../components/Breadcrumbs";
 import Icon from "../components/Icon";
 import ProductCard from "../components/ProductCard";
-import { EmptyState, ErrorState, Spinner } from "../components/ui";
+import { EmptyState, ErrorState } from "../components/ui";
 import { useAsync } from "../hooks/useAsync";
 import { listBrands, listCategories, listFacets, listProducts } from "../services/catalogApi";
 import { errorMessage } from "../components/ui";
@@ -227,6 +227,26 @@ function ShopPage() {
 
   return (
     <div className="shop">
+      <div className="shop__heading">
+        {/* Part S2 item 7: breadcrumbs (category name once loaded) */}
+        <Breadcrumbs
+          items={[
+            { label: "خانه", to: "/" },
+            { label: "فروشگاه", to: "/shop/" },
+            ...(searchParams.get("category")
+              ? [
+                  {
+                    label:
+                      (categoriesState.data?.results || []).find(
+                        (c) => c.slug === searchParams.get("category")
+                      )?.name || searchParams.get("category"),
+                  },
+                ]
+              : []),
+          ]}
+        />
+        <h1>فروشگاه</h1>
+      </div>
       <aside className="shop__sidebar">
         {/* Part S5 item 7: on small screens the filter column folds into a
             drawer; the open/close motion is the same grid-template-rows
@@ -248,7 +268,6 @@ function ShopPage() {
           id="shop-filters"
         >
           <div className="shop__filters-inner">
-            <h2>فیلترها</h2>
 
             <FilterGroup title="دسته‌بندی">
               <select
@@ -342,25 +361,7 @@ function ShopPage() {
       </aside>
 
       <div className="shop__main">
-        {/* Part S2 item 7: breadcrumbs (category name once loaded) */}
-        <Breadcrumbs
-          items={[
-            { label: "خانه", to: "/" },
-            { label: "فروشگاه", to: "/shop/" },
-            ...(searchParams.get("category")
-              ? [
-                  {
-                    label:
-                      (categoriesState.data?.results || []).find(
-                        (c) => c.slug === searchParams.get("category")
-                      )?.name || searchParams.get("category"),
-                  },
-                ]
-              : []),
-          ]}
-        />
         <div className="shop__toolbar">
-          <h1>فروشگاه</h1>
           {/* Part S2 item 7: result count, always derived from the server. */}
           {products ? <span className="shop__count">{formatPrice(products.count)} کالا</span> : null}
           <label>

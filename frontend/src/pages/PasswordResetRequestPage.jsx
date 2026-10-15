@@ -19,7 +19,7 @@ import { toAsciiDigits } from "../utils/iranianFields";
  *     mode: /reset-password/confirm/?mode=code&phone=...).
  */
 function PasswordResetRequestPage() {
-  usePageMeta({ title: "بازیابی رمز عبور", path: "/reset-password/", noindex: true });
+  usePageMeta({ title: "بازیابی رمز عبور", path: "/password-reset/", noindex: true });
   const [identifier, setIdentifier] = useState("");
   const [submittedIdentifier, setSubmittedIdentifier] = useState("");
   const [sent, setSent] = useState(false);

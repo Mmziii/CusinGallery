@@ -3,7 +3,7 @@ import { ContentSkeleton } from "../../components/Skeletons";
 import { useCallback, useEffect, useState } from "react";
 
 import AddressForm from "../../components/AddressForm";
-import { Alert, EmptyState, Spinner, errorMessage } from "../../components/ui";
+import { Alert, EmptyState, errorMessage } from "../../components/ui";
 import * as authApi from "../../services/authApi";
 import { normalizeApiError } from "../../utils/apiError";
 

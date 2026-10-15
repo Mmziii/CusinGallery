@@ -8,6 +8,7 @@ export default function SearchCombobox({ id, label, value, options, onChange, di
   const input = useRef(null);
   const panel = useRef(null);
   const [open, setOpen] = useState(false);
+  const [present, setPresent] = useState(false);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const [position, setPosition] = useState({});
@@ -28,6 +29,14 @@ export default function SearchCombobox({ id, label, value, options, onChange, di
     document.addEventListener("keydown", escape);
     return () => { document.removeEventListener("pointerdown", outside); document.removeEventListener("keydown", escape); };
   }, [open]);
+  useEffect(() => {
+    if (open) { setPresent(true); return; }
+    const timeout = setTimeout(() => setPresent(false), window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 150);
+    return () => clearTimeout(timeout);
+  }, [open]);
+  useEffect(() => {
+    document.getElementById(`${listId}-${active}`)?.scrollIntoView?.({block: "nearest"});
+  }, [active, listId]);
   const keyDown = event => {
     if (["ArrowDown", "ArrowUp"].includes(event.key)) {
       event.preventDefault();
@@ -45,7 +54,7 @@ export default function SearchCombobox({ id, label, value, options, onChange, di
         const text = event.target.value; if (!open) show(); setQuery(text); setActive(0);
         const exact = options.find(option => option.label === text); if (exact) onChange(exact.value);
       }} />
-    {open ? <Portal><span ref={panel} className="combobox-panel" style={position}>
+    {open || present ? <Portal><span ref={panel} aria-hidden={!open} className={`combobox-panel ${!open ? "is-closing" : ""}`} style={position}>
       <span className="combobox-panel__head">{label}<button type="button" aria-label="بستن فهرست" onClick={() => { setOpen(false); input.current?.focus(); }}>×</button></span>
       <input className="combobox-panel__search" aria-label={`جستجوی ${label}`} placeholder={`جستجوی ${label}…`} value={query} onChange={event => { setQuery(event.target.value); setActive(0); }} onKeyDown={keyDown} />
       <span role="listbox" id={listId} aria-label={label} className="combobox-panel__options">

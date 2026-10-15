@@ -6,7 +6,7 @@ import { Link } from "react-router-dom";
 
 import PriceTag from "../components/PriceTag";
 import SmartImage from "../components/SmartImage";
-import { EmptyState, ErrorState, Spinner, errorMessage } from "../components/ui";
+import { EmptyState, ErrorState, errorMessage } from "../components/ui";
 import { useWishlist } from "../hooks/useWishlist";
 import useCartStore from "../store/useCartStore";
 import { toast } from "../utils/toast";

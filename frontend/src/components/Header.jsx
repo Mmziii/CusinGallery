@@ -29,10 +29,11 @@ import { formatPrice } from "../utils/formatPrice";
  */
 function Header() {
   const wishlist = useWishlistStore();
+  const { refetch: refreshWishlist, reset: resetWishlist } = wishlist;
   const location = useLocation();
   const navigate = useNavigate();
   const { user, isAuthenticated, isLoading, logout, fetchMe } = useAuthStore();
-  useEffect(() => { if (isAuthenticated) wishlist.refetch(); else wishlist.reset(); }, [isAuthenticated, wishlist.refetch, wishlist.reset]);
+  useEffect(() => { if (isAuthenticated) refreshWishlist(); else resetWishlist(); }, [isAuthenticated, refreshWishlist, resetWishlist]);
   const cart = useCartStore((s) => s.cart);
   const guestLines = useCartStore((s) => s.guestLines);
   const guestProducts = useCartStore((s) => s.guestProducts);
@@ -434,13 +435,15 @@ function Header() {
                 className="user-menu__trigger"
                 onClick={() => setUserMenuOpen((open) => !open)}
               >
-                {user?.first_name || user?.phone || "حساب کاربری"}
+                {user?.first_name || (user?.phone ? <bdi dir="ltr">{user.phone}</bdi> : "حساب کاربری")}
               </button>
               {userMenuOpen ? (
                 <div className="user-menu__panel">
                   <Link to="/account/" onClick={() => setUserMenuOpen(false)}>پروفایل</Link>
                   <Link to="/account/orders/" onClick={() => setUserMenuOpen(false)}>سفارش‌ها</Link>
                   <Link to="/account/addresses/" onClick={() => setUserMenuOpen(false)}>آدرس‌ها</Link>
+                  <Link to="/account/reviews/" onClick={() => setUserMenuOpen(false)}>نظرات من</Link>
+                  <Link to="/wishlist/" onClick={() => setUserMenuOpen(false)}>علاقه‌مندی‌ها</Link>
                   <button type="button" onClick={handleLogout}>خروج</button>
                 </div>
               ) : null}
@@ -472,6 +475,9 @@ function Header() {
             </div>
             <NavLink to="/" onClick={() => setMenuOpen(false)}>خانه</NavLink>
             <NavLink to="/shop/" onClick={() => setMenuOpen(false)}>فروشگاه</NavLink>
+            <NavLink to="/about/" onClick={() => setMenuOpen(false)}>درباره ما</NavLink>
+            <NavLink to="/contact/" onClick={() => setMenuOpen(false)}>تماس با ما</NavLink>
+            <NavLink to="/account/" onClick={() => setMenuOpen(false)}>حساب کاربری</NavLink>
             {categories.map((category) => (
               <NavLink
                 key={category.id}

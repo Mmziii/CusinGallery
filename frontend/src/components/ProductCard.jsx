@@ -48,9 +48,7 @@ function ProductCard({ product }) {
     }
   };
 
-  // Card-level wishlist action is add-only (the filled state lives on
-  // the product page and the wishlist page, which hold the item ids
-  // removal requires). Adding twice is idempotent server-side.
+  // Shared item ids let cards toggle the same state as the header and wishlist.
   const handleWishlist = async () => {
     if (!isAuthenticated || wishlistBusy) return;
     setWishlistBusy(true);

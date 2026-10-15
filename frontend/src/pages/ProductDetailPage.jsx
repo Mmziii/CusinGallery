@@ -366,6 +366,7 @@ function ProductDetailPage() {
   const stockStatus = activeVariant ? activeVariant.stock_status : product?.stock_status;
   const availableStock = activeVariant?.stock_quantity ?? product?.stock_quantity ?? Infinity;
   const outOfStock = stockStatus === "out_of_stock";
+  useEffect(() => { setQuantity(q => Math.max(1, Math.min(q, availableStock))); }, [availableStock, activeVariant?.id]);
 
   useEffect(() => {
     setSelected({});
@@ -454,7 +455,7 @@ function ProductDetailPage() {
         ) : null}
 
         <div className="product-detail__buy">
-          <div className="qty-picker">
+          <div className="qty-picker" hidden={outOfStock}>
             <button type="button" onClick={() => setQuantity((q) => Math.max(1, q - 1))} aria-label="کاهش"><Icon name="minus" size={16} /></button>
             <span>{faDigits(quantity)}</span>
             <button type="button" disabled={quantity >= availableStock} onClick={() => setQuantity((q) => Math.min(availableStock, q + 1))} aria-label="افزایش"><Icon name="plus" size={16} /></button>
