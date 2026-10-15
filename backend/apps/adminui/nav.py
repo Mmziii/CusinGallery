@@ -3,40 +3,52 @@
 Groups the apps that ``AdminSite.each_context()`` hands over (already
 permission-filtered) into Persian-language sections with sprite icons.
 Pure presentation: nothing here queries the database or changes access.
+
+Ordering (owner's workflow, not Django's alphabetical app list)
+-------------------------------------------------------------
+The sidebar used to be grouped by APP -- «محصولات و کاتالوگ»، «سفارش‌ها و
+پرداخت»، … -- which put «محصولات» above «سفارش‌ها» and buried «تنظیمات
+فروشگاه» at the bottom, and made the owner open a group to reach the one
+thing they came for. It is now a flat list in the order the owner actually
+works:
+
+    داشبورد، سفارش‌ها، محصولات، دسته‌بندی‌ها، برندها، کوپن‌ها، نظرات،
+    بنرها و پیشنهاد روزانه، اطلاع‌رسانی موجودی، کاربران، تنظیمات فروشگاه
+
+Everything else (payments, addresses, carts, wishlist, OTP devices, groups,
+sessions, product variants/attributes, …) is collapsed into one
+«سایر / پیشرفته» group at the bottom: needed sometimes, but never on the
+daily path, and never in the way.
 """
 from __future__ import annotations
 
 from django.urls import NoReverseMatch, reverse
 
-# app_label -> (order, group id). Apps missing from the map land in "more".
-APP_GROUPS: dict[str, str] = {
-    "products": "catalog",
-    "categories": "catalog",
-    "orders": "sales",
-    "payments": "sales",
-    "accounts": "customers",
-    "cart": "customers",
-    "wishlist": "customers",
-    "discounts": "marketing",
-    "banners": "marketing",
-    "reviews": "marketing",
-    "notifications": "messages",
-    "core": "settings",
-    "auth": "settings",
-    "django_otp": "settings",
-    "sessions": "settings",
-}
-
-GROUPS: tuple[tuple[str, str, str], ...] = (
-    # (id, Persian title, icon name -- must exist in the sprite)
-    ("catalog", "محصولات و کاتالوگ", "box"),
-    ("sales", "سفارش‌ها و پرداخت", "receipt"),
-    ("customers", "مشتریان", "users"),
-    ("marketing", "بازاریابی", "megaphone"),
-    ("messages", "پیام‌ها و گزارش‌ها", "bell"),
-    ("settings", "تنظیمات", "sliders"),
-    ("more", "سایر بخش‌ها", "grid"),
+# --------------------------------------------------------------------------
+# The primary items, in the owner's order.
+# (app_label, model_name, Persian label, icon, advanced?)
+# ``model_name`` is matched case-insensitively against ``object_name``.
+# An entry may carry several models: «بنرها و پیشنهاد روزانه» is one item in
+# the owner's mental model but two changelists behind it.
+# --------------------------------------------------------------------------
+PRIMARY_ITEMS: tuple[tuple[str, tuple[str, ...], str, str], ...] = (
+    ("orders", ("order",), "سفارش‌ها", "receipt"),
+    ("products", ("product",), "محصولات", "box"),
+    ("categories", ("category",), "دسته‌بندی‌ها", "tree"),
+    ("products", ("brand",), "برندها", "award"),
+    ("discounts", ("coupon",), "کوپن‌ها", "ticket"),
+    ("reviews", ("review",), "نظرات", "star"),
+    # Banner + daily deal: one shelf in the shop, one entry in the menu.
+    ("banners", ("banner", "dailydeal"), "بنرها و پیشنهاد روزانه", "megaphone"),
+    ("products", ("backinstocksubscription",), "اطلاع‌رسانی موجودی", "bell-ring"),
+    ("accounts", ("user",), "کاربران", "users"),
+    ("core", ("sitesettings",), "تنظیمات فروشگاه", "sliders"),
 )
+
+#: The collapsed bucket at the bottom for everything not listed above.
+ADVANCED_GROUP_ID = "advanced"
+ADVANCED_GROUP_TITLE = "سایر / پیشرفته"
+ADVANCED_GROUP_ICON = "grid"
 
 # (app_label, model_name) -> icon id in the sprite; fallback "dot".
 MODEL_ICONS: dict[tuple[str, str], str] = {
@@ -62,13 +74,38 @@ MODEL_ICONS: dict[tuple[str, str], str] = {
     ("notifications", "notificationlog"): "mail",
     ("core", "sitesettings"): "sliders",
     ("auth", "group"): "shield",
+    ("otp_totp", "totpdevice"): "shield",
+    ("otp_static", "staticdevice"): "shield",
 }
 
 FALLBACK_ICON = "dot"
 
+# Per-model Persian labels for the collapsed group. Django's verbose_name
+# is what the model author wrote ("TOTP device", "Wishlist item", …); the
+# rest of THIS menu is Persian, so those would stand out as English.
+MODEL_LABELS: dict[tuple[str, str], str] = {
+    ("payments", "payment"): "پرداخت‌ها",
+    ("accounts", "address"): "نشانی‌ها",
+    ("cart", "cart"): "سبدهای خرید",
+    ("wishlist", "wishlistitem"): "علاقه‌مندی‌ها",
+    ("discounts", "couponusage"): "گزارش استفاده از کوپن",
+    ("products", "productvariant"): "انواع کالا",
+    ("products", "productattribute"): "ویژگی‌های کالا",
+    ("products", "productattributevalue"): "مقدارهای ویژگی",
+    ("products", "frequentlyboughttogether"): "خریدهای مکمل",
+    ("notifications", "notificationlog"): "گزارش اعلان‌ها",
+    ("auth", "group"): "گروه‌های دسترسی",
+    ("otp_totp", "totpdevice"): "دستگاه‌های تأیید دو مرحله‌ای",
+    ("otp_static", "staticdevice"): "کدهای پشتیبان",
+}
+
 
 def icon_for(app_label: str, model_name: str) -> str:
     return MODEL_ICONS.get((app_label, model_name.lower()), FALLBACK_ICON)
+
+
+def label_for(app_label: str, model_name: str, fallback: str) -> str:
+    return MODEL_LABELS.get((app_label, model_name.lower()), fallback)
 
 
 def _admin_index_url() -> str:
@@ -78,57 +115,91 @@ def _admin_index_url() -> str:
         return "/admin/"
 
 
-def build_sidebar(available_apps, request) -> list[dict]:
-    """Turn ``available_apps`` into grouped sidebar data.
+def _model_entry(app_label: str, model: dict, current_path: str, name=None) -> dict:
+    url = model.get("admin_url") or ""
+    object_name = model.get("object_name") or ""
+    return {
+        "name": name or label_for(app_label, object_name, model.get("name", "")),
+        "object_name": object_name,
+        "model_name": object_name.lower(),
+        "app_label": app_label,
+        "url": url,
+        "add_url": model.get("add_url"),
+        "icon": icon_for(app_label, object_name),
+        "active": bool(url) and current_path.startswith(url),
+    }
 
-    Each group: ``{"id", "title", "icon", "active", "open", "models": [...]}``;
-    each model: ``{"name", "url", "add_url", "icon", "active", "object_name"}``.
+
+def build_sidebar(available_apps, request) -> dict:
+    """Turn ``available_apps`` into the ordered sidebar structure.
+
+    Returns ``{"primary": [...], "advanced": {...}}`` where each primary
+    entry is a flat link (``{"label", "url", "icon", "active", ...}``) or,
+    when one entry covers several models, a small group with ``children``.
+
     ``active`` is derived from ``request.path`` so the current section is
-    highlighted (A3). Groups with no accessible models are dropped.
+    highlighted and can be scrolled into view (theme.js). Permission
+    filtering already happened upstream, so a model the user may not see
+    never appears here at all.
     """
     current_path = getattr(request, "path", "") if request is not None else ""
-    grouped: dict[str, list[dict]] = {}
 
+    # object_name (lower) -> model dict, for every accessible model.
+    by_key: dict[tuple[str, str], dict] = {}
     for app in available_apps:
         app_label = app["app_label"]
-        group_id = APP_GROUPS.get(app_label, "more")
         for model in app.get("models", []):
-            url = model.get("admin_url") or ""
-            add_url = model.get("add_url")
-            grouped.setdefault(group_id, []).append({
-                "name": model.get("name", ""),
-                "object_name": model.get("object_name", ""),
-                "model_name": (model.get("object_name") or "").lower(),
-                "url": url,
-                "add_url": add_url,
-                "icon": icon_for(app_label, (model.get("object_name") or "")),
-                "active": bool(url) and current_path.startswith(url),
-            })
+            key = (app_label, (model.get("object_name") or "").lower())
+            by_key[key] = {"app_label": app_label, "model": model}
 
-    sections: list[dict] = []
-    for group_id, title, icon in GROUPS:
-        models = grouped.pop(group_id, None)
-        if not models:
+    primary: list[dict] = []
+    taken: set[tuple[str, str]] = set()
+
+    for app_label, model_names, label, icon in PRIMARY_ITEMS:
+        found = [
+            (app_label, name, by_key[(app_label, name)])
+            for name in model_names
+            if (app_label, name) in by_key
+        ]
+        if not found:
             continue
-        active = any(m["active"] for m in models)
-        sections.append({
-            "id": group_id,
-            "title": title,
+        taken.update({(a, n) for a, n, _ in found})
+
+        if len(found) == 1:
+            entry = _model_entry(app_label, found[0][2]["model"], current_path)
+            entry["label"] = label
+            entry["icon"] = icon
+            primary.append(entry)
+            continue
+
+        # Several models behind one menu entry: keep them as children so
+        # the entry stays one row, and mark it active when any child is.
+        children = [
+            _model_entry(a, data["model"], current_path) for a, _n, data in found
+        ]
+        primary.append({
+            "id": f"{app_label}-{'-'.join(n for _a, n, _d in found)}",
+            "label": label,
             "icon": icon,
-            "active": active,
-            "open": active,  # active section starts expanded (A3)
-            "models": models,
+            "children": children,
+            "active": any(child["active"] for child in children),
         })
 
-    # Unknown apps (future additions) keep working via the "more" bucket.
-    leftovers = [m for models in grouped.values() for m in models]
-    if leftovers:
-        sections.append({
-            "id": "more",
-            "title": "سایر بخش‌ها",
-            "icon": "grid",
-            "active": any(m["active"] for m in leftovers),
-            "open": any(m["active"] for m in leftovers),
-            "models": leftovers,
-        })
-    return sections
+    advanced_models = [
+        _model_entry(app_label, data["model"], current_path)
+        for (app_label, model_name), data in by_key.items()
+        if (app_label, model_name) not in taken
+    ]
+    advanced_models.sort(key=lambda item: item["name"])
+
+    return {
+        "dashboard_url": _admin_index_url(),
+        "primary": primary,
+        "advanced": {
+            "id": ADVANCED_GROUP_ID,
+            "title": ADVANCED_GROUP_TITLE,
+            "icon": ADVANCED_GROUP_ICON,
+            "models": advanced_models,
+            "active": any(item["active"] for item in advanced_models),
+        },
+    }

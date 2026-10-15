@@ -336,9 +336,14 @@ kbd.cusin-kbd {
   flex: 0 0 var(--cusin-sidebar-w);
   width: var(--cusin-sidebar-w);
   position: sticky;
-  top: var(--cusin-sticky-top);
+  /* --cusin-header-h is measured by theme.js (ResizeObserver) because the
+     topbar WRAPS at 125%/150% zoom and on narrow screens -- the old fixed
+     --cusin-sticky-top made the drawer's own header slide underneath the
+     topbar exactly when the owner needed it most. The fallback keeps the
+     pre-JS paint sane. */
+  top: calc(var(--cusin-header-h, var(--cusin-sticky-top)) + 6px);
   align-self: flex-start;
-  max-height: calc(100vh - var(--cusin-sticky-top));
+  max-height: calc(100vh - var(--cusin-header-h, var(--cusin-sticky-top)) - 12px);
   overflow-y: auto;
   background: var(--cusin-surface);
   color: var(--cusin-text);
@@ -393,7 +398,11 @@ kbd.cusin-kbd {
   font-weight: 700;
 }
 .cusin-nav-groups { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
-.cusin-nav-group { border-radius: var(--cusin-radius-sm); }
+/* The owner-ordered flat list: one row per destination, no group to open. */
+.cusin-nav-primary { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.cusin-nav-primary > li { display: block; }
+.cusin-nav-row { display: flex; align-items: stretch; gap: 4px; }
+.cusin-nav-group { border-radius: var(--cusin-radius-sm); margin-top: 2px; }
 .cusin-nav-group summary {
   cursor: pointer;
   list-style: none;
@@ -404,8 +413,19 @@ kbd.cusin-kbd {
 .cusin-nav-group[open] > summary .cusin-nav-caret { transform: rotate(180deg); }
 .cusin-nav-group.is-active > summary { color: var(--cg-olive-hover); }
 .cusin-nav-group ul { list-style: none; margin: 2px 0 8px; padding: 0; }
-.cusin-nav-group li { display: flex; align-items: stretch; gap: 4px; }
-.cusin-nav-link { flex: 1 1 auto; margin-inline-start: 18px; }
+.cusin-nav-group ul > li { display: flex; align-items: stretch; gap: 4px; }
+/* Top-level rows sit flush; only nested children are indented. */
+.cusin-nav-primary > li > .cusin-nav-row .cusin-nav-link { margin-inline-start: 0; }
+.cusin-nav-group ul .cusin-nav-link { margin-inline-start: 18px; }
+/* «سایر / پیشرفته»: reachable, but visually parked at the bottom. */
+.cusin-nav-group--advanced {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--cusin-border);
+  border-radius: 0;
+}
+.cusin-nav-group--advanced > summary { font-weight: 600; color: var(--cusin-muted); }
+.cusin-nav-link { flex: 1 1 auto; margin-inline-start: 0; }
 .cusin-nav-link .cusin-icon { color: currentColor; }
 .cusin-nav-add {
   display: inline-flex;

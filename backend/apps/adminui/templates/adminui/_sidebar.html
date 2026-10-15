@@ -1,33 +1,54 @@
 {% load adminui_extras %}{% comment %}
-Grouped sidebar sections rendered from permission-filtered available_apps.
-Native <details>/<summary> keeps the groups keyboard-accessible; theme.js
-remembers their open state per user without ever changing permissions.
+Owner-ordered sidebar: the flat primary list (داشبورد، سفارش‌ها، محصولات،
+…) followed by one collapsed «سایر / پیشرفته» group.
+
+Notes for whoever edits this next:
+* the drawer itself scrolls (--cusin-header-h keeps it clear of the
+  sticky topbar) -- do NOT add a second scroll container;
+* theme.js persists which groups are open AND the drawer's scroll offset
+  in sessionStorage, and scrolls the active row into view. Every group it
+  must remember needs a stable [data-cusin-nav-group] id, which is why the
+  ids come from nav.py rather than from a counter here.
 {% endcomment %}
-<div class="cusin-nav-groups">
-{% for group in sidebar_groups %}
-  <details class="cusin-nav-group{% if group.active %} is-active{% endif %}"
-           data-cusin-nav-group="{{ group.id }}"{% if group.open %} open{% endif %}>
-    <summary aria-controls="cusin-nav-{{ group.id }}" aria-expanded="{% if group.open %}true{% else %}false{% endif %}">
-      {% cusin_icon group.icon %}
-      <span class="cusin-nav-group-title">{{ group.title }}</span>
-      {% cusin_icon "chevron-down" "cusin-icon cusin-nav-caret" %}
-    </summary>
-    <ul id="cusin-nav-{{ group.id }}">
-      {% for model in group.models %}
-      <li>
-        <a href="{{ model.url }}" class="cusin-nav-link{% if model.active %} is-active{% endif %}"{% if model.active %} aria-current="page"{% endif %}>
-          {% cusin_icon model.icon %}<span>{{ model.name }}</span>
-        </a>
-        {% if model.add_url %}
-        <a href="{{ model.add_url }}" class="cusin-nav-add" title="افزودن {{ model.name }}" aria-label="افزودن {{ model.name }}">
-          {% cusin_icon "plus" %}
-        </a>
-        {% endif %}
-      </li>
-      {% endfor %}
-    </ul>
-  </details>
-{% empty %}
-  <p class="cusin-nav-empty">بخشی در دسترس شما نیست.</p>
+<ul class="cusin-nav-primary">
+{% for item in sidebar.primary %}
+  {% if item.children %}
+  <li>
+    <details class="cusin-nav-group{% if item.active %} is-active{% endif %}"
+             data-cusin-nav-group="{{ item.id }}"{% if item.active %} open{% endif %}>
+      <summary aria-controls="cusin-nav-{{ item.id }}" aria-expanded="{% if item.active %}true{% else %}false{% endif %}">
+        {% cusin_icon item.icon %}
+        <span class="cusin-nav-group-title">{{ item.label }}</span>
+        {% cusin_icon "chevron-down" "cusin-icon cusin-nav-caret" %}
+      </summary>
+      <ul id="cusin-nav-{{ item.id }}">
+        {% for child in item.children %}
+        <li>{% include "adminui/_sidebar_row.html" with model=child %}</li>
+        {% endfor %}
+      </ul>
+    </details>
+  </li>
+  {% else %}
+  <li>{% include "adminui/_sidebar_row.html" with model=item %}</li>
+  {% endif %}
 {% endfor %}
-</div>
+{% if not sidebar.primary and not sidebar.advanced.models %}
+  <li><p class="cusin-nav-empty">بخشی در دسترس شما نیست.</p></li>
+{% endif %}
+</ul>
+
+{% if sidebar.advanced.models %}
+<details class="cusin-nav-group cusin-nav-group--advanced{% if sidebar.advanced.active %} is-active{% endif %}"
+         id="cusin-nav-advanced" data-cusin-nav-group="advanced"{% if sidebar.advanced.active %} open{% endif %}>
+  <summary aria-controls="cusin-nav-advanced-list" aria-expanded="{% if sidebar.advanced.active %}true{% else %}false{% endif %}">
+    {% cusin_icon sidebar.advanced.icon %}
+    <span class="cusin-nav-group-title">{{ sidebar.advanced.title }}</span>
+    {% cusin_icon "chevron-down" "cusin-icon cusin-nav-caret" %}
+  </summary>
+  <ul id="cusin-nav-advanced-list">
+    {% for model in sidebar.advanced.models %}
+    <li>{% include "adminui/_sidebar_row.html" with model=model %}</li>
+    {% endfor %}
+  </ul>
+</details>
+{% endif %}

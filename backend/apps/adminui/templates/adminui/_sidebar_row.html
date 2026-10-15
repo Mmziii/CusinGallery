@@ -1,0 +1,12 @@
+{% load adminui_extras %}{% comment %}
+One sidebar row: the changelist link plus its "add" shortcut.
+{% endcomment %}<span class="cusin-nav-row">
+  <a href="{{ model.url }}" class="cusin-nav-link{% if model.active %} is-active{% endif %}"{% if model.active %} aria-current="page"{% endif %}>
+    {% cusin_icon model.icon %}<span>{{ model.label|default:model.name }}</span>
+  </a>
+  {% if model.add_url %}
+  <a href="{{ model.add_url }}" class="cusin-nav-add" title="افزودن {{ model.label|default:model.name }}" aria-label="افزودن {{ model.label|default:model.name }}">
+    {% cusin_icon "plus" %}
+  </a>
+  {% endif %}
+</span>

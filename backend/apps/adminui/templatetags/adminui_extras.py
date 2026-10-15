@@ -144,16 +144,20 @@ def cusin_icon(name: str, css_class: str = "cusin-icon") -> str:
 
 @register.inclusion_tag("adminui/_sidebar.html", takes_context=True)
 def cusin_sidebar(context) -> dict:
-    """Grouped sidebar navigation built from the admin's ``available_apps``.
+    """Sidebar navigation built from the admin's ``available_apps``.
 
     ``available_apps`` comes from ``AdminSite.each_context()`` and is already
     permission-filtered, so the menu respects per-user access automatically.
+
+    The result is the owner-ordered flat list plus the collapsed
+    «سایر / پیشرفته» bucket -- see apps/adminui/nav.py.
     """
     request = context.get("request")
     available_apps = context.get("available_apps") or []
-    is_index_active = bool(request) and request.path == context.get("cusin_index_url", "/admin/")
+    index_url = context.get("cusin_index_url") or "/admin/"
+    is_index_active = bool(request) and request.path == index_url
     return {
-        "sidebar_groups": build_sidebar(available_apps, request),
+        "sidebar": build_sidebar(available_apps, request),
         "is_index_active": is_index_active,
         "request": request,
     }

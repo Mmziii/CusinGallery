@@ -453,38 +453,122 @@
     }, true);
   }
 
-  /* ------------------------------------------------------------------ *
-   * 2a. Sidebar group state (per-user, resilient to blocked storage)
+  /* ------------------------------------------------------------------ *\
+   * 2a. Sidebar: group state + scroll offset, per user, per browser tab
    * ------------------------------------------------------------------ */
-  function initSidebarGroups() {
-    var groups = document.querySelectorAll("[data-cusin-nav-group]");
-    if (!groups.length) return;
-    var userId = document.body.getAttribute("data-cusin-user-id") || "guest";
-    var key = "cusin-admin-nav:v1:" + userId;
-    var state = {};
+  /* sessionStorage, not localStorage: which groups are expanded is "where
+     I am right now", not a preference -- a shared shop computer must not
+     inherit the previous user's layout, and a fresh tab should start
+     clean. Every access is wrapped because privacy modes THROW on
+     sessionStorage access, and a menu that breaks there is far worse
+     than a menu that forgets. */
+  function sidebarStore() {
+    var store = null;
     try {
-      state = JSON.parse(window.localStorage.getItem(key) || "{}") || {};
+      store = window.sessionStorage;
     } catch (error) {
-      state = {};
+      store = null;
     }
+    var userId = document.body.getAttribute("data-cusin-user-id") || "guest";
+    var key = "cusin-admin-nav:v2:" + userId;
+    return {
+      read: function () {
+        if (!store) return {};
+        try {
+          return JSON.parse(store.getItem(key) || "{}") || {};
+        } catch (error) {
+          return {};
+        }
+      },
+      write: function (state) {
+        if (!store) return;
+        try {
+          store.setItem(key, JSON.stringify(state));
+        } catch (error) {
+          /* quota or private mode: the menu still works, it just forgets */
+        }
+      }
+    };
+  }
+
+  function initSidebarGroups() {
+    var drawer = document.getElementById("cusin-drawer");
+    var store = sidebarStore();
+    var state = store.read();
+    var openState = state.groups || {};
+    var groups = document.querySelectorAll("#cusin-drawer [data-cusin-nav-group]");
 
     groups.forEach(function (group) {
       var id = group.getAttribute("data-cusin-nav-group");
       var summary = group.querySelector("summary");
       if (!summary) return;
-      if (Object.prototype.hasOwnProperty.call(state, id)) group.open = Boolean(state[id]);
+      if (Object.prototype.hasOwnProperty.call(openState, id)) {
+        group.open = Boolean(openState[id]);
+      }
       summary.setAttribute("aria-expanded", group.open ? "true" : "false");
       group.addEventListener("toggle", function () {
         summary.setAttribute("aria-expanded", group.open ? "true" : "false");
-        try {
-          var stored = JSON.parse(window.localStorage.getItem(key) || "{}") || {};
-          stored[id] = group.open;
-          window.localStorage.setItem(key, JSON.stringify(stored));
-        } catch (error) {
-          // Storage may be disabled by privacy settings; the group still works.
-        }
+        var current = store.read();
+        current.groups = current.groups || {};
+        current.groups[id] = group.open;
+        store.write(current);
       });
     });
+
+    if (!drawer) return;
+
+    /* Remember WHERE the drawer was scrolled. Without this every save
+       (a full page load) snapped the menu back to the top and the owner
+       lost their place in a long list. */
+    if (typeof state.scrollTop === "number" && state.scrollTop > 0) {
+      drawer.scrollTop = state.scrollTop;
+    }
+    var scrollTimer = null;
+    drawer.addEventListener("scroll", function () {
+      if (scrollTimer) window.clearTimeout(scrollTimer);
+      scrollTimer = window.setTimeout(function () {
+        var current = store.read();
+        current.scrollTop = drawer.scrollTop;
+        store.write(current);
+      }, 120);
+    }, { passive: true });
+
+    /* Bring the current row into view WITHOUT scrolling the page itself,
+       and only when it is actually out of sight -- the menu must not
+       jump under the cursor on every navigation. */
+    var active = drawer.querySelector(
+      ".cusin-nav-link.is-active, .cusin-nav-group.is-active > summary"
+    );
+    if (active && typeof active.scrollIntoView === "function") {
+      try {
+        active.scrollIntoView({ block: "nearest", inline: "nearest" });
+      } catch (error) {
+        /* old browsers: keep the default behaviour */
+      }
+    }
+  }
+
+  /* ------------------------------------------------------------------ *\
+   * 2a-2. Header height -> --cusin-header-h (the drawer stays below it)
+   * ------------------------------------------------------------------ */
+  function initHeaderHeightVar() {
+    var header = document.getElementById("header");
+    var root = document.documentElement;
+    if (!header || !root) return;
+    var apply = function () {
+      var height = Math.round(header.getBoundingClientRect().height);
+      if (height > 0) root.style.setProperty("--cusin-header-h", height + "px");
+    };
+    apply();
+    if (typeof window.ResizeObserver === "function") {
+      new window.ResizeObserver(apply).observe(header);
+    }
+    window.addEventListener("resize", apply);
+    /* Late-loading fonts change the topbar's height, and at 125%/150%
+       zoom it wraps to two lines -- re-measure once they are in. */
+    if (document.fonts && document.fonts.ready && typeof document.fonts.ready.then === "function") {
+      document.fonts.ready.then(apply, function () {});
+    }
   }
 
   /* ------------------------------------------------------------------ *
@@ -1101,6 +1185,7 @@
 
   document.addEventListener("DOMContentLoaded", function () {
     initDrawer();
+    initHeaderHeightVar();
     initSidebarGroups();
     initChangelistToolbar();
     initRelatedControls();
