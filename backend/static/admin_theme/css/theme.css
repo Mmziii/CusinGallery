@@ -325,6 +325,17 @@ kbd.cusin-kbd {
   background: transparent;
 }
 .cusin-breadcrumbs-wrap .breadcrumbs a { color: var(--cusin-link); }
+/* The trail is built by apps.adminui.breadcrumbs, where the separator is
+   its own element (and carries no surrounding whitespace of its own). */
+.cusin-breadcrumbs-wrap .breadcrumbs .cusin-crumb-sep {
+  display: inline-block;
+  margin: 0 6px;
+  color: var(--cusin-border-strong);
+}
+.cusin-breadcrumbs-wrap .breadcrumbs .cusin-crumb-current {
+  color: var(--cusin-text);
+  font-weight: 600;
+}
 
 /* --------------------------------------------------------------------------
    5. White RTL sidebar and groups

@@ -13,6 +13,7 @@ from django.utils import timezone
 from django.utils.html import format_html
 
 from apps.adminui import admin_dates, jalali
+from apps.adminui.breadcrumbs import build_crumbs
 from apps.adminui.nav import build_sidebar
 
 register = template.Library()
@@ -164,6 +165,19 @@ def cusin_icon(name: str, css_class: str = "cusin-icon") -> str:
         css_class,
         name,
     )
+
+
+@register.inclusion_tag("adminui/_breadcrumbs.html", takes_context=True)
+def cusin_breadcrumbs(context) -> dict:
+    """«شروع › سفارش‌ها › CG-…» -- one trail, no repeated label.
+
+    Django's own admin templates each render their own trail, and a
+    single-model app (orders, products, banners) is named after the model
+    it contains, so the trail read «سفارش‌ها › سفارش‌ها». The theme builds
+    the trail itself and drops the app crumb when it would only repeat
+    the model crumb -- see apps/adminui/breadcrumbs.py.
+    """
+    return {"crumbs": build_crumbs(context)}
 
 
 @register.inclusion_tag("adminui/_sidebar.html", takes_context=True)

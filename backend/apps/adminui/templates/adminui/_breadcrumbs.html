@@ -1,0 +1,6 @@
+{% comment %}
+The one breadcrumb trail (issue #6). Rendered by {% cusin_breadcrumbs %};
+Django's own per-template breadcrumbs blocks are dropped because the
+theme's base.html declares no `breadcrumbs` block for them to override.
+{% endcomment %}
+<div class="breadcrumbs">{% for crumb in crumbs %}{% if not forloop.first %}<span class="cusin-crumb-sep" aria-hidden="true">&rsaquo;</span>{% endif %}{% if crumb.url and not forloop.last %}<a href="{{ crumb.url }}">{{ crumb.label }}</a>{% else %}<span class="cusin-crumb-current">{{ crumb.label }}</span>{% endif %}{% endfor %}</div>
