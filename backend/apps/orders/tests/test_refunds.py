@@ -63,8 +63,11 @@ class RefundTestBase(CacheIsolatedAPITestCase):
         return order
 
     def return_paid_order(self, order):
-        """Walk a paid (confirmed) order to RETURNED through the real DAG:
-        confirmed -> processing -> shipped (with tracking code) -> returned."""
+        """Walk a paid order to RETURNED through the real DAG: the owner
+        confirms it first (a paid order waits for that), then
+        processing -> shipped (with tracking code) -> returned."""
+        set_status(order, Order.Status.CONFIRMED)
+        order.refresh_from_db()
         set_status(order, Order.Status.PROCESSING)
         order.refresh_from_db()
         order.tracking_code = "POST-REFUND-1"
@@ -230,7 +233,8 @@ class VerifiedButUnappliedCaptureTests(RefundTestBase):
 
         self.assertEqual(loser.status, Payment.Status.FAILED)
         order.refresh_from_db()
-        self.assertEqual(order.status, Order.Status.CONFIRMED)
+        # Paid, but NOT confirmed: confirming is the owner's call now.
+        self.assertEqual(order.status, Order.Status.PENDING)
         self.assertEqual(order.payment_status, Order.PaymentStatus.PAID)
         # The customer was charged twice: the duplicate is real money owed
         # back and must show in the refund ledger.

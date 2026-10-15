@@ -151,15 +151,22 @@ class PickupWorkflowTests(CacheIsolatedAPITestCase):
         serializer.is_valid(raise_exception=True)
         return do_checkout(user, serializer.validated_data)
 
+    def _paid_order(self, method):
+        """Checkout -> paid: the order is PAID and «در انتظار تأیید»."""
+        order = self._order(method)
+        order.payment_status = Order.PaymentStatus.PAID
+        order.save(update_fields=["payment_status"])
+        return order
+
     def test_pickup_can_ship_without_a_tracking_code(self):
-        order = self._order("pickup")
+        order = self._paid_order("pickup")
         set_status(order, Order.Status.CONFIRMED)
         set_status(order, Order.Status.PROCESSING)
         shipped = set_status(order, Order.Status.SHIPPED)  # must NOT raise
         self.assertEqual(shipped.status, Order.Status.SHIPPED)
 
     def test_courier_methods_still_require_tracking(self):
-        order = self._order("standard")
+        order = self._paid_order("standard")
         set_status(order, Order.Status.CONFIRMED)
         set_status(order, Order.Status.PROCESSING)
         with self.assertRaises(OrderWorkflowError):
@@ -187,14 +194,18 @@ class PickupNotificationTests(CacheIsolatedAPITestCase):
         })
         serializer.is_valid(raise_exception=True)
         order = do_checkout(user, serializer.validated_data)
+        order.payment_status = Order.PaymentStatus.PAID
+        order.save(update_fields=["payment_status"])
 
         with self.captureOnCommitCallbacks(execute=True):
             set_status(order, Order.Status.CONFIRMED)
             set_status(order, Order.Status.PROCESSING)
             set_status(order, Order.Status.SHIPPED)
 
-        self.assertEqual(len(fake.sent), 1)
-        message = fake.sent[0]["message"]
+        # Two notices now: the shop confirmed the order, then it shipped.
+        messages = [item["message"] for item in fake.sent]
+        self.assertEqual(len(messages), 2)
+        message = next(item for item in messages if "آمادهٔ دریافت حضوری" in item)
         self.assertIn("آمادهٔ دریافت حضوری", message)
         self.assertIn("تهران، خیابان ولیعصر، پلاک ۱۰", message)
         self.assertNotIn("کد رهگیری", message)
@@ -212,13 +223,16 @@ class PickupNotificationTests(CacheIsolatedAPITestCase):
         order = do_checkout(user, serializer.validated_data)
         order.refresh_from_db()
         order.tracking_code = "POST-123"
-        order.save(update_fields=["tracking_code"])
+        order.payment_status = Order.PaymentStatus.PAID
+        order.save(update_fields=["tracking_code", "payment_status"])
 
         with self.captureOnCommitCallbacks(execute=True):
             set_status(order, Order.Status.CONFIRMED)
             set_status(order, Order.Status.PROCESSING)
             set_status(order, Order.Status.SHIPPED)
 
-        self.assertEqual(len(fake.sent), 1)
-        self.assertIn("ارسال شد", fake.sent[0]["message"])
-        self.assertIn("POST-123", fake.sent[0]["message"])
+        messages = [item["message"] for item in fake.sent]
+        self.assertEqual(len(messages), 2)
+        shipped = next(item for item in messages if "ارسال شد" in item)
+        self.assertIn("POST-123", shipped)
+        self.assertTrue(any("تأیید شد" in item for item in messages), messages)

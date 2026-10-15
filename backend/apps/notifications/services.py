@@ -21,7 +21,8 @@ WHICH event happened for WHICH object; everything else lives here:
       numbers and email addresses never enter the audit log.
 
 Channels per event:
-    order_confirmed / order_shipped   SMS (to the account phone) + email
+    order_paid / order_confirmed /
+    order_shipped                     SMS (to the account phone) + email
                                       (to the account email, if any)
     password_reset                    email link (accounts with an email)
                                       OR SMS one-time code (phone-only
@@ -46,6 +47,10 @@ class Events:
     """The event vocabulary. Machine names stored in NotificationLog.event."""
 
     PASSWORD_RESET = "password_reset"
+    # Two DISTINCT customer events now that confirming is the OWNER's job:
+    # ORDER_PAID fires when the gateway confirms the money (the order stays
+    # «در انتظار تأیید»); ORDER_CONFIRMED fires when the shop accepts it.
+    ORDER_PAID = "order_paid"
     ORDER_CONFIRMED = "order_confirmed"
     ORDER_SHIPPED = "order_shipped"
     # Part R4 item 3: OWNER-facing alerts (never sent to customers).
@@ -309,11 +314,19 @@ def _order_sms_content(notice: _OrderNotice):
     """(direct_message, template_name, template_tokens) for an order event.
     Template names come from env; when one is empty the provider falls
     back to the locally-composed direct message."""
-    if notice.event == Events.ORDER_CONFIRMED:
+    if notice.event == Events.ORDER_PAID:
+        template = (settings.SMS_TEMPLATE_ORDER_PAID or "").strip()
+        tokens = {"token": notice.order_number, "token2": f"{notice.total}"}
+        message = (
+            f"پرداخت سفارش {notice.order_number} در کازین گالری با موفقیت انجام شد "
+            f"(مبلغ: {notice.total:,} تومان). "
+            "سفارش شما در انتظار تأیید فروشگاه است و پس از تأیید، آماده‌سازی و ارسال می‌شود."
+        )
+    elif notice.event == Events.ORDER_CONFIRMED:
         template = (settings.SMS_TEMPLATE_ORDER_CONFIRMED or "").strip()
         tokens = {"token": notice.order_number, "token2": f"{notice.total}"}
         message = (
-            f"سفارش {notice.order_number} در کازین گالری با موفقیت پرداخت و ثبت شد. "
+            f"سفارش {notice.order_number} تأیید شد و در حال آماده‌سازی است. "
             f"مبلغ: {notice.total:,} تومان"
         )
     elif notice.event == Events.ORDER_SHIPPED and notice.shipping_method == "pickup":
@@ -345,12 +358,34 @@ def _order_sms_content(notice: _OrderNotice):
 
 def _order_email_content(notice: _OrderNotice):
     shipping_label = "اکسپرس" if notice.shipping_method == "express" else "استاندارد"
-    if notice.event == Events.ORDER_CONFIRMED:
-        subject = f"تأیید سفارش {notice.order_number} — کازین گالری"
+    if notice.event == Events.ORDER_PAID:
+        subject = f"پرداخت سفارش {notice.order_number} دریافت شد — کازین گالری"
         lines = [
             "سلام،",
             "",
-            f"سفارش {notice.order_number} با موفقیت پرداخت و ثبت شد.",
+            f"پرداخت سفارش {notice.order_number} با موفقیت دریافت شد.",
+            f"مبلغ کل: {notice.total:,} تومان",
+            f"روش ارسال: {shipping_label}",
+            "",
+            "سفارش شما در انتظار تأیید فروشگاه است؛ پس از تأیید، آماده‌سازی و ارسال "
+            "می‌شود و کد رهگیری برای شما پیامک خواهد شد.",
+        ]
+        if notice.estimated_delivery_min and notice.estimated_delivery_max:
+            lines.append(
+                "بازهٔ تحویل تخمینی: "
+                f"{notice.estimated_delivery_min:%Y/%m/%d} تا {notice.estimated_delivery_max:%Y/%m/%d}"
+            )
+        lines += [
+            "",
+            "می‌توانید وضعیت سفارش را در حساب کاربری خود پیگیری کنید.",
+            "با تشکر — کازین گالری (cusin.ir)",
+        ]
+    elif notice.event == Events.ORDER_CONFIRMED:
+        subject = f"سفارش {notice.order_number} تأیید شد — کازین گالری"
+        lines = [
+            "سلام،",
+            "",
+            f"سفارش {notice.order_number} توسط فروشگاه تأیید شد و در حال آماده‌سازی است.",
             f"مبلغ کل: {notice.total:,} تومان",
             f"روش ارسال: {shipping_label}",
         ]

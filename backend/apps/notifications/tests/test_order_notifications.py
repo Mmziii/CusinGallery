@@ -44,6 +44,11 @@ class OrderNotificationTestBase(CacheIsolatedAPITestCase):
         return payment
 
     def ship_order(self, order):
+        # A paid order waits for the owner: confirming is part of shipping.
+        if order.status == Order.Status.PENDING:
+            with self.captureOnCommitCallbacks(execute=True):
+                set_status(order, Order.Status.CONFIRMED)
+            order.refresh_from_db()
         set_status(order, Order.Status.PROCESSING)
         order.refresh_from_db()
         order.tracking_code = "POST-778899"
@@ -54,7 +59,10 @@ class OrderNotificationTestBase(CacheIsolatedAPITestCase):
         return order
 
 
-class OrderConfirmedNotificationTests(OrderNotificationTestBase):
+class OrderPaidNotificationTests(OrderNotificationTestBase):
+    """Payment success fires ORDER_PAID -- and must NOT claim the shop has
+    confirmed anything (confirming is the owner's step now)."""
+
     def test_payment_success_notifies_sms_and_email_with_masked_logs(self):
         fake = install_fake_provider(self)
         user = make_user(phone="+989121112233", email="buyer@example.com")
@@ -70,15 +78,20 @@ class OrderConfirmedNotificationTests(OrderNotificationTestBase):
         # The amount appears in the usual grouped form (150,000 تومان).
         self.assertIn(f"{order.total:,}", fake.sent[0]["message"])
 
-        # ...and an email with the confirmation subject.
+        # ...and the message must NOT say the shop confirmed the order.
+        self.assertNotIn("تأیید شد", fake.sent[0]["message"])
+        self.assertIn("در انتظار تأیید", fake.sent[0]["message"])
+
+        # ...and an email with the payment-received subject.
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn("buyer@example.com", mail.outbox[0].to)
         self.assertIn(order.order_number, mail.outbox[0].subject)
+        self.assertIn("در انتظار تأیید فروشگاه", mail.outbox[0].body)
 
         # Audit rows: one per channel, SENT, provider id recorded, and
         # recipients MASKED (raw contact data must not be in the log).
-        sms_log = NotificationLog.objects.get(event=Events.ORDER_CONFIRMED, channel="sms")
-        email_log = NotificationLog.objects.get(event=Events.ORDER_CONFIRMED, channel="email")
+        sms_log = NotificationLog.objects.get(event=Events.ORDER_PAID, channel="sms")
+        email_log = NotificationLog.objects.get(event=Events.ORDER_PAID, channel="email")
         self.assertEqual(sms_log.status, NotificationLog.Status.SENT)
         self.assertEqual(sms_log.provider_message_id, "FAKE-MSG-1")
         self.assertEqual(email_log.status, NotificationLog.Status.SENT)
@@ -99,7 +112,7 @@ class OrderConfirmedNotificationTests(OrderNotificationTestBase):
         self.assertEqual(len(fake.sent), 1)
         self.assertEqual(mail.outbox, [])
         self.assertEqual(
-            NotificationLog.objects.filter(event=Events.ORDER_CONFIRMED, channel="email").count(), 0,
+            NotificationLog.objects.filter(event=Events.ORDER_PAID, channel="email").count(), 0,
             "an account without an email is not an incident -- no email log row",
         )
 
@@ -113,11 +126,11 @@ class OrderConfirmedNotificationTests(OrderNotificationTestBase):
 
         order.refresh_from_db()
         self.assertEqual(order.payment_status, Order.PaymentStatus.PAID)
-        self.assertEqual(order.status, Order.Status.CONFIRMED)
+        self.assertEqual(order.status, Order.Status.PENDING)
         product.refresh_from_db()
         self.assertEqual(product.stock_quantity, 9)  # real payment effect intact
 
-        sms_log = NotificationLog.objects.get(event=Events.ORDER_CONFIRMED, channel="sms")
+        sms_log = NotificationLog.objects.get(event=Events.ORDER_PAID, channel="sms")
         self.assertEqual(sms_log.status, NotificationLog.Status.FAILED)
         self.assertIn("kavenegar unreachable", sms_log.error)
         # The email channel is independent: it still went out.
@@ -133,7 +146,7 @@ class OrderConfirmedNotificationTests(OrderNotificationTestBase):
         self.pay_order(user, order)
 
         self.assertEqual(order.payment_status, Order.PaymentStatus.PAID)
-        log = NotificationLog.objects.get(event=Events.ORDER_CONFIRMED, channel="sms")
+        log = NotificationLog.objects.get(event=Events.ORDER_PAID, channel="sms")
         self.assertEqual(log.status, NotificationLog.Status.FAILED)
         self.assertIn("RuntimeError", log.error)
 
@@ -151,7 +164,7 @@ class OrderConfirmedNotificationTests(OrderNotificationTestBase):
 
         order.refresh_from_db()
         self.assertEqual(order.payment_status, Order.PaymentStatus.PAID)
-        email_log = NotificationLog.objects.get(event=Events.ORDER_CONFIRMED, channel="email")
+        email_log = NotificationLog.objects.get(event=Events.ORDER_PAID, channel="email")
         self.assertEqual(email_log.status, NotificationLog.Status.FAILED)
         self.assertIn("smtp connection refused", email_log.error)
 
@@ -171,11 +184,11 @@ class OrderConfirmedNotificationTests(OrderNotificationTestBase):
             handle_callback(signed_ok(payment.gateway_transaction_id))
             # And a buggy/duplicated direct trigger for good measure:
             order.refresh_from_db()
-            notify_order_event(order, Events.ORDER_CONFIRMED)
+            notify_order_event(order, Events.ORDER_PAID)
 
         self.assertEqual(len(fake.sent), 1, "SMS sent more than once for one event")
         self.assertEqual(len(mail.outbox), 1, "email sent more than once for one event")
-        self.assertEqual(NotificationLog.objects.filter(event=Events.ORDER_CONFIRMED).count(), 2)
+        self.assertEqual(NotificationLog.objects.filter(event=Events.ORDER_PAID).count(), 2)
 
     def test_rolled_back_transaction_sends_nothing(self):
         """on_commit is the reliability rule: a transaction that never
@@ -187,7 +200,7 @@ class OrderConfirmedNotificationTests(OrderNotificationTestBase):
         with self.captureOnCommitCallbacks(execute=True):
             try:
                 with transaction.atomic():
-                    notify_order_event(order, Events.ORDER_CONFIRMED)
+                    notify_order_event(order, Events.ORDER_PAID)
                     raise RuntimeError("payment verification blew up -- rolling back")
             except RuntimeError:
                 pass
@@ -222,9 +235,66 @@ class OrderConfirmedNotificationTests(OrderNotificationTestBase):
         ):
             self.pay_order(user, order)
 
-        email_log = NotificationLog.objects.get(event=Events.ORDER_CONFIRMED, channel="email")
+        email_log = NotificationLog.objects.get(event=Events.ORDER_PAID, channel="email")
         self.assertEqual(email_log.status, NotificationLog.Status.SKIPPED)
         self.assertIn("EMAIL_HOST", email_log.error)
+
+
+class OrderConfirmedNotificationTests(OrderNotificationTestBase):
+    """ORDER_CONFIRMED is fired by the OWNER confirming the order in the
+    admin (apps/orders/workflow.set_status), never by the payment."""
+
+    def test_owner_confirmation_notifies_and_payment_does_not(self):
+        fake = install_fake_provider(self)
+        user = make_user(phone="+989121112299", email="confirmed@example.com")
+        order = make_unpaid_order(user)
+        self.pay_order(user, order)
+        self.assertEqual(
+            NotificationLog.objects.filter(event=Events.ORDER_CONFIRMED).count(), 0,
+            "payment must not claim the shop confirmed the order",
+        )
+        mail.outbox.clear()
+        fake.sent.clear()
+
+        with self.captureOnCommitCallbacks(execute=True):
+            set_status(order, Order.Status.CONFIRMED)
+        order.refresh_from_db()
+
+        self.assertEqual(order.status, Order.Status.CONFIRMED)
+        self.assertEqual(len(fake.sent), 1)
+        self.assertIn("تأیید شد", fake.sent[0]["message"])
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("تأیید شد", mail.outbox[0].subject)
+        self.assertEqual(
+            NotificationLog.objects.filter(
+                event=Events.ORDER_CONFIRMED, status=NotificationLog.Status.SENT
+            ).count(),
+            2,  # sms + email
+        )
+
+    def test_confirming_twice_does_not_notify_twice(self):
+        fake = install_fake_provider(self)
+        user = make_user(phone="+989121112298")
+        order = make_unpaid_order(user)
+        self.pay_order(user, order)
+        with self.captureOnCommitCallbacks(execute=True):
+            set_status(order, Order.Status.CONFIRMED)
+            order.refresh_from_db()
+            set_status(order, Order.Status.CONFIRMED)  # no-op
+        self.assertEqual(
+            NotificationLog.objects.filter(event=Events.ORDER_CONFIRMED).count(), 1
+        )
+
+    def test_an_unpaid_order_cannot_be_confirmed_so_it_never_notifies(self):
+        fake = install_fake_provider(self)
+        from apps.orders.workflow import OrderWorkflowError
+
+        user = make_user(phone="+989121112297")
+        order = make_unpaid_order(user)
+        with self.assertRaises(OrderWorkflowError):
+            set_status(order, Order.Status.CONFIRMED)
+        self.assertEqual(NotificationLog.objects.count(), 0)
+        self.assertEqual(fake.sent, [])
 
 
 class OrderShippedNotificationTests(OrderNotificationTestBase):
@@ -238,12 +308,15 @@ class OrderShippedNotificationTests(OrderNotificationTestBase):
 
         self.ship_order(order)
 
-        self.assertEqual(len(fake.sent), 1)
-        self.assertIn("POST-778899", fake.sent[0]["message"])
-        self.assertIn(order.order_number, fake.sent[0]["message"])
-        self.assertEqual(len(mail.outbox), 1)
-        self.assertIn("POST-778899", mail.outbox[0].body)
-        self.assertIn("ارسال شد", mail.outbox[0].subject)
+        # The confirmation notice goes out too (the owner confirmed the
+        # order as part of shipping); the shipped one carries the code.
+        self.assertEqual(len(fake.sent), 2)
+        shipped_sms = next(item["message"] for item in fake.sent if "POST-778899" in item["message"])
+        self.assertIn(order.order_number, shipped_sms)
+        self.assertEqual(len(mail.outbox), 2)
+        shipped_mail = next(item.body for item in mail.outbox if "POST-778899" in item.body)
+        self.assertIn("ارسال شد", next(item.subject for item in mail.outbox if "POST-778899" in item.body))
+        self.assertTrue(shipped_mail)
 
         logs = NotificationLog.objects.filter(event=Events.ORDER_SHIPPED)
         self.assertEqual(logs.count(), 2)  # sms + email

@@ -385,6 +385,9 @@ SMS_SENDER = env("SMS_SENDER", default="")
 # Empty = fall back to a direct send with locally-composed Persian text
 # (which then requires SMS_SENDER).
 SMS_TEMPLATE_PASSWORD_RESET = env("SMS_TEMPLATE_PASSWORD_RESET", default="")
+# ORDER_PAID = the gateway confirmed the money (order still awaiting the
+# shop's confirmation); ORDER_CONFIRMED = the shop accepted it.
+SMS_TEMPLATE_ORDER_PAID = env("SMS_TEMPLATE_ORDER_PAID", default="")
 SMS_TEMPLATE_ORDER_CONFIRMED = env("SMS_TEMPLATE_ORDER_CONFIRMED", default="")
 SMS_TEMPLATE_ORDER_SHIPPED = env("SMS_TEMPLATE_ORDER_SHIPPED", default="")
 

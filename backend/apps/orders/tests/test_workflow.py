@@ -47,7 +47,17 @@ class WorkflowTestBase(CacheIsolatedAPITestCase):
         handle_callback(signed_ok(payment.gateway_transaction_id))
         order.refresh_from_db()
         self.product.refresh_from_db()
+        # A paid order now STAYS «در انتظار تأیید»: only the owner's
+        # confirmation may move it on (payment is not a promise to fulfil).
+        self.assertEqual(order.payment_status, Order.PaymentStatus.PAID)
+        self.assertEqual(order.status, Order.Status.PENDING)
         return order, self.product
+
+    def confirm(self, order):
+        """The owner accepting the order -- the only way out of PENDING."""
+        set_status(order, Order.Status.CONFIRMED)
+        order.refresh_from_db()
+        return order
 
 
 class TransitionDAGTests(WorkflowTestBase):
@@ -88,6 +98,7 @@ class TransitionDAGTests(WorkflowTestBase):
         order, product = self.make_paid_order()
         S = Order.Status
 
+        self.confirm(order)
         set_status(order, S.PROCESSING)
         order.refresh_from_db()
         self.assertEqual(order.status, S.PROCESSING)
@@ -110,6 +121,7 @@ class TransitionDAGTests(WorkflowTestBase):
 class ShippedRequiresTrackingCodeTests(WorkflowTestBase):
     def test_shipped_without_tracking_code_is_rejected(self):
         order, _ = self.make_paid_order()
+        self.confirm(order)
         set_status(order, Order.Status.PROCESSING)
         order.refresh_from_db()
         self.assertEqual(order.tracking_code, "")
@@ -122,6 +134,7 @@ class ShippedRequiresTrackingCodeTests(WorkflowTestBase):
 
     def test_shipped_with_tracking_code_succeeds(self):
         order, _ = self.make_paid_order()
+        self.confirm(order)
         set_status(order, Order.Status.PROCESSING)
         order.tracking_code = "TBA-999"
         order.save(update_fields=["tracking_code"])
@@ -227,12 +240,14 @@ class OrderAdminWorkflowTests(WorkflowTestBase):
 
     def test_admin_valid_transition_persists(self):
         order, _ = self.make_paid_order()
+        self.confirm(order)
         self._save_via_admin(order, Order.Status.PROCESSING)
         order.refresh_from_db()
         self.assertEqual(order.status, Order.Status.PROCESSING)
 
     def test_admin_invalid_transition_persists_nothing(self):
         order, _ = self.make_paid_order()
+        self.confirm(order)
         original_number = order.order_number
         order.status = Order.Status.DELIVERED      # confirmed -> delivered: illegal
         order.tracking_code = "SHOULD-NOT-SAVE"
@@ -261,6 +276,7 @@ class OrderAdminWorkflowTests(WorkflowTestBase):
 
     def test_admin_shipped_requires_tracking_code(self):
         order, _ = self.make_paid_order()
+        self.confirm(order)
         self._save_via_admin(order, Order.Status.PROCESSING)
         order.refresh_from_db()
 

@@ -44,7 +44,8 @@ class SuccessfulCallbackTests(CallbackBase):
 
         self.order.refresh_from_db()
         self.assertEqual(self.order.payment_status, Order.PaymentStatus.PAID)
-        self.assertEqual(self.order.status, Order.Status.CONFIRMED)
+        # Payment does NOT confirm: a paid order waits for the owner.
+        self.assertEqual(self.order.status, Order.Status.PENDING)
 
     def test_successful_callback_decrements_stock(self):
         product = self.order.items.first().product
@@ -263,7 +264,7 @@ class SecondAttemptRaceTests(CallbackBase):
         self.assertEqual(result.status, Payment.Status.CANCELLED)
         self.order.refresh_from_db()
         self.assertEqual(self.order.payment_status, Order.PaymentStatus.PAID)
-        self.assertEqual(self.order.status, Order.Status.CONFIRMED)
+        self.assertEqual(self.order.status, Order.Status.PENDING)
 
     def test_loser_callback_over_http_redirects_failed_not_500(self):
         second = self._initiate_second_attempt()

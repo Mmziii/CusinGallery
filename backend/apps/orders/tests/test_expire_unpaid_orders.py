@@ -110,7 +110,9 @@ class ExpireUnpaidOrdersTests(CacheIsolatedAPITestCase):
         output = self.run_command()
 
         order.refresh_from_db()
-        self.assertEqual(order.status, Order.Status.CONFIRMED)
+        # Paid, and therefore left alone -- but payment no longer confirms:
+        # it waits for the owner.
+        self.assertEqual(order.status, Order.Status.PENDING)
         self.assertEqual(order.payment_status, Order.PaymentStatus.PAID)
         self.assertIn("cancelled 0", output)
         product.refresh_from_db()
@@ -196,7 +198,7 @@ class ExpireUnpaidOrdersTests(CacheIsolatedAPITestCase):
 
         self.assertFalse(result)
         order.refresh_from_db()
-        self.assertEqual(order.status, Order.Status.CONFIRMED)
+        self.assertEqual(order.status, Order.Status.PENDING)
         self.assertEqual(order.payment_status, Order.PaymentStatus.PAID)
 
     def test_customer_who_pays_after_expiry_has_money_recorded_and_flagged(self):

@@ -17,7 +17,13 @@ Status lifecycle (a strict DAG -- no backwards or skip transitions):
 * cancelled and returned are terminal.
 * An order can only be cancelled while it is still pre-shipment
   (pending / confirmed / processing). Once shipped, the physical flow
-  takes over (delivered / returned).
+  takes over (delivered / returned). Cancelling is allowed WHETHER OR NOT
+  the order was paid -- that is how abandoned unpaid orders are closed.
+* Payment gate: «pending -> confirmed» (and every later status) requires
+  ``payment_status == PAID``. A paid order deliberately STAYS «در انتظار
+  تأیید» until the owner confirms it in the admin -- payment proves the
+  money arrived, not that the shop can fulfil the order. See
+  apps/payments/services.py, which now only sets payment_status.
 
 Stock restoration on cancel
 ---------------------------
@@ -84,11 +90,58 @@ def allowed_next_statuses(current_status):
     return set(ALLOWED_TRANSITIONS.get(current_status, set()))
 
 
-def validate_transition(current_status, new_status):
+# Statuses that mean "the shop is actually fulfilling this order". Reaching
+# any of them is only honest once the customer's money is in: a paid order
+# stays «در انتظار تأیید» until the OWNER confirms it, and an unpaid one
+# must never be confirmed, processed, shipped or delivered. Cancelling an
+# unpaid order stays allowed -- that is exactly how abandoned ones are
+# cleaned up.
+FULFILMENT_STATUSES = frozenset(
+    {
+        Order.Status.CONFIRMED,
+        Order.Status.PROCESSING,
+        Order.Status.SHIPPED,
+        Order.Status.DELIVERED,
+    }
+)
+
+
+def requires_payment(status):
+    """True when this status may only be entered on a PAID order."""
+    return status in FULFILMENT_STATUSES
+
+
+def payment_block_reason(order=None, new_status=None, payment_status=None):
+    """
+    Persian explanation of why ``new_status`` is blocked on this order, or
+    "" when payment is not an obstacle.
+
+    Accepts either an Order (its payment_status is read) or an explicit
+    ``payment_status`` value, so the admin can ask about a transition it
+    has not made yet.
+    """
+    if payment_status is None:
+        payment_status = getattr(order, "payment_status", None)
+    if new_status is None or not requires_payment(new_status):
+        return ""
+    if payment_status == Order.PaymentStatus.PAID:
+        return ""
+    return (
+        "این سفارش پرداخت نشده است؛ تا زمانی که پرداخت آن تأیید نشود نمی‌توان آن را "
+        f"به «{Order.Status(new_status).label}» برد. "
+        "برای سفارش پرداخت‌نشده فقط «لغو شده» مجاز است."
+    )
+
+
+def validate_transition(current_status, new_status, payment_status=None):
     """
     Raise OrderWorkflowError unless ``current_status -> new_status`` is a
     legal edge in the DAG. A no-op transition (same status) is allowed
     and treated as a plain save by callers.
+
+    ``payment_status`` is the order's payment status. When given, a
+    fulfilment status (confirmed and beyond) is refused unless the order
+    is PAID; cancelling is never blocked by payment.
     """
     if new_status == current_status:
         return  # idempotent save with no status change is fine
@@ -100,9 +153,13 @@ def validate_transition(current_status, new_status):
             f"Allowed next statuses: "
             f"{', '.join(sorted(s.label for s in allowed_next_statuses(current_status))) or 'none (terminal status)'}."
         )
+    reason = payment_block_reason(new_status=new_status, payment_status=payment_status)
+    if reason:
+        raise OrderWorkflowError(reason)
 
 
-def check_transition(current_status, new_status, tracking_code, shipping_method="standard"):
+def check_transition(current_status, new_status, tracking_code, shipping_method="standard",
+                     payment_status=None):
     """
     Full pre-save validation for moving an order from ``current_status``
     to ``new_status``: the DAG plus business preconditions (a courier-
@@ -117,7 +174,7 @@ def check_transition(current_status, new_status, tracking_code, shipping_method=
     nothing; set_status runs it again under the row lock as a safety
     net against concurrent edits.
     """
-    validate_transition(current_status, new_status)
+    validate_transition(current_status, new_status, payment_status=payment_status)
     if new_status != current_status and new_status == Order.Status.SHIPPED and not tracking_code:
         from . import shipping
 
@@ -143,7 +200,8 @@ def set_status(order, new_status):
             return locked  # no-op: nothing to change, nothing to restore
 
         check_transition(
-            locked.status, new_status, locked.tracking_code, locked.shipping_method
+            locked.status, new_status, locked.tracking_code, locked.shipping_method,
+            payment_status=locked.payment_status,
         )
 
         cancelled_a_paid_order = (
@@ -178,6 +236,15 @@ def set_status(order, new_status):
 
         locked.status = new_status
         locked.save(update_fields=["status", "stock_restored_at", "updated_at"])
+
+        if new_status == Order.Status.CONFIRMED:
+            # The shop has accepted the order -- only NOW is it fair to
+            # tell the customer it was confirmed. Payment alone only earns
+            # the «در انتظار تأیید» state (see apps/payments/services.py,
+            # which fires Events.ORDER_PAID instead).
+            from apps.notifications.services import Events, notify_order_event
+
+            notify_order_event(locked, Events.ORDER_CONFIRMED)
 
         if new_status == Order.Status.SHIPPED:
             # Customer "shipped" notification with the tracking code

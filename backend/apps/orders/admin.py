@@ -15,10 +15,12 @@ The admin is the shop owner's day-to-day order desk:
   provided for the owner.
 """
 import csv
+import datetime as dt
 
+from django.conf import settings as django_settings
 from django.contrib import admin, messages
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db.models import Count, Q
+from django.db.models import Count, Prefetch, Q
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.template.response import TemplateResponse
@@ -28,6 +30,7 @@ from django.utils.html import format_html
 
 from apps.adminui.jalali import format_jalali_datetime
 from apps.adminui.templatetags.adminui_extras import toman_filter
+from apps.payments.models import Payment
 
 from .models import Order, OrderItem
 from .refunds import RefundError, finalize_refunded, validate_admin_refund_change
@@ -36,6 +39,7 @@ from .workflow import (
     OrderWorkflowError,
     allowed_next_statuses,
     check_transition,
+    payment_block_reason,
     set_status,
 )
 
@@ -50,17 +54,42 @@ FLOW_STATUSES = [
     Order.Status.DELIVERED,
 ]
 
+def abandoned_unpaid_q(now=None):
+    """Orders the customer walked away from: never paid, still open, and
+    older than ORDER_ABANDONED_UNPAID_AFTER_HOURS.
+
+    They are real rows (and the refund/expiry cron still sees them), so
+    they are HIDDEN from the default admin list rather than deleted --
+    the owner's work queue should be the orders that need a decision.
+    """
+    hours = getattr(django_settings, "ORDER_ABANDONED_UNPAID_AFTER_HOURS", 24) or 24
+    cutoff = (now or timezone.now()) - dt.timedelta(hours=max(int(hours), 1))
+    return (
+        Q(payment_status__in=[
+            Order.PaymentStatus.UNPAID,
+            Order.PaymentStatus.PENDING,
+            Order.PaymentStatus.FAILED,
+        ])
+        & Q(status=Order.Status.PENDING)
+        & Q(created_at__lt=cutoff)
+    )
+
+
 # Queue filter/tab definitions: (key, Persian label, sprite icon).
 # Purely additive views over existing columns -- every tab maps to the
 # same predicates the dashboard "needs action" cards use.
 ORDER_QUEUES = (
     ("awaiting_payment", "در انتظار پرداخت", "hourglass"),
-    ("paid_to_process", "پرداخت‌شده‌های در انتظار پردازش", "box"),
+    # A paid order stays «در انتظار تأیید» until the OWNER confirms it:
+    # that queue is the owner's real inbox.
+    ("awaiting_confirmation", "پرداخت‌شده‌های در انتظار تأیید", "bell"),
+    ("paid_to_process", "تأیید‌شدهٔ در حال آماده‌سازی", "box"),
     ("shipped", "ارسال‌شده", "truck"),
     ("delivered", "تحویل‌شده", "check"),
     ("cancelled_returned", "لغو/مرجوع", "x"),
     ("needs_refund", "نیازمند بازپرداخت", "refund"),
     ("pickup_waiting", "حضوریِ تحویل‌نشده", "store"),
+    ("abandoned", "سفارش‌های رهاشده", "hourglass"),
 )
 
 QUEUE_FILTERS = {
@@ -70,13 +99,20 @@ QUEUE_FILTERS = {
         Order.Status.PENDING, Order.Status.CONFIRMED,
         Order.Status.PROCESSING, Order.Status.SHIPPED,
     ]),
+    "awaiting_confirmation": Q(
+        payment_status=Order.PaymentStatus.PAID, status=Order.Status.PENDING,
+    ),
     "paid_to_process": Q(payment_status=Order.PaymentStatus.PAID, status__in=[
-        Order.Status.PENDING, Order.Status.CONFIRMED, Order.Status.PROCESSING,
+        Order.Status.CONFIRMED, Order.Status.PROCESSING,
     ]),
     "shipped": Q(status=Order.Status.SHIPPED),
     "delivered": Q(status=Order.Status.DELIVERED),
     "cancelled_returned": Q(status__in=[Order.Status.CANCELLED, Order.Status.RETURNED]),
     "needs_refund": Q(refund_status=Order.RefundStatus.REQUIRED),
+    # Not gone, just hidden from the DEFAULT list -- see
+    # OrderAdmin.get_queryset. One click away, and the cron cancels them.
+    # A callable because the cutoff is "now minus N hours", not a constant.
+    "abandoned": abandoned_unpaid_q,
     "pickup_waiting": Q(
         payment_status=Order.PaymentStatus.PAID,
         shipping_method="pickup",
@@ -85,6 +121,17 @@ QUEUE_FILTERS = {
             Order.Status.PROCESSING, Order.Status.SHIPPED,
         ],
     ),
+}
+
+# Owner-facing wording for the outcome of the LAST gateway attempt. The
+# raw Payment.Status labels describe the PSP record («لغو شده»); on an
+# order the owner wants to know what the CUSTOMER did at the gateway
+# («لغو توسط مشتری»).
+LAST_ATTEMPT_PHRASES = {
+    Payment.Status.SUCCESS: "موفق",
+    Payment.Status.FAILED: "ناموفق",
+    Payment.Status.CANCELLED: "لغو توسط مشتری",
+    Payment.Status.PENDING: "در انتظار نتیجه از درگاه",
 }
 
 # Quick-action button presentation per target status.
@@ -115,7 +162,9 @@ class OrderQueueFilter(admin.SimpleListFilter):
         predicate = QUEUE_FILTERS.get(self.value())
         if predicate is None:
             return queryset
-        return queryset.filter(predicate)
+        # An entry may be a callable -- the "abandoned" cutoff depends on
+        # the current time, so it cannot be a frozen Q object.
+        return queryset.filter(predicate() if callable(predicate) else predicate)
 
 
 def _jalali_stamp(value) -> str:
@@ -156,7 +205,8 @@ class OrderAdmin(admin.ModelAdmin):
     # Preserve every operational value and its sort key, but present the
     # order number compactly and put the amount's currency unit in its header.
     list_display = (
-        "order_number_cell", "user", "status_badge", "payment_badge", "total_fa",
+        "order_number_cell", "user", "status_badge", "payment_badge",
+        "last_attempt_cell", "total_fa",
         "shipping_method_cell", "stock_restored_badge", "refund_badge",
         "created_at_jalali",
     )
@@ -187,6 +237,33 @@ class OrderAdmin(admin.ModelAdmin):
         return format_html(
             '<span class="cusin-badge pay-{}">{}</span>',
             obj.payment_status, obj.get_payment_status_display(),
+        )
+
+    # --- last gateway attempt (what the CUSTOMER did at the gateway) ---
+
+    @staticmethod
+    def last_payment_attempt(obj):
+        """The most recent Payment row, or None. Uses the prefetch set up
+        in get_queryset when there is one (no N+1 on the changelist)."""
+        cached = getattr(obj, "recent_payments", None)
+        if cached is not None:
+            return cached[0] if cached else None
+        return obj.payments.order_by("-created_at").first()
+
+    @admin.display(description="آخرین تلاش پرداخت")
+    def last_attempt_cell(self, obj):
+        payment = self.last_payment_attempt(obj)
+        if payment is None:
+            return format_html('<span class="cusin-muted">—</span>')
+        phrase = LAST_ATTEMPT_PHRASES.get(payment.status, payment.get_status_display())
+        when = timezone.localtime(payment.created_at)
+        return format_html(
+            '<span class="cusin-attempt attempt-{}" title="{}">{}'
+            '<small class="cusin-muted"> — {}</small></span>',
+            payment.status,
+            payment.get_status_display(),
+            phrase,
+            format_jalali_datetime(when),
         )
 
     @admin.display(description="مبلغ (تومان)", ordering="total")
@@ -280,6 +357,39 @@ class OrderAdmin(admin.ModelAdmin):
         ("زمان‌ها", {"fields": ("created_at_detail", "updated_at_detail")}),
     )
 
+    # --- default work queue -------------------------------------------
+    # GET params that mean "the owner asked for something specific", i.e.
+    # stop hiding the abandoned unpaid orders.
+    _EXPLICIT_VIEW_PARAMS = (
+        "queue", "q", "all", "status__exact", "payment_status__exact",
+        "refund_status__exact", "e", "o",
+    )
+
+    @classmethod
+    def _hides_abandoned(cls, request) -> bool:
+        """True on the DEFAULT list (no filter, no search, no tab)."""
+        params = getattr(request, "GET", None)
+        if params is None:
+            return False
+        if params.get("all") == "1":
+            return False
+        for name in cls._EXPLICIT_VIEW_PARAMS:
+            if params.get(name):
+                return False
+        return not any(key.startswith("created_at") for key in params)
+
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request).prefetch_related(
+            Prefetch(
+                "payments",
+                queryset=Payment.objects.order_by("-created_at"),
+                to_attr="recent_payments",
+            )
+        )
+        if self._hides_abandoned(request):
+            queryset = queryset.exclude(abandoned_unpaid_q())
+        return queryset
+
     def has_add_permission(self, request):
         # Orders only come from the checkout flow; admin manages existing ones.
         return False
@@ -312,14 +422,40 @@ class OrderAdmin(admin.ModelAdmin):
     def changelist_view(self, request, extra_context=None):
         extra_context = dict(extra_context or {})
         extra_context["queue_tabs"] = self._queue_tabs(request)
+        extra_context.update(self._hidden_abandoned_context(request))
         return super().changelist_view(request, extra_context=extra_context)
 
+    def _hidden_abandoned_context(self, request) -> dict:
+        """How many abandoned unpaid orders the default list is hiding, and
+        the link that shows them. Nothing is ever unreachable."""
+        if not self._hides_abandoned(request):
+            return {}
+        hidden = (
+            super().get_queryset(request).filter(abandoned_unpaid_q()).count()
+        )
+        if not hidden:
+            return {}
+        params = request.GET.copy()
+        params["all"] = "1"
+        return {
+            "hidden_abandoned_count": hidden,
+            "hidden_abandoned_url": f"{request.path}?{params.urlencode()}",
+        }
+
     def _queue_tabs(self, request):
-        """One conditional-aggregate query for every tab count."""
-        queryset = self.get_queryset(request)
+        """One conditional-aggregate query for every tab count.
+
+        Counts run over the UNFILTERED queryset on purpose: the default
+        list hides abandoned unpaid orders, but their tab must still show
+        how many there are -- a hidden count is how work gets lost.
+        """
+        queryset = super().get_queryset(request)
         aggregate = {"all": Count("pk")}
         for key, _label, _icon in ORDER_QUEUES:
-            aggregate[key] = Count("pk", filter=QUEUE_FILTERS[key])
+            predicate = QUEUE_FILTERS[key]
+            aggregate[key] = Count(
+                "pk", filter=predicate() if callable(predicate) else predicate
+            )
         counts = queryset.aggregate(**aggregate)
 
         # Tab links keep every other active GET param (search, other
@@ -387,17 +523,39 @@ class OrderAdmin(admin.ModelAdmin):
                 "label": Order.Status(order.status).label,
             }
 
-        # Quick status buttons: ONLY the transitions the workflow DAG
-        # allows from the current status, in DAG order.
+        # Quick status buttons: ONLY the transitions BOTH the DAG and the
+        # payment rule allow, in DAG order. An unpaid order therefore shows
+        # «لغو شده» and nothing else (it cannot be confirmed, processed,
+        # shipped or delivered until the money is in -- see
+        # apps/orders/workflow.py).
         allowed = allowed_next_statuses(order.status)
         quick_allowed = []
+        quick_blocked = []
         for status in FLOW_STATUSES + [Order.Status.RETURNED, Order.Status.CANCELLED]:
-            if status in allowed and status not in [q["value"] for q in quick_allowed]:
-                icon, tone = QUICK_ACTION_META.get(status, ("check", ""))
-                quick_allowed.append({
+            if status not in allowed:
+                continue
+            blocked = payment_block_reason(order, status)
+            if blocked:
+                quick_blocked.append({
                     "value": status, "label": Order.Status(status).label,
-                    "icon": icon, "tone": tone,
+                    "reason": blocked,
                 })
+                continue
+            icon, tone = QUICK_ACTION_META.get(status, ("check", ""))
+            quick_allowed.append({
+                "value": status, "label": Order.Status(status).label,
+                "icon": icon, "tone": tone,
+            })
+        # The single sentence the owner needs on an unpaid order.
+        unpaid_warning = ""
+        if order.payment_status != Order.PaymentStatus.PAID:
+            unpaid_warning = (
+                "پرداخت نشده — این سفارش هنوز پرداخت نشده است و تا زمانی که "
+                "پرداخت آن تأیید نشود، فقط می‌توان آن را لغو کرد "
+                "(تأیید، آماده‌سازی، ارسال و تحویل نیازمند پرداخت است)."
+            )
+        elif order.status == Order.Status.PENDING:
+            unpaid_warning = ""
         method_config = shipping_module.get_shipping_methods().get(order.shipping_method, {})
         quick_needs_tracking = (
             Order.Status.SHIPPED in allowed
@@ -405,13 +563,33 @@ class OrderAdmin(admin.ModelAdmin):
             and not order.tracking_code
         )
 
+        last_attempt = self.last_payment_attempt(order)
         return {
             "cusin_order_summary": True,
             "summary_items": summary_items,
             "summary_payments": order.payments.order_by("-created_at")[:5],
+            "summary_last_attempt": (
+                {
+                    "label": LAST_ATTEMPT_PHRASES.get(
+                        last_attempt.status, last_attempt.get_status_display()
+                    ),
+                    "raw_label": last_attempt.get_status_display(),
+                    "at": last_attempt.created_at,
+                    "status": last_attempt.status,
+                    "reason": last_attempt.failure_reason or "",
+                }
+                if last_attempt is not None
+                else None
+            ),
             "summary_stepper_steps": steps,
             "summary_terminal": terminal,
             "quick_allowed": quick_allowed,
+            "quick_blocked": quick_blocked,
+            "unpaid_warning": unpaid_warning,
+            "awaiting_confirmation": (
+                order.payment_status == Order.PaymentStatus.PAID
+                and order.status == Order.Status.PENDING
+            ),
             "quick_needs_tracking": quick_needs_tracking,
             "quick_can_change": self.has_change_permission(request, order),
             "quick_status_url": reverse("admin:orders_order_quick_status", args=[order.pk]),
@@ -475,6 +653,11 @@ class OrderAdmin(admin.ModelAdmin):
                 request,
                 f"تغییر وضعیت از «{current_label}» به «{target.label}» طبق گردش کار سفارش مجاز نیست.",
             )
+            return HttpResponseRedirect(back_url)
+
+        payment_reason = payment_block_reason(order, target)
+        if payment_reason:
+            messages.error(request, payment_reason)
             return HttpResponseRedirect(back_url)
 
         tracking = (request.POST.get("tracking_code") or "").strip()
@@ -585,7 +768,8 @@ class OrderAdmin(admin.ModelAdmin):
         # field values (e.g. a tracking code typed in this very save).
         try:
             check_transition(
-                db_obj.status, requested_status, obj.tracking_code, obj.shipping_method
+                db_obj.status, requested_status, obj.tracking_code, obj.shipping_method,
+                payment_status=obj.payment_status,
             )
         except OrderWorkflowError as exc:
             raise ValidationError(str(exc))

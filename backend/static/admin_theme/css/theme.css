@@ -2302,6 +2302,47 @@ body.cusin-admin.app-orders.model-order #result_list .cusin-ship {
   color: var(--cg-success-text);
 }
 
+/* Order-page banner: «پرداخت نشده» / «در انتظار تأیید شما».
+   Same shape as the refund note so the page reads as one family. */
+.cusin-quick-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: var(--cusin-radius-sm);
+  font-size: 0.875rem;
+  background: #f9e7e3;
+  border: 1px solid #efc9bf;
+  border-inline-start: 4px solid var(--cg-danger);
+  color: var(--cg-danger-text);
+  line-height: 1.7;
+}
+.cusin-quick-warning.is-info {
+  background: #fdf6e3;
+  border-color: #ecd9a6;
+  border-inline-start-color: var(--cg-warning, #b8860b);
+  color: #6b4e00;
+}
+.cusin-quick-warning .cusin-icon { flex: 0 0 auto; margin-top: 2px; }
+
+/* A status the workflow forbids is shown disabled WITH its reason, never
+   hidden silently -- the owner must see why the button is dead. */
+.cusin-menu-item.is-disabled {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+  opacity: 0.55;
+  cursor: not-allowed;
+  text-align: start;
+}
+.cusin-menu-item.is-disabled small {
+  font-size: 0.75rem;
+  line-height: 1.5;
+  white-space: normal;
+}
+
 /* product form enhancement shell */
 .cusin-product-enh {
   display: grid;
