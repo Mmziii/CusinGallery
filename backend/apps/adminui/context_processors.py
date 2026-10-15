@@ -11,7 +11,7 @@ from django.urls import NoReverseMatch, reverse
 
 from apps.adminui.dashboard import (
     DEFAULT_PERIOD,
-    PERIOD_COOKIE,
+    PERIOD_SESSION_KEY,
     get_dashboard,
     normalize_days,
     period_cookie_name,
@@ -28,14 +28,26 @@ def _safe_reverse(name: str, default: str = "") -> str:
 def _dashboard_days(request, user) -> int:
     """The period the owner is looking at.
 
-    Priority: an explicit ``?days=`` in the URL (a shared link must win),
-    then the cookie the switcher wrote on their last visit, then the
-    default. The cookie is per user id, so a shared shop computer does not
-    make one owner's «۹۰ روز» the other owner's dashboard.
+    Priority: an explicit ``?days=`` in the URL (a shared link must win,
+    and it is remembered), then the period already stored in THEIR
+    session, then the legacy per-user cookie, then the default.
+
+    The session is per user by construction -- a shared shop computer
+    cannot make one owner's «۹۰ روز» the other owner's dashboard -- and
+    it is written here rather than by JavaScript, so the choice survives
+    a browser that blocks cookies, a phone, or a different machine.
     """
     from_query = request.GET.get("days")
     if from_query is not None:
-        return normalize_days(from_query)
+        days = normalize_days(from_query)
+        session = getattr(request, "session", None)
+        if session is not None:
+            session[PERIOD_SESSION_KEY] = days
+        return days
+    session = getattr(request, "session", None)
+    stored = session.get(PERIOD_SESSION_KEY) if session is not None else None
+    if stored is not None:
+        return normalize_days(stored, default=DEFAULT_PERIOD)
     cookie_name = period_cookie_name(user)
     stored = request.COOKIES.get(cookie_name)
     if stored is not None:

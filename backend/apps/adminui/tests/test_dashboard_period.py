@@ -168,13 +168,67 @@ class PeriodPersistenceTests(CacheIsolationMixin, TestCase):
                             period_cookie_name(self.other))
         self.assertTrue(period_cookie_name(self.owner).startswith("cusin_dash_days_"))
 
-    def test_query_param_wins_over_the_cookie(self):
+    def test_query_param_wins_over_the_remembered_period(self):
+        self.client.get(self.url, {"days": "30"})
         response = self.client.get(self.url, {"days": "7"})
         self.assertEqual(response.context["cusin_dashboard_days"], 7)
 
-    def test_cookie_is_honoured_on_a_plain_visit(self):
-        cookie = period_cookie_name(self.owner)
-        self.client.cookies[cookie] = "30"
+    def test_query_param_overrides_a_cookie_too(self):
+        self.client.cookies[period_cookie_name(self.owner)] = "30"
+        response = self.client.get(self.url, {"days": "7"})
+        self.assertEqual(response.context["cusin_dashboard_days"], 7)
+
+    def test_the_period_is_remembered_without_the_query_param(self):
+        """The bug: choosing ۳۰ روز and coming back to /admin/ fell back
+        to the default, because the choice lived in a client-side cookie
+        only."""
+        self.client.get(self.url, {"days": "30"})
+        response = self.client.get(self.url)
+        self.assertEqual(response.context["cusin_dashboard_days"], 30)
+
+    def test_the_period_survives_a_trip_through_another_admin_page(self):
+        self.client.get(self.url, {"days": "30"})
+        # a page that is NOT the dashboard must not reset it
+        self.client.get(reverse("admin:products_product_changelist"))
+        self.client.get(reverse("admin:orders_order_changelist"))
+        response = self.client.get(self.url)
+        self.assertEqual(response.context["cusin_dashboard_days"], 30)
+
+    def test_the_last_choice_replaces_the_previous_one(self):
+        self.client.get(self.url, {"days": "90"})
+        self.client.get(self.url, {"days": "7"})
+        response = self.client.get(self.url)
+        self.assertEqual(response.context["cusin_dashboard_days"], 7)
+
+    def test_each_owner_keeps_their_own_period(self):
+        """A shared shop computer must not mix the two owners up."""
+        self.client.get(self.url, {"days": "30"})
+        other = self.client_class()
+        other.force_login(self.other)
+        other.get(self.url, {"days": "90"})
+
+        self.assertEqual(
+            self.client.get(self.url).context["cusin_dashboard_days"], 30
+        )
+        self.assertEqual(
+            other.get(self.url).context["cusin_dashboard_days"], 90
+        )
+
+    def test_an_owner_who_chose_nothing_gets_the_default(self):
+        response = self.client.get(self.url)
+        self.assertEqual(response.context["cusin_dashboard_days"], 14)
+
+    def test_a_bogus_stored_period_falls_back_to_the_default(self):
+        session = self.client.session
+        session["cusin_dash_days"] = "not-a-number"
+        session.save()
+        self.assertEqual(
+            self.client.get(self.url).context["cusin_dashboard_days"], 14
+        )
+
+    def test_a_legacy_cookie_is_still_honoured(self):
+        """An owner mid-session with the old cookie keeps their range."""
+        self.client.cookies[period_cookie_name(self.owner)] = "30"
         response = self.client.get(self.url)
         self.assertEqual(response.context["cusin_dashboard_days"], 30)
 
@@ -187,6 +241,13 @@ class PeriodPersistenceTests(CacheIsolationMixin, TestCase):
         self.client.cookies[period_cookie_name(self.owner)] = "not-a-number"
         response = self.client.get(self.url)
         self.assertEqual(response.context["cusin_dashboard_days"], 14)
+
+    def test_the_switcher_works_without_javascript(self):
+        """Nothing on the page depends on a script to change the period."""
+        html = self.client.get(self.url).content.decode()
+        for days in (1, 7, 14, 30, 90):
+            with self.subTest(days=days):
+                self.assertIn(f'href="?days={days}"', html)
 
     def test_all_five_chips_are_rendered_with_the_right_one_active(self):
         html = self.client.get(self.url, {"days": "90"}).content.decode()
@@ -269,9 +330,14 @@ class DashboardCssJsContractTests(TestCase):
         block = self.css.split(".cusin-card-note {", 1)[1].split("}", 1)[0]
         self.assertIn("font-size: 0.6875rem", block)
 
-    def test_period_is_persisted_in_a_cookie(self):
-        self.assertIn("cusin_dash_days", self.js)
-        self.assertIn("document.cookie", self.js)
+    def test_the_period_switcher_needs_no_cookie_and_no_script(self):
+        """Server-side memory: no cookie to block, nothing to re-run."""
+        self.assertNotIn("cusin_dash_days", self.js)
+        self.assertNotIn("document.cookie", self.js)
+        template = (
+            Path(settings.BASE_DIR) / "templates" / "admin" / "index.html"
+        ).read_text(encoding="utf-8")
+        self.assertIn('href="?days={{ period.days }}"', template)
 
     def test_tooltip_works_on_touch_not_only_hover(self):
         self.assertIn('addEventListener("touchstart"', self.js)

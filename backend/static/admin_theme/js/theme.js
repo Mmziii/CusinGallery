@@ -599,49 +599,14 @@
   }
 
   /* ------------------------------------------------------------------ *\
-   * 2c. Dashboard: period switcher + chart tooltip
+   * 2c. Dashboard: chart tooltip
+   *
+   * The period switcher needs no JavaScript: the chips are plain
+   * ?days= links and the SERVER remembers the choice in the owner's
+   * session, so the first paint already shows the right range (a
+   * cookie could only be written after a click, and never reached a
+   * browser that blocks cookies or a second device).
    * ------------------------------------------------------------------ */
-  /* The period is written to a cookie when a chip is clicked, so the next
-     visit (or a reload without ?days=) opens on the same range. The
-     cookie is per user id: two people on the same browser must not fight
-     over it, and localStorage would not reach the server that renders the
-     page -- which is what makes the first paint show the right range
-     instead of flashing ۱۴ روز before correcting itself. */
-  var DASH_COOKIE = "cusin_dash_days";
-
-  /* Same per-user suffix the server uses (dashboard.period_cookie_name):
-     the cookie the client writes is the cookie the server reads. */
-  function dashCookieName() {
-    var userId = document.body.getAttribute("data-cusin-user-id") || "guest";
-    return DASH_COOKIE + "_" + userId;
-  }
-
-  function readCookie(name) {
-    var parts = ("; " + document.cookie).split("; " + name + "=");
-    if (parts.length < 2) return "";
-    return decodeURIComponent(parts[1].split(";")[0]);
-  }
-
-  function initDashboardPeriod() {
-    var chips = document.querySelectorAll("[data-cusin-period]");
-    if (!chips.length) return;
-    var cookieName = dashCookieName();
-    var current = readCookie(cookieName);
-    chips.forEach(function (chip) {
-      chip.addEventListener("click", function () {
-        var days = chip.getAttribute("data-cusin-period");
-        if (!days) return;
-        document.cookie =
-          cookieName + "=" + encodeURIComponent(days) +
-          "; path=/; max-age=" + 60 * 60 * 24 * 365 + "; samesite=lax";
-      });
-      // The server already rendered the active chip from the same cookie;
-      // this only keeps a stale client-side view honest.
-      if (current && chip.getAttribute("data-cusin-period") === current) {
-        chip.classList.add("is-active");
-      }
-    });
-  }
 
   /* A bar's numbers on hover AND on tap. <title> alone never fires on
      touch, and the owner checks the shop from a phone more often than
@@ -1405,7 +1370,6 @@
     initDrawer();
     initHeaderHeightVar();
     initSidebarGroups();
-    initDashboardPeriod();
     initChartTooltip();
     initChangelistToolbar();
     initRelatedControls();

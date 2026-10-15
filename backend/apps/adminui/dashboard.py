@@ -76,6 +76,12 @@ MAX_CHART_TICKS = 7
 #: Cookie holding the owner's chosen period (see context_processors).
 PERIOD_COOKIE = "cusin_dash_days"
 
+#: The owner's period is remembered SERVER SIDE, in their session: a
+#: choice made on Monday must still be there on Tuesday, from any browser,
+#: with or without JavaScript. The cookie below is only read, for an owner
+#: who still carries the one the old client-side switcher wrote.
+PERIOD_SESSION_KEY = "cusin_dash_days"
+
 
 def period_cookie_name(user) -> str:
     """Per-user cookie name, so two owners on one browser don't collide."""
