@@ -1,4 +1,4 @@
-{% load i18n adminui_extras %}<!DOCTYPE html>
+{% load i18n adminui_extras site_extras order_extras %}<!DOCTYPE html>
 <html lang="fa" dir="rtl">
 <head>
   <meta charset="utf-8">
@@ -32,8 +32,16 @@
 <body>
 <button class="print-btn" onclick="window.print()">چاپ</button>
 <div class="sheet">
-  <h1>کازین گالری — سفارش {{ order.order_number }}</h1>
-  <div class="muted">تاریخ ثبت: {{ order.created_at|jdatetime }}</div>
+  <h1>{{ site.display_name }} — سفارش <bdi dir="ltr">{{ order.order_number }}</bdi></h1>
+  <div class="muted">
+    تاریخ ثبت: {{ order.created_at|jdatetime }}
+    {% with support_phone=site.phone|no_placeholder shop_address=site.address|no_placeholder %}
+      {% if support_phone or shop_address %} — {% endif %}
+      {% if support_phone %}تلفن: <bdi dir="ltr">{{ support_phone|fa_digits }}</bdi>{% endif %}
+      {% if support_phone and shop_address %} — {% endif %}
+      {% if shop_address %}{{ shop_address }}{% endif %}
+    {% endwith %}
+  </div>
 
   <div class="box">
     {% if order.shipping_method == "pickup" %}
@@ -58,7 +66,7 @@
           (تحویل: {{ order.estimated_delivery_min|jdate_range:order.estimated_delivery_max }})
         {% endif %}
       </div>
-      {% if order.tracking_code %}<div><b>کد رهگیری:</b> {{ order.tracking_code }}</div>{% endif %}
+      {% if order.tracking_code %}<div><b>کد رهگیری:</b> <bdi dir="ltr">{{ order.tracking_code }}</bdi></div>{% endif %}
     </div>
     {% endif %}
   </div>
@@ -70,31 +78,31 @@
       <div><span class="badge">پرداخت: {{ order.get_payment_status_display }}</span></div>
       {% if order.coupon %}<div><b>کوپن:</b> {{ order.coupon.code }}</div>{% endif %}
       {% if order.gift_wrap %}
-      <div><b>بسته‌بندی هدیه:</b> بله ({{ order.gift_wrap_fee }} تومان){% if order.gift_message %} — پیام: {{ order.gift_message }}{% endif %}</div>
+      <div><b>بسته‌بندی هدیه:</b> بله ({{ order.gift_wrap_fee|toman }}){% if order.gift_message %} — پیام: {{ order.gift_message }}{% endif %}</div>
       {% endif %}
     </div>
     <table class="items">
       <thead>
-        <tr><th>ردیف</th><th>کالا</th><th>شناسه</th><th>فی (تومان)</th><th>تعداد</th><th>جمع (تومان)</th></tr>
+        <tr><th>ردیف</th><th>کالا</th><th>شناسه</th><th>فی</th><th>تعداد</th><th>جمع</th></tr>
       </thead>
       <tbody>
         {% for item in order.items.all %}
         <tr>
           <td>{{ forloop.counter }}</td>
           <td>{{ item.product_name }}</td>
-          <td>{{ item.sku }}</td>
-          <td>{{ item.unit_price }}</td>
+          <td><bdi dir="ltr">{{ item.sku }}</bdi></td>
+          <td>{{ item.unit_price|toman }}</td>
           <td>{{ item.quantity }}</td>
-          <td>{{ item.total_price }}</td>
+          <td>{{ item.total_price|toman }}</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
     <div class="totals">
-      <div><span>جمع کالاها</span><span>{{ order.subtotal }} تومان</span></div>
-      {% if order.discount_amount %}<div><span>تخفیف</span><span>-{{ order.discount_amount }} تومان</span></div>{% endif %}
-      <div><span>هزینه ارسال</span><span>{{ order.shipping_cost }} تومان</span></div>
-      <div class="grand"><span>مبلغ قابل پرداخت</span><span>{{ order.total }} تومان</span></div>
+      <div><span>جمع کالاها</span><span>{{ order.subtotal|toman }}</span></div>
+      {% if order.discount_amount %}<div><span>تخفیف</span><span>-{{ order.discount_amount|toman }}</span></div>{% endif %}
+      <div><span>هزینه ارسال</span><span>{{ order.shipping_cost|toman }}</span></div>
+      <div class="grand"><span>مبلغ قابل پرداخت</span><span>{{ order.total|toman }}</span></div>
     </div>
   </div>
 </div>

@@ -58,6 +58,14 @@ class SiteSettings(TimeStampedModel):
     changes from the admin UI, not deployment configuration.
     """
 
+    # «نام فروشگاه» used to be hardcoded in the invoice/print templates.
+    # It lives here so the owner can change what their own documents say
+    # without a deploy; empty falls back to the fixed brand name.
+    shop_name = models.CharField(
+        "نام فروشگاه", max_length=120, blank=True, default="",
+        help_text="بالای فاکتور مشتری و برگهٔ چاپ سفارش می‌آید. "
+                  "اگر خالی بماند، نام ثابت برند استفاده می‌شود.",
+    )
     phone = models.CharField("تلفن پشتیبانی", max_length=40, blank=True, default="")
     whatsapp = models.CharField(
         "واتس‌اپ", max_length=40, blank=True, default="",
@@ -136,6 +144,24 @@ class SiteSettings(TimeStampedModel):
     def load(cls) -> "SiteSettings":
         obj, _created = cls.objects.get_or_create(pk=1)
         return obj
+
+    @property
+    def display_name(self) -> str:
+        """The shop name for printed documents.
+
+        The owner's own value when they set one, otherwise the fixed brand
+        name -- a document must never print an empty letterhead, and a
+        PLACEHOLDER shop name (the seeded bracketed instruction) is worse
+        than no name at all, so it falls back too.
+        """
+        from apps.core.placeholders import is_placeholder
+
+        from .seo import SITE_NAME
+
+        name = (self.shop_name or "").strip()
+        if name and not is_placeholder(name):
+            return name
+        return SITE_NAME
 
     def __str__(self):
         return "تنظیمات فروشگاه"

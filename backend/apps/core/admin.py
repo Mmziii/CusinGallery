@@ -23,8 +23,9 @@ class SiteSettingsAdmin(admin.ModelAdmin):
     settings row; a second row cannot be added."""
 
     fieldsets = (
-        (_("تماس"), {"fields": ("phone", "whatsapp", "telegram", "instagram",
-                                "address", "working_hours")}),
+        (_("نام و تماس"), {"fields": ("shop_name", "phone", "whatsapp",
+                                      "telegram", "instagram",
+                                      "address", "working_hours")}),
         (_("دریافت حضوری"), {"fields": ("pickup_address", "pickup_hours")}),
         (_("نمادها"), {"fields": ("enamad_html",)}),
     )

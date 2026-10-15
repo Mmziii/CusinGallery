@@ -40,9 +40,15 @@
   </div>
 
   <div class="head">
-    <div class="brand">کازین گالری<small>Cusin Gallery — cusin.ir</small></div>
+    <div class="brand">
+      {{ site.display_name }}
+      <small>
+        {% with support_phone=site.phone|no_placeholder %}{% if support_phone %}تلفن: <bdi dir="ltr">{{ support_phone|fa_digits }}</bdi>{% endif %}{% endwith %}
+        {% with shop_address=site.address|no_placeholder %}{% if shop_address %} — {{ shop_address }}{% endif %}{% endwith %}
+      </small>
+    </div>
     <div class="meta">
-      <div>فاکتور سفارش: <b>{{ order.order_number|fa_digits }}</b></div>
+      <div>فاکتور سفارش: <b><bdi dir="ltr">{{ order.order_number }}</bdi></b></div>
       <div>تاریخ ثبت: {{ order.created_at|jdatetime }}</div>
       <div>وضعیت پرداخت: {{ order.get_payment_status_display }}</div>
     </div>
@@ -67,7 +73,7 @@
           {% endwith %}
         </td>
         <td>{{ item.product_name }}</td>
-        <td>{{ item.sku|fa_digits }}</td>
+        <td><bdi dir="ltr">{{ item.sku }}</bdi></td>
         <td>{{ item.unit_price|fa_toman }}</td>
         <td>{{ item.quantity|fa_digits }}</td>
         <td>{{ item.total_price|fa_toman }}</td>
@@ -85,7 +91,7 @@
 
   <div class="totals">
     <div><span>جمع اقلام</span><span>{{ order.subtotal|fa_toman }} تومان</span></div>
-    {% if order.discount_amount %}<div><span>تخفیف{% if order.coupon %} (کوپن {{ order.coupon.code }}){% endif %}</span><span>- {{ order.discount_amount|fa_toman }} تومان</span></div>{% endif %}
+    {% if order.discount_amount %}<div><span>تخفیف{% if order.coupon %} (کوپن <bdi dir="ltr">{{ order.coupon.code }}</bdi>){% endif %}</span><span>- {{ order.discount_amount|fa_toman }} تومان</span></div>{% endif %}
     <div><span>هزینهٔ ارسال ({{ shipping_method_label }})</span><span>{% if order.shipping_cost == 0 %}رایگان{% else %}{{ order.shipping_cost|fa_toman }} تومان{% endif %}</span></div>
     {% if order.gift_wrap %}<div><span>بسته‌بندی هدیه</span><span>{{ order.gift_wrap_fee|fa_toman }} تومان</span></div>{% endif %}
     <div class="grand"><span>مبلغ نهایی</span><span>{{ order.total|fa_toman }} تومان</span></div>
@@ -98,10 +104,10 @@
     {% else %}
       <b>ارسال به:</b>
       {{ order.shipping_province }}، {{ order.shipping_city }}، {{ order.shipping_address }}
-      {% if order.tracking_code %}<br><b>کد رهگیری:</b> {{ order.tracking_code|fa_digits }}{% endif %}
+      {% if order.tracking_code %}<br><b>کد رهگیری:</b> <bdi dir="ltr">{{ order.tracking_code }}</bdi>{% endif %}
     {% endif %}
     <br>
-    {% with support_phone=site.phone|no_placeholder %}{% if support_phone %}تلفن پشتیبانی: {{ support_phone|fa_digits }} — {% endif %}{% endwith %}
+    {% with support_phone=site.phone|no_placeholder %}{% if support_phone %}تلفن پشتیبانی: <bdi dir="ltr">{{ support_phone|fa_digits }}</bdi> — {% endif %}{% endwith %}
     {% with shop_address=site.address|no_placeholder %}{% if shop_address %}{{ shop_address }}{% endif %}{% endwith %}
   </div>
 </body>
