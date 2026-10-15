@@ -1,3 +1,4 @@
+import NotFound from "./NotFound";
 import { normalizePhone, isValidIranianPhone } from "../utils/iranianFields";
 import { usePageMeta } from "../hooks/usePageMeta";
 import PropTypes from "prop-types";
@@ -289,7 +290,7 @@ function ProductDetailPage() {
   const shareSource = product ? product.primary_image || product.images?.[0] || null : null;
   const ogImage = product ? shareImageUrl(shareSource) : undefined;
   usePageMeta({
-    title: product?.name,
+    title: error?.response?.status === 404 ? "صفحه یافت نشد" : product?.name,
     description: product?.short_description || undefined,
     path: `/products/${slug}/`,
     image: ogImage,
@@ -372,6 +373,7 @@ function ProductDetailPage() {
   }, [isAuthenticated, product]);
 
   if (isLoading) return <Spinner label="در حال دریافت محصول…" />;
+  if (error?.response?.status === 404) return <NotFound />;
   if (error) return <ErrorState message={errorMessage(normalizeApiError(error))} onRetry={refetch} />;
   if (!product) return null;
 
