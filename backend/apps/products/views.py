@@ -219,6 +219,6 @@ class BackInStockView(APIView):
             defaults={"notified_at": None},
         )
         return Response(
-            {"detail": "ثبت شد؛ به محض موجودشدن، پیامک اطلاع‌رسانی دریافت می‌کنید."},
+            {"detail": "درخواست اطلاع‌رسانی موجودی ثبت شد."},
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )

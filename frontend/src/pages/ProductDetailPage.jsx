@@ -1,3 +1,4 @@
+import ProductCard from "../components/ProductCard";
 import { faDigits } from "../utils/faDigits";
 import useWishlistStore from "../store/useWishlistStore";
 import { ContentSkeleton } from "../components/Skeletons";
@@ -416,18 +417,7 @@ function ProductDetailPage() {
       </div>
 
       <div className="product-detail__info">
-        <nav className="breadcrumb">
-          <Link to="/">خانه</Link> /{" "}
-          {product.category ? (
-            <>
-              <Link to={`/shop/?category=${encodeURIComponent(product.category.slug)}`}>
-                {product.category.name}
-              </Link>{" "}
-              /{" "}
-            </>
-          ) : null}
-          <span>{faDigits(product.name)}</span>
-        </nav>
+
 
         <h1>{faDigits(product.name)}</h1>
         {product.brand ? <div className="product-detail__brand">برند: {product.brand.name}</div> : null}
@@ -479,7 +469,7 @@ function ProductDetailPage() {
           </button>
         {outOfStock ? (
           <div className="back-in-stock">
-            <p className="muted">کیف را جا نگذارید: شمارهٔ موبایل بگذارید تا به محض موجودشدن پیامک بزنیم.</p>
+            <p className="muted">این کالا فعلاً موجود نیست. شمارهٔ موبایل‌تان را بگذارید تا وقتی موجود شد خبرتان کنیم.</p>
             <div className="back-in-stock__row">
               <input
                 type="text"
@@ -565,11 +555,7 @@ function ProductDetailPage() {
             <h2>محصولات مرتبط</h2>
             <div className="related-grid">
               {product.related_products.map((related) => (
-                <Link key={related.id} to={`/products/${related.slug}/`} className="related-card">
-                  <SmartImage image={related.primary_image || null} alt={faDigits(related.name)} />
-                  <span>{faDigits(related.name)}</span>
-                  <span className="related-card__price">{formatPrice(related.price_info.price)} تومان</span>
-                </Link>
+                <ProductCard key={related.id} product={related} />
               ))}
             </div>
           </section>
@@ -581,7 +567,7 @@ function ProductDetailPage() {
       <ReviewSection product={product} />
 
       {/* Part R5 item 10: browser-local, server knows nothing about it */}
-      <RecentlyViewed />
+      <RecentlyViewed excludeId={product.id} />
 
       <div className="product-detail__stickybar">
         <PriceTag priceInfo={displayPrice} size="md" />
