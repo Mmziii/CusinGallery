@@ -1247,10 +1247,22 @@ body.login #footer { display: none; }
   margin: 6px 0 10px;
 }
 
-/* KPI row */
+/* KPI row. The columns follow the cards, not a fixed number of them: the
+   dashboard shows two («امروز» and the chosen range), and a fixed
+   3-column track left a third of the row empty -- in RTL that read as the
+   KPIs crowding the right half of the page with a hole on the left. */
+.cusin-kpis-block { display: flex; flex-direction: column; gap: 2px; }
+.cusin-kpis-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.cusin-kpis-head .cusin-section-title { margin: 6px 0 10px; }
 .cusin-kpis {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(19rem, 100%), 1fr));
   gap: 14px;
 }
 .cusin-kpi-card { padding: 14px 16px; }

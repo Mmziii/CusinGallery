@@ -314,6 +314,41 @@ class DashboardChromeTests(CacheIsolationMixin, TestCase):
         self.assertIn("پرفروش‌های ۷ روز اخیر", self._page(days="7"))
         self.assertIn("پرفروش‌های امروز اخیر", self._page(days="1"))
 
+    @staticmethod
+    def kpi_header_block(html):
+        return html[
+            html.index("cusin-kpis-head"): html.index(
+                'class="cusin-kpis"', html.index("cusin-kpis-head")
+            )
+        ]
+
+    def test_the_switcher_sits_next_to_the_kpis_not_in_the_page_header(self):
+        """At 1366px the chips were a full row away from the numbers they
+        change, over on the far side of a right-to-left page."""
+        html = self._page()
+        self.assertIn("cusin-kpis-head", html)
+        self.assertIn("cusin-kpis-block", html)
+        header = html[
+            html.index("cusin-dash-head"): html.index("cusin-kpis-block")
+        ]
+        self.assertNotIn("cusin-days-toggle", header)
+        block = self.kpi_header_block(html)
+        self.assertIn("cusin-days-toggle", block)
+        self.assertIn("شاخص‌های کلیدی", block)
+
+    def test_every_period_chip_is_in_the_kpi_header(self):
+        block = self.kpi_header_block(self._page())
+        for days in (1, 7, 14, 30, 90):
+            with self.subTest(days=days):
+                self.assertIn(f'href="?days={days}"', block)
+
+    def test_both_kpi_cards_are_rendered(self):
+        """«امروز» and the chosen range: two cards, one row."""
+        html = self._page(days="30")
+        self.assertEqual(html.count("cusin-kpi-card"), 2)
+        self.assertIn("امروز", html)
+        self.assertIn("۳۰ روز", html)
+
 
 class DashboardCssJsContractTests(TestCase):
     def setUp(self):
@@ -329,6 +364,19 @@ class DashboardCssJsContractTests(TestCase):
     def test_secondary_card_text_is_one_step_smaller(self):
         block = self.css.split(".cusin-card-note {", 1)[1].split("}", 1)[0]
         self.assertIn("font-size: 0.6875rem", block)
+
+    def test_the_kpi_row_uses_the_whole_content_width(self):
+        """A fixed 3-column track left a third of the row empty, which in
+        RTL read as the KPIs crowding the right half."""
+        block = self.css.split(".cusin-kpis {", 1)[1].split("}", 1)[0]
+        self.assertIn("auto-fit", block)
+        self.assertNotIn("repeat(3", block)
+
+    def test_the_kpi_heading_and_the_switcher_share_one_row(self):
+        block = self.css.split(".cusin-kpis-head {", 1)[1].split("}", 1)[0]
+        self.assertIn("display: flex", block)
+        self.assertIn("justify-content: space-between", block)
+        self.assertIn("flex-wrap: wrap", block)
 
     def test_the_period_switcher_needs_no_cookie_and_no_script(self):
         """Server-side memory: no cookie to block, nothing to re-run."""
