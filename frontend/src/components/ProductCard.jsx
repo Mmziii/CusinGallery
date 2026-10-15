@@ -110,7 +110,7 @@ function ProductCard({ product }) {
         <Link to={`/products/${product.slug}/`} className="product-card__name">
           {product.name}
         </Link>
-        {product.brand ? <div className="product-card__brand">{product.brand.name}</div> : null}
+        <div className="product-card__brand">{product.brand?.name || "\u00a0"}</div>
 
         <PriceTag priceInfo={product.price_info} size="sm" />
 
