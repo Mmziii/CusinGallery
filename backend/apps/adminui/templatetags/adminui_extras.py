@@ -144,6 +144,19 @@ def numfa_filter(value) -> str:
 # ---------------------------------------------------------------------------
 
 @register.simple_tag
+def changelist_page_href(cl, page) -> str:
+    """The href for one page of the changelist paginator.
+
+    The overridden admin/pagination.html renders the page links itself so
+    the numbers can be Persian; Django has no template tag for exactly
+    this URL, and rebuilding it by hand is how query parameters get lost.
+    """
+    from django.contrib.admin.templatetags.admin_list import PAGE_VAR
+
+    return cl.get_query_string({PAGE_VAR: page})
+
+
+@register.simple_tag
 def cusin_icon(name: str, css_class: str = "cusin-icon") -> str:
     """Render ``<svg><use href="#cusin-i-NAME"/></svg>`` from the inline sprite."""
     return format_html(

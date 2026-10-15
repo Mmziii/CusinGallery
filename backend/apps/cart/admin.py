@@ -35,7 +35,7 @@ class CartAdmin(admin.ModelAdmin):
         # changelist, not per row -- see item_count() below.
         return super().get_queryset(request).select_related("user").annotate(_item_count=Count("items"))
 
-    @admin.display(description="Items", ordering="_item_count")
+    @admin.display(description="تعداد اقلام", ordering="_item_count")
     def item_count(self, obj):
         # A plain row count, not the storefront's own item_count (sum of
         # quantities) from apps.cart.services.build_cart_view --

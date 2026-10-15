@@ -64,7 +64,7 @@ class EveryChangelistEmptyStateTests(TestCase):
         self.assertNotIn("نتیجه‌ای پیدا نشد", html)
         # the table body is still present in markup but CSS hides it; the
         # paginator count stays truthful
-        self.assertIn("0 سفارش", html)
+        self.assertIn("۰ سفارش", html)
 
     def test_search_with_no_match_shows_no_results_and_clear_link(self):
         make_product(name="کتری")
@@ -88,7 +88,7 @@ class EveryChangelistEmptyStateTests(TestCase):
         self.assertIn("نتیجه‌ای پیدا نشد", html)
         self.assertIn("با فیلترهای فعلی", html)
         # the total count is offered so the owner knows data exists
-        self.assertIn("در مجموع 1 مورد ثبت شده است", html)
+        self.assertIn("در مجموع ۱ مورد ثبت شده است", html)
 
     def test_normal_list_has_no_empty_state(self):
         make_order()
@@ -96,15 +96,20 @@ class EveryChangelistEmptyStateTests(TestCase):
         html = response.content.decode()
         self.assertNotIn(MARKER, html)
         self.assertIn('id="result_list"', html)
-        self.assertIn("1 سفارش", html)
+        # Persian digits, and Persian counts with the singular noun.
+        self.assertIn("۱ سفارش", html)
+        self.assertNotIn("1 سفارش", html)
 
     def test_result_count_message_unchanged_for_filtered_lists(self):
-        """The stock «N products» line still renders on non-empty lists."""
+        """The «N products» line still renders on non-empty lists -- in
+        Persian digits, with the singular noun («۲ محصول»)."""
         make_product(name="A")
         make_product(name="B")
         response = self.client.get(reverse("admin:products_product_changelist"))
         self.assertEqual(response.context["cl"].result_count, 2)
-        self.assertIn("2 محصولات", response.content.decode())
+        html = response.content.decode()
+        self.assertIn("۲ محصول", html)
+        self.assertNotIn("2 محصول", html)
 
     def test_search_term_is_escaped(self):
         response = self.client.get(
@@ -143,11 +148,16 @@ class EmptyStateTemplateTests(TestCase):
             Path(settings.BASE_DIR) / "templates" / "admin" / "pagination.html"
         ).read_text(encoding="utf-8")
         for stock_fragment in (
-            "{% paginator_number cl i %}",
             '<input type="submit" name="_save" class="default"',
             "{% if show_all_url %}",
+            "{% if pagination_required %}",
+            'class="this-page"',
         ):
             self.assertIn(stock_fragment, template)
+        # The page LINKS are rendered here (not by Django's
+        # paginator_number tag) so the numbers can be Persian.
+        self.assertIn("changelist_page_href cl i", template)
+        self.assertIn("numfa", template)
 
     def test_theme_disabled_falls_back_to_stock_without_empty_state(self):
         from copy import deepcopy

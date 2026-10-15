@@ -81,7 +81,8 @@ class Order(models.Model):
     gift_wrap = models.BooleanField("بسته‌بندی هدیه", default=False)
     gift_message = models.TextField(
         "پیام هدیه", blank=True, default="",
-        help_text="حداکثر ۲۰۰ کاراکتر؛ متن ساده -- در همهٔ نمایش‌ها escape می‌شود.",
+        help_text="حداکثر ۲۰۰ کاراکتر. متن ساده بنویسید (بدون لینک و ایموجی)؛ "
+        "همراه بسته برای گیرنده چاپ می‌شود.",
     )
     gift_wrap_fee = models.PositiveBigIntegerField("هزینهٔ بسته‌بندی هدیه (تومان)", default=0)
 

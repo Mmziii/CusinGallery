@@ -9,13 +9,15 @@ from django.contrib import admin, messages
 from django.utils import timezone
 from django.utils.html import format_html
 
-from apps.adminui.admin_forms import NumericChangelistAdminMixin
+from apps.adminui.admin_forms import AutoWebpVariantsMixin, NumericChangelistAdminMixin
 
 from .models import Banner, DailyDeal
 
 
 @admin.register(Banner)
-class BannerAdmin(NumericChangelistAdminMixin, admin.ModelAdmin):
+class BannerAdmin(
+    AutoWebpVariantsMixin, NumericChangelistAdminMixin, admin.ModelAdmin
+):
     list_display = (
         "preview", "title", "status_badge", "is_active", "ordering",
         "start_date", "end_date",
@@ -48,6 +50,26 @@ class BannerAdmin(NumericChangelistAdminMixin, admin.ModelAdmin):
         return format_html('<span style="color:#888">غیرفعال</span>')
 
     status_badge.short_description = "وضعیت نمایش"
+
+    image_field = "image"
+    image_help = (
+        "اندازهٔ پیشنهادی ۱۲۰۰×۵۰۰ پیکسل (نسبت تقریبی ۱۲ به ۵) و حداکثر ۲ "
+        "مگابایت؛ JPG یا PNG یا WebP. برای بنر مربعِ اسلایدر موبایل، "
+        "۸۰۰×۸۰۰ مناسب است."
+    )
+    fieldsets = (
+        (None, {"fields": ("title", "subtitle", "image", "cta_text", "cta_url")}),
+        ("نمایش", {"fields": ("is_active", "ordering", "start_date", "end_date")}),
+        ("نسخه‌های خودکار تصویر", {
+            "fields": ("webp_400_readonly", "webp_800_readonly", "webp_1200_readonly"),
+            "classes": ("collapse",),
+            "description": (
+                "این سه نسخه هنگام ذخیرهٔ تصویر به‌طور خودکار ساخته می‌شوند تا "
+                "در موبایل و دسکتاپ سریع‌تر بارگذاری شود. قابل ویرایش نیستند."
+            ),
+        }),
+    )
+    readonly_fields = ("webp_400_readonly", "webp_800_readonly", "webp_1200_readonly")
 
     @admin.action(description="فعال‌سازی بنرهای انتخاب‌شده")
     def activate_banners(self, request, queryset):

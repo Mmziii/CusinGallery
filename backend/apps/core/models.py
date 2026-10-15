@@ -83,7 +83,8 @@ class SiteSettings(TimeStampedModel):
     working_hours = models.CharField("ساعات پاسخگویی", max_length=120, blank=True, default="")
     pickup_address = models.TextField(
         "نشانی دریافت حضوری", blank=True, default="",
-        help_text="برای روش ارسال «حضوری» در checkout و فاکتور نمایش داده می‌شود.",
+        help_text="اگر مشتری «دریافت حضوری» را انتخاب کند، این نشانی در مرحلهٔ "
+        "تکمیل خرید و در فاکتور به او نشان داده می‌شود.",
     )
     pickup_hours = models.CharField("ساعات دریافت حضوری", max_length=120, blank=True, default="")
     enamad_html = models.TextField(

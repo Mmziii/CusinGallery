@@ -89,16 +89,17 @@ class User(AbstractUser):
     """
 
     phone = models.CharField(
+        "تلفن",
         max_length=20,
         blank=True,
         null=True,
         unique=True,
         validators=[phone_validator],
-        help_text="Required for customer self-registration (enforced in RegisterSerializer); "
-        "nullable here because staff/superuser accounts aren't required to have one.",
+        help_text="برای ثبت‌نام مشتری الزامی است؛ کارکنان و مدیران "
+        "می‌توانند بدون شماره باشند، برای همین این فیلد می‌تواند خالی بماند.",
     )
     email = models.EmailField(
-        "email address",
+        "ایمیل",
         blank=True,
         null=True,
         help_text="Optional for customers. See the class docstring for why this is nullable "
@@ -154,8 +155,8 @@ class Address(TimeStampedModel):
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="addresses"
     )
     recipient_name = models.CharField(max_length=150)
-    phone = models.CharField(max_length=20, validators=[phone_validator])
-    province = models.CharField(max_length=100)
+    phone = models.CharField("تلفن", max_length=20, validators=[phone_validator])
+    province = models.CharField("استان", max_length=100)
     city = models.CharField(max_length=100)
     address = models.TextField()
     postal_code = models.CharField(max_length=20)
@@ -175,7 +176,7 @@ class Address(TimeStampedModel):
         max_length=20,
         validators=[validators.validate_building_number],
     )
-    is_default = models.BooleanField(default=False)
+    is_default = models.BooleanField("پیش‌فرض", default=False)
 
     class Meta:
         verbose_name = "آدرس"

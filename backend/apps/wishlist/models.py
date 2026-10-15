@@ -17,8 +17,11 @@ class WishlistItem(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="wishlist_items"
     )
-    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="wishlisted_by")
-    created_at = models.DateTimeField(auto_now_add=True)
+    product = models.ForeignKey(
+        Product, on_delete=models.CASCADE, related_name="wishlisted_by",
+        verbose_name="محصول",
+    )
+    created_at = models.DateTimeField("تاریخ افزودن", auto_now_add=True)
 
     class Meta:
         verbose_name = "علاقه‌مندی"

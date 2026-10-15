@@ -21,7 +21,7 @@ from django.utils.text import slugify
 from decimal import ROUND_HALF_UP, Decimal
 
 from apps.adminui.admin_dates import jalali_column
-from apps.adminui.admin_forms import NumericChangelistAdminMixin
+from apps.adminui.admin_forms import AutoWebpVariantsMixin, NumericChangelistAdminMixin
 from apps.adminui.search import NormalizedSearchMixin
 
 import csv
@@ -275,7 +275,7 @@ class ProductVariantInline(AdminSkuDirectionMixin, admin.TabularInline):
 
 
 @admin.register(Brand)
-class BrandAdmin(NumericChangelistAdminMixin, admin.ModelAdmin):
+class BrandAdmin(AutoWebpVariantsMixin, NumericChangelistAdminMixin, admin.ModelAdmin):
     # Part R2: featured tiles are managed right from the changelist --
     # tick is_featured and set display_order inline, or use bulk actions.
     list_display = ("name", "slug", "is_featured", "display_order", "is_active")
@@ -284,6 +284,27 @@ class BrandAdmin(NumericChangelistAdminMixin, admin.ModelAdmin):
     search_fields = ("name", "slug")
     prepopulated_fields = {"slug": ("name",)}
     actions = ("make_featured", "make_not_featured")
+
+    image_field = "tile_image"
+    image_help = (
+        "اندازهٔ پیشنهادی کاشی ۸۰۰×۸۰۰ پیکسل (مربع) و حداکثر ۲ مگابایت؛ "
+        "JPG یا PNG یا WebP."
+    )
+    fieldsets = (
+        (None, {"fields": ("name", "slug", "logo")}),
+        ("کاشی صفحهٔ اصلی", {
+            "fields": (
+                "is_featured", "display_order", "tile_image",
+                "webp_400_readonly", "webp_800_readonly", "webp_1200_readonly",
+            ),
+            "description": (
+                "سه نسخهٔ WebP هنگام ذخیرهٔ تصویر کاشی به‌طور خودکار ساخته "
+                "می‌شوند و قابل ویرایش نیستند."
+            ),
+        }),
+        (None, {"fields": ("is_active",)}),
+    )
+    readonly_fields = ("webp_400_readonly", "webp_800_readonly", "webp_1200_readonly")
 
     @admin.action(description="برند ویژه: بله")
     def make_featured(self, request, queryset):
@@ -328,6 +349,22 @@ class ProductStockChangelistWidget(forms.NumberInput):
             badge_class,
             label,
         )
+
+
+class BrandFilter(admin.RelatedFieldListFilter):
+    """Django's related filter labels its «no value» option with the admin's
+    empty-value marker, i.e. a bare «-». On the product list that reads as
+    a broken row; it means «بدون برند»."""
+
+    empty_choice_title = "بدون برند"
+
+    def choices(self, changelist):
+        original = self.empty_value_display
+        self.empty_value_display = self.empty_choice_title
+        try:
+            yield from super().choices(changelist)
+        finally:
+            self.empty_value_display = original
 
 
 class LowStockFilter(admin.SimpleListFilter):
@@ -413,9 +450,18 @@ class ProductAdmin(
     list_editable = ("price", "compare_at_price", "stock_quantity", "is_active", "is_featured")
     list_filter = (
         "is_active", "is_featured", "is_new", "is_best_seller", "category",
-        "brand", LowStockFilter, HasImageFilter,
+        ("brand", BrandFilter), LowStockFilter, HasImageFilter,
     )
     search_fields = ("name", "sku", "slug")
+
+    # The changelist column must stay SHORT («SKU» is a narrow column and
+    # the table has to fit a 125%-scaled Windows screen), but the FORM
+    # should say what the code means -- «SKU:» alone is English jargon.
+    def get_form(self, request, obj=None, change=False, **kwargs):
+        form = super().get_form(request, obj, change=change, **kwargs)
+        if "sku" in form.base_fields:
+            form.base_fields["sku"].label = "کد کالا (SKU)"
+        return form
     prepopulated_fields = {"slug": ("name",)}
     # Part R5 item 9: complements is an M2M to Product itself -- the
     # autocomplete widget searches by ProductAdmin.search_fields above.

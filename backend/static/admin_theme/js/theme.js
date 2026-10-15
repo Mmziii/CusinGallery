@@ -946,7 +946,11 @@
       var current = paginator.querySelector(".this-page");
       if (!pageLinks.length) return;
       paginator.dataset.cusinPaginationReady = "true";
-      var currentLabel = current ? current.textContent.trim() : "۱";
+      // The page numbers arrive from the server already Persian-ised; be
+      // defensive for a template rendered without the filter.
+      var currentLabel = current
+        ? persianDigits(current.textContent.trim())
+        : "۱";
       var menu = makeMenu("صفحهٔ " + currentLabel, "pagination-" + index, "chevron-down", "cusin-pagination-menu");
       pageLinks.forEach(function (link) {
         var item = addMenuItem(menu.panel, link.textContent.trim(), link.href, null);
@@ -1302,6 +1306,53 @@
   }
 
   /* ------------------------------------------------------------------ *
+   * 6b. Persian digits in Django's own chrome
+   *
+   * Django counts in ASCII: «0 از 1 انتخاب شده‌اند»، «صفحهٔ 1»، «165
+   * محصولات». The server-rendered ones are fixed in the overridden
+   * admin/actions.html, admin/pagination.html and admin/search_form.html;
+   * this handles the two that Django's own JavaScript rewrites AFTER the
+   * page has loaded (the action counter and the pagination menu label),
+   * because there is no hook to intercept them.
+   * ------------------------------------------------------------------ */
+  var PERSIAN_DIGITS = ["\u06f0", "\u06f1", "\u06f2", "\u06f3", "\u06f4",
+    "\u06f5", "\u06f6", "\u06f7", "\u06f8", "\u06f9"];
+
+  function persianDigits(text) {
+    if (!text) return text;
+    return String(text).replace(/[0-9]/g, function (digit) {
+      return PERSIAN_DIGITS[Number(digit)];
+    });
+  }
+
+  function persianDigitsIn(node) {
+    if (!node || node.dataset.cusinDigitsDone === "true") return;
+    var next = persianDigits(node.textContent);
+    if (next !== node.textContent) {
+      // Only ever touch the text: the counter also carries
+      // data-attributes that Django's actions.js reads back.
+      node.textContent = next;
+    }
+    node.dataset.cusinDigitsDone = "true";
+  }
+
+  function initPersianDigits() {
+    var nodes = document.querySelectorAll(".action-counter, .all, .question");
+    if (!nodes.length) return;
+    nodes.forEach(persianDigitsIn);
+    // Django's actions.js replaces the counter's text on every checkbox
+    // change, so re-run whenever it does.
+    if (typeof MutationObserver !== "function") return;
+    nodes.forEach(function (node) {
+      var observer = new MutationObserver(function () {
+        node.dataset.cusinDigitsDone = "false";
+        persianDigitsIn(node);
+      });
+      observer.observe(node, { childList: true, characterData: true, subtree: true });
+    });
+  }
+
+  /* ------------------------------------------------------------------ *
    * 7. Misc polish
    * ------------------------------------------------------------------ */
   function initMisc() {
@@ -1326,6 +1377,7 @@
     initPalette();
     initCopyButtons();
     initQuickStatusGuard();
+    initPersianDigits();
     initMisc();
   });
 })();

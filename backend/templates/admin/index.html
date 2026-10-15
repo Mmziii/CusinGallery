@@ -31,7 +31,7 @@ context processor was removed) this page degrades to the stock app list.
         امروز: {{ cusin_dashboard.today|jweekday }} {{ cusin_dashboard.today|jdate }}
       </p>
       <p class="cusin-dash-meta">
-        آخرین به‌روزرسانی اعداد: {{ cusin_dashboard.generated_at|time:"H:i" }}
+        آخرین به‌روزرسانی اعداد: {{ cusin_dashboard.generated_at|time:"H:i"|fanum }}
         <span class="cusin-muted">(هر ۶۰ ثانیه تازه می‌شود)</span>
       </p>
     </div>

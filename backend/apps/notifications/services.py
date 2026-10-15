@@ -58,6 +58,20 @@ class Events:
     OWNER_LOW_STOCK = "owner_low_stock"
 
 
+#: Persian display names for the machine codes above. The admin's
+#: notification log used to print the raw code («order_confirmed»), which
+#: is the one place in the panel a non-technical owner meets English.
+#: Anything not listed here falls back to its stored value.
+EVENT_LABELS = {
+    Events.PASSWORD_RESET: "بازنشانی رمز عبور",
+    Events.ORDER_PAID: "پرداخت سفارش",
+    Events.ORDER_CONFIRMED: "تأیید سفارش",
+    Events.ORDER_SHIPPED: "ارسال سفارش",
+    Events.OWNER_PAID_ORDER: "آگاه‌سازی مدیر: سفارش پرداخت‌شده",
+    Events.OWNER_LOW_STOCK: "آگاه‌سازی مدیر: موجودی کم",
+}
+
+
 # ---------------------------------------------------------------------------
 # Recipient masking (audit log never stores raw contact data)
 # ---------------------------------------------------------------------------

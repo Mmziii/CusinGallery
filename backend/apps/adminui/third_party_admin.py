@@ -43,6 +43,38 @@ class PersianTOTPDeviceAdmin(PersianFieldsetTitlesMixin, TOTPDeviceAdmin):
     pass
 
 
+MODEL_NAMES = {
+    StaticDevice: ("کد پشتیبان", "کدهای پشتیبان"),
+    TOTPDevice: ("دستگاه کد یک‌بارمصرف", "دستگاه‌های کد یک‌بارمصرف"),
+}
+
+#: Field labels the plugin ships in English («Created at»، «Last used at»).
+FIELD_LABELS = {
+    "created_at": "تاریخ ایجاد",
+    "last_used_at": "آخرین استفاده",
+    "throttling_failure_timestamp": "زمان آخرین تلاش ناموفق",
+    "throttling_failure_count": "شمار تلاش‌های ناموفق",
+}
+
+
+def relabel_otp_models() -> None:
+    """Rename the models themselves («TOTP devices» -> Persian).
+
+    The plugin's models declare no verbose_name, so Django falls back to
+    the class names. Patching ``_meta`` is deliberate: it changes what the
+    admin PRINTS only -- there is no migration, no field and no query
+    involved, and a third-party model cannot be given a Persian
+    ``verbose_name`` any other way without forking the package.
+    """
+    for model, (singular, plural) in MODEL_NAMES.items():
+        model._meta.verbose_name = singular
+        model._meta.verbose_name_plural = plural
+        for field in model._meta.fields:
+            label = FIELD_LABELS.get(field.name)
+            if label:
+                field.verbose_name = label
+
+
 def register_persian_otp_admins():
     for model, admin_class in (
         (StaticDevice, PersianStaticDeviceAdmin),
@@ -51,3 +83,4 @@ def register_persian_otp_admins():
         if model in admin.site._registry:
             admin.site.unregister(model)
         admin.site.register(model, admin_class)
+    relabel_otp_models()
