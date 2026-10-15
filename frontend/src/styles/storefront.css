@@ -1728,3 +1728,9 @@ input, select, textarea { min-width: 0; max-width: 100%; }
  .combobox-panel { top: auto !important; left: 0 !important; right: 0; bottom: 0; width: auto !important; padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px)); border-radius: 18px 18px 0 0; max-height: 65dvh; }
 }
 @media (prefers-reduced-motion: reduce) { .combobox-panel { animation: none; } }
+/* Audit 15: image/placeholder must match the narrow cart grid track. */
+@media (max-width: 640px) {
+  .cart-item { grid-template-columns: 70px minmax(0, 1fr); }
+  .cart-item > picture, .cart-item img, .cart-item .img-placeholder, .cart-item__noimage,
+  .cart-item__skeleton-img { width: 70px; height: 70px; max-width: 100%; }
+}
