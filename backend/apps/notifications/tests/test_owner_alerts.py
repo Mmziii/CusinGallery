@@ -154,12 +154,17 @@ class OwnerLowStockAlertTests(OrderNotificationTestBase):
         user = make_user(phone=CUSTOMER_PHONE)
         product = make_product(name="کتری استیل", stock_quantity=5)
 
-        # 5 -> 2 crosses threshold 3: exactly ONE alert.
-        self._pay(user, product, quantity=3)
+        # The alert fires on the product's OWN threshold (5 by default), so
+        # 6 -> 2 crosses it: exactly ONE alert.
+        product.stock_quantity = 6
+        product.save(update_fields=["stock_quantity"])
+        self._pay(user, product, quantity=4)
         owner_sends = self.low_stock_sends(fake)
         self.assertEqual(len(owner_sends), 1)
         self.assertIn("کتری استیل", owner_sends[0]["message"])
         self.assertIn("موجودی 2", owner_sends[0]["message"])
+        # ...and it names the threshold that actually fired.
+        self.assertIn("آستانهٔ هشدار این کالا: 5", owner_sends[0]["message"])
 
         # 2 -> 1 stays below: NO new alert.
         self._pay(user, product, quantity=1)
@@ -167,9 +172,9 @@ class OwnerLowStockAlertTests(OrderNotificationTestBase):
         self.assertEqual(len(owner_sends), 1)
 
         # Restock above the threshold, then cross again: re-armed alert.
-        product.stock_quantity = 6
+        product.stock_quantity = 8
         product.save()
-        self._pay(user, product, quantity=4)  # 6 -> 2 crosses again
+        self._pay(user, product, quantity=4)  # 8 -> 4 crosses again
         owner_sends = self.low_stock_sends(fake)
         self.assertEqual(len(owner_sends), 2)
         # One SMS log row per crossing (email adds its own channel row).

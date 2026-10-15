@@ -30,7 +30,7 @@ from zoneinfo import ZoneInfo
 from django.conf import settings
 from django.contrib.admin.models import DELETION, LogEntry
 from django.core.cache import cache
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, F, Q, Sum
 from django.db.models.functions import TruncDate, TruncHour
 from django.urls import NoReverseMatch, reverse
 from django.utils import timezone
@@ -202,7 +202,11 @@ def _action_cards(today: dt.date) -> list[dict]:
     permission-protected). Counts come from 6 conditional-aggregate
     queries total -- one per model family.
     """
-    threshold = settings.LOW_STOCK_THRESHOLD
+    # «موجودی کم» is a per-product judgement: each Product carries its own
+    # آستانهٔ هشدار موجودی کم (default 5). Counting against the global
+    # LOW_STOCK_THRESHOLD showed the owner a number that matched neither
+    # the badge on the row nor the list the card links to.
+    own_threshold = F("low_stock_threshold")
 
     o = Order.objects.aggregate(
         # Paid orders sit in PENDING until the OWNER confirms them; that is
@@ -237,7 +241,7 @@ def _action_cards(today: dt.date) -> list[dict]:
     )
     p = Product.objects.aggregate(
         low_stock=Count(
-            "pk", filter=Q(stock_quantity__lte=threshold, stock_quantity__gt=0),
+            "pk", filter=Q(stock_quantity__lte=own_threshold, stock_quantity__gt=0),
         ),
         out_of_stock=Count("pk", filter=Q(stock_quantity=0)),
         no_image=Count("pk", filter=Q(images__isnull=True), distinct=True),
@@ -298,7 +302,7 @@ def _action_cards(today: dt.date) -> list[dict]:
         {
             "id": "low_stock", "count": p["low_stock"],
             "label": "موجودی کم",
-            "hint": f"کالاهای دارای موجودی ≤ {threshold} (و بیشتر از صفر).",
+            "hint": "کالاهایی که موجودی‌شان به آستانهٔ هشدار خودشان رسیده (و بیشتر از صفر).",
             "icon": "alert-triangle", "perm": "products.view_product",
             # value "3" = at/below threshold but NOT zero, so the list the
             # owner opens shows exactly the rows the card counted.

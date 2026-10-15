@@ -562,8 +562,13 @@ def _deliver_owner_paid_order(notice: _OwnerOrderNotice) -> None:
 
 def notify_owner_low_stock(order, crossings) -> None:
     """Queue ONE owner alert for every stock crossing detected by this
-    order's decrement. `crossings` is a list of (label, remaining) tuples
-    captured while the row locks are held; delivery is on_commit."""
+    order's decrement.
+
+    `crossings` is a list of (label, remaining, threshold) tuples captured
+    while the row locks are held; delivery is on_commit. The threshold is
+    per product -- the alert names the number that actually fired, instead
+    of the global default.
+    """
     if not crossings:
         return
     snapshot = (order.pk, order.order_number, tuple(crossings))
@@ -571,11 +576,24 @@ def notify_owner_low_stock(order, crossings) -> None:
 
 
 def _owner_low_stock_text(order_number, crossings) -> str:
+    """Persian low-stock alert.
+
+    Each crossing carries its OWN threshold, because «موجودی کم» is a
+    per-product setting. An alert that quotes the global default quietly
+    lies about why it fired.
+    """
     lines = ["هشدار موجودی کم - کازین گالری"]
-    for label, remaining in crossings:
-        lines.append(f"- {label}: موجودی {remaining}")
+    for crossing in crossings:
+        label, remaining = crossing[0], crossing[1]
+        threshold = crossing[2] if len(crossing) > 2 else None
+        if threshold is None:
+            lines.append(f"- {label}: موجودی {remaining}")
+        else:
+            lines.append(
+                f"- {label}: موجودی {remaining} "
+                f"(آستانهٔ هشدار این کالا: {threshold})"
+            )
     lines.append(f"سفارش مربوط: {order_number}")
-    lines.append(f"آستانه هشدار: {settings.LOW_STOCK_THRESHOLD}")
     return "\n".join(lines)
 
 

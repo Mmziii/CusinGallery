@@ -11,7 +11,7 @@ from django.conf import settings
 from django.contrib import admin, messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.db.models import Count, Prefetch, Q
+from django.db.models import Count, F, Prefetch, Q
 from django.http import FileResponse, HttpResponse, HttpResponseRedirect
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
@@ -309,7 +309,11 @@ class ProductStockChangelistWidget(forms.NumberInput):
 
         if quantity <= 0:
             badge_class, label = "stock-out", "ناموجود"
-        elif quantity <= getattr(self, "low_stock_threshold", settings.LOW_STOCK_THRESHOLD):
+        elif quantity <= getattr(
+            self,
+            "low_stock_threshold",
+            getattr(self, "_settings_threshold", settings.LOW_STOCK_THRESHOLD),
+        ):
             badge_class = "stock-low"
             label = f"{fa_digits(quantity)} موجودی کم"
         else:
@@ -329,8 +333,11 @@ class LowStockFilter(admin.SimpleListFilter):
     low-stock threshold (env LOW_STOCK_THRESHOLD, default 3).
 
     Admin-panel work adds the «ناموجود» (exactly zero) lookup -- purely
-    additive: the existing "1"/"0" values and their querysets are
-    untouched (covered by apps/products/tests/test_admin_products.py).
+    additive: the existing "1"/"0" values are untouched (covered by
+    apps/products/tests/test_admin_products.py).
+
+    Every comparison is against each product's OWN low_stock_threshold,
+    never the global LOW_STOCK_THRESHOLD -- see the note in queryset().
     """
 
     title = "وضعیت موجودی"
@@ -345,12 +352,17 @@ class LowStockFilter(admin.SimpleListFilter):
         )
 
     def queryset(self, request, queryset):
-        from django.conf import settings
-
+        # ONE rule: a product's own «آستانهٔ هشدار موجودی کم». The env
+        # LOW_STOCK_THRESHOLD is only the default for a NEW product -- it
+        # is not a second, competing rule, and comparing against it made
+        # the filter disagree with the badge on the very same row (a
+        # product with stock 4 and threshold 5 was "موجودی کافی" here and
+        # "موجودی کم" there).
+        own_threshold = F("low_stock_threshold")
         if self.value() == "1":
-            return queryset.filter(stock_quantity__lte=settings.LOW_STOCK_THRESHOLD)
+            return queryset.filter(stock_quantity__lte=own_threshold)
         if self.value() == "0":
-            return queryset.filter(stock_quantity__gt=settings.LOW_STOCK_THRESHOLD)
+            return queryset.filter(stock_quantity__gt=own_threshold)
         if self.value() == "2":
             return queryset.filter(stock_quantity=0)
         if self.value() == "3":
@@ -358,7 +370,7 @@ class LowStockFilter(admin.SimpleListFilter):
             # (zero-stock rows live on their own «ناموجود» card), so its
             # link must land on exactly that set.
             return queryset.filter(
-                stock_quantity__lte=settings.LOW_STOCK_THRESHOLD,
+                stock_quantity__lte=own_threshold,
                 stock_quantity__gt=0,
             )
         return queryset
