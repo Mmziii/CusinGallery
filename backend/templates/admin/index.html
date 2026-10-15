@@ -248,17 +248,22 @@ context processor was removed) this page degrades to the stock app list.
     </header>
     <ul class="cusin-readiness-list">
       {% for item in cusin_readiness %}
-      <li class="{% if item.ok %}is-ok{% else %}is-bad{% endif %}">
+      <li class="{% if item.ok %}is-ok{% else %}is-bad{% endif %}" data-check="{{ item.id }}">
         {% if item.ok %}{% cusin_icon "check" %}{% else %}{% cusin_icon "x" %}{% endif %}
-        <strong>{{ item.label }}</strong>
-        <span>{{ item.detail }}</span>
-        {% if item.missing %}
-        <ul class="cusin-readiness-missing">
-          {% for miss in item.missing %}
-          <li><b>{{ miss.label }}</b> — {{ miss.reason }}</li>
-          {% endfor %}
-        </ul>
-        {% endif %}
+        {# Title, sentence, then the missing items -- each shown ONCE. The
+           text is one flex column of its own so the sub-list spans the
+           full row instead of becoming a narrow column beside the icon. #}
+        <div class="cusin-readiness-body">
+          <strong>{{ item.label }}</strong>
+          <span>{{ item.detail }}</span>
+          {% if item.missing %}
+          <ul class="cusin-readiness-missing">
+            {% for miss in item.missing %}
+            <li><b>{{ miss.label }}</b> — {{ miss.reason }}</li>
+            {% endfor %}
+          </ul>
+          {% endif %}
+        </div>
       </li>
       {% endfor %}
     </ul>

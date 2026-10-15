@@ -590,23 +590,19 @@ def readiness_checks() -> list[dict]:
     missing_profile = site.missing_items()
     required_missing = [item for item in missing_profile if item["required"]]
     optional_missing = [item for item in missing_profile if not item["required"]]
+    # ONE sentence, and then the items themselves, once, in the card's
+    # sub-list. Spelling them out here as well made the row read the same
+    # list twice -- once as a run-on sentence, once as a nested column.
     site_ok = not required_missing
     if site_ok and optional_missing:
         site_detail = (
-            "تلفن و نشانی واقعی ثبت شده است. هنوز پر نشده: "
-            + "، ".join(item["label"] for item in optional_missing)
-            + "."
+            "تلفن و نشانی واقعی ثبت شده است؛ "
+            "این موارد اختیاری هنوز خالی‌اند."
         )
     elif site_ok:
         site_detail = "تلفن و نشانی در «تنظیمات فروشگاه» تکمیل شده."
     else:
-        site_detail = (
-            "در «تنظیمات فروشگاه» پر نشده: "
-            + "؛ ".join(
-                f"{item['label']} ({item['reason']})" for item in missing_profile
-            )
-            + "."
-        )
+        site_detail = "این موارد در «تنظیمات فروشگاه» هنوز پر نشده است."
 
     placeholder_pages = placeholder_legal_pages()
     pages_ok = not placeholder_pages
@@ -634,9 +630,7 @@ def readiness_checks() -> list[dict]:
             "detail": (
                 "همهٔ صفحه‌ها متن واقعی دارند."
                 if pages_ok
-                else "متن این صفحه‌ها هنوز نمونه (placeholder) است: "
-                + "، ".join(page["label"] for page in placeholder_pages)
-                + "."
+                else "متن این صفحه‌ها هنوز نمونه (placeholder) است."
             ),
             "missing": placeholder_pages,
         },
