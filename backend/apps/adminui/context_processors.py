@@ -9,7 +9,13 @@ from __future__ import annotations
 from django.conf import settings
 from django.urls import NoReverseMatch, reverse
 
-from apps.adminui.dashboard import get_dashboard
+from apps.adminui.dashboard import (
+    DEFAULT_PERIOD,
+    PERIOD_COOKIE,
+    get_dashboard,
+    normalize_days,
+    period_cookie_name,
+)
 
 
 def _safe_reverse(name: str, default: str = "") -> str:
@@ -17,6 +23,24 @@ def _safe_reverse(name: str, default: str = "") -> str:
         return reverse(name)
     except NoReverseMatch:  # pragma: no cover - defensive during early boot
         return default
+
+
+def _dashboard_days(request, user) -> int:
+    """The period the owner is looking at.
+
+    Priority: an explicit ``?days=`` in the URL (a shared link must win),
+    then the cookie the switcher wrote on their last visit, then the
+    default. The cookie is per user id, so a shared shop computer does not
+    make one owner's «۹۰ روز» the other owner's dashboard.
+    """
+    from_query = request.GET.get("days")
+    if from_query is not None:
+        return normalize_days(from_query)
+    cookie_name = period_cookie_name(user)
+    stored = request.COOKIES.get(cookie_name)
+    if stored is not None:
+        return normalize_days(stored, default=DEFAULT_PERIOD)
+    return DEFAULT_PERIOD
 
 
 def admin_panel(request):
@@ -33,8 +57,8 @@ def admin_panel(request):
         and resolver.app_name == "admin"
         and resolver.url_name == "index"
     ):
-        days = 30 if request.GET.get("days") == "30" else 14
         user = request.user
+        days = _dashboard_days(request, user)
         payload = get_dashboard(days)
         ctx["cusin_dashboard"] = payload
         ctx["cusin_dashboard_days"] = days

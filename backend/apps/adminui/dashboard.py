@@ -31,7 +31,7 @@ from django.conf import settings
 from django.contrib.admin.models import DELETION, LogEntry
 from django.core.cache import cache
 from django.db.models import Count, Q, Sum
-from django.db.models.functions import TruncDate
+from django.db.models.functions import TruncDate, TruncHour
 from django.urls import NoReverseMatch, reverse
 from django.utils import timezone
 
@@ -44,8 +44,52 @@ from apps.reviews.models import Review
 
 TEHRAN = ZoneInfo("Asia/Tehran")
 
+#: Persian Jalali month names, for compact axis labels («۲۳ مهر»).
+JALALI_MONTHS = (
+    "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور",
+    "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند",
+)
+
 CACHE_SECONDS = 60
-CACHE_KEY = "adminui:dashboard:v2:{days}"
+CACHE_KEY = "adminui:dashboard:v3:{days}"
+
+# The periods the dashboard offers. «امروز» (1) is special: it is the only
+# one whose chart is HOURLY -- a single daily bar would tell the owner
+# nothing about a day they are living through.
+PERIODS: tuple[int, ...] = (1, 7, 14, 30, 90)
+DEFAULT_PERIOD = 14
+
+#: Persian labels for the switcher, in order.
+PERIOD_LABELS: dict[int, str] = {
+    1: "امروز",
+    7: "۷ روز",
+    14: "۱۴ روز",
+    30: "۳۰ روز",
+    90: "۹۰ روز",
+}
+
+#: How many x-axis ticks the chart may show. More than ~7 and the Jalali
+#: labels crowd each other until they are unreadable at 1366px.
+MAX_CHART_TICKS = 7
+
+
+#: Cookie holding the owner's chosen period (see context_processors).
+PERIOD_COOKIE = "cusin_dash_days"
+
+
+def period_cookie_name(user) -> str:
+    """Per-user cookie name, so two owners on one browser don't collide."""
+    pk = getattr(user, "pk", None)
+    return f"{PERIOD_COOKIE}" if pk in (None, "") else f"{PERIOD_COOKIE}_{pk}"
+
+
+def normalize_days(value, default: int = DEFAULT_PERIOD) -> int:
+    """Clamp anything the URL hands over to one of ``PERIODS``."""
+    try:
+        days = int(value)
+    except (TypeError, ValueError):
+        return default
+    return days if days in PERIODS else default
 
 PAID_Q = Q(payment_status=Order.PaymentStatus.PAID)
 CANCELLED_RETURNED_Q = Q(status__in=[Order.Status.CANCELLED, Order.Status.RETURNED])
@@ -75,6 +119,7 @@ def _period(days: int) -> tuple[dt.datetime, dt.datetime, dt.datetime]:
     """(current_start, prev_start, exclusive_end) for a rolling ``days``
     window ending at the end of today (Tehran)."""
     today = _tehran_today()
+    start = _utc_midnight(today)
     end = _utc_midnight(today + dt.timedelta(days=1))
     start = _utc_midnight(today - dt.timedelta(days=days - 1))
     prev_start = _utc_midnight(today - dt.timedelta(days=2 * days - 1))
@@ -317,7 +362,35 @@ def _action_cards(today: dt.date) -> list[dict]:
 # chart + lists
 # ---------------------------------------------------------------------------
 
-def _chart(days: int) -> list[dict]:
+def _hourly_chart() -> list[dict]:
+    """Today's sales in 24 Tehran hourly buckets (1 query)."""
+    from apps.adminui.jalali import fa_digits, format_jalali
+
+    today = _tehran_today()
+    start = _utc_midnight(today)
+    end = _utc_midnight(today + dt.timedelta(days=1))
+    rows = (
+        Order.objects.filter(created_at__gte=start, created_at__lt=end)
+        .annotate(hour=TruncHour("created_at", tzinfo=TEHRAN))
+        .values("hour")
+        .annotate(gross=Sum("total", filter=PAID_Q), orders=Count("pk", filter=PAID_Q))
+    )
+    by_hour = {row["hour"].hour: row for row in rows if row["hour"]}
+    points = []
+    for hour in range(24):
+        row = by_hour.get(hour)
+        points.append({
+            "date": today,
+            "hour": hour,
+            "jlabel": fa_digits(f"{hour:02d}:00"),
+            "jfull": f"{format_jalali(today)} — ساعت {fa_digits(f'{hour:02d}')}",
+            "gross": (row["gross"] or 0) if row else 0,
+            "orders": row["orders"] if row else 0,
+        })
+    return points
+
+
+def _daily_chart(days: int) -> list[dict]:
     """Daily gross sales for the last ``days`` Tehran days (1 query)."""
     from apps.adminui.jalali import fa_digits, format_jalali, to_jalali
 
@@ -338,13 +411,55 @@ def _chart(days: int) -> list[dict]:
         jd = to_jalali(day)
         points.append({
             "date": day,
-            # Short Jalali axis label: «۰۷/۱۸»
+            "hour": None,
             "jlabel": fa_digits(f"{jd.jalali_month:02d}/{jd.jalali_day:02d}"),
+            # Axis form: «۲۳ مهر» (day + Persian month name). The «۰۷/۱۸»
+            # form stays on the bar's tooltip/table row, where there is
+            # room for the year too.
+            "jaxis": f"{fa_digits(str(jd.jalali_day))} {JALALI_MONTHS[jd.jalali_month - 1]}",
             "jfull": format_jalali(day),
             "gross": (row["gross"] or 0) if row else 0,
             "orders": row["orders"] if row else 0,
         })
     return points
+
+
+def _chart(days: int) -> list[dict]:
+    """Sales series for the selected period.
+
+    «امروز» is hourly -- the owner wants to see the shape of the day
+    they are in, and one bar labelled "today" would not tell them
+    anything. Every other period is daily.
+    """
+    return _hourly_chart() if days == 1 else _daily_chart(days)
+
+
+def _chart_ticks(points: list[dict], step: float, bar_w: float,
+                 limit: int = MAX_CHART_TICKS) -> list[dict]:
+    """At most ``limit`` evenly spaced x-axis ticks.
+
+    30 daily bars each labelled «۲۳ مهر» overlap into an unreadable smear;
+    the axis now shows ~7 evenly spaced ones (always including the first
+    and the last) and the full value of every bar stays in the tooltip and
+    in the numbers table underneath.
+    """
+    total = len(points)
+    if total <= limit:
+        indices = range(total)
+    else:
+        positions = [round(i * (total - 1) / (limit - 1)) for i in range(limit)]
+        indices = sorted(set(positions))
+    ticks = []
+    for index in indices:
+        point = points[index]
+        ticks.append({
+            "index": index,
+            "x": index * step + bar_w / 2,
+            # «۲۳ مهر» -- the day and month the owner thinks in.
+            "label": point.get("jaxis") or point["jlabel"],
+            "jfull": point["jfull"],
+        })
+    return ticks
 
 
 def _top_products(days: int, limit: int = 5) -> list[dict]:
@@ -552,31 +667,37 @@ def readiness_checks() -> list[dict]:
 
 def build_payload(days: int) -> dict:
     """Compute the full dashboard payload (only called on cache miss)."""
-    days = 30 if int(days) == 30 else 14
+    days = normalize_days(days)
     today = _tehran_today()
 
-    kpis = {}
-    for key, span in (("today", 1), ("week", 7), ("month", 30)):
-        start, prev_start, end = _period(span)
-        kpis[key] = _kpi_block(start, prev_start, end)
+    # «امروز» is always on screen: it is the one number an owner looks at
+    # without choosing anything. The second card follows the switcher.
+    start, prev_start, end = _period(1)
+    kpis = {"today": _kpi_block(start, prev_start, end)}
+    start, prev_start, end = _period(days)
+    kpis["period"] = _kpi_block(start, prev_start, end)
+
     kpi_list = [
-        {"key": key, "title": title, **kpis[key]}
-        for key, title in (
-            ("today", "امروز"), ("week", "۷ روز اخیر"), ("month", "۳۰ روز اخیر"),
-        )
+        {"key": "today", "title": "امروز", **kpis["today"]},
+        {"key": "period", "title": PERIOD_LABELS[days], **kpis["period"]},
     ]
 
     chart = _chart(days)
     chart_max = max((p["gross"] for p in chart), default=0)
     # Pre-computed SVG bar geometry (baseline y=140, label row y=162).
     bar_area = 120
+    step = 36 if len(chart) <= 31 else max(12, round(1000 / len(chart)))
+    bar_w = max(6, min(24, step - 12))
     for index, point in enumerate(chart):
         height = round(point["gross"] / chart_max * bar_area) if chart_max else 0
         if height == 0 and point["gross"]:
             height = 2  # keep a sliver visible for tiny-but-nonzero days
         point["bar_h"] = height
         point["bar_y"] = 140 - height
-        point["x"] = index * 36 + 6
+        point["x"] = index * step + (step - bar_w) / 2
+        point["bar_w"] = bar_w
+        # Tooltip: the full Jalali date and the amount in تومان.
+        point["gross_toman"] = f"{point['gross']:,} تومان"
 
     payload = {
         "generated_at": timezone.now(),
@@ -585,9 +706,16 @@ def build_payload(days: int) -> dict:
         "kpi_list": kpi_list,
         "actions": _action_cards(today),
         "chart_days": days,
+        "chart_hourly": days == 1,
         "chart": chart,
         "chart_max": chart_max,
-        "chart_width": days * 36,
+        "chart_width": max(320, len(chart) * step),
+        "chart_ticks": _chart_ticks(chart, step, bar_w),
+        "periods": [
+            {"days": value, "label": PERIOD_LABELS[value], "active": value == days}
+            for value in PERIODS
+        ],
+        "period_label": PERIOD_LABELS[days],
         "top_products": _top_products(days),
         "latest_orders": _latest_orders(),
         "latest_logs": _latest_logs(),
@@ -596,9 +724,9 @@ def build_payload(days: int) -> dict:
     return payload
 
 
-def get_dashboard(days: int = 14) -> dict:
+def get_dashboard(days: int = DEFAULT_PERIOD) -> dict:
     """Cached dashboard payload; ~60s TTL, plain data (Redis-safe)."""
-    days = 30 if int(days) == 30 else 14
+    days = normalize_days(days)
     key = CACHE_KEY.format(days=days)
     payload = cache.get(key)
     if payload is None:

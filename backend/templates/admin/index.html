@@ -36,9 +36,12 @@ context processor was removed) this page degrades to the stock app list.
       </p>
     </div>
     {% if cusin_perms.orders %}
-    <div class="cusin-days-toggle" role="group" aria-label="بازهٔ نمودار">
-      <a href="?days=14" class="cusin-chip{% if cusin_dashboard_days == 14 %} is-active{% endif %}">۱۴ روز</a>
-      <a href="?days=30" class="cusin-chip{% if cusin_dashboard_days == 30 %} is-active{% endif %}">۳۰ روز</a>
+    <div class="cusin-days-toggle" role="group" aria-label="بازهٔ زمانی داشبورد">
+      {% for period in cusin_dashboard.periods %}
+      <a href="?days={{ period.days }}" data-cusin-period="{{ period.days }}"
+         class="cusin-chip{% if period.active %} is-active{% endif %}"
+         {% if period.active %}aria-current="true"{% endif %}>{{ period.label }}</a>
+      {% endfor %}
     </div>
     {% endif %}
   </div>
@@ -124,24 +127,30 @@ context processor was removed) this page degrades to the stock app list.
   <div class="cusin-dash-cols">
     <section class="cusin-card cusin-chart-card" aria-label="نمودار فروش">
       <header class="cusin-card-head">
-        <h2>فروش روزانهٔ {{ cusin_dashboard.chart_days|fanum }} روز اخیر</h2>
+        <h2>{% if cusin_dashboard.chart_hourly %}فروش ساعتیِ امروز{% else %}فروش در {{ cusin_dashboard.period_label }} اخیر{% endif %}</h2>
         <span class="cusin-card-note">فروش ناخالص (سفارش‌های پرداخت‌شده)</span>
       </header>
       {% if cusin_dashboard.chart_max %}
       <div class="cusin-chart-scroll" dir="ltr">
         <svg class="cusin-chart" viewBox="0 0 {{ cusin_dashboard.chart_width }} 170" role="img"
-             aria-label="نمودار ستونی فروش روزانه؛ جدول اعداد زیر نمودار آمده است.">
+             data-cusin-chart
+             aria-label="نمودار ستونی فروش؛ جدول اعداد زیر نمودار آمده است.">
           {% for p in cusin_dashboard.chart %}
           <g class="cusin-chart-col">
-            <rect x="{{ p.x }}" y="{{ p.bar_y }}" width="24" height="{{ p.bar_h }}" rx="4">
+            <rect x="{{ p.x }}" y="{{ p.bar_y }}" width="{{ p.bar_w }}" height="{{ p.bar_h }}" rx="4"
+                  data-cusin-chart-bar
+                  data-date="{{ p.jfull }}"
+                  data-amount="{{ p.gross_toman }}"
+                  data-orders="{{ p.orders }}">
               <title>{{ p.jfull }} — {{ p.gross|toman }} ({{ p.orders|fanum }} سفارش)</title>
             </rect>
-            {% if cusin_dashboard.chart_days == 14 or forloop.counter0|divisibleby:2 %}
-            <text x="{{ p.x|add:12 }}" y="162" text-anchor="middle">{{ p.jlabel }}</text>
-            {% endif %}
           </g>
           {% endfor %}
+          {% for tick in cusin_dashboard.chart_ticks %}
+          <text class="cusin-chart-tick" x="{{ tick.x }}" y="162" text-anchor="middle">{{ tick.label }}</text>
+          {% endfor %}
         </svg>
+        <div class="cusin-chart-tip" data-cusin-chart-tip hidden role="status" aria-live="polite"></div>
       </div>
       {% else %}
       <p class="cusin-empty">{% cusin_icon "chart-bar" %} در این بازه فروشی ثبت نشده است.</p>
@@ -162,7 +171,7 @@ context processor was removed) this page degrades to the stock app list.
 
     <section class="cusin-card" aria-label="پرفروش‌ترین محصولات">
       <header class="cusin-card-head">
-        <h2>پرفروش‌های {{ cusin_dashboard.chart_days|fanum }} روز</h2>
+        <h2>پرفروش‌های {{ cusin_dashboard.period_label }} اخیر</h2>
         <span class="cusin-card-note">بر پایهٔ تعداد قلم</span>
       </header>
       {% if cusin_dashboard.top_products %}
@@ -255,11 +264,6 @@ context processor was removed) this page degrades to the stock app list.
     </ul>
   </section>
   {% endif %}
-
-  <section class="cusin-card cusin-appsections" aria-label="بخش‌های مدیریت">
-    <header class="cusin-card-head"><h2>بخش‌های مدیریت</h2></header>
-    {% include "admin/app_list.html" with app_list=app_list show_changelinks=True %}
-  </section>
 
 </div>
 {% else %}

@@ -112,7 +112,7 @@ class DashboardNumbersTests(CacheIsolationMixin, TestCase):
         with frozen_clock(FROZEN):
             self._fixture_orders()
             self._fixture_customers()
-            payload = build_payload(14)
+            payload = build_payload(7)   # «۷ روز» drives the period card
 
             today = payload["kpis"]["today"]["current"]
             self.assertEqual(today["orders"], 3)               # o1, o2, o4
@@ -122,7 +122,7 @@ class DashboardNumbersTests(CacheIsolationMixin, TestCase):
             self.assertEqual(today["aov"], 150000)             # 300000 / 2 paid
             self.assertEqual(today["new_customers"], 1)        # c1 only
 
-            week = payload["kpis"]["week"]["current"]
+            week = payload["kpis"]["period"]["current"]
             self.assertEqual(week["orders"], 4)                # o1..o4
             self.assertEqual(week["gross"], 350000)            # o1+o2+o3
             self.assertEqual(week["cancelled_returned"], 100000)
@@ -130,12 +130,12 @@ class DashboardNumbersTests(CacheIsolationMixin, TestCase):
             self.assertEqual(week["aov"], 116667)              # 350000/3 rounded
             self.assertEqual(week["new_customers"], 2)         # c1, c2
 
-            prev_week = payload["kpis"]["week"]["previous"]
+            prev_week = payload["kpis"]["period"]["previous"]
             self.assertEqual(prev_week["orders"], 1)           # o5
             self.assertEqual(prev_week["gross"], 400000)
             self.assertEqual(prev_week["new_customers"], 1)    # c3
 
-            changes = payload["kpis"]["week"]["changes"]
+            changes = payload["kpis"]["period"]["changes"]
             self.assertEqual(changes["orders"], 300.0)
             self.assertEqual(changes["gross"], -12.5)
             self.assertEqual(changes["new_customers"], 100.0)
@@ -143,7 +143,7 @@ class DashboardNumbersTests(CacheIsolationMixin, TestCase):
     def test_percentage_change_is_none_without_previous(self):
         with frozen_clock(FROZEN):
             payload = build_payload(14)  # empty database
-            self.assertIsNone(payload["kpis"]["week"]["changes"]["orders"])
+            self.assertIsNone(payload["kpis"]["period"]["changes"]["orders"])
             self.assertEqual(payload["kpis"]["today"]["current"]["orders"], 0)
             self.assertEqual(payload["kpis"]["today"]["current"]["gross"], 0)
             self.assertEqual(payload["kpis"]["today"]["current"]["aov"], 0)
@@ -162,7 +162,7 @@ class DashboardNumbersTests(CacheIsolationMixin, TestCase):
             today = build_payload(14)["kpis"]["today"]["current"]
             self.assertEqual(today["orders"], 1)
             self.assertEqual(today["gross"], 2000)
-            week = build_payload(14)["kpis"]["week"]["current"]
+            week = build_payload(14)["kpis"]["period"]["current"]
             self.assertEqual(week["orders"], 2)
 
     def test_chart_shape_and_geometry(self):
@@ -235,9 +235,20 @@ class DashboardNumbersTests(CacheIsolationMixin, TestCase):
             self.assertEqual(payload["chart_days"], 30)
             self.assertEqual(len(payload["chart"]), 30)
             self.assertEqual(payload["chart_width"], 30 * 36)
-        # days other than 30 collapse to 14
+
+    def test_every_supported_period_is_honoured(self):
+        """«امروز | ۷ روز | ۱۴ روز | ۳۰ روز | ۹۰ روز» -- all five, no
+        silent collapse back to a default."""
         with frozen_clock(FROZEN):
-            self.assertEqual(build_payload(7)["chart_days"], 14)
+            for days in (1, 7, 14, 30, 90):
+                with self.subTest(days=days):
+                    payload = build_payload(days)
+                    self.assertEqual(payload["chart_days"], days)
+
+    def test_an_unsupported_period_falls_back_to_the_default(self):
+        with frozen_clock(FROZEN):
+            self.assertEqual(build_payload(45)["chart_days"], 14)
+            self.assertEqual(build_payload("bogus")["chart_days"], 14)
 
 
 @override_settings(**PLAIN_STATIC)

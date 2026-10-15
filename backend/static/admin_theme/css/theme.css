@@ -1183,8 +1183,26 @@ body.login #footer { display: none; }
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  /* Card titles are the FIRST thing that overflowed at 125%/150% zoom:
+     «فروش در ۹۰ روز اخیر» was clipped mid-word instead of wrapping. Give
+     them a real line box and let long ones wrap to a second line. */
+  min-width: 0;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }
-.cusin-card-note { font-size: 0.75rem; color: var(--cusin-muted); }
+/* The secondary line ("درصد تغییر نسبت به دورهٔ قبل", "بر پایهٔ تعداد
+   قلم") competes with the title for the same row; one step smaller and
+   it stops shoving the title out of the card. */
+.cusin-card-note {
+  font-size: 0.6875rem;
+  color: var(--cusin-muted);
+  flex: 0 1 auto;
+  min-width: 0;
+  line-height: 1.6;
+}
 .cusin-card-link {
   font-size: 0.8125rem;
   font-weight: 700;
@@ -1323,8 +1341,26 @@ body.login #footer { display: none; }
 .cusin-dash-cols > .cusin-card { min-width: 0; }
 
 /* chart */
-.cusin-chart-scroll { overflow-x: auto; padding-bottom: 4px; }
+.cusin-chart-scroll { overflow-x: auto; padding-bottom: 4px; position: relative; }
 .cusin-chart { width: 100%; min-width: 480px; height: 190px; display: block; }
+/* Hover OR tap tooltip: the SVG <title> only works on hover and only
+   after a delay, so a touch owner got no numbers at all. */
+.cusin-chart-tip {
+  position: absolute;
+  z-index: 5;
+  pointer-events: none;
+  padding: 6px 10px;
+  border-radius: var(--cusin-radius-sm);
+  background: var(--cusin-text, #1e2412);
+  color: var(--cusin-surface, #fff);
+  font-size: 0.75rem;
+  line-height: 1.7;
+  white-space: nowrap;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+  transform: translateX(-50%);
+}
+.cusin-chart-tip b { font-weight: 700; }
+.cusin-chart-tick { font-variant-numeric: tabular-nums; }
 .cusin-chart rect {
   fill: var(--cg-olive);
   transition: fill 160ms var(--cusin-ease);

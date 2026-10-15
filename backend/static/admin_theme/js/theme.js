@@ -571,6 +571,109 @@
     }
   }
 
+  /* ------------------------------------------------------------------ *\
+   * 2c. Dashboard: period switcher + chart tooltip
+   * ------------------------------------------------------------------ */
+  /* The period is written to a cookie when a chip is clicked, so the next
+     visit (or a reload without ?days=) opens on the same range. The
+     cookie is per user id: two people on the same browser must not fight
+     over it, and localStorage would not reach the server that renders the
+     page -- which is what makes the first paint show the right range
+     instead of flashing ۱۴ روز before correcting itself. */
+  var DASH_COOKIE = "cusin_dash_days";
+
+  /* Same per-user suffix the server uses (dashboard.period_cookie_name):
+     the cookie the client writes is the cookie the server reads. */
+  function dashCookieName() {
+    var userId = document.body.getAttribute("data-cusin-user-id") || "guest";
+    return DASH_COOKIE + "_" + userId;
+  }
+
+  function readCookie(name) {
+    var parts = ("; " + document.cookie).split("; " + name + "=");
+    if (parts.length < 2) return "";
+    return decodeURIComponent(parts[1].split(";")[0]);
+  }
+
+  function initDashboardPeriod() {
+    var chips = document.querySelectorAll("[data-cusin-period]");
+    if (!chips.length) return;
+    var cookieName = dashCookieName();
+    var current = readCookie(cookieName);
+    chips.forEach(function (chip) {
+      chip.addEventListener("click", function () {
+        var days = chip.getAttribute("data-cusin-period");
+        if (!days) return;
+        document.cookie =
+          cookieName + "=" + encodeURIComponent(days) +
+          "; path=/; max-age=" + 60 * 60 * 24 * 365 + "; samesite=lax";
+      });
+      // The server already rendered the active chip from the same cookie;
+      // this only keeps a stale client-side view honest.
+      if (current && chip.getAttribute("data-cusin-period") === current) {
+        chip.classList.add("is-active");
+      }
+    });
+  }
+
+  /* A bar's numbers on hover AND on tap. <title> alone never fires on
+     touch, and the owner checks the shop from a phone more often than
+     from a desk. */
+  function initChartTooltip() {
+    var chart = document.querySelector("[data-cusin-chart]");
+    if (!chart) return;
+    var scroll = chart.closest(".cusin-chart-scroll") || chart.parentNode;
+    var tip = scroll.querySelector("[data-cusin-chart-tip]");
+    if (!tip) return;
+
+    var show = function (bar) {
+      var date = bar.getAttribute("data-date") || "";
+      var amount = bar.getAttribute("data-amount") || "";
+      var orders = bar.getAttribute("data-orders") || "0";
+      tip.innerHTML = "";
+      var head = document.createElement("span");
+      head.textContent = date;
+      var value = document.createElement("b");
+      value.textContent = amount;
+      var tail = document.createElement("span");
+      tail.textContent = " — " + orders + " سفارش";
+      tip.appendChild(head);
+      tip.appendChild(document.createElement("br"));
+      tip.appendChild(value);
+      tip.appendChild(tail);
+      tip.hidden = false;
+
+      var scrollRect = scroll.getBoundingClientRect();
+      var barRect = bar.getBoundingClientRect();
+      var x = barRect.left - scrollRect.left + scroll.scrollLeft + barRect.width / 2;
+      var y = barRect.top - scrollRect.top;
+      tip.style.left = Math.max(0, x) + "px";
+      tip.style.top = Math.max(0, y - 8) + "px";
+    };
+    var hide = function () {
+      tip.hidden = true;
+    };
+
+    chart.addEventListener("mouseover", function (event) {
+      var bar = event.target.closest && event.target.closest("[data-cusin-chart-bar]");
+      if (bar) show(bar);
+    });
+    chart.addEventListener("mouseout", function (event) {
+      if (event.target.closest && event.target.closest("[data-cusin-chart-bar]")) hide();
+    });
+    chart.addEventListener("click", function (event) {
+      var bar = event.target.closest && event.target.closest("[data-cusin-chart-bar]");
+      if (bar) show(bar);
+    });
+    // Touch: a tap anywhere else dismisses it.
+    document.addEventListener("touchstart", function (event) {
+      if (!tip.hidden && !(event.target.closest && event.target.closest("[data-cusin-chart]"))) {
+        hide();
+      }
+    }, { passive: true });
+    scroll.addEventListener("scroll", hide, { passive: true });
+  }
+
   /* ------------------------------------------------------------------ *
    * 2b. Changelist toolbar, filter/date/sort and pagination menus
    * ------------------------------------------------------------------ */
@@ -1187,6 +1290,8 @@
     initDrawer();
     initHeaderHeightVar();
     initSidebarGroups();
+    initDashboardPeriod();
+    initChartTooltip();
     initChangelistToolbar();
     initRelatedControls();
     initCardLabels();
