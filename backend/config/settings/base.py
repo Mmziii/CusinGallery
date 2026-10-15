@@ -636,6 +636,25 @@ PRODUCT_IMAGE_IMPORT_BATCH_SIZE = env.int(
 OWNER_GUIDE_URL = env("OWNER_GUIDE_URL", default="")
 
 # ---------------------------------------------------------------------------
+# Placeholder (sample) content -- see apps/core/placeholders.py
+# ---------------------------------------------------------------------------
+# The seeded store profile ships instructions to the owner, not content:
+# «+98 21 0000 0000», «[نشانی واقعی فروشگاه را از پنل مدیریت وارد کنید]».
+# Those must read as MISSING everywhere (readiness card, storefront,
+# invoices, SMS) instead of being shown to customers.
+#
+# The legal pages live in the frontend sources, which a deployed backend
+# container does not ship. Set LEGAL_PAGES_PLACEHOLDER to a comma-separated
+# list of still-unedited page slugs to drive that check from the
+# deployment instead of the repository:
+#   LEGAL_PAGES_PLACEHOLDER=about,terms,privacy,shipping-returns,contact
+LEGAL_PAGES_PLACEHOLDER = [
+    slug.strip()
+    for slug in env("LEGAL_PAGES_PLACEHOLDER", default="").split(",")
+    if slug.strip()
+]
+
+# ---------------------------------------------------------------------------
 # Error monitoring (Phase E) -- optional, env-driven Sentry
 # ---------------------------------------------------------------------------
 # Leave SENTRY_DSN empty and nothing is initialized (zero overhead). Set

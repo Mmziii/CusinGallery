@@ -355,10 +355,13 @@ class DashboardViewTests(CacheIsolationMixin, TestCase):
         ids = {card["id"] for card in response.context["cusin_actions"]}
         self.assertEqual(
             ids,
-            {"paid_to_process", "awaiting_payment", "needs_refund", "pickup_waiting"},
+            {
+                "awaiting_confirmation", "paid_to_process",
+                "awaiting_payment", "needs_refund", "pickup_waiting",
+            },
         )
         html = response.content.decode()
-        self.assertIn("پرداخت‌شده در انتظار پردازش", html)
+        self.assertIn("پرداخت‌شده در انتظار تأیید", html)
         self.assertNotIn("موجودی کم", html)          # products card hidden
         self.assertNotIn("cusin-readiness", html)
 
@@ -445,7 +448,10 @@ class ReadinessTests(CacheIsolationMixin, TestCase):
         ids = [item["id"] for item in readiness]
         self.assertEqual(
             ids,
-            ["gateway", "sms", "two_factor", "site_profile", "https", "debug", "admin_url"],
+            [
+                "gateway", "sms", "two_factor", "site_profile", "legal_pages",
+                "https", "debug", "admin_url",
+            ],
         )
         by_id = {item["id"]: item for item in readiness}
         # test settings keep the mock gateway -> card must flag it

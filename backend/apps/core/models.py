@@ -109,6 +109,29 @@ class SiteSettings(TimeStampedModel):
                 self.created_at = existing_created_at
         super().save(*args, **kwargs)
 
+    # --- placeholder-aware accessors ---------------------------------
+    # A seeded «+98 21 0000 0000» or «[نشانی واقعی فروشگاه …]» is NOT
+    # content: it is an instruction to the owner. Everything that shows or
+    # checks these fields goes through apps/core/placeholders.py so the
+    # storefront can never render a bracketed sentence and the readiness
+    # card can never call a sample value "complete".
+
+    def display(self, field: str) -> str:
+        """The value for DISPLAY: "" when the stored value is a placeholder."""
+        from .placeholders import clean_value
+
+        return clean_value(getattr(self, field, None))
+
+    def is_set(self, field: str) -> bool:
+        """True when the field holds real content."""
+        return bool(self.display(field))
+
+    def missing_items(self) -> list:
+        """[{field, label, value, required, reason}] -- what is still to do."""
+        from .placeholders import missing_site_items
+
+        return missing_site_items(self)
+
     @classmethod
     def load(cls) -> "SiteSettings":
         obj, _created = cls.objects.get_or_create(pk=1)

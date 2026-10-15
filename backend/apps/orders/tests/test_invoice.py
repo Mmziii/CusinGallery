@@ -19,28 +19,33 @@ from .helpers import add_to_cart, make_product
 CB = "http://testserver/api/v1/payments/callback/"
 
 
+def _paid_order(testcase, user, gift_message=""):
+    """Check out, pay and return the paid Order (shared by both classes)."""
+    product = make_product(price=150000, stock_quantity=5)
+    add_to_cart(user, product, quantity=1)
+    from ..serializers import CheckoutSerializer
+    from ..services import checkout
+
+    serializer = CheckoutSerializer(data={
+        "recipient_name": "Invoice Buyer", "phone": "+989121112233",
+        "province": "Tehran", "city": "Tehran", "address": "St 1",
+        "postal_code": "1234567890",
+        "building_number": "10", "unit": "3",
+        **({"gift_wrap": True, "gift_message": gift_message} if gift_message else {}),
+    })
+    serializer.is_valid(raise_exception=True)
+    with override_settings(GIFT_WRAP_FEE=10000):
+        order = checkout(user, serializer.validated_data)
+    payment = initiate_payment(user, order.pk, callback_url=CB)["payment"]
+    handle_callback({"authority": payment.gateway_transaction_id, "status": "ok",
+                     "sig": _sign(payment.gateway_transaction_id, "ok")})
+    order.refresh_from_db()
+    return order
+
+
 class InvoiceAccessTests(CacheIsolatedAPITestCase):
     def _paid_order(self, user, gift_message=""):
-        product = make_product(price=150000, stock_quantity=5)
-        add_to_cart(user, product, quantity=1)
-        from ..serializers import CheckoutSerializer
-        from ..services import checkout
-
-        serializer = CheckoutSerializer(data={
-            "recipient_name": "Invoice Buyer", "phone": "+989121112233",
-            "province": "Tehran", "city": "Tehran", "address": "St 1",
-            "postal_code": "1234567890",
-            "building_number": "10", "unit": "3",
-            **({"gift_wrap": True, "gift_message": gift_message} if gift_message else {}),
-        })
-        serializer.is_valid(raise_exception=True)
-        with override_settings(GIFT_WRAP_FEE=10000):
-            order = checkout(user, serializer.validated_data)
-        payment = initiate_payment(user, order.pk, callback_url=CB)["payment"]
-        handle_callback({"authority": payment.gateway_transaction_id, "status": "ok",
-                         "sig": _sign(payment.gateway_transaction_id, "ok")})
-        order.refresh_from_db()
-        return order
+        return _paid_order(self, user, gift_message)
 
     def test_invoice_requires_login(self):
         response = self.client.get(reverse("order-invoice", args=[1]))
@@ -92,3 +97,46 @@ class InvoiceAccessTests(CacheIsolatedAPITestCase):
         self.assertIn("کازین گالری", html)
         self.assertIn("۴۴۴", html)                     # Persian digits
         self.assertIn("چاپ / ذخیره به PDF", html)
+
+
+class InvoicePlaceholderTests(CacheIsolatedAPITestCase):
+    """The printed invoice must not carry a seeded sample value.
+
+    A fresh install ships «+98 21 0000 0000» / «[نشانی واقعی فروشگاه را از
+    پنل مدیریت وارد کنید]». Those are instructions to the owner; printing
+    them on a customer's invoice is worse than printing nothing.
+    """
+
+    SEED_PHONE = "+98 21 0000 0000"
+    SEED_ADDRESS = "[نشانی واقعی فروشگاه را از پنل مدیریت وارد کنید]"
+
+    def _seed_and_invoice(self, phone="", address=""):
+        site = SiteSettings.load()
+        site.phone = phone
+        site.address = address
+        site.pickup_address = address
+        site.pickup_hours = address
+        site.save()
+        user = make_user(phone="+989540000010")
+        order = _paid_order(self, user)
+        self.client.login(username="+989540000010", password="a-strong-passw0rd!")
+        response = self.client.get(reverse("order-invoice", args=[order.pk]))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        return response.content.decode()
+
+    def test_seeded_phone_is_not_printed(self):
+        html = self._seed_and_invoice(phone=self.SEED_PHONE)
+        self.assertNotIn(self.SEED_PHONE, html)
+        self.assertNotIn("تلفن پشتیبانی", html)
+
+    def test_seeded_bracketed_address_is_not_printed(self):
+        html = self._seed_and_invoice(address=self.SEED_ADDRESS)
+        self.assertNotIn(self.SEED_ADDRESS, html)
+        self.assertNotIn("[", html.replace("&#x5B;", ""))
+
+    def test_real_values_are_printed(self):
+        html = self._seed_and_invoice(phone="+98 21 4444 5555",
+                                      address="تهران، خیابان ولیعصر، پلاک ۱۰")
+        self.assertIn("تلفن پشتیبانی", html)
+        self.assertIn("۴۴۴", html)
+        self.assertIn("تهران، خیابان ولیعصر، پلاک ۱۰", html)

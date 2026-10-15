@@ -243,6 +243,13 @@ context processor was removed) this page degrades to the stock app list.
         {% if item.ok %}{% cusin_icon "check" %}{% else %}{% cusin_icon "x" %}{% endif %}
         <strong>{{ item.label }}</strong>
         <span>{{ item.detail }}</span>
+        {% if item.missing %}
+        <ul class="cusin-readiness-missing">
+          {% for miss in item.missing %}
+          <li><b>{{ miss.label }}</b> — {{ miss.reason }}</li>
+          {% endfor %}
+        </ul>
+        {% endif %}
       </li>
       {% endfor %}
     </ul>

@@ -335,14 +335,19 @@ def _order_sms_content(notice: _OrderNotice):
         # tracking code (Part 1). Template mode is deliberately skipped
         # here -- panel templates are built for courier tracking codes.
         from apps.core.models import SiteSettings
+        from apps.core.placeholders import clean_value
 
         site = SiteSettings.load()
         template = ""
         tokens = {}
         message = (
             f"سفارش {notice.order_number} کازین گالری آمادهٔ دریافت حضوری است. "
-            f"نشانی: {site.pickup_address or '-'}"
-            + (f" | ساعات دریافت: {site.pickup_hours}" if site.pickup_hours else "")
+            f"نشانی: {clean_value(site.pickup_address) or '-'}"
+            + (
+                f" | ساعات دریافت: {clean_value(site.pickup_hours)}"
+                if clean_value(site.pickup_hours)
+                else ""
+            )
         )
     elif notice.event == Events.ORDER_SHIPPED:
         template = (settings.SMS_TEMPLATE_ORDER_SHIPPED or "").strip()
@@ -401,6 +406,7 @@ def _order_email_content(notice: _OrderNotice):
         ]
     elif notice.event == Events.ORDER_SHIPPED and notice.shipping_method == "pickup":
         from apps.core.models import SiteSettings
+        from apps.core.placeholders import clean_value
 
         site = SiteSettings.load()
         subject = f"سفارش {notice.order_number} آمادهٔ دریافت حضوری — کازین گالری"
@@ -408,10 +414,10 @@ def _order_email_content(notice: _OrderNotice):
             "سلام،",
             "",
             f"سفارش {notice.order_number} آمادهٔ تحویل حضوری است.",
-            f"نشانی دریافت: {site.pickup_address or '-'}",
+            f"نشانی دریافت: {clean_value(site.pickup_address) or '-'}",
         ]
-        if site.pickup_hours:
-            lines.append(f"ساعات دریافت: {site.pickup_hours}")
+        if clean_value(site.pickup_hours):
+            lines.append(f"ساعات دریافت: {clean_value(site.pickup_hours)}")
         lines += ["", "با تشکر — کازین گالری (cusin.ir)"]
     elif notice.event == Events.ORDER_SHIPPED:
         subject = f"سفارش {notice.order_number} ارسال شد — کازین گالری"

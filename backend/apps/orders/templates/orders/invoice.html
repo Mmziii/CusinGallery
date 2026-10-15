@@ -1,4 +1,4 @@
-{% load order_extras cusin_images %}<!doctype html>
+{% load order_extras cusin_images site_extras %}<!doctype html>
 <html lang="fa" dir="rtl">
 <head>
 <meta charset="utf-8">
@@ -94,16 +94,15 @@
   <div class="info">
     {% if order.shipping_method == "pickup" %}
       <b>دریافت حضوری.</b>
-      {% if site.pickup_address %} نشانی دریافت: {{ site.pickup_address }}.{% endif %}
-      {% if site.pickup_hours %} ساعات دریافت: {{ site.pickup_hours }}.{% endif %}
+      {% with pickup_addr=site.pickup_address|no_placeholder pickup_hrs=site.pickup_hours|no_placeholder %}{% if pickup_addr %} نشانی دریافت: {{ pickup_addr }}.{% endif %}{% if pickup_hrs %} ساعات دریافت: {{ pickup_hrs }}.{% endif %}{% endwith %}
     {% else %}
       <b>ارسال به:</b>
       {{ order.shipping_province }}، {{ order.shipping_city }}، {{ order.shipping_address }}
       {% if order.tracking_code %}<br><b>کد رهگیری:</b> {{ order.tracking_code|fa_digits }}{% endif %}
     {% endif %}
     <br>
-    {% if site.phone %}تلفن پشتیبانی: {{ site.phone|fa_digits }} — {% endif %}
-    {% if site.address %}{{ site.address }}{% endif %}
+    {% with support_phone=site.phone|no_placeholder %}{% if support_phone %}تلفن پشتیبانی: {{ support_phone|fa_digits }} — {% endif %}{% endwith %}
+    {% with shop_address=site.address|no_placeholder %}{% if shop_address %}{{ shop_address }}{% endif %}{% endwith %}
   </div>
 </body>
 </html>

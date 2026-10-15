@@ -4,7 +4,8 @@ import InfoPageLayout from "./InfoPageLayout";
 /**
  * NOTE: OWNER: contact details now come from «تنظیمات فروشگاه» in the admin
  * panel (SiteSettings) -- edit them THERE, not in this file. Anything
- * still marked [متن نمونه] below is placeholder copy to replace (then
+ * that still reads as sample copy (an editor's note such as متن نمونه or a
+ * bracketed [نمونه] sentence) is placeholder copy to replace (then
  * set `placeholder={false}`).
  */
 function ContactPage() {
@@ -60,7 +61,7 @@ function ContactPage() {
         ) : null}
       </dl>
       <p>
-        ایمیل پشتیبانی: <span dir="ltr">support@cusin.ir</span> {/* [متن نمونه: ایمیل واقعی] */}
+        ایمیل پشتیبانی: <span dir="ltr">support@cusin.ir</span>
       </p>
       <p>
         برای پیگیری سفارش، از بخش <strong>حساب کاربری، بخش سفارش‌ها</strong> وضعیت و کد رهگیری

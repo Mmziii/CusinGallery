@@ -1468,6 +1468,11 @@ body.login #footer { display: none; }
 .cusin-readiness-list li .cusin-icon { margin-top: 3px; }
 .cusin-readiness-list li strong { display: block; }
 .cusin-readiness-list li span { color: var(--cusin-muted); }
+/* The per-item "what exactly is missing" list (readiness). Kept tight --
+   it lives inside an already-bordered card row, so no extra chrome. */
+.cusin-readiness-missing { list-style: none; margin: 6px 0 0; padding: 0 0 0 18px; display: grid; gap: 3px; }
+.cusin-readiness-missing li { font-size: 0.86rem; color: var(--cusin-muted); }
+.cusin-readiness-missing li b { color: var(--cusin-text, inherit); font-weight: 600; }
 .cusin-readiness-list li.is-ok { border-inline-start: 4px solid var(--cg-success); }
 .cusin-readiness-list li.is-ok > .cusin-icon { color: var(--cg-success-text); }
 .cusin-readiness-list li.is-bad { border-inline-start: 4px solid var(--cg-danger); }

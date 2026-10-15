@@ -160,10 +160,15 @@ def _action_cards(today: dt.date) -> list[dict]:
     threshold = settings.LOW_STOCK_THRESHOLD
 
     o = Order.objects.aggregate(
+        # Paid orders sit in PENDING until the OWNER confirms them; that is
+        # the queue the dashboard must surface first.
+        awaiting_confirmation=Count(
+            "pk", filter=PAID_Q & Q(status=Order.Status.PENDING),
+        ),
         paid_to_process=Count(
             "pk",
             filter=PAID_Q & Q(status__in=[
-                Order.Status.PENDING, Order.Status.CONFIRMED, Order.Status.PROCESSING,
+                Order.Status.CONFIRMED, Order.Status.PROCESSING,
             ]),
         ),
         awaiting_payment=Count(
@@ -211,10 +216,17 @@ def _action_cards(today: dt.date) -> list[dict]:
     exp_limit = (today + dt.timedelta(days=7)).isoformat()
     return [
         {
+            "id": "awaiting_confirmation", "count": o["awaiting_confirmation"],
+            "label": "پرداخت‌شده در انتظار تأیید",
+            "hint": "پولشان رسیده اما هنوز تأیید نکرده‌اید؛ تا تأیید شما ارسال نمی‌شوند.",
+            "icon": "bell", "perm": "orders.view_order",
+            "url": f"{orders_url}?queue=awaiting_confirmation",
+        },
+        {
             "id": "paid_to_process", "count": o["paid_to_process"],
-            "label": "پرداخت‌شده در انتظار پردازش",
-            "hint": "سفارش‌های پرداخت‌شده‌ای که هنوز ارسال نشده‌اند.",
-            "icon": "truck", "perm": "orders.view_order",
+            "label": "تأیید‌شده در حال آماده‌سازی",
+            "hint": "تأیید شده‌اند و در حال آماده‌سازی برای ارسال‌اند.",
+            "icon": "box", "perm": "orders.view_order",
             "url": f"{orders_url}?queue=paid_to_process",
         },
         {
@@ -449,9 +461,36 @@ def readiness_checks() -> list[dict]:
         sms_ok, sms_detail = True, f"پیامک از طریق {settings.SMS_PROVIDER} فعال است."
 
     from apps.core.models import SiteSettings
+    from apps.core.placeholders import placeholder_legal_pages
 
     site = SiteSettings.load()
-    site_ok = bool((site.phone or "").strip() and (site.address or "").strip())
+    # A seeded «+98 21 0000 0000» or a bracketed «[… را از پنل مدیریت وارد
+    # کنید]» is a placeholder, NOT content -- the old check only looked at
+    # strip() and therefore reported the store's contact info as complete
+    # while the storefront was showing a fake phone number.
+    missing_profile = site.missing_items()
+    required_missing = [item for item in missing_profile if item["required"]]
+    optional_missing = [item for item in missing_profile if not item["required"]]
+    site_ok = not required_missing
+    if site_ok and optional_missing:
+        site_detail = (
+            "تلفن و نشانی واقعی ثبت شده است. هنوز پر نشده: "
+            + "، ".join(item["label"] for item in optional_missing)
+            + "."
+        )
+    elif site_ok:
+        site_detail = "تلفن و نشانی در «تنظیمات فروشگاه» تکمیل شده."
+    else:
+        site_detail = (
+            "در «تنظیمات فروشگاه» پر نشده: "
+            + "؛ ".join(
+                f"{item['label']} ({item['reason']})" for item in missing_profile
+            )
+            + "."
+        )
+
+    placeholder_pages = placeholder_legal_pages()
+    pages_ok = not placeholder_pages
 
     return [
         {"id": "gateway", "label": "درگاه پرداخت", "ok": gw_ok, "detail": gw_detail},
@@ -467,10 +506,20 @@ def readiness_checks() -> list[dict]:
         {
             "id": "site_profile", "label": "تلفن و نشانی فروشگاه",
             "ok": site_ok,
+            "detail": site_detail,
+            "missing": missing_profile,
+        },
+        {
+            "id": "legal_pages", "label": "صفحه‌های حقوقی/اعتماد",
+            "ok": pages_ok,
             "detail": (
-                "تلفن و نشانی در «تنظیمات سایت» تکمیل شده." if site_ok
-                else "تلفن یا نشانی فروشگاه در «تنظیمات سایت» خالی است."
+                "همهٔ صفحه‌ها متن واقعی دارند."
+                if pages_ok
+                else "متن این صفحه‌ها هنوز نمونه (placeholder) است: "
+                + "، ".join(page["label"] for page in placeholder_pages)
+                + "."
             ),
+            "missing": placeholder_pages,
         },
         {
             "id": "https", "label": "HTTPS",
