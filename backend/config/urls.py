@@ -16,10 +16,11 @@ import os
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
-from django.urls import include, path
+from django.urls import include, path, re_path
 
 from apps.adminui.views import quick_search
 from apps.core.seo import product_meta, shop_meta
+from apps.core.spa import spa_page
 from apps.core.views import healthz, robots_txt, sitemap_xml
 
 _admin_path = os.environ.get("ADMIN_URL", "admin/").strip()
@@ -68,3 +69,16 @@ urlpatterns = [
 # never serves media files in production.
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+# ---------------------------------------------------------------------------
+# Storefront catch-all (Audit 19 item 5) -- MUST stay last.
+# ---------------------------------------------------------------------------
+# nginx routes page requests here instead of answering every path with the
+# SPA shell, so /nonexistent-xyz and /products/does-not-exist/ are real 404s
+# (with the same Persian 404 page) instead of "200 with the 404 design".
+# It is appended AFTER the DEBUG media route above so /media/ keeps working
+# in development; anything that is not a page (/api/, /admin/, /static/,
+# /media/, /seo/, /healthz) is rejected with Django's own 404.
+urlpatterns += [
+    re_path(r"^(?P<spa_path>.*)$", spa_page, name="spa-page"),
+]

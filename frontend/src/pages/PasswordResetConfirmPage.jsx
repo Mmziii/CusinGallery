@@ -1,5 +1,6 @@
 import { usePageMeta } from "../hooks/usePageMeta";
 import PasswordHint from "../components/PasswordHint.jsx";
+import PasswordInput from "../components/PasswordInput.jsx";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
@@ -109,12 +110,12 @@ function PasswordResetConfirmPage() {
                 ) : null}
                 <label className="field">
                   <span>رمز عبور جدید</span>
-                  <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                  <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} required />
                   <PasswordHint value={password} />
                 </label>
                 <label className="field">
                   <span>تکرار رمز عبور جدید</span>
-                  <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required />
+                  <PasswordInput value={confirm} onChange={(e) => setConfirm(e.target.value)} required />
                 </label>
                 {error ? <Alert>{error}</Alert> : null}
                 <button type="submit" className="btn btn--primary btn--block" disabled={busy}>

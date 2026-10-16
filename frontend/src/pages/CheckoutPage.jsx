@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import AddressForm from "../components/AddressForm";
+import Icon from "../components/Icon";
 import { isValidIranianPhone, normalizePhone, validateAddressPayload } from "../utils/iranianFields";
 import { Alert, Spinner, errorMessage } from "../components/ui";
 import * as authApi from "../services/authApi";
@@ -16,6 +17,7 @@ import useCartStore from "../store/useCartStore";
 import useSiteSettings from "../hooks/useSiteSettings";
 import { normalizeApiError } from "../utils/apiError";
 import { formatPrice } from "../utils/formatPrice";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 
 /**
  * Checkout: choose a saved address (or enter a one-off inline address),
@@ -57,24 +59,46 @@ function methodLabel(id) {
  * Part S2 item 6: checkout progress indicator (address -> shipping ->
  * review -> payment). `done` marks completed steps, `current` the active
  * one; everything is visible on mobile too (horizontal wrap).
+ *
+ * Audit 19 item 2: on phones the checkout really IS stepped, so `onStepClick`
+ * turns every EARLIER step into a button that goes back, while the current
+ * step stays the only strong element on the bar.
  */
-function CheckoutSteps({ done, current }) {
+function CheckoutSteps({ done, current, onStepClick }) {
   const labels = ["آدرس", "روش ارسال", "بازبینی", "پرداخت"];
   return (
     <ol className="checkout__steps" aria-label="مراحل ثبت سفارش">
       {labels.map((label, index) => {
         const isDone = index < current || (done || []).includes(index);
         const isCurrent = index === current;
+        // Only earlier steps go back: a shopper can never skip ahead to a
+        // step whose prerequisites are not met yet.
+        const canGoBack = Boolean(onStepClick) && index < current;
+        // Future steps stay muted; the current step must never look disabled.
+        const isTodo = !isDone && !isCurrent;
+        const body = (
+          <>
+            <span className="checkout__step-num" aria-hidden="true">{formatPrice(index + 1)}</span>
+            {label}
+          </>
+        );
         return (
           <li
             key={label}
             className={`checkout__step ${isDone ? "checkout__step--done" : ""} ${
               isCurrent ? "checkout__step--current" : ""
+            } ${canGoBack ? "checkout__step--clickable" : ""} ${
+              isTodo ? "checkout__step--todo" : ""
             }`}
             aria-current={isCurrent ? "step" : undefined}
           >
-            <span className="checkout__step-num" aria-hidden="true">{formatPrice(index + 1)}</span>
-            {label}
+            {canGoBack ? (
+              <button type="button" onClick={() => onStepClick(index)}>
+                {body}
+              </button>
+            ) : (
+              body
+            )}
           </li>
         );
       })}
@@ -85,6 +109,7 @@ function CheckoutSteps({ done, current }) {
 CheckoutSteps.propTypes = {
   current: PropTypes.number.isRequired,
   done: PropTypes.arrayOf(PropTypes.number),
+  onStepClick: PropTypes.func,
 };
 
 /** Server-configured cost of a method for a given subtotal -- the same
@@ -153,6 +178,11 @@ function CheckoutPage() {
   // Part S5 item 4: "what is still missing" checklist, rendered under the
   // submit button and next to the section each item belongs to.
   const [issues, setIssues] = useState([]);
+  // Audit 19 item 2: on phones the checkout is a real step-by-step flow
+  // (0 address -> 1 delivery method -> 2 review -> 3 payment). Desktop keeps
+  // the single-page layout it always had.
+  const isMobile = useMediaQuery("(max-width: 767px)");
+  const [mobileStep, setMobileStep] = useState(0);
   const [checkoutError, setCheckoutError] = useState(null);
   const [placedOrder, setPlacedOrder] = useState(null);
   const [paying, setPaying] = useState(false);
@@ -311,6 +341,41 @@ function CheckoutPage() {
     if (!target) return;
     target.scrollIntoView?.({ behavior: "smooth", block: "center" });
     target.focus?.({ preventScroll: true });
+  };
+
+  /**
+   * Audit 19 item 2: move the phone flow one step forward, using the SAME
+   * validation the submit path uses (collectIssues) -- so an incomplete
+   * address or a missing delivery method stops the shopper on its own step
+   * with a Persian message instead of a dead end later. Nothing is ever sent
+   * to the server here: a failed check leaves the cart untouched.
+   */
+  const continueFromStep = (step) => {
+    // Same inline field errors the submit path produces, so the phone user
+    // sees exactly which value is wrong in the step they are on.
+    if (!isPickup && addressMode === "inline") {
+      setAddressErrors(validateAddressPayload(inlineAddress));
+    }
+    setPickupErrors({
+      recipient_name: String(pickupContact.recipient_name || "").trim() ? null : "نام تحویل‌گیرنده را وارد کنید.",
+      phone: !String(pickupContact.phone || "").trim()
+        ? "شماره تماس را وارد کنید."
+        : isValidIranianPhone(pickupContact.phone)
+          ? null
+          : "فقط شمارهٔ موبایل (مثل ۰۹۱۲۳۴۵۶۷۸۹) قابل قبول است.",
+    });
+    const found = collectIssues().filter((issue) => {
+      if (issue.section === "cart") return true;
+      if (step === 0) return issue.section === "address";
+      if (step === 1) return issue.section === "shipping";
+      return true;
+    });
+    setIssues(found);
+    if (found.length) {
+      focusIssue(found[0]);
+      return;
+    }
+    setMobileStep(step + 1);
   };
 
   const placeOrder = async () => {
@@ -479,13 +544,43 @@ function CheckoutPage() {
     (couponPreview ? couponPreview.discount_amount : 0);
 
   const sectionIssues = (section) => issues.filter((issue) => issue.section === section);
+
+  // Audit 19 item 2: the address / delivery method shown on the review step
+  // (and the sticky bar's call to action).
+  const reviewAddress = isPickup
+    ? {
+        title: "دریافت حضوری",
+        body: `${pickupContact.recipient_name || "—"} — ${pickupContact.phone || "—"}`,
+      }
+    : addressMode === "saved" && selectedAddress
+      ? { title: "آدرس ارسال", body: `${selectedAddress.recipient_name} — ${formatAddress(selectedAddress)}` }
+      : {
+          title: "آدرس ارسال",
+          body: `${inlineAddress.recipient_name || "—"} — ${formatAddress(inlineAddress)}`,
+        };
+  const reviewShipping = currentMethod
+    ? {
+        title: currentMethod.label || methodLabel(currentMethod.id),
+        body: `${previewedShippingCost === 0 ? "رایگان" : `${formatPrice(previewedShippingCost)} تومان`} — ${
+          currentMethod.min_days != null
+            ? deliveryDays(currentMethod.min_days, currentMethod.max_days)
+            : "تحویل حضوری پس از پرداخت"
+        }`,
+      }
+    : null;
+  const stepButtonLabel =
+    mobileStep === 0 ? "ادامه: انتخاب روش ارسال" : mobileStep === 1 ? "ادامه: بازبینی" : "ثبت سفارش";
   const showPickupErrors = isPickup && issues.length > 0 ? pickupErrors : {};
 
   return (
     <div className="checkout">
       <h1 className="page-title">ثبت سفارش</h1>
 
-      <CheckoutSteps current={2} done={doneSteps} />
+      <CheckoutSteps
+        current={isMobile ? mobileStep : 2}
+        done={doneSteps}
+        onStepClick={isMobile ? setMobileStep : undefined}
+      />
 
       {/* Part S5 follow-up 4 item 4: dedicated wrapper for the sticky summary
           (own stacking context; the grid is the last thing in the page, so the
@@ -497,6 +592,7 @@ function CheckoutPage() {
             <section
               id="checkout-section-address"
               tabIndex={-1}
+              hidden={isMobile && mobileStep !== 0}
               className={`checkout__section ${sectionIssues("address").length ? "checkout__section--attention" : ""}`}
             >
               <h2>دریافت حضوری</h2>
@@ -559,6 +655,7 @@ function CheckoutPage() {
           <section
             id="checkout-section-address"
             tabIndex={-1}
+            hidden={isMobile && mobileStep !== 0}
             className={`checkout__section ${sectionIssues("address").length ? "checkout__section--attention" : ""}`}
           >
             <h2>آدرس ارسال</h2>
@@ -675,9 +772,15 @@ function CheckoutPage() {
           </section>
           )}
 
+          {/* Delivery method. On phones this is ITS OWN STEP (the owner's
+              report: it used to sit far below the address list where nobody
+              scrolled), so it is gated by the stepper; on desktop it stays
+              right after the address, exactly where the layout already
+              had it. */}
           <section
             id="checkout-section-shipping"
             tabIndex={-1}
+            hidden={isMobile && mobileStep !== 1}
             className={`checkout__section ${sectionIssues("shipping").length ? "checkout__section--attention" : ""}`}
           >
             <h2>روش ارسال</h2>
@@ -705,6 +808,18 @@ function CheckoutPage() {
                         checked={selectedMethod === method.id}
                         onChange={() => setSelectedMethod(method.id)}
                       />
+                      <span className="shipping-method__icon" aria-hidden="true">
+                        <Icon
+                          name={
+                            method.requires_address === false
+                              ? "store"
+                              : method.id === "express"
+                                ? "bolt-fast"
+                                : "truck"
+                          }
+                          size={20}
+                        />
+                      </span>
                       <span className="shipping-method__body">
                         <strong>{method.label || methodLabel(method.id)}</strong>
                         {method.id === "pickup" && siteSettings.pickup_address ? <span>نشانی دریافت: {siteSettings.pickup_address}</span> : null}
@@ -738,6 +853,7 @@ function CheckoutPage() {
           <section
             id="checkout-section-coupon"
             tabIndex={-1}
+            hidden={isMobile && mobileStep !== 2}
             className={`checkout__section ${sectionIssues("coupon").length ? "checkout__section--attention" : ""}`}
           >
             <h2><label htmlFor="checkout-coupon">کد تخفیف</label></h2>
@@ -767,9 +883,76 @@ function CheckoutPage() {
               <p key={issue.key} className="checkout__issue" role="alert">{issue.message}</p>
             ))}
           </section>
+          {/* Audit 19 item 2: the review step (phones only) -- address,
+              delivery method (each with «تغییر») and the items, on one
+              screen, so «ثبت سفارش» is never a leap of faith. */}
+          {isMobile ? (
+            <section
+              id="checkout-section-review"
+              tabIndex={-1}
+              className="checkout__section checkout__review"
+              hidden={mobileStep !== 2}
+            >
+              <h2>بازبینی سفارش</h2>
+
+              <div className="checkout__review-block">
+                <h3>{reviewAddress.title}</h3>
+                <p>{reviewAddress.body}</p>
+                <button
+                  type="button"
+                  className="checkout__review-change"
+                  onClick={() => setMobileStep(0)}
+                >
+                  تغییر
+                </button>
+              </div>
+
+              <div className="checkout__review-block">
+                <h3>روش ارسال</h3>
+                {reviewShipping ? (
+                  <>
+                    <p>{reviewShipping.title}</p>
+                    <p className="muted">{reviewShipping.body}</p>
+                  </>
+                ) : (
+                  <p className="muted">هنوز انتخاب نشده است.</p>
+                )}
+                <button
+                  type="button"
+                  className="checkout__review-change"
+                  onClick={() => setMobileStep(1)}
+                >
+                  تغییر
+                </button>
+              </div>
+
+              <div className="checkout__review-block">
+                <h3>کالاها</h3>
+                <ul className="checkout__items">
+                  {cart.items.map((item) => (
+                    <li key={item.id}>
+                      <span>{faDigits(item.product.name)} × {faDigits(item.quantity)}</span>
+                      <span>{formatPrice(item.line_total)}</span>
+                    </li>
+                  ))}
+                </ul>
+                <dl className="checkout__review-totals">
+                  <div><dt>جمع کالاها</dt><dd>{formatPrice(cart.subtotal)} تومان</dd></div>
+                  <div>
+                    <dt>هزینه ارسال</dt>
+                    <dd>{previewedShippingCost === 0 ? "رایگان" : `${formatPrice(previewedShippingCost)} تومان`}</dd>
+                  </div>
+                  {couponPreview ? (
+                    <div><dt>تخفیف</dt><dd>− {formatPrice(couponPreview.discount_amount)} تومان</dd></div>
+                  ) : null}
+                  <div className="checkout__grand"><dt>مبلغ قابل پرداخت</dt><dd>{formatPrice(estimatedTotal)} تومان</dd></div>
+                </dl>
+              </div>
+            </section>
+          ) : null}
         </div>
 
-        <aside className="checkout__summary" id="checkout-section-cart" tabIndex={-1}>
+        <aside className="checkout__summary" id="checkout-section-cart" tabIndex={-1} hidden={isMobile}>
           <h2>خلاصه سفارش</h2>
           <ul className="checkout__items">
             {cart.items.map((item) => (
@@ -819,6 +1002,31 @@ function CheckoutPage() {
         </aside>
         </div>
       </div>
+
+      {/* Audit 19 item 2: the sticky bar holds the CURRENT step's main
+          button and the payable amount, so the next action and the money
+          are always on screen. */}
+      {isMobile ? (
+        <div className="checkout__mobile-bar">
+          {issues.length ? (
+            <p className="checkout__issue" role="alert">{issues[0].message}</p>
+          ) : null}
+          <div className="checkout__mobile-bar-row">
+            <span className="checkout__mobile-total">
+              <small>مبلغ قابل پرداخت</small>
+              <b>{formatPrice(estimatedTotal)} تومان</b>
+            </span>
+            <button
+              type="button"
+              className="btn btn--primary"
+              disabled={placing}
+              onClick={() => (mobileStep < 2 ? continueFromStep(mobileStep) : placeOrder())}
+            >
+              {placing ? "در حال ثبت سفارش…" : stepButtonLabel}
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

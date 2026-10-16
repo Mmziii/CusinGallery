@@ -2,6 +2,7 @@ import { usePageMeta } from "../hooks/usePageMeta";
 import { useState } from "react";
 import { Navigate, Link, useLocation, useNavigate } from "react-router-dom";
 
+import PasswordInput from "../components/PasswordInput.jsx";
 import { Alert, errorMessage } from "../components/ui";
 import useAuthStore from "../store/useAuthStore";
 import { toAsciiDigits } from "../utils/iranianFields";
@@ -49,8 +50,7 @@ function LoginPage() {
         </label>
         <label className="field">
           <span>رمز عبور</span>
-          <input
-            type="password"
+          <PasswordInput
             value={password}
             autoComplete="current-password"
             onChange={(e) => setPassword(e.target.value)}

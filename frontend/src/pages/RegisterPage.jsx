@@ -1,4 +1,5 @@
 import PasswordHint from "../components/PasswordHint.jsx";
+import PasswordInput from "../components/PasswordInput.jsx";
 import { usePageMeta } from "../hooks/usePageMeta";
 import { useState } from "react";
 import { Navigate, Link, useNavigate } from "react-router-dom";
@@ -105,14 +106,14 @@ function RegisterPage() {
           <span>
             رمز عبور <span className="field__required" aria-hidden="true">*</span>
           </span>
-          <input type="password" autoComplete="new-password" value={form.password} onChange={setField("password")} required />
+          <PasswordInput autoComplete="new-password" value={form.password} onChange={setField("password")} required />
           <PasswordHint value={form.password} />
         </label>
         <label className="field">
           <span>
             تکرار رمز عبور <span className="field__required" aria-hidden="true">*</span>
           </span>
-          <input type="password" autoComplete="new-password" value={form.password_confirm} onChange={setField("password_confirm")} required />
+          <PasswordInput autoComplete="new-password" value={form.password_confirm} onChange={setField("password_confirm")} required />
         </label>
 
         {error ? <Alert>{error}</Alert> : null}

@@ -1,4 +1,5 @@
 import PasswordHint from "../../components/PasswordHint.jsx";
+import PasswordInput from "../../components/PasswordInput.jsx";
 import { useState } from "react";
 
 import { Alert, errorMessage } from "../../components/ui";
@@ -106,16 +107,16 @@ function ProfilePage() {
         <h2>تغییر رمز عبور</h2>
         <label className="field">
           <span>رمز عبور فعلی</span>
-          <input type="password" autoComplete="current-password" value={pw.current_password} onChange={(e) => setPw((f) => ({ ...f, current_password: e.target.value }))} required />
+          <PasswordInput autoComplete="current-password" value={pw.current_password} onChange={(e) => setPw((f) => ({ ...f, current_password: e.target.value }))} required />
         </label>
         <label className="field">
           <span>رمز عبور جدید</span>
-          <input type="password" autoComplete="new-password" value={pw.new_password} onChange={(e) => setPw((f) => ({ ...f, new_password: e.target.value }))} required />
+          <PasswordInput autoComplete="new-password" value={pw.new_password} onChange={(e) => setPw((f) => ({ ...f, new_password: e.target.value }))} required />
           <PasswordHint value={pw.new_password} />
         </label>
         <label className="field">
           <span>تکرار رمز عبور جدید</span>
-          <input type="password" autoComplete="new-password" value={pw.new_password_confirm} onChange={(e) => setPw((f) => ({ ...f, new_password_confirm: e.target.value }))} required />
+          <PasswordInput autoComplete="new-password" value={pw.new_password_confirm} onChange={(e) => setPw((f) => ({ ...f, new_password_confirm: e.target.value }))} required />
         </label>
         {pwError ? <Alert>{pwError}</Alert> : null}
         {pwMessage ? <Alert kind="success">{pwMessage}</Alert> : null}

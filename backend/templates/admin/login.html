@@ -1,0 +1,97 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static adminui_extras %}
+{% comment %}
+Admin login page (Audit 19 item 3).
+
+Same stock flow as django.contrib.admin's login.html (one POST to
+{{ app_path }} with the CSRF token), with two additions on top of the
+branded light theme:
+
+  * the password field is wrapped in .cusin-password and carries the
+    show/hide eye button AS MARKUP (not only as a JS enhancement), so the
+    control exists even before the theme's script runs;
+  * the button is a real `type="button"` with the Persian labels
+    «نمایش رمز» / «پنهان کردن رمز» and aria-pressed, 40px tap target --
+    identical to the storefront's PasswordInput.
+
+theme.js also enhances every OTHER password input in the panel (the
+password-change pages, the reset-confirm form, the user change form), so no
+admin surface is left without the toggle -- see initPasswordToggles().
+{% endcomment %}
+
+{% block title %}{% if form.errors %}{% translate "Error:" %} {% endif %}{{ block.super }}{% endblock %}
+
+{% block extrastyle %}{{ block.super }}<link rel="stylesheet" href="{% static "admin/css/login.css" %}">
+{{ form.media }}
+{% endblock %}
+
+{% block bodyclass %}{{ block.super }} login{% endblock %}
+
+{% block usertools %}{% endblock %}
+
+{% block nav-global %}{% endblock %}
+
+{% block nav-sidebar %}{% endblock %}
+
+{% block content_title %}{% endblock %}
+
+{% block nav-breadcrumbs %}{% endblock %}
+
+{% block content %}
+{% if form.errors and not form.non_field_errors %}
+<p class="errornote">
+{% blocktranslate count counter=form.errors.items|length %}Please correct the error below.{% plural %}Please correct the errors below.{% endblocktranslate %}
+</p>
+{% endif %}
+
+{% if form.non_field_errors %}
+{% for error in form.non_field_errors %}
+<p class="errornote">
+    {{ error }}
+</p>
+{% endfor %}
+{% endif %}
+
+<div id="content-main">
+
+{% if user.is_authenticated %}
+<p class="errornote">
+{% blocktranslate trimmed %}
+    You are authenticated as {{ username }}, but are not authorized to
+    access this page. Would you like to login to a different account?
+{% endblocktranslate %}
+</p>
+{% endif %}
+
+<form action="{{ app_path }}" method="post" id="login-form">{% csrf_token %}
+  <div class="form-row">
+    {{ form.username.errors }}
+    {{ form.username.label_tag }} {{ form.username }}
+  </div>
+  <div class="form-row cusin-password-row">
+    {{ form.password.errors }}
+    {{ form.password.label_tag }}
+    <span class="cusin-password">
+      {{ form.password }}
+      <button type="button" class="cusin-password-toggle" data-cusin-password-toggle
+              aria-label="نمایش رمز" aria-pressed="false" title="نمایش رمز"
+              aria-controls="{{ form.password.id_for_label }}">
+        {% cusin_icon "eye" "cusin-icon cusin-icon--eye" %}
+        {% cusin_icon "eye-off" "cusin-icon cusin-icon--eye-off" %}
+      </button>
+    </span>
+    <input type="hidden" name="next" value="{{ next }}">
+  </div>
+  {% url 'admin_password_reset' as password_reset_url %}
+  {% if password_reset_url %}
+  <div class="password-reset-link">
+    <a href="{{ password_reset_url }}">{% translate 'Forgotten your login credentials?' %}</a>
+  </div>
+  {% endif %}
+  <div class="submit-row">
+    <input type="submit" value="{% translate 'Log in' %}">
+  </div>
+</form>
+
+</div>
+{% endblock %}

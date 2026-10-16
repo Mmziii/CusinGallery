@@ -274,13 +274,51 @@ describe("sticky CSS contract (item 4)", () => {
     // A new entry here means a new sticky element: it must get a dedicated
     // parent that ends before the next section, a z-index below the header
     // and a `position: static` reset below its desktop breakpoint.
+    //
+    // `.shop__mobile-bar` (Audit 19 item 1) is the phone's filter/sort bar.
+    // It is the FIRST child of `.shop__main`, whose box is the whole results
+    // list -- so its sticky travel range is exactly the list it belongs to
+    // (had it been a grid item of `.shop`, it would only stick inside its own
+    // row and never move). The next test pins that structure, its stacking
+    // order and its opaque background.
     expect([...selectors].sort()).toEqual([
       ".account__nav",
       ".cart-page__summary",
       ".checkout__summary",
+      ".shop__mobile-bar",
       ".shop__sidebar",
       ".site-header",
     ]);
+  });
+
+  it("audits the phone shop toolbar: opaque, under the header, phone-only", () => {
+    const rules = parseCss();
+    // Rendered structure: inside the results column, never a grid item of
+    // `.shop` (a grid item's sticky travel box is its own row).
+    const source = fs.readFileSync(
+      path.resolve(__dirname, "ShopPage.jsx"), "utf8"
+    );
+    const barIndex = source.indexOf('className="shop__mobile-bar"');
+    const mainIndex = source.indexOf('className="shop__main"');
+    expect(mainIndex).toBeGreaterThan(-1);
+    expect(barIndex).toBeGreaterThan(mainIndex);
+    // The bar is gated on the phone breakpoint...
+    expect(source.slice(barIndex - 200, barIndex)).toContain("isMobile ? (");
+    // ... and the desktop sidebar markup is the alternative.
+    expect(source.indexOf('className="shop__sidebar"')).toBeGreaterThan(-1);
+    // Static (and unrendered) everywhere except the phone breakpoint.
+    expect(effectiveDeclarations(rules, ".shop__mobile-bar", null).position).toBe("static");
+    const phone = effectiveDeclarations(rules, ".shop__mobile-bar", "(max-width: 767px)");
+    expect(phone.position).toBe("sticky");
+    // Opaque: cards scrolling under it must never show through.
+    expect(phone.background).toBe("var(--brand-green-dark)");
+    // Below the sticky header (60) and above the plain page content.
+    const z = Number(phone["z-index"]);
+    expect(z).toBeGreaterThan(0);
+    expect(z).toBeLessThan(60);
+    // It hangs directly under the header, whose live height the header
+    // measures into --site-header-height.
+    expect(phone.top).toBe("var(--site-header-height, 76px)");
   });
 
   it("gives the cart/checkout wrappers their own stacking context", () => {

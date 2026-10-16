@@ -70,6 +70,39 @@ const PATHS = {
       <path d="M9 8a3 3 0 0 1 6 0" />
     </>
   ),
+  // Mobile quick add-to-cart (Audit 19 item 1): a bag/cart with a plus sign.
+  "cart-plus": (
+    <>
+      <path d="M4 7h2.2l1.9 9.5h9.7L20 9.5H7" />
+      <circle cx="9.5" cy="20" r="1.2" />
+      <circle cx="17" cy="20" r="1.2" />
+      <path d="M15.5 2.5v4M13.5 4.5h4" />
+    </>
+  ),
+  // Password visibility toggle (Audit 19 item 3).
+  eye: (
+    <>
+      <path d="M2.5 12S6 5.8 12 5.8 21.5 12 21.5 12 18 18.2 12 18.2 2.5 12 2.5 12z" />
+      <circle cx="12" cy="12" r="3" />
+    </>
+  ),
+  "eye-off": (
+    <>
+      <path d="M4 4.5l15.5 15.5" />
+      <path d="M9.6 6.3A9.7 9.7 0 0 1 12 5.8c6 0 9.5 6.2 9.5 6.2a17 17 0 0 1-3 3.6" />
+      <path d="M6.3 8A17 17 0 0 0 2.5 12S6 18.2 12 18.2a9.6 9.6 0 0 0 3.4-.6" />
+      <path d="M10 10.2a3 3 0 0 0 4.1 4.1" />
+    </>
+  ),
+  // Delivery-method cards at checkout (Audit 19 item 2).
+  store: (
+    <>
+      <path d="M4 9.5V20h16V9.5" />
+      <path d="M3 4h18l1 5.5a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0z" />
+      <path d="M10 20v-5h4v5" />
+    </>
+  ),
+  "bolt-fast": <path d="M13 2 4.5 13.5H11l-1 8.5L19 10.5h-6.5z" />,
 };
 
 function Icon({ name, size = 20, filled = false, className = "" }) {

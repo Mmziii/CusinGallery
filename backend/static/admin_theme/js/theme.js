@@ -1271,6 +1271,93 @@
   }
 
   /* ------------------------------------------------------------------ *
+   * 6a. Password show/hide toggle (Audit 19 item 3)
+   *
+   * Every password field in the panel gets an eye button inside the field,
+   * at the INLINE END (the LEFT side in this RTL panel): the login page
+   * ships the markup itself (backend/templates/admin/login.html), and this
+   * enhances every other one -- the password-change form, the
+   * reset-confirm form, the user change form, popups -- so no admin
+   * surface is left without it.
+   *
+   * The button is a real `type="button"` (it can never submit the form),
+   * carries «نمایش رمز» / «پنهان کردن رمز» as aria-label, mirrors the state
+   * in aria-pressed, and is a 40px tap target (see .cusin-password in
+   * theme.css).
+   * ------------------------------------------------------------------ */
+  var EYE_LABEL_SHOW = "نمایش رمز";
+  var EYE_LABEL_HIDE = "پنهان کردن رمز";
+
+  function spriteUse(iconName, className) {
+    var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", className || "cusin-icon");
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("focusable", "false");
+    var use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+    use.setAttribute("href", "#cusin-i-" + iconName);
+    svg.appendChild(use);
+    return svg;
+  }
+
+  function decoratePasswordField(button, input) {
+    function apply(visible) {
+      input.type = visible ? "text" : "password";
+      button.setAttribute("aria-pressed", visible ? "true" : "false");
+      button.setAttribute("aria-label", visible ? EYE_LABEL_HIDE : EYE_LABEL_SHOW);
+      button.setAttribute("title", visible ? EYE_LABEL_HIDE : EYE_LABEL_SHOW);
+      button.setAttribute("data-visible", visible ? "true" : "false");
+      button.classList.toggle("is-visible", visible);
+    }
+    apply(false);
+    button.addEventListener("click", function (event) {
+      // Never let the click reach a wrapping <label> either: a label click
+      // forwards to the input, which is harmless, but the form must never
+      // see a submit.
+      event.preventDefault();
+      apply(input.type === "password");
+      input.focus();
+    });
+  }
+
+  function wrapPasswordInput(input) {
+    if (input.dataset.cusinPasswordReady === "true") return;
+    if (input.type !== "password") return;
+    var wrapper = document.createElement("span");
+    wrapper.className = "cusin-password";
+    input.parentNode.insertBefore(wrapper, input);
+    wrapper.appendChild(input);
+
+    var button = document.createElement("button");
+    button.type = "button";
+    button.className = "cusin-password-toggle";
+    button.setAttribute("data-cusin-password-toggle", "");
+    if (input.id) button.setAttribute("aria-controls", input.id);
+    button.appendChild(spriteUse("eye", "cusin-icon cusin-icon--eye"));
+    button.appendChild(spriteUse("eye-off", "cusin-icon cusin-icon--eye-off"));
+    wrapper.appendChild(button);
+
+    input.dataset.cusinPasswordReady = "true";
+    decoratePasswordField(button, input);
+  }
+
+  function initPasswordToggles() {
+    document.querySelectorAll('input[type="password"]').forEach(function (input) {
+      var existing = input.closest(".cusin-password");
+      if (existing) {
+        // Server-rendered markup (the login page): wire up its own button so
+        // both paths behave identically.
+        var button = existing.querySelector("[data-cusin-password-toggle]");
+        if (button) {
+          input.dataset.cusinPasswordReady = "true";
+          decoratePasswordField(button, input);
+        }
+        return;
+      }
+      wrapPasswordInput(input);
+    });
+  }
+
+  /* ------------------------------------------------------------------ *
    * 6b. Persian digits in Django's own chrome
    *
    * Django counts in ASCII: «0 از 1 انتخاب شده‌اند»، «صفحهٔ 1»، «165
@@ -1378,6 +1465,7 @@
     initPalette();
     initCopyButtons();
     initQuickStatusGuard();
+    initPasswordToggles();
     initPersianDigits();
     initPriceHints();
     initMisc();

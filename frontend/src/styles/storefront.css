@@ -858,7 +858,6 @@ input:focus, textarea:focus, select:focus {
   padding: var(--space-3);
   cursor: pointer;
 }
-.shipping-method--active { border-color: var(--color-accent); background: rgba(138, 109, 75, 0.05); }
 .shipping-method__body { display: flex; flex-direction: column; flex: 1; }
 .shipping-method__cost { font-weight: 800; white-space: nowrap; }
 
@@ -1748,3 +1747,450 @@ input, select, textarea { min-width: 0; max-width: 100%; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 .combobox-panel.is-closing { animation: audit-card-in .15s ease reverse both; pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { .combobox-panel.is-closing { animation: none; } }
+
+/* ==========================================================================
+   PART S6 / AUDIT 19 — PHONE DENSITY, CHECKOUT STEPS, PASSWORD EYES
+   ==========================================================================
+   Everything in this section is additive and lives LAST in the sheet on
+   purpose: earlier audit blocks re-declare the same selectors outside any
+   media query (e.g. `.site-header__search { flex: 1; max-width: 460px }`
+   defeated the ≤768px wrap rule above it), so the phone rules have to be
+   re-stated after them to win the cascade.
+
+   Breakpoints follow the owner's brief:
+     ≤ 767px   phone    : 2 product columns, 8px gaps, 12px page padding
+     ≤ 1023px  tablet   : 3 product columns
+     ≥ 1024px  desktop  : the existing layout, untouched
+   ========================================================================== */
+
+/* --- 1. Phone header: the search field gets its own full-width row --------
+   `.site-header__actions` keeps `margin-inline-start: auto`, so the burger,
+   the brand and the account/cart controls share the first row while the
+   search occupies the second one on its own -- always ≥ 70% of the width,
+   and the Persian placeholder «جستجوی محصول…» is fully visible. */
+@media (max-width: 767px) {
+  .site-header__inner { flex-wrap: wrap; row-gap: 10px; }
+  .site-header__search {
+    order: 3;
+    flex: 1 0 100%;
+    width: 100%;
+    max-width: none;
+    margin-inline: 0;
+  }
+  .site-header__search input { min-height: 44px; }
+  .site-header__brand-name { font-size: var(--font-size-base); }
+}
+
+/* --- 2. Password fields: the eye button (item 3) --------------------------
+   The button sits at the INLINE END of the field -- the LEFT side in this
+   RTL layout. 40px tap target, tab-reachable, `type="button"` in the
+   component so it can never submit the form. */
+.password-field { position: relative; display: block; }
+.password-field__input { width: 100%; padding-inline-end: 46px; }
+.password-field__toggle {
+  position: absolute;
+  inset-inline-end: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  line-height: 1;
+}
+.password-field__toggle:hover { color: var(--brand-green-dark); background: var(--brand-green-tint); }
+.password-field__toggle[aria-pressed="true"] { color: var(--brand-green-dark); }
+.field--error .password-field__input, .password-field__input.is-invalid { border-color: var(--color-danger); }
+
+/* Skeleton cards mirror the REAL card boxes (square media + two text lines),
+   at every width -- otherwise the first paint has a different height than the
+   results that replace it, which is exactly the layout shift the loaders are
+   supposed to prevent. */
+.product-card--skeleton .product-card__image { aspect-ratio: 1 / 1; height: auto; border-radius: 0; }
+
+/* --- 3. Phone product grids: 2 dense columns everywhere ------------------- */
+@media (max-width: 767px) {
+  .container { padding-inline: 12px; }
+
+  .product-grid,
+  .related-grid,
+  .wishlist-grid,
+  .complements__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  /* The «پیشنهاد همراه» cards follow the compact rhythm too: a square image
+     box instead of a fixed 130px strip, so nothing is cropped at ~171px. */
+  .complements__media { display: block; aspect-ratio: 1 / 1; background: #f3f1e8; overflow: hidden; }
+  .complements__media img, .complements__media picture img {
+    width: 100%; height: 100%; object-fit: contain; padding: 6px;
+  }
+  .complements__media picture { display: block; width: 100%; height: 100%; }
+  .complements__name, .complements__price { padding-inline: 8px; overflow-wrap: anywhere; }
+  .complements__name { font-size: 13px; line-height: 1.7; padding-top: 6px; }
+  .complements__price { font-size: 0.8rem; }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .product-grid,
+  .related-grid,
+  .wishlist-grid,
+  .complements__grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-3);
+  }
+}
+
+/* Home-page carousels may stay horizontal on a phone; each card is then
+   ~44% of the viewport width, so two cards plus a peek of the third are
+   visible (item 1). Applies to the deals rail. */
+@media (max-width: 767px) {
+  .deals-grid {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    padding-bottom: 4px;
+  }
+  .deals-grid > * { flex: 0 0 44%; scroll-snap-align: start; min-width: 0; }
+  .deal-card__name { font-size: var(--font-size-sm); }
+}
+
+/* --- 4. Compact card (item 1) ---------------------------------------------
+   Square, light image field with `object-fit: contain` (nothing is cropped
+   at 171px wide), badges as small chips in one corner, the wishlist heart
+   in the opposite one, a 2-line name, a reserved 1-line brand line and a
+   bottom row holding the bold final price (prices line up across a row)
+   plus the round cart-plus button. */
+@media (max-width: 767px) {
+  .product-card { border-radius: 12px; }
+  .product-card:hover { transform: none; box-shadow: var(--shadow-sm); }
+
+  .product-card__media,
+  .product-card__media-wrap { position: relative; }
+  .product-card__media { aspect-ratio: 1 / 1; background: #f3f1e8; }
+  .product-card__media img,
+  .product-card__media picture img,
+  .product-card__media .img-placeholder,
+  .product-card__media picture { object-fit: contain; }
+  .product-card__media img { padding: 6px; }
+  .product-card__media .img-placeholder { padding: 0; }
+  .product-card__media picture { position: absolute; inset: 0; }
+  .product-card__media picture img {
+    position: absolute; inset: 0; width: 100%; height: 100%; padding: 6px;
+  }
+  .product-card:hover .product-card__img--main { transform: none; }
+  .product-card__img--alt { display: none; }
+
+  .product-card__badges { top: 6px; inset-inline-start: 6px; gap: 4px; max-width: calc(100% - 44px); }
+  .product-card__badges .badge {
+    font-size: 0.68rem;
+    line-height: 1.6;
+    padding: 1px 7px;
+    border-radius: 999px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .product-card__quick-add { display: none; }
+
+  /* Wishlist heart: the corner opposite the badges, 32px tap target. */
+  .product-card__heart {
+    position: absolute;
+    top: 6px;
+    inset-inline-end: 6px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, .92);
+    border: 1px solid var(--color-border);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+  }
+  .product-card__heart:disabled { opacity: .75; }
+
+  .product-card__body { padding: 8px; gap: 2px; }
+  .product-card__name {
+    font-size: 13px;
+    line-height: 1.7;
+    height: 3.4em;
+    min-height: 3.4em;
+  }
+  .product-card__brand { font-size: 11px; height: 1.7em; min-height: 1.7em; }
+  .price--sm .price__current { font-size: 0.95rem; }
+  .product-card__body .price__compare { font-size: 0.72rem; }
+  .product-card__body .price__badge { display: none; }
+
+  .product-card--compact .product-card__footer {
+    margin-top: auto;
+    align-items: flex-end;
+    gap: 6px;
+    flex-wrap: nowrap;
+  }
+  .product-card--compact .product-card__footer .price {
+    margin-top: 0;
+    min-width: 0;
+    gap: 4px;
+  }
+  .product-card__add-icon {
+    flex: none;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--brand-green-dark);
+    color: var(--brand-gold);
+    border: 1px solid rgba(206, 180, 100, .6);
+    cursor: pointer;
+  }
+  .product-card__add-icon:disabled { opacity: .7; }
+  .product-card__notify {
+    font-size: 11px;
+    color: var(--brand-gold-deep);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    padding-block: 8px;
+    text-align: end;
+  }
+
+  /* Skeletons keep the exact box of the real compact card: no layout shift
+     when the products (and then the images) arrive. */
+  .product-card--skeleton .product-card__image,
+  .product-card--skeleton .skeleton.product-card__image { height: auto; aspect-ratio: 1 / 1; border-radius: 0; }
+  .product-card--skeleton .skeleton--line { margin-inline: 8px; }
+}
+
+/* --- 5. Shop: sticky mobile toolbar, bottom sheets, load more (item 1) ----
+   The bar is a deliberate sticky element (like a sticky table header): it is
+   opaque, sits at z-index 30 -- well under the sticky header's 60 -- and only
+   exists below 768px, where the JS also stops rendering it. Its travel box is
+   the shop grid, which is exactly the list it belongs to. */
+.shop__mobile-bar { display: none; position: static; }
+
+@media (max-width: 767px) {
+  .shop { padding-block: 10px; }
+  /* Belt and braces: the sidebar is not even rendered on a phone (the sheet
+     holds the same panel), and CSS hides it if the two ever disagree. */
+  .shop__sidebar { display: none; }
+
+  .shop__mobile-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    position: sticky;
+    top: var(--site-header-height, 76px);
+    z-index: 30;
+    margin: 0 0 10px;
+    padding: 8px;
+    border-radius: 14px;
+    background: var(--brand-green-dark);
+    border: 1px solid rgba(206, 180, 100, .45);
+    box-shadow: 0 6px 18px rgba(20, 26, 10, .25);
+  }
+  .shop__mobile-bar .shop__mobile-count {
+    margin-inline-start: auto;
+    color: var(--brand-ivory);
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .shop__mobile-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 40px;
+    padding: 6px 14px;
+    border-radius: 10px;
+    border: 1px solid rgba(206, 180, 100, .55);
+    background: rgba(206, 180, 100, .14);
+    color: var(--brand-gold);
+    font-weight: 700;
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+  }
+  .shop__mobile-btn__badge {
+    display: inline-grid;
+    place-items: center;
+    min-width: 20px;
+    padding-inline: 5px;
+    border-radius: 10px;
+    background: var(--brand-gold);
+    color: var(--brand-green-dark);
+    font-size: 0.72rem;
+  }
+  /* The toolbar's count and sorting select are both in the sticky bar above
+     (result count + sorting sheet), so the row itself is redundant here. */
+  .shop__toolbar { display: none; }
+  .pagination { display: none; }             /* replaced by «نمایش کالاهای بیشتر» */
+  .shop__load-more { display: inline-flex; width: 100%; justify-content: center; margin-top: var(--space-4); }
+  .shop__main { min-width: 0; }
+}
+
+.shop__load-more { display: none; }
+
+/* Bottom sheets (filters + sorting) */
+.sheet {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 130;
+  background: var(--color-surface);
+  border-radius: 18px 18px 0 0;
+  box-shadow: var(--shadow-lg);
+  max-height: 86dvh;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  animation: sheet-in .22s cubic-bezier(.2, .8, .2, 1);
+}
+@keyframes sheet-in { from { transform: translateY(14px); opacity: .6; } to { transform: none; opacity: 1; } }
+.sheet__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--color-border);
+}
+.sheet__head h2 { margin: 0; font-size: var(--font-size-md); }
+.sheet__close {
+  width: 40px; height: 40px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--color-border); border-radius: 10px;
+  background: var(--color-surface); color: var(--color-text-muted); cursor: pointer;
+}
+.sheet__body { padding: 12px 16px; overflow-y: auto; flex: 1; }
+.sheet__foot {
+  padding: 12px 16px calc(14px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+.sheet__foot .btn { width: 100%; }
+.sheet-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 129;
+  background: rgba(20, 26, 10, .5);
+  border: 0;
+  padding: 0;
+}
+.sheet__option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 12px 4px;
+  border-bottom: 1px dashed var(--color-border);
+  cursor: pointer;
+}
+.sheet__option:last-of-type { border-bottom: 0; }
+.sheet__option input { width: 20px; height: 20px; }
+@media (prefers-reduced-motion: reduce) { .sheet { animation: none; } }
+.sheet__foot .btn[disabled] { opacity: .6; }
+
+/* --- 6. Checkout: one step at a time on a phone, sticky action bar (item 2) */
+.checkout__mobile-bar {
+  display: none;
+  position: static;
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+}
+.checkout__mobile-total small { color: var(--color-text-muted); font-size: 0.72rem; }
+.checkout__mobile-total b { color: var(--brand-green-dark); }
+.checkout__review-block h3 { color: var(--color-text-muted); }
+.checkout__review-change { color: var(--brand-gold-deep); background: none; }
+/* Selected delivery card: gold border + tinted field + a ring, identical on
+   every screen size (declared out here so the contrast audit can see it). */
+.shipping-method--active {
+  border-color: var(--brand-gold-deep);
+  background: var(--brand-green-tint);
+  box-shadow: inset 0 0 0 1px var(--brand-gold-deep);
+}
+
+@media (max-width: 767px) {
+  .checkout { padding-bottom: 96px; }        /* room for the fixed action bar */
+  .checkout__grid { grid-template-columns: 1fr; }
+  .checkout__summary { position: static; order: 0; }
+
+  .checkout__mobile-bar {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    z-index: 90;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -6px 22px rgba(30, 36, 18, .12);
+  }
+  .checkout__mobile-bar-row { display: flex; align-items: center; gap: var(--space-3); }
+  .checkout__mobile-total { display: flex; flex-direction: column; line-height: 1.4; min-width: 0; }
+  .checkout__mobile-total b { font-size: var(--font-size-md); white-space: nowrap; }
+  .checkout__mobile-bar .btn { flex: 1; min-height: 46px; }
+
+  /* The review step (phone only): address + delivery method + items, with a
+     «تغییر» link on every block that can still change. */
+  .checkout__review-totals { margin: var(--space-2) 0 0; font-size: var(--font-size-sm); }
+  .checkout__review-totals > div { display: flex; justify-content: space-between; padding-block: 3px; }
+  .checkout__review-totals dd { margin: 0; }
+  .checkout__review-block { border-bottom: 1px dashed var(--color-border); padding-block: var(--space-3); }
+  .checkout__review-block:last-of-type { border-bottom: 0; }
+  .checkout__review-block h3 { margin: 0 0 6px; font-size: var(--font-size-sm); }
+  .checkout__review-block p { margin: 0; }
+  .checkout__review-change { border: 0; padding: 6px 0; font-weight: 700; cursor: pointer; text-decoration: underline; }
+
+  /* Delivery methods become large selectable cards: icon, title, delivery
+     time and price, with the selected one clearly highlighted. */
+  .shipping-method {
+    align-items: flex-start;
+    gap: var(--space-3);
+    padding: 14px;
+    border-width: 2px;
+  }
+  .shipping-method__icon {
+    flex: none;
+    width: 40px; height: 40px;
+    display: inline-grid; place-items: center;
+    border-radius: 12px;
+    background: var(--brand-green-tint);
+    color: var(--brand-green-dark);
+  }
+  .shipping-method__body { min-width: 0; gap: 2px; }
+  .shipping-method__body strong { font-size: var(--font-size-base); }
+  .shipping-method__cost { font-size: var(--font-size-base); }
+  .shipping-method--active .shipping-method__icon { background: #fff; }
+}
+
+/* The delivery section must follow the address directly on desktop too, and
+   its heading must be unmistakable. */
+.checkout__section > h2 { font-size: var(--font-size-lg); margin-top: 0; }
+.checkout__step-anchor { display: inline; }
+
+/* Clickable, clearly-marked stepper: earlier steps go back, the current step
+   is the only strong element, future steps stay muted. */
+.checkout__step button {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.checkout__step--todo { opacity: .65; }
+.checkout__step--clickable:hover { border-color: var(--brand-gold-deep); }
