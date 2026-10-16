@@ -168,6 +168,57 @@ keeps its own, already-correct behaviour, and the server-side rule in
 
 ---
 
+## Changed files
+
+**New**
+
+```
+backend/apps/core/spa.py                              catch-all: 200 vs 404 for page URLs
+backend/apps/core/test_spa_404.py
+backend/apps/adminui/tests/test_order_status_choices.py
+backend/apps/adminui/tests/test_admin_password_toggle.py
+backend/templates/admin/login.html                    themed login page + eye button
+frontend/src/components/PasswordInput.jsx             one reusable password field
+frontend/src/components/PasswordInput.test.jsx
+frontend/src/components/ProductCard.compact.test.jsx
+frontend/src/pages/ShopPage.mobile.test.jsx
+frontend/src/pages/CheckoutPage.mobile.test.jsx
+frontend/src/admin-theme/passwordToggle.test.js
+e2e/mobile-grid.spec.js                               real-browser 375px checks
+docs/mobile-audit/README.md                           this report
+```
+
+**Modified**
+
+```
+frontend/src/components/ProductCard.jsx     compact phone card
+frontend/src/components/Header.jsx          measured --site-header-height
+frontend/src/components/Icon.jsx            cart-plus / eye / eye-off / store / bolt
+frontend/src/pages/ShopPage.jsx             sticky bar, sheets, load more, skeletons
+frontend/src/pages/CheckoutPage.jsx         phone step flow + review step
+frontend/src/pages/LoginPage.jsx            uses PasswordInput
+frontend/src/pages/RegisterPage.jsx         uses PasswordInput
+frontend/src/pages/PasswordResetConfirmPage.jsx
+frontend/src/pages/account/ProfilePage.jsx
+frontend/src/pages/StickyLayout.test.jsx    audits the new sticky bar
+frontend/src/styles/storefront.css          all phone rules, sheets, compact card
+backend/apps/orders/admin.py                OrderStatusSelect / OrderAdminForm
+backend/apps/core/test_nginx_configs.py     page requests must reach the catch-all
+backend/config/urls.py                      mounts the catch-all last
+backend/config/settings/base.py             SPA_INDEX_FILE / SPA_SHELL_URL
+backend/apps/adminui/templates/adminui/_sprite.html   eye-off symbol
+backend/static/admin_theme/js/theme.js      initPasswordToggles()
+backend/static/admin_theme/css/theme.css    .cusin-password styles
+nginx/conf.d/cusin.conf                     page routing + asset locations
+nginx/prod.d/cusin.conf                     same
+nginx/prod.d/00-bootstrap-http.conf.example same
+docker-compose.yml / docker-compose.prod.yml   SPA_SHELL_URL for the backend
+.env.example / backend/.env.example         documented the two new settings
+docs/DEPLOY.md / docs/E2E.md                routing + how to run the new spec
+```
+
+---
+
 ## Verification
 
 ```sh
