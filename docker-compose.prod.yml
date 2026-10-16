@@ -71,6 +71,12 @@ services:
     environment:
       POSTGRES_HOST: db
       DJANGO_SETTINGS_MODULE: config.settings.production
+      # Audit 19 item 5: Django answers every storefront page request (a real
+      # 200 for a known page, a real 404 otherwise -- see apps/core/spa.py),
+      # and needs the built index.html to do it. The frontend container owns
+      # that file; fetching it over the compose network keeps it impossible
+      # to serve a stale shell after a deploy. Cached in-process for 30s.
+      SPA_SHELL_URL: http://frontend/index.html
     command: ["sh", "/app/docker-entrypoint.sh"]
     volumes:
       - static_volume:/app/staticfiles

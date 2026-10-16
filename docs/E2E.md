@@ -48,6 +48,20 @@ E2E_BASE_URL=http://localhost:5173 npm test -- --project=chromium
 ```bash
 cd e2e
 E2E_BASE_URL=http://localhost:5173 npx playwright test --project=mobile-pixel
+
+آزمون موبایل (Audit 19) — اندازه‌گیری واقعی گرید دو ستونه، سرریز افقی، نوار چسبان
+فیلتر/مرتب‌سازی، مرحلهٔ «روش ارسال» در تسویه‌حساب موبایل و چرخهٔ رمز عبور:
+
+```bash
+cd e2e
+E2E_BASE_URL=http://localhost:5173 npx playwright test mobile-grid.spec.js --project=chromium
+```
+
+بررسی ۴۰۴ واقعی فقط روی پشتهٔ کامل (nginx + Django) معنا دارد؛ برای آن:
+
+```bash
+E2E_BASE_URL=https://cusin.ir E2E_EXPECT_REAL_404=1 npx playwright test mobile-grid.spec.js --project=chromium
+```
 E2E_BASE_URL=http://localhost:5173 npx playwright test --project=mobile-iphone
 ```
 

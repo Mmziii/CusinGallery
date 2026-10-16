@@ -4296,3 +4296,70 @@ body.cusin-admin.app-discounts.model-coupon #container #changelist #result_list 
   }
   body.cusin-admin #container .cusin-topbar .cusin-search-trigger-label { display: none; }
 }
+
+
+/* --------------------------------------------------------------------------
+   PASSWORD VISIBILITY TOGGLE (Audit 19 item 3)
+   Every password field of the light panel -- the login page, the
+   password-change form, the reset-confirm form, the user change form --
+   renders inside .cusin-password with a .cusin-password-toggle button at the
+   INLINE END of the field (the left side in this RTL panel). The button is a
+   40px tap target, shows eye / eye-off, and only ever toggles the input's
+   type -- it is `type="button"` in the markup, so it can never submit.
+   -------------------------------------------------------------------------- */
+body.cusin-admin .cusin-password {
+  position: relative;
+  display: block;
+}
+
+body.cusin-admin .cusin-password > input[type="password"],
+body.cusin-admin .cusin-password > input[type="text"] {
+  width: 100%;
+  padding-inline-end: 48px;
+}
+
+body.cusin-admin .cusin-password-toggle {
+  position: absolute;
+  inset-inline-end: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  min-height: 40px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: var(--cusin-radius-sm);
+  background: transparent;
+  color: var(--cusin-muted, #6b7280);
+  cursor: pointer;
+  line-height: 1;
+}
+
+body.cusin-admin .cusin-password-toggle:hover {
+  background: rgba(99, 112, 55, 0.12);
+  color: var(--cg-olive);
+}
+
+body.cusin-admin .cusin-password-toggle .cusin-icon {
+  width: 18px;
+  height: 18px;
+}
+
+/* eye while hidden, eye-off while visible (the button sets aria-pressed and
+   the is-visible class in JS; the icons are both in the DOM because the
+   server-rendered login page ships them too). */
+body.cusin-admin .cusin-password-toggle .cusin-icon--eye-off { display: none; }
+body.cusin-admin .cusin-password-toggle[aria-pressed="true"] .cusin-icon--eye-off { display: inline-block; }
+body.cusin-admin .cusin-password-toggle[aria-pressed="true"] .cusin-icon--eye { display: none; }
+
+body.cusin-admin .cusin-password-toggle:focus-visible {
+  outline: 2px solid var(--cg-olive);
+  outline-offset: 2px;
+}
+
+/* The login card sits on a dark gradient: keep the field readable there. */
+body.login .cusin-password-toggle { color: #4b5563; }
+body.login .cusin-password-toggle:hover { background: rgba(99, 112, 55, 0.16); }

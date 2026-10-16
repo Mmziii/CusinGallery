@@ -451,6 +451,23 @@ PASSWORD_RESET_CODE_TTL_MINUTES = env.int("PASSWORD_RESET_CODE_TTL_MINUTES", def
 FRONTEND_URL = env("FRONTEND_URL", default="https://cusin.ir")
 
 # ---------------------------------------------------------------------------
+# Storefront SPA shell (Audit 19 item 5: real 404 for unknown page URLs)
+# ---------------------------------------------------------------------------
+# Django's catch-all view (apps/core/spa.py) decides whether a page URL is
+# real (200 + the built index.html) or a typo (404 + the same document with
+# <meta name="robots" content="noindex">). It needs the built shell:
+#   SPA_INDEX_FILE  - path to a copy of the built index.html on disk; checked
+#                     first when the file exists.
+#   SPA_SHELL_URL   - internal URL of the frontend container's index.html,
+#                     fetched (and cached briefly) when no file is configured.
+# In the compose stack the frontend service owns the file, so the URL is the
+# source that can never go stale after a deploy. Both empty = the view uses
+# the repository's frontend/index.html (development) and finally a small
+# built-in Persian document, so it never fails hard.
+SPA_INDEX_FILE = env("SPA_INDEX_FILE", default="")
+SPA_SHELL_URL = env("SPA_SHELL_URL", default="")
+
+# ---------------------------------------------------------------------------
 # Shipping (Phase 6; selectable methods + delivery windows added in the
 # Phase A corrections round)
 # ---------------------------------------------------------------------------

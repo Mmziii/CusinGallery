@@ -17,6 +17,7 @@ The admin is the shop owner's day-to-day order desk:
 import csv
 import datetime as dt
 
+from django import forms
 from django.conf import settings as django_settings
 from django.contrib import admin, messages
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -202,6 +203,99 @@ class OrderItemInline(admin.TabularInline):
     autocomplete_fields = ()
 
 
+class OrderStatusSelect(forms.Select):
+    """
+    The status <select> of the order change form (Audit 19 item 6).
+
+    The owner's report: on an UNPAID order the select still listed
+    «تأیید شده» and every later status, even though saving them is refused by
+    the workflow. Being shown an action that cannot succeed is a trap, so the
+    widget renders:
+
+      * only the statuses that are actually reachable -- the order's CURRENT
+        status (a plain save must stay possible) and the transitions both the
+        DAG and the payment rule allow;
+      * the transitions the DAG allows but the payment rule forbids as
+        ``disabled`` options, each carrying its Persian reason as a ``title``
+        -- never silently hidden, because "why is «تأیید شده» missing?" is
+        its own support call.
+
+    The server-side rule is untouched: apps/orders/workflow.validate_transition
+    (called from save_model under the row lock) still refuses everything this
+    list does not offer.
+    """
+
+    def __init__(self, attrs=None, disabled_options=None, **kwargs):
+        super().__init__(attrs, **kwargs)
+        self.disabled_options = list(disabled_options or [])
+
+    def optgroups(self, name, value, attrs=None):
+        groups = super().optgroups(name, value, attrs)
+        if not groups or not self.disabled_options:
+            return groups
+        index = len(groups[0][1])
+        for entry in self.disabled_options:
+            option = self.create_option(name, entry["value"], entry["label"], False, index)
+            option["attrs"]["disabled"] = True
+            option["attrs"]["title"] = entry["reason"]
+            groups[0][1].append(option)
+            index += 1
+        return groups
+
+
+class OrderAdminForm(forms.ModelForm):
+    """
+    Order change form with a status field that only offers what will be
+    accepted (Audit 19 item 6). Everything else is stock ModelForm behaviour.
+    """
+
+    class Meta:
+        model = Order
+        fields = "__all__"
+        widgets = {"status": OrderStatusSelect}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        order = self.instance
+        field = self.fields.get("status")
+        if field is None or order is None or not order.pk:
+            return
+
+        reachable = []
+        blocked = []
+        for status in Order.Status.values:
+            if status == order.status:
+                reachable.append(status)
+                continue
+            if status not in allowed_next_statuses(order.status):
+                continue
+            reason = payment_block_reason(order, status)
+            if reason:
+                blocked.append(
+                    {"value": status, "label": Order.Status(status).label, "reason": reason}
+                )
+            else:
+                reachable.append(status)
+
+        field.choices = [(status, Order.Status(status).label) for status in reachable]
+        # The disabled extras live on the widget only: they are NOT valid
+        # choices, so a crafted POST that sends one is rejected by the field
+        # before the workflow even sees it.
+        field.widget.disabled_options = blocked
+
+        hints = []
+        if blocked:
+            hints.append(
+                "گزینه‌های خاکستری (غیرفعال) در وضعیت فعلی این سفارش مجاز نیستند؛ "
+                + " ".join(f"«{entry['label']}»: {entry['reason']}" for entry in blocked)
+            )
+        hints.append(
+            "فقط انتقال‌های مجاز گردش کار نمایش داده می‌شوند؛ تغییرهای دیگر توسط "
+            "سیستم رد می‌شوند."
+        )
+        field.help_text = " ".join(hints)
+
+
 @admin.register(Order)
 class OrderAdmin(NormalizedSearchMixin, admin.ModelAdmin):
     # Preserve every operational value and its sort key, but present the
@@ -218,6 +312,9 @@ class OrderAdmin(NormalizedSearchMixin, admin.ModelAdmin):
     # OrderQueueFilter (B3a) is purely additive and powers the tabs.
     list_filter = (OrderQueueFilter, "status", "payment_status", "refund_status", "created_at")
     change_list_template = "admin/orders/order_change_list.html"
+    # Audit 19 item 6: the status select offers only reachable statuses (see
+    # OrderAdminForm); the workflow's server-side rule is unchanged.
+    form = OrderAdminForm
 
     @admin.display(description="شماره", ordering="order_number")
     def order_number_cell(self, obj):

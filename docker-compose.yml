@@ -58,6 +58,12 @@ services:
       # config/settings/base.py) -- POSTGRES_HOST here is the Compose
       # service name "db", which only resolves inside the Compose network.
       POSTGRES_HOST: db
+      # Audit 19 item 5: the storefront page requests are decided by Django
+      # (apps/core/spa.py), which needs the built index.html. The frontend
+      # container owns that file, so it is fetched over the internal network
+      # (and cached briefly). Empty value = the view falls back to the
+      # repository's frontend/index.html.
+      SPA_SHELL_URL: http://frontend/index.html
     volumes:
       - static_volume:/app/staticfiles
       - media_volume:/app/media

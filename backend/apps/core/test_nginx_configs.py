@@ -280,6 +280,70 @@ class NginxSecurityHeaderTests(SimpleTestCase):
                             f"and so drops the server-level '{name}'",
                         )
 
+    @staticmethod
+    def _location_body(source, header, want="proxy_pass"):
+        """Text of the location block whose body mentions ``want``.
+
+        A config can hold several `location /` blocks (the TLS server's plain
+        HTTP twin only redirects); picking the one that actually proxies is
+        what makes these assertions about the real storefront block.
+        """
+        start = 0
+        fallback = None
+        while True:
+            index = source.find(header, start)
+            if index == -1:
+                return fallback
+            end = source.find("\n    }", index)
+            block = source[index:end if end != -1 else len(source)]
+            if want in block:
+                return block
+            if fallback is None:
+                fallback = block
+            start = index + len(header)
+
+    def test_storefront_pages_reach_the_backend_catch_all(self):
+        """Audit 19 item 5: page requests must reach Django's catch-all.
+
+        While nginx answered every path with the built index.html, an unknown
+        URL was a 200 with the 404 design (a soft 404). The catch-all view
+        (apps/core/spa.py) is the only layer that knows both the SPA's route
+        table and the product/category slugs, so `location /` must proxy the
+        backend -- and the build output must still come from the frontend
+        container, which is the only place those files exist.
+        """
+        for path in NGINX_FILES:
+            source = strip_comments(path.read_text(encoding="utf-8"))
+            block = self._location_body(source, "location / {")
+            with self.subTest(config=path.name):
+                self.assertIsNotNone(block, f"{path.name}: no `location /`")
+                self.assertIn("proxy_pass http://backend_upstream;", block)
+                self.assertNotIn("proxy_pass http://frontend_upstream;", block)
+            for asset in ("/assets/", "/fonts/", "/brand/"):
+                with self.subTest(config=path.name, asset=asset):
+                    self.assertRegex(
+                        source,
+                        r"location \^~ " + asset + r" \{[^}]*frontend_upstream",
+                        f"{path.name}: the built bundle/fonts/brand files must be "
+                        f"served by the frontend container",
+                    )
+
+    def test_product_and_shop_pages_use_the_catch_all_for_humans_too(self):
+        for path in NGINX_FILES:
+            source = strip_comments(path.read_text(encoding="utf-8"))
+            product = self._location_body(source, "location ~ ^/products/")
+            if product is None:
+                continue  # the HTTP bootstrap config has no crawler routing
+            with self.subTest(config=path.name, block="products"):
+                # Bot -> /seo/ and human -> catch-all: BOTH end on the backend,
+                # so an unknown slug is a real 404 either way.
+                self.assertEqual(product.count("proxy_pass http://backend_upstream;"), 2)
+                self.assertNotIn("proxy_pass http://frontend_upstream;", product)
+            shop = self._location_body(source, "location = /shop/")
+            with self.subTest(config=path.name, block="shop"):
+                self.assertIn("proxy_pass http://backend_upstream;", shop)
+                self.assertNotIn("proxy_pass http://frontend_upstream;", shop)
+
     def test_seo_routes_reach_the_backend_in_every_config(self):
         """/robots.txt and /sitemap.xml are rendered by Django, not the SPA.
 

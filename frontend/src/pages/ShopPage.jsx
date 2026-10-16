@@ -1,5 +1,4 @@
 import { faDigits } from "../utils/faDigits";
-import { ContentSkeleton } from "../components/Skeletons";
 import { digitInput } from "../utils/iranianFields";
 import PropTypes from "prop-types";
 import { usePageMeta } from "../hooks/usePageMeta";
@@ -8,9 +7,13 @@ import { Link, useNavigationType, useSearchParams } from "react-router-dom";
 
 import Breadcrumbs from "../components/Breadcrumbs";
 import Icon from "../components/Icon";
+import Portal from "../components/Portal";
 import ProductCard from "../components/ProductCard";
+import { ProductCardSkeleton } from "../components/Skeletons";
 import { EmptyState, ErrorState } from "../components/ui";
 import { useAsync } from "../hooks/useAsync";
+import useFocusTrap from "../hooks/useFocusTrap";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 import { listBrands, listCategories, listFacets, listProducts } from "../services/catalogApi";
 import { errorMessage } from "../components/ui";
 import { normalizeApiError } from "../utils/apiError";
@@ -91,6 +94,18 @@ function ShopPage() {
   // into a drawer; the open/close transition is a grid-template-rows
   // 0fr -> 1fr animation (same technique as the filter groups).
   const [filtersOpen, setFiltersOpen] = useState(false);
+  // Audit 19 item 1: phones get their own toolbar (sticky, under the header),
+  // the filters and the sorting move into bottom sheets and page-number links
+  // become a single «نمایش کالاهای بیشتر» button. The query matches the CSS
+  // breakpoint exactly, so markup and stylesheet never disagree.
+  const isMobile = useMediaQuery("(max-width: 767px)");
+  const [sortOpen, setSortOpen] = useState(false);
+  const filtersSheetRef = useRef(null);
+  const sortSheetRef = useRef(null);
+  const closeFilters = useCallback(() => setFiltersOpen(false), []);
+  const closeSort = useCallback(() => setSortOpen(false), []);
+  useFocusTrap(filtersSheetRef, isMobile && filtersOpen, closeFilters);
+  useFocusTrap(sortSheetRef, isMobile && sortOpen, closeSort);
 
   const params = useMemo(() => {
     const p = {};
@@ -107,7 +122,21 @@ function ShopPage() {
     return p;
   }, [searchParams]);
 
-  const productsState = useAsync(() => listProducts(params), [searchParams.toString()]);
+  // The URL stays the single source of truth for paging (SEO + back button):
+  // ?page=N means "the first N pages", so a deep link and the phone's
+  // «نمایش کالاهای بیشتر» append the same way. Page 1 keeps the plain single
+  // request it always had.
+  const currentPage = Math.max(1, Number(params.page) || 1);
+  const productsState = useAsync(async () => {
+    if (currentPage <= 1) return listProducts(params);
+    const pages = await Promise.all(
+      Array.from({ length: currentPage }, (_, index) =>
+        listProducts({ ...params, page: index + 1 })
+      )
+    );
+    const last = pages[pages.length - 1];
+    return { ...last, results: pages.flatMap((page) => page.results || []) };
+  }, [searchParams.toString()]);
   const categoriesState = useAsync(() => listCategories(), []);
   const brandsState = useAsync(() => listBrands(), []);
   // Facets re-scope whenever the selected category changes; the facet
@@ -173,6 +202,17 @@ function ShopPage() {
   const products = productsState.data;
   const totalPages = products ? Math.ceil(products.count / 20) : 0;
 
+  // Audit 19 item 1: how many filters are active right now -- shown on the
+  // phone's «فیلترها» button and in the sheet heading, so a shopper always
+  // knows why the list is short. Paging and sorting are not filters.
+  const activeFilterCount =
+    ["category", "brand", "min_price", "max_price", "in_stock"].filter((key) =>
+      searchParams.get(key)
+    ).length +
+    [...searchParams.keys()].filter(
+      (key) => key.startsWith("attr_") && searchParams.get(key)
+    ).length;
+
   // Part S2 item 7: preserve scroll position when the browser navigates
   // BACK to this listing (filters already survive via the URL). The
   // position is stored per filter-set, so forward navigation starts fresh.
@@ -225,6 +265,100 @@ function ShopPage() {
     (key) => key.startsWith("attr_") && searchParams.get(key)
   );
 
+  // ONE filter panel, rendered either in the desktop sidebar or in the phone
+  // bottom sheet -- never both, so no control (and no id) is ever duplicated.
+  const filtersPanel = (
+    <div className="shop__filters-inner">
+      <FilterGroup title="دسته‌بندی">
+        <select
+          aria-label="دسته‌بندی"
+          value={searchParams.get("category") || ""}
+          onChange={(e) => setParam("category", e.target.value)}
+        >
+          <option value="">همه دسته‌ها</option>
+          {(categoriesState.data?.results || []).map((category) => (
+            <option key={category.id} value={category.slug}>{category.name}</option>
+          ))}
+        </select>
+      </FilterGroup>
+
+      <FilterGroup title="برند">
+        <select
+          aria-label="برند"
+          value={searchParams.get("brand") || ""}
+          onChange={(e) => setParam("brand", e.target.value)}
+        >
+          <option value="">همه برندها</option>
+          {(brandsState.data?.results || []).map((brand) => (
+            <option key={brand.id} value={brand.slug}>{brand.name}</option>
+          ))}
+        </select>
+      </FilterGroup>
+
+      {/* Part R5 item 8: dynamic attribute facets, one checkbox group
+          per attribute that exists on active products (re-scoped to
+          the selected category). */}
+      {(facetsState.data?.results || []).map((attribute) => {
+        const selected = selectedAttrValues(attribute.slug);
+        return (
+          <FilterGroup key={attribute.slug} title={attribute.name}>
+            {attribute.values.map((entry) => (
+              <label className="checkbox" key={entry.value}>
+                <input
+                  type="checkbox"
+                  checked={selected.includes(entry.value)}
+                  onChange={() => toggleAttrValue(attribute.slug, entry.value)}
+                />
+                {entry.value} <span className="filter-group__count">({entry.count})</span>
+              </label>
+            ))}
+          </FilterGroup>
+        );
+      })}
+
+      <FilterGroup title="محدوده قیمت (تومان)">
+        <div className="filter-group__row">
+          <input
+            type="text"
+            inputMode="numeric"
+            placeholder="از"
+            aria-label="کمترین قیمت"
+            value={priceText.min_price ? formatPrice(priceText.min_price) : ""}
+            onChange={(e) => applyPrice("min_price", e.target.value)}
+            onBlur={(e) => setParam("min_price", digitInput(e.target.value))}
+          />
+          <input
+            type="text"
+            inputMode="numeric"
+            placeholder="تا"
+            aria-label="بیشترین قیمت"
+            value={priceText.max_price ? formatPrice(priceText.max_price) : ""}
+            onChange={(e) => applyPrice("max_price", e.target.value)}
+            onBlur={(e) => setParam("max_price", digitInput(e.target.value))}
+          />
+        </div>
+      </FilterGroup>
+
+      {priceText.min_price && priceText.max_price && Number(priceText.min_price) > Number(priceText.max_price) ? <p role="alert">کمترین قیمت نباید بیشتر از بیشترین قیمت باشد.</p> : null}
+      <FilterGroup title="موجودی">
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={searchParams.get("in_stock") === "true"}
+            onChange={(e) => setParam("in_stock", e.target.checked ? "true" : "")}
+          />
+          فقط کالاهای موجود
+        </label>
+      </FilterGroup>
+
+      {(searchParams.get("category") || searchParams.get("brand") || searchParams.get("min_price") || searchParams.get("max_price") || searchParams.get("in_stock") || attrKeys.length > 0) ? (
+        <button type="button" className="btn btn--outline btn--sm" onClick={clearAllFilters}>
+          حذف همه فیلترها
+        </button>
+      ) : null}
+    </div>
+  );
+
   return (
     <div className="shop">
       <div className="shop__heading">
@@ -247,120 +381,169 @@ function ShopPage() {
         />
         <h1>فروشگاه</h1>
       </div>
-      <aside className="shop__sidebar">
-        {/* Part S5 item 7: on small screens the filter column folds into a
-            drawer; the open/close motion is the same grid-template-rows
-            0fr -> 1fr transition the groups use. The panel stays in the
-            DOM, so nothing is lost when it is closed. */}
-        <button
-          type="button"
-          className="shop__filters-toggle"
-          aria-expanded={filtersOpen}
-          aria-controls="shop-filters"
-          onClick={() => setFiltersOpen((value) => !value)}
-        >
-          <span>فیلترها</span>
-          <Icon name="chevron-down" size={16} />
-        </button>
+      {isMobile ? null : (
+        <aside className="shop__sidebar">
+          {/* Part S5 item 7: on small screens the filter column folds into a
+              drawer; the open/close motion is the same grid-template-rows
+              0fr -> 1fr transition the groups use. The panel stays in the
+              DOM, so nothing is lost when it is closed. On phones (Audit 19
+              item 1) this whole block is REPLACED by the sticky toolbar and
+              the bottom sheets below. */}
+          <button
+            type="button"
+            className="shop__filters-toggle"
+            aria-expanded={filtersOpen}
+            aria-controls="shop-filters"
+            onClick={() => setFiltersOpen((value) => !value)}
+          >
+            <span>فیلترها</span>
+            <Icon name="chevron-down" size={16} />
+          </button>
 
-        <div
-          className={`shop__filters${filtersOpen ? " shop__filters--open" : ""}`}
-          id="shop-filters"
-        >
-          <div className="shop__filters-inner">
+          <div
+            className={`shop__filters${filtersOpen ? " shop__filters--open" : ""}`}
+            id="shop-filters"
+          >
+            {filtersPanel}
+          </div>
+        </aside>
+      )}
 
-            <FilterGroup title="دسته‌بندی">
-              <select
-                aria-label="دسته‌بندی"
-                value={searchParams.get("category") || ""}
-                onChange={(e) => setParam("category", e.target.value)}
+      {isMobile ? (
+        <>
+          {filtersOpen ? (
+            <Portal>
+              <button
+                type="button"
+                className="sheet-scrim"
+                aria-label="بستن فیلترها"
+                onClick={closeFilters}
+              />
+              <div
+                className="sheet"
+                id="shop-filters-sheet"
+                role="dialog"
+                aria-modal="true"
+                aria-label="فیلترها"
+                ref={filtersSheetRef}
               >
-                <option value="">همه دسته‌ها</option>
-                {(categoriesState.data?.results || []).map((category) => (
-                  <option key={category.id} value={category.slug}>{category.name}</option>
-                ))}
-              </select>
-            </FilterGroup>
+                <div className="sheet__head">
+                  <h2>
+                    فیلترها
+                    {activeFilterCount > 0 ? ` (${formatPrice(activeFilterCount)})` : ""}
+                  </h2>
+                  <button
+                    type="button"
+                    className="sheet__close"
+                    aria-label="بستن"
+                    onClick={closeFilters}
+                  >
+                    <Icon name="close" size={16} />
+                  </button>
+                </div>
+                <div className="sheet__body">{filtersPanel}</div>
+                <div className="sheet__foot">
+                  {/* Filters apply live -- the URL is the state -- so «اعمال»
+                      just closes the sheet and returns to the results, with
+                      the count of active filters visible in the heading. */}
+                  <button type="button" className="btn btn--primary" onClick={closeFilters}>
+                    اعمال
+                  </button>
+                </div>
+              </div>
+            </Portal>
+          ) : null}
 
-            <FilterGroup title="برند">
-              <select
-                aria-label="برند"
-                value={searchParams.get("brand") || ""}
-                onChange={(e) => setParam("brand", e.target.value)}
+          {sortOpen ? (
+            <Portal>
+              <button
+                type="button"
+                className="sheet-scrim"
+                aria-label="بستن مرتب‌سازی"
+                onClick={closeSort}
+              />
+              <div
+                className="sheet"
+                id="shop-sort-sheet"
+                role="dialog"
+                aria-modal="true"
+                aria-label="مرتب‌سازی"
+                ref={sortSheetRef}
               >
-                <option value="">همه برندها</option>
-                {(brandsState.data?.results || []).map((brand) => (
-                  <option key={brand.id} value={brand.slug}>{brand.name}</option>
-                ))}
-              </select>
-            </FilterGroup>
-
-            {/* Part R5 item 8: dynamic attribute facets, one checkbox group
-                per attribute that exists on active products (re-scoped to
-                the selected category). */}
-            {(facetsState.data?.results || []).map((attribute) => {
-              const selected = selectedAttrValues(attribute.slug);
-              return (
-                <FilterGroup key={attribute.slug} title={attribute.name}>
-                  {attribute.values.map((entry) => (
-                    <label className="checkbox" key={entry.value}>
+                <div className="sheet__head">
+                  <h2>مرتب‌سازی</h2>
+                  <button
+                    type="button"
+                    className="sheet__close"
+                    aria-label="بستن"
+                    onClick={closeSort}
+                  >
+                    <Icon name="close" size={16} />
+                  </button>
+                </div>
+                <div className="sheet__body">
+                  {SORT_OPTIONS.map((option) => (
+                    <label key={option.value} className="sheet__option">
                       <input
-                        type="checkbox"
-                        checked={selected.includes(entry.value)}
-                        onChange={() => toggleAttrValue(attribute.slug, entry.value)}
+                        type="radio"
+                        name="shop-sorting"
+                        value={option.value}
+                        checked={(searchParams.get("ordering") || "newest") === option.value}
+                        onChange={() => {
+                          setParam("ordering", option.value);
+                          closeSort();
+                        }}
                       />
-                      {entry.value} <span className="filter-group__count">({entry.count})</span>
+                      {option.label}
                     </label>
                   ))}
-                </FilterGroup>
-              );
-            })}
-
-            <FilterGroup title="محدوده قیمت (تومان)">
-              <div className="filter-group__row">
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="از"
-                  aria-label="کمترین قیمت"
-                  value={priceText.min_price ? formatPrice(priceText.min_price) : ""}
-                  onChange={(e) => applyPrice("min_price", e.target.value)}
-                  onBlur={(e) => setParam("min_price", digitInput(e.target.value))}
-                />
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="تا"
-                  aria-label="بیشترین قیمت"
-                  value={priceText.max_price ? formatPrice(priceText.max_price) : ""}
-                  onChange={(e) => applyPrice("max_price", e.target.value)}
-                  onBlur={(e) => setParam("max_price", digitInput(e.target.value))}
-                />
+                </div>
+                <div className="sheet__foot">
+                  <button type="button" className="btn btn--outline" onClick={closeSort}>
+                    بستن
+                  </button>
+                </div>
               </div>
-            </FilterGroup>
-
-            {priceText.min_price && priceText.max_price && Number(priceText.min_price) > Number(priceText.max_price) ? <p role="alert">کمترین قیمت نباید بیشتر از بیشترین قیمت باشد.</p> : null}
-            <FilterGroup title="موجودی">
-              <label className="checkbox">
-                <input
-                  type="checkbox"
-                  checked={searchParams.get("in_stock") === "true"}
-                  onChange={(e) => setParam("in_stock", e.target.checked ? "true" : "")}
-                />
-                فقط کالاهای موجود
-              </label>
-            </FilterGroup>
-
-            {(searchParams.get("category") || searchParams.get("brand") || searchParams.get("min_price") || searchParams.get("max_price") || searchParams.get("in_stock") || attrKeys.length > 0) ? (
-              <button type="button" className="btn btn--outline btn--sm" onClick={clearAllFilters}>
-                حذف همه فیلترها
-              </button>
-            ) : null}
-          </div>
-        </div>
-      </aside>
+            </Portal>
+          ) : null}
+        </>
+      ) : null}
 
       <div className="shop__main">
+        {/* Audit 19 item 1: on a phone the sticky toolbar lives INSIDE
+            .shop__main -- whose box is the whole results list, so the bar can
+            stick for the entire scroll (a grid item would only stick inside
+            its own row). It carries filters, sorting and the result count,
+            and is not rendered above 768px. */}
+        {isMobile ? (
+          <div className="shop__mobile-bar">
+            <button
+              type="button"
+              className="shop__mobile-btn"
+              aria-expanded={filtersOpen}
+              aria-controls="shop-filters-sheet"
+              onClick={() => setFiltersOpen(true)}
+            >
+              فیلترها
+              {activeFilterCount > 0 ? (
+                <span className="shop__mobile-btn__badge">{formatPrice(activeFilterCount)}</span>
+              ) : null}
+            </button>
+            <button
+              type="button"
+              className="shop__mobile-btn"
+              aria-expanded={sortOpen}
+              aria-controls="shop-sort-sheet"
+              onClick={() => setSortOpen(true)}
+            >
+              مرتب‌سازی
+            </button>
+            {products ? (
+              <span className="shop__mobile-count">{formatPrice(products.count)} کالا</span>
+            ) : null}
+          </div>
+        ) : null}
+
         <div className="shop__toolbar">
           {/* Part S2 item 7: result count, always derived from the server. */}
           {products ? <span className="shop__count">{formatPrice(products.count)} کالا</span> : null}
@@ -437,7 +620,19 @@ function ShopPage() {
             spinner only covers the very first load; from then on the previous
             results stay on screen -- dimmed and aria-busy -- until the new
             page replaces them, so the layout never jumps. */}
-        {!products && productsState.isLoading ? <ContentSkeleton label="در حال دریافت محصولات…" /> : null}
+        {/* Audit 19 item 1: the loading state is the SAME dense grid the
+            results land in -- six card-shaped skeletons, so nothing shifts
+            when the products (and then their images) arrive. */}
+        {!products && productsState.isLoading ? (
+          <div className="shop__skeleton" role="status" aria-busy="true" aria-label="در حال دریافت محصولات…">
+            <span className="sr-only">در حال دریافت محصولات…</span>
+            <div className="product-grid">
+              {Array.from({ length: 6 }, (_, index) => (
+                <ProductCardSkeleton key={index} />
+              ))}
+            </div>
+          </div>
+        ) : null}
         {productsState.error ? <ErrorState message={errorMessage(normalizeApiError(productsState.error))} onRetry={productsState.refetch} /> : null}
 
         {products ? (
@@ -471,15 +666,29 @@ function ShopPage() {
           </div>
         ) : null}
 
-        {totalPages > 1 ? (
+        {/* Phones: one «نمایش کالاهای بیشتر» button that walks the SAME
+            ?page= URLs the numbered links use (so links stay shareable and
+            the back button keeps working); every page up to N is fetched and
+            rendered concatenated. Desktop keeps the numbered pagination. */}
+        {isMobile && totalPages > currentPage ? (
+          <button
+            type="button"
+            className="btn btn--outline shop__load-more"
+            onClick={() => setParam("page", String(currentPage + 1))}
+          >
+            نمایش کالاهای بیشتر
+          </button>
+        ) : null}
+
+        {!isMobile && totalPages > 1 ? (
           <nav className="pagination" aria-label="صفحه‌بندی">
-            {Number(params.page || 1) > 1 ? <Link to={`?${new URLSearchParams({ ...Object.fromEntries(searchParams), page: Number(params.page || 1) - 1 })}`}>قبلی</Link> : <span aria-disabled="true">قبلی</span>}
+            {currentPage > 1 ? <Link to={`?${new URLSearchParams({ ...Object.fromEntries(searchParams), page: currentPage - 1 })}`}>قبلی</Link> : <span aria-disabled="true">قبلی</span>}
             {Array.from({length: totalPages}, (_, index) => index + 1)
-              .filter(page => page === 1 || page === totalPages || Math.abs(page - Number(params.page || 1)) <= 2)
-              .map(page => <Link key={page} aria-current={page === Number(params.page || 1) ? "page" : undefined}
+              .filter(page => page === 1 || page === totalPages || Math.abs(page - currentPage) <= 2)
+              .map(page => <Link key={page} aria-current={page === currentPage ? "page" : undefined}
                 to={`?${new URLSearchParams({ ...Object.fromEntries(searchParams), page })}`}>{faDigits(page)}</Link>)}
             <span>صفحه {faDigits(params.page || 1)} از {faDigits(totalPages)}</span>
-            {Number(params.page || 1) < totalPages ? <Link to={`?${new URLSearchParams({ ...Object.fromEntries(searchParams), page: Number(params.page || 1) + 1 })}`}>بعدی</Link> : <span aria-disabled="true">بعدی</span>}
+            {currentPage < totalPages ? <Link to={`?${new URLSearchParams({ ...Object.fromEntries(searchParams), page: currentPage + 1 })}`}>بعدی</Link> : <span aria-disabled="true">بعدی</span>}
           </nav>
         ) : null}
       </div>

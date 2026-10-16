@@ -51,6 +51,7 @@ function Header() {
   const [compact, setCompact] = useState(false);
   const [categories, setCategories] = useState([]);
   const hasOpenDrawer = menuOpen || cartOpen;
+  const headerRef = useRef(null);
   const userMenuRef = useRef(null);
   const searchRef = useRef(null);
   const searchTimer = useRef(null);
@@ -118,6 +119,38 @@ function Header() {
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  // Audit 19: publish the header's REAL height as --site-header-height.
+  // Sticky elements that must sit directly under the header (the shop's
+  // mobile filter/sort bar) used to hard-code 76px, which is wrong the
+  // moment the phone layout wraps the search onto a second row. Measured
+  // after every scroll (the header shrinks), on resize and once on mount.
+  useEffect(() => {
+    const root = document.documentElement;
+    let frame = null;
+    const measure = () => {
+      frame = null;
+      const height = headerRef.current?.offsetHeight || 0;
+      // jsdom and hidden tabs report 0 -- keep the last real value instead
+      // of pinning every sticky offset to 0.
+      if (height > 0) root.style.setProperty("--site-header-height", `${height}px`);
+    };
+    const schedule = () => {
+      if (frame !== null) return;
+      frame = window.requestAnimationFrame ? window.requestAnimationFrame(measure) : measure();
+    };
+    schedule();
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule);
+    const resizeObserver =
+      typeof ResizeObserver === "function" ? new ResizeObserver(schedule) : null;
+    if (resizeObserver && headerRef.current) resizeObserver.observe(headerRef.current);
+    return () => {
+      window.removeEventListener("scroll", schedule);
+      window.removeEventListener("resize", schedule);
+      resizeObserver?.disconnect();
+    };
   }, []);
 
   // Outside click closes menus.
@@ -284,7 +317,7 @@ function Header() {
     : sumLineTotals(cartLines.map((line) => line.lineTotal));
 
   return (
-    <header className={`site-header ${compact ? "site-header--compact" : ""}`}>
+    <header className={`site-header ${compact ? "site-header--compact" : ""}`} ref={headerRef}>
       <div className="container site-header__inner">
         <button
           type="button"
