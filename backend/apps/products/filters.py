@@ -16,8 +16,8 @@ class NumberInFilter(django_filters.BaseInFilter, django_filters.NumberFilter):
 
 class ProductFilter(django_filters.FilterSet):
     ids = NumberInFilter(field_name="id", lookup_expr="in")
-    category = django_filters.CharFilter(field_name="category__slug", lookup_expr="iexact")
-    brand = django_filters.CharFilter(field_name="brand__slug", lookup_expr="iexact")
+    category = django_filters.CharFilter(method="filter_category")
+    brand = django_filters.CharFilter(method="filter_brand")
     min_price = django_filters.NumberFilter(field_name="price", lookup_expr="gte")
     max_price = django_filters.NumberFilter(field_name="price", lookup_expr="lte")
     in_stock = django_filters.BooleanFilter(method="filter_in_stock")
@@ -28,6 +28,14 @@ class ProductFilter(django_filters.FilterSet):
     class Meta:
         model = Product
         fields = ["category", "brand", "min_price", "max_price", "in_stock", "is_featured", "is_new", "is_best_seller"]
+
+    def filter_category(self, queryset, name, value):
+        from apps.categories.tree import category_subtree_ids
+
+        return queryset.filter(category_id__in=category_subtree_ids(value))
+
+    def filter_brand(self, queryset, name, value):
+        return queryset.filter(brand__slug__iexact=value, brand__is_active=True)
 
     def filter_in_stock(self, queryset, name, value):
         return queryset.filter(stock_quantity__gt=0) if value else queryset.filter(stock_quantity=0)

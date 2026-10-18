@@ -76,8 +76,8 @@ def make_image_bytes(color_a, color_b, size=(800, 600), variant=0):
 
 CATEGORIES = [
     # (name, slug, parent_slug, description)
-    # One catalog root («آشپزخانه», slug kitchen -- see the
-    # categories migration 0006) with the main groups under it.
+    # "kitchen" is a logical seed key, NOT the existing root's identity.
+    # Migration 0006 may give the actual root a different published slug.
     ("آشپزخانه", "kitchen", None, "ریشهٔ دسته‌بندی‌های فروشگاه"),
     ("ظروف پخت‌وپز", "cookware", "kitchen", "قابلمه، تابه و ظروف پخت"),
     ("ظروف سرو و پذیرایی", "serving", "kitchen", "ظروف سرو، دیس و کاسه"),
@@ -182,27 +182,34 @@ class Command(BaseCommand):
         categories = {}
         for name, slug, parent_slug, description in CATEGORIES:
             parent = categories.get(parent_slug)
-            category, _ = Category.objects.get_or_create(
-                slug=slug,
-                defaults={
-                    "name": name,
-                    "parent": parent,
-                    "description": description,
-                    "is_active": True,
-                    "ordering": len(categories),
-                    # The first (parent-less) seed entry is the catalog
-                    # root; runtime code reads this flag, never the slug.
-                    "is_catalog_root": parent_slug is None,
-                },
-            )
-            # Keep re-runs idempotent even on a database seeded before
-            # the flag existed.
-            if parent_slug is None and not category.is_catalog_root:
-                Category.objects.filter(is_catalog_root=True).exclude(
-                    pk=category.pk
-                ).update(is_catalog_root=False)
-                category.is_catalog_root = True
-                category.save(update_fields=["is_catalog_root", "updated_at"])
+            defaults = {
+                "name": name,
+                "parent": parent,
+                "description": description,
+                "is_active": True,
+                "ordering": len(categories),
+            }
+            if parent_slug is None:
+                # The catalog root is the flagged row -- never a name/slug
+                # match, so demo groups cannot land on a legacy row that
+                # merely owns the preferred slug.
+                category = Category.catalog_root()
+                if category is None:
+                    candidate, suffix = slug, 0
+                    while Category.objects.filter(slug=candidate).exists():
+                        suffix += 1
+                        candidate = f"{slug}-root" if suffix == 1 else f"{slug}-root-{suffix - 1}"
+                    category = Category.objects.create(slug=candidate, **defaults)
+                # Keep re-runs idempotent even on a database seeded before
+                # the flag existed.
+                if not category.is_catalog_root:
+                    Category.objects.filter(is_catalog_root=True).exclude(
+                        pk=category.pk
+                    ).update(is_catalog_root=False)
+                    category.is_catalog_root = True
+                    category.save(update_fields=["is_catalog_root", "updated_at"])
+            else:
+                category, _ = Category.objects.get_or_create(slug=slug, defaults=defaults)
             categories[slug] = category
         self.stdout.write(f"Categories: {Category.objects.count()}")
 

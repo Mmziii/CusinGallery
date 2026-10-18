@@ -11,7 +11,8 @@ const CATEGORY_TREE = [
   {
     id: 1,
     name: "آشپزخانه",
-    slug: "kitchen",
+    slug: "kitchen-root",
+    is_catalog_root: true,
     product_count: 1,
     children: [
       { id: 2, name: "ظروف پخت", slug: "cookware", product_count: 1, children: [] },

@@ -66,7 +66,7 @@ beforeAll(() => {
   apiClient.defaults.adapter = async (config) => {
     if (/categories\/tree/.test(config.url || "")) {
       return {
-        data: { count: TREE.length, next: null, previous: null, results: TREE },
+        data: { count: 1, next: null, previous: null, results: [{ id: 99, name: "آشپزخانه", slug: "kitchen-root", is_catalog_root: true, children: TREE }] },
         status: 200,
         statusText: "OK",
         headers: {},
@@ -103,6 +103,14 @@ const untilMenu = () =>
   });
 
 describe("mega menu", () => {
+  it("opens the real root's groups even when its slug is kitchen-root", async () => {
+    const { button } = await renderHeader();
+    fireEvent.click(button);
+    await untilMenu();
+    const roots = document.querySelector(".mega-menu__roots");
+    expect(within(roots).getAllByRole("button").map((item) => item.textContent.trim())).toEqual(["ظروف پخت", "بلور"]);
+  });
+
   it("survives the pointer crossing the gap, closes after the delay when left", async () => {
     const { button, trigger } = await renderHeader();
 

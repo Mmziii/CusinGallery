@@ -211,6 +211,31 @@ def shop_meta(request):
     )
 
 
+def brand_meta(request, slug):
+    """Crawler-visible metadata for the same active-brand pages as the SPA."""
+    from apps.products.models import Brand
+    from .digits import fa_digits
+
+    brand = Brand.objects.filter(slug=slug, is_active=True).first()
+    if brand is None:
+        raise Http404("برند یافت نشد.")
+    title = f"محصولات برند {fa_digits(brand.name)}"
+    image = (
+        (og_image_for(brand) if brand.tile_image else None)
+        or og_image_for(brand.tile_image)
+        or og_image_for(brand.logo)
+    )
+    return _html_response(
+        title=f"{title} | {SITE_NAME}",
+        description=f"خرید محصولات برند {fa_digits(brand.name)} از {SITE_NAME}؛ قیمت به تومان و ارسال به سراسر ایران.",
+        url=absolute(f"/brands/{iri_to_uri(brand.slug)}/"),
+        image=image or placeholder_image(),
+        og_type="website",
+        heading=title,
+        image_is_placeholder=not image,
+    )
+
+
 def _json_ld_script(payload):
     import json
 

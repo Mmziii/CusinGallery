@@ -26,13 +26,15 @@ describe("recentlyViewed store", () => {
     expect(getRecentlyViewed()).toEqual([1, 3, 2]);
   });
 
-  it("caps the list at 12 entries", () => {
+  it("shows ten entries and reserves a bounded current-product slot", () => {
     for (let id = 1; id <= 20; id += 1) recordView(id);
     const list = getRecentlyViewed();
     expect(list.length).toBe(RECENT_LIMIT);
-    expect(list.length).toBe(12);
+    expect(list.length).toBe(10);
     expect(list[0]).toBe(20); // newest first
-    expect(list[list.length - 1]).toBe(9); // oldest nine entries dropped
+    expect(list[list.length - 1]).toBe(11);
+    expect(JSON.parse(localStorage.getItem(RECENT_KEY)).length).toBe(11);
+    expect(getRecentlyViewed(20)).toEqual([19, 18, 17, 16, 15, 14, 13, 12, 11, 10]);
   });
 
   it("ignores non-positive or non-integer ids", () => {
@@ -52,7 +54,7 @@ describe("recentlyViewed store", () => {
   });
 
   it("drops non-integer junk entries from storage", () => {
-    localStorage.setItem(RECENT_KEY, JSON.stringify([5, "x", -1, 3.5, 9]));
+    localStorage.setItem(RECENT_KEY, JSON.stringify([5, "x", -1, 3.5, 9, 5]));
     expect(getRecentlyViewed()).toEqual([5, 9]);
   });
 });

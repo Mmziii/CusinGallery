@@ -6,7 +6,7 @@ create/update/delete endpoint exists here at all -- catalog data is only
 ever modified through Django Admin (staff-only, unaffected by anything
 here).
 """
-from django.db.models import Count, Prefetch
+from django.db.models import Count, Max, Min, Prefetch
 from django_filters.rest_framework import DjangoFilterBackend
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import permissions, status, viewsets
@@ -108,6 +108,30 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
             return product_search(queryset, search_term)
         return queryset.order_by(self._resolve_ordering())
 
+    def list(self, request, *args, **kwargs):
+        base = self.get_queryset()
+        queryset = self.filter_queryset(base)
+        price_range = queryset.order_by().aggregate(min=Min("price"), max=Max("price"))
+        # Result extrema include the selected prices. The handle domain
+        # deliberately excludes ONLY the price filter so shoppers can widen
+        # it again without clearing their category/brand/search/stock/facets.
+        if request.query_params.get("min_price") or request.query_params.get("max_price"):
+            params = request.query_params.copy()
+            params.pop("min_price", None)
+            params.pop("max_price", None)
+            bounds_queryset = ProductFilter(params, queryset=base, request=request).qs
+            price_bounds = bounds_queryset.order_by().aggregate(min=Min("price"), max=Max("price"))
+        else:
+            price_bounds = dict(price_range)
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            response = self.get_paginated_response(self.get_serializer(page, many=True).data)
+        else:
+            data = self.get_serializer(queryset, many=True).data
+            response = Response({"count": len(data), "next": None, "previous": None, "results": data})
+        response.data.update(price_range=price_range, price_bounds=price_bounds)
+        return response
+
     @action(detail=False, methods=["get"], url_path="facets")
     def facets(self, request):
         """Part R5 item 8: dynamic attribute filters for the shop sidebar.
@@ -121,7 +145,12 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
         products = Product.objects.filter(is_active=True)
         category_slug = request.query_params.get("category")
         if category_slug:
-            products = products.filter(category__slug=category_slug, category__is_active=True)
+            from apps.categories.tree import category_subtree_ids
+
+            products = products.filter(category_id__in=category_subtree_ids(category_slug))
+        brand_slug = request.query_params.get("brand")
+        if brand_slug:
+            products = products.filter(brand__slug__iexact=brand_slug, brand__is_active=True)
         rows = (
             ProductAttributeValue.objects.filter(
                 variants__is_active=True,

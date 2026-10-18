@@ -1,10 +1,4 @@
-/**
- * Part R5 item 9: the «پیشنهاد همراه» (complements) section on the
- * product page. The API only ever returns active + in-stock candidates,
- * so these tests verify rendering, selection state, and the bulk
- * "add selected to cart" action against the guest cart (no server).
- */
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
@@ -89,68 +83,20 @@ function renderPage(path = "/products/base-pot/") {
   );
 }
 
-describe("product page complements section", () => {
-  it("renders the section with every candidate preselected", async () => {
-    renderPage();
-    expect(await screen.findByText("پیشنهاد همراه")).toBeTruthy();
-    expect(await screen.findByText("کفچک استیل")).toBeTruthy();
-    expect(await screen.findByText("آبکش بلور")).toBeTruthy();
-
-    const boxes = document.querySelectorAll(".complements__card input[type=checkbox]");
-    expect(boxes.length).toBe(2);
-    boxes.forEach((box) => expect(box.checked).toBe(true));
-  });
-
-  it("adds only the selected complements to the guest cart", async () => {
-    renderPage();
-    await screen.findByText("پیشنهاد همراه");
-
-    // Uncheck the second complement, keep the first.
-    const boxes = document.querySelectorAll(".complements__card input[type=checkbox]");
-    fireEvent.click(boxes[1]);
-    expect(boxes[1].checked).toBe(false);
-
-    fireEvent.click(screen.getByText("افزودن انتخاب‌شده‌ها به سبد"));
-
-    await waitFor(() => {
-      const lines = useCartStore.getState().guestLines;
-      expect(lines.length).toBe(1);
-      expect(lines[0]).toMatchObject({ product_id: 11, quantity: 1 });
-    });
-    expect(await screen.findByText("کالاهای انتخاب‌شده به سبد خرید اضافه شدند.")).toBeTruthy();
-  });
-
-  it("adds all selected complements when none are unchecked", async () => {
-    renderPage();
-    await screen.findByText("پیشنهاد همراه");
-    fireEvent.click(screen.getByText("افزودن انتخاب‌شده‌ها به سبد"));
-
-    await waitFor(() => {
-      const lines = useCartStore.getState().guestLines;
-      expect(lines.map((l) => l.product_id).sort()).toEqual([11, 12]);
-    });
-  });
-
-  it("disables the button when nothing is selected", async () => {
-    renderPage();
-    await screen.findByText("پیشنهاد همراه");
-    const boxes = document.querySelectorAll(".complements__card input[type=checkbox]");
-    fireEvent.click(boxes[0]);
-    fireEvent.click(boxes[1]);
-
-    const button = screen.getByText("افزودن انتخاب‌شده‌ها به سبد");
-    expect(button.disabled).toBe(true);
-  });
-
-  it("renders nothing when the product has no complements", async () => {
-    renderPage("/products/no-complements/");
-    await screen.findByRole("heading", { level: 1, name: "قابلمه گرانیتی" });
+describe("product page below-the-product content", () => {
+  it("does not render complements or their bulk-purchase action even when the API includes them", async () => {
+    const { container } = renderPage();
+    await screen.findByRole("heading", { name: "قابلمه گرانیتی" });
     expect(screen.queryByText("پیشنهاد همراه")).toBeNull();
+    expect(screen.queryByText("کفچک استیل")).toBeNull();
+    expect(screen.queryByText("افزودن انتخاب‌شده‌ها به سبد")).toBeNull();
+    expect(container.querySelector(".complements")).toBeNull();
+    expect(screen.getByRole("heading", { name: "نظرات کاربران" })).toBeTruthy();
   });
 
-  it("records the view in browser-local storage (item 10)", async () => {
+  it("records the view in browser-local storage", async () => {
     renderPage();
-    await screen.findByText("پیشنهاد همراه");
+    await screen.findByRole("heading", { name: "قابلمه گرانیتی" });
     await waitFor(() => {
       expect(JSON.parse(localStorage.getItem("cusin_recently_viewed"))).toEqual([1]);
     });

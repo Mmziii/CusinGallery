@@ -128,7 +128,7 @@ describe("phone shop toolbar", () => {
     expect(sheet.getAttribute("aria-modal")).toBe("true");
     expect(sheet.querySelector(".sheet__head h2").textContent).toContain("۲");
     // The real filter controls live in the sheet, plus the «اعمال» button.
-    expect(sheet.querySelector('select[aria-label="برند"]')).toBeTruthy();
+    expect(sheet.querySelector('input[aria-label="جستجوی برند"]')).toBeTruthy();
     const apply = screen.getByRole("button", { name: "اعمال" });
     fireEvent.click(apply);
     await waitFor(() => expect(document.getElementById("shop-filters-sheet")).toBeNull());

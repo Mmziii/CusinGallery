@@ -153,6 +153,14 @@ def checkout(user, validated_data) -> Order:
     # Address resolution doesn't need the cart lock below -- kept outside
     # the atomic block to keep the lock's hold time minimal.
     shipping_fields = _resolve_shipping_fields(user, validated_data)
+    shipping_method = validated_data.get("shipping_method") or shipping.DEFAULT_METHOD
+    if shipping_method == "express" and not shipping.is_express_eligible(
+        shipping_fields["shipping_province"], shipping_fields["shipping_city"]
+    ):
+        # Check the resolved, owned saved address rather than trusting extra
+        # inline fields supplied alongside address_id. Reject before any
+        # cart/order/coupon writes, including callers outside the HTTP view.
+        raise CheckoutError({"shipping_method": [shipping.EXPRESS_UNAVAILABLE_MESSAGE]})
 
     with transaction.atomic():
         cart = cart_services.get_or_create_cart(user)
@@ -193,7 +201,6 @@ def checkout(user, validated_data) -> Order:
         # delivery window are computed here, server-side, from the
         # settings in force RIGHT NOW -- then snapshotted onto the Order
         # so they never change afterwards.
-        shipping_method = validated_data.get("shipping_method") or shipping.DEFAULT_METHOD
         shipping_cost = shipping.calculate_shipping_cost(subtotal, shipping_method)
         delivery_min, delivery_max = shipping.calculate_estimated_delivery(shipping_method)
 

@@ -8,43 +8,34 @@
  * tiles, shop filters) must show its CHILDREN -- never the root
  * itself, which would render as one useless tile.
  *
- * The root is found by the flag, never by name/slug, so renaming it
- * cannot break grouping. All helpers degrade gracefully when the
- * flag is absent (older API data, mocked trees in tests): they fall
- * back to the historical `kitchen` slug, then to the raw roots, so
- * nothing breaks before/after a deploy.
+ * Root identity is the flag alone. Migration 0006 may publish the
+ * root as kitchen-root(-N), and the owner may rename it (name or
+ * slug) afterwards, so no helper may fall back to either field.
  */
 
-export const KITCHEN_ROOT_SLUG = "kitchen";
-
-/** The catalog-root row of a root list, by flag (slug fallback). */
+/** The catalog-root row of a root list, by flag. */
 export function catalogRoot(roots) {
   const list = Array.isArray(roots) ? roots : [];
-  return (
-    list.find((category) => category.is_catalog_root === true) ||
-    list.find((category) => category.slug === KITCHEN_ROOT_SLUG) ||
-    null
-  );
+  return list.find((category) => category.is_catalog_root === true) || null;
 }
 
-/** True when this category object (or slug, in `flatList`) is the root. */
+/** True when this category OBJECT is the flagged catalog root. */
+export function isCatalogRoot(category) {
+  return Boolean(category) && typeof category === "object" && category.is_catalog_root === true;
+}
+
+/** True when a category object (or a slug, resolved in `flatList`) is the root. */
 export function isCatalogRootCategory(category, flatList) {
   if (!category) return false;
-  if (typeof category === "object") {
-    if (category.is_catalog_root === true) return true;
-    if (category.is_catalog_root === false) return false;
-    return category.slug === KITCHEN_ROOT_SLUG;
-  }
+  if (typeof category === "object") return isCatalogRoot(category);
   const list = Array.isArray(flatList) ? flatList : [];
-  const row = list.find((item) => item.slug === category);
-  if (row && typeof row.is_catalog_root === "boolean") return row.is_catalog_root;
-  return category === KITCHEN_ROOT_SLUG;
+  return list.some((item) => item.slug === category && item.is_catalog_root === true);
 }
 
 /**
  * The main groups of the catalog: the children of the catalog
- * root. Falls back to the given roots when there is no root
- * (unmigrated data / test fixtures).
+ * root. Falls back to the given roots when there is no flagged
+ * root (unmigrated data / test fixtures).
  */
 export function mainGroups(roots) {
   const list = Array.isArray(roots) ? roots : [];
@@ -54,29 +45,26 @@ export function mainGroups(roots) {
 }
 
 /**
- * Shop URL for a category slug. The catalog root has no products
+ * Shop URL for a category. The catalog root has no products
  * of its own (it is a grouping node), so it maps to the shop
- * itself instead of a dead filter. Pass the flat list when
- * available so the root is recognised by its flag.
+ * itself instead of a dead filter.
+ *
+ * Pass the category OBJECT so the root is recognised by its flag.
+ * A slug-only caller can supply the flat API list; otherwise the
+ * slug is treated as a literal filter, never as a guessed root.
  */
-export function categoryUrl(slug, flatList) {
+export function categoryUrl(category, flatList = []) {
+  const slug = typeof category === "string" ? category : category?.slug;
   if (!slug) return "/shop/";
-  if (isCatalogRootCategory(slug, flatList)) return "/shop/";
+  if (isCatalogRootCategory(category, flatList)) return "/shop/";
   return `/shop/?category=${encodeURIComponent(slug)}`;
-}
-
-/** Shop URL for a category OBJECT (preferred: carries the flag). */
-export function categoryUrlFor(category) {
-  if (!category) return "/shop/";
-  if (isCatalogRootCategory(category)) return "/shop/";
-  return categoryUrl(category.slug);
 }
 
 /**
  * Ancestor chain (top-most first, INCLUDING the given category
  * itself) for a category slug, resolved from the FLAT category
- * list (each row carries `parent_slug`). Guarded against
- * cycles/pathological depth.
+ * list (each row carries `parent_slug`). Returns null when the
+ * slug is unknown. Guarded against cycles/pathological depth.
  */
 export function categoryChain(slug, flatList) {
   const list = Array.isArray(flatList) ? flatList : [];

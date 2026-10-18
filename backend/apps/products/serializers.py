@@ -42,6 +42,8 @@ class CategoryMiniSerializer(serializers.Serializer):
     id = serializers.IntegerField()
     name = serializers.CharField()
     slug = serializers.SlugField()
+    # The storefront marks the «آشپزخانه» root by this flag alone;
+    # name/slug are never treated as root identity.
     is_catalog_root = serializers.BooleanField(required=False, default=False)
     # Stage 1 (root category «آشپزخانه»): storefront breadcrumbs
     # need the FULL ancestor chain (top-most first, NOT including
@@ -59,7 +61,7 @@ class CategoryMiniSerializer(serializers.Serializer):
             chain.append({
                 "slug": node.slug,
                 "name": node.name,
-                "is_catalog_root": bool(getattr(node, "is_catalog_root", False)),
+                "is_catalog_root": node.is_catalog_root,
             })
             node = node.parent
             guard += 1
@@ -140,7 +142,7 @@ class ProductListSerializer(serializers.ModelSerializer):
     """
 
     category = CategoryMiniSerializer(read_only=True)
-    brand = BrandSerializer(read_only=True)
+    brand = serializers.SerializerMethodField()
     price_info = serializers.SerializerMethodField()
     primary_image = serializers.SerializerMethodField()
     stock_status = serializers.SerializerMethodField()
@@ -153,6 +155,11 @@ class ProductListSerializer(serializers.ModelSerializer):
             "price_info", "primary_image", "stock_status", "is_in_stock", "stock_quantity",
             "is_featured", "is_new", "is_best_seller",
         ]
+
+    def get_brand(self, obj):
+        if not obj.brand or not obj.brand.is_active:
+            return None
+        return BrandSerializer(obj.brand, context=self.context).data
 
     def get_price_info(self, obj):
         return PriceInfoSerializer(pricing.price_info_for_product(obj)).data
