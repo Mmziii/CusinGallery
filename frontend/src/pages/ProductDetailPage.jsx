@@ -27,7 +27,7 @@ import { normalizeApiError } from "../utils/apiError";
 import { formatPrice } from "../utils/formatPrice";
 import { recordView } from "../utils/recentlyViewed";
 import { shareImageUrl } from "../utils/shareImage";
-import { categoryUrl } from "../utils/categories";
+import { categoryUrlFor } from "../utils/categories";
 import RecentlyViewed from "../components/RecentlyViewed";
 
 function Stars({ value, size = "md" }) {
@@ -317,11 +317,11 @@ function ProductDetailPage() {
     const trail = [{ label: "کازین گالری", to: "/" }];
     if (product.category) {
       for (const ancestor of product.category.ancestors || []) {
-        trail.push({ label: ancestor.name, to: categoryUrl(ancestor.slug) });
+        trail.push({ label: ancestor.name, to: categoryUrlFor(ancestor) });
       }
       trail.push({
         label: product.category.name,
-        to: categoryUrl(product.category.slug),
+        to: categoryUrlFor(product.category),
       });
     }
     trail.push({ label: faDigits(product.name) });

@@ -19,7 +19,7 @@ import { errorMessage } from "../components/ui";
 import { normalizeApiError } from "../utils/apiError";
 import { formatPrice } from "../utils/formatPrice";
 import { shareImageUrl } from "../utils/shareImage";
-import { categoryChain, categoryUrl, KITCHEN_ROOT_SLUG } from "../utils/categories";
+import { categoryChain, categoryUrlFor, isCatalogRootCategory } from "../utils/categories";
 
 /** Part S5 item 7: price inputs wait ~300ms after the last keystroke. */
 const PRICE_DEBOUNCE_MS = 300;
@@ -162,7 +162,7 @@ function ShopPage() {
     () =>
       categoryChain(params.category, categories).map((category) => ({
         label: category.name,
-        to: categoryUrl(category.slug),
+        to: categoryUrlFor(category),
       })),
     [params.category, categories]
   );
@@ -293,7 +293,7 @@ function ShopPage() {
               filter offers its children (the main groups),
               not the root. */}
           {(categoriesState.data?.results || [])
-            .filter((category) => category.slug !== KITCHEN_ROOT_SLUG)
+            .filter((category) => !isCatalogRootCategory(category))
             .map((category) => (
               <option key={category.id} value={category.slug}>{category.name}</option>
             ))}

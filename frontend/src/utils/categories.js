@@ -1,48 +1,82 @@
 /**
  * Stage 1 helpers for the single-root catalog tree.
  *
- * The backend now has exactly ONE root category: «آشپزخانه»
- * (slug `kitchen`, see the categories 0006 data migration).
+ * The backend has exactly ONE catalog root («آشپزخانه»), marked with
+ * the API flag `is_catalog_root` (categories migration 0007).
  * Everything a shopper browses lives under it. Surfaces that
  * present "the main groups" (header mega menu, home category
  * tiles, shop filters) must show its CHILDREN -- never the root
- * itself, which would render as one useless «آشپزخانه» tile.
+ * itself, which would render as one useless tile.
  *
- * All helpers degrade gracefully when the tree has no kitchen
- * root (older API data, mocked trees in tests): they fall back
- * to the raw roots so nothing breaks before/after a deploy.
+ * The root is found by the flag, never by name/slug, so renaming it
+ * cannot break grouping. All helpers degrade gracefully when the
+ * flag is absent (older API data, mocked trees in tests): they fall
+ * back to the historical `kitchen` slug, then to the raw roots, so
+ * nothing breaks before/after a deploy.
  */
 
 export const KITCHEN_ROOT_SLUG = "kitchen";
 
-/**
- * The main groups of the catalog: the children of the
- * «آشپزخانه» root. Falls back to the given roots when there
- * is no kitchen root (unmigrated data / test fixtures).
- */
-export function mainGroups(roots) {
+/** The catalog-root row of a root list, by flag (slug fallback). */
+export function catalogRoot(roots) {
   const list = Array.isArray(roots) ? roots : [];
-  const kitchen = list.find((category) => category.slug === KITCHEN_ROOT_SLUG);
-  if (!kitchen) return list;
-  return kitchen.children || [];
+  return (
+    list.find((category) => category.is_catalog_root === true) ||
+    list.find((category) => category.slug === KITCHEN_ROOT_SLUG) ||
+    null
+  );
+}
+
+/** True when this category object (or slug, in `flatList`) is the root. */
+export function isCatalogRootCategory(category, flatList) {
+  if (!category) return false;
+  if (typeof category === "object") {
+    if (category.is_catalog_root === true) return true;
+    if (category.is_catalog_root === false) return false;
+    return category.slug === KITCHEN_ROOT_SLUG;
+  }
+  const list = Array.isArray(flatList) ? flatList : [];
+  const row = list.find((item) => item.slug === category);
+  if (row && typeof row.is_catalog_root === "boolean") return row.is_catalog_root;
+  return category === KITCHEN_ROOT_SLUG;
 }
 
 /**
- * Shop URL for a category slug. The kitchen root has no
- * products of its own (it is a grouping node), so it maps to
- * the shop itself instead of a dead `?category=kitchen` filter.
+ * The main groups of the catalog: the children of the catalog
+ * root. Falls back to the given roots when there is no root
+ * (unmigrated data / test fixtures).
  */
-export function categoryUrl(slug) {
+export function mainGroups(roots) {
+  const list = Array.isArray(roots) ? roots : [];
+  const root = catalogRoot(list);
+  if (!root) return list;
+  return root.children || [];
+}
+
+/**
+ * Shop URL for a category slug. The catalog root has no products
+ * of its own (it is a grouping node), so it maps to the shop
+ * itself instead of a dead filter. Pass the flat list when
+ * available so the root is recognised by its flag.
+ */
+export function categoryUrl(slug, flatList) {
   if (!slug) return "/shop/";
-  if (slug === KITCHEN_ROOT_SLUG) return "/shop/";
+  if (isCatalogRootCategory(slug, flatList)) return "/shop/";
   return `/shop/?category=${encodeURIComponent(slug)}`;
+}
+
+/** Shop URL for a category OBJECT (preferred: carries the flag). */
+export function categoryUrlFor(category) {
+  if (!category) return "/shop/";
+  if (isCatalogRootCategory(category)) return "/shop/";
+  return categoryUrl(category.slug);
 }
 
 /**
  * Ancestor chain (top-most first, INCLUDING the given category
  * itself) for a category slug, resolved from the FLAT category
- * list (each row carries `parent_slug`). Returns null when the
- * slug is unknown. Guarded against cycles/pathological depth.
+ * list (each row carries `parent_slug`). Guarded against
+ * cycles/pathological depth.
  */
 export function categoryChain(slug, flatList) {
   const list = Array.isArray(flatList) ? flatList : [];
@@ -77,10 +111,7 @@ export function pruneEmptyCategories(categories) {
     });
 }
 
-/**
- * The menu-ready catalog: main groups (children of the
- * «آشپزخانه» root), pruned of empty subtrees.
- */
+/** The menu-ready catalog: main groups, pruned of empty subtrees. */
 export function catalogGroups(roots) {
   return pruneEmptyCategories(mainGroups(roots));
 }

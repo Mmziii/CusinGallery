@@ -24,6 +24,7 @@ from apps.adminui.admin_dates import jalali_column
 from apps.adminui.templatetags.adminui_extras import group_thousands, to_fa_digits
 from apps.adminui.admin_forms import AutoWebpVariantsMixin, NumericChangelistAdminMixin
 from apps.adminui.search import NormalizedSearchMixin
+from apps.categories.models import Category
 
 import csv
 import glob
@@ -468,6 +469,36 @@ class HasImageFilter(admin.SimpleListFilter):
         return queryset
 
 
+LEAF_CATEGORY_HELP = "محصول را فقط در زیردسته‌ها قرار دهید؛ دسته‌های والد فقط گروه‌بندی هستند."
+
+
+def leaf_categories_queryset(include_pk=None):
+    """Leaf categories (no sub-categories), in tree order.
+
+    Products live on leaves only (Task 3). ``include_pk`` keeps a
+    legacy product's current parent category selectable while editing
+    it, so fixing other fields is not blocked before it is moved.
+    """
+    if include_pk:
+        qs = Category.objects.filter(Q(children__isnull=True) | Q(pk=include_pk))
+    else:
+        qs = Category.objects.filter(children__isnull=True)
+    return (
+        qs.distinct()
+        .select_related("parent", "parent__parent", "parent__parent__parent")
+        .order_by(
+            "parent__parent__ordering", "parent__ordering", "ordering", "name"
+        )
+    )
+
+
+class LeafCategoryChoiceField(forms.ModelChoiceField):
+    """Category choice labelled with its full path («آشپزخانه › …»)."""
+
+    def label_from_instance(self, obj):
+        return obj.full_path
+
+
 @admin.register(Product)
 class ProductAdmin(
     AdminSkuDirectionMixin,
@@ -497,15 +528,39 @@ class ProductAdmin(
         form = super().get_form(request, obj, change=change, **kwargs)
         if "sku" in form.base_fields:
             form.base_fields["sku"].label = "کد کالا (SKU)"
+        if "category" in form.base_fields:
+            field = form.base_fields["category"]
+            # Reset on every call: base_fields live on the form class,
+            # so a legacy parent included for one product must not leak
+            # into the next add form.
+            include_pk = obj.category_id if obj is not None else None
+            field.queryset = leaf_categories_queryset(include_pk=include_pk)
+            field.help_text = LEAF_CATEGORY_HELP
+            if obj is not None and obj.category_id and obj.category.children.exists():
+                field.help_text += (
+                    f" این محصول اکنون در دستهٔ والد «{obj.category.name}» است؛ "
+                    "آن را به یک زیردسته منتقل کنید."
+                )
         return form
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == "category":
+            kwargs.setdefault("queryset", leaf_categories_queryset())
+            kwargs.setdefault("help_text", LEAF_CATEGORY_HELP)
+            return LeafCategoryChoiceField(**kwargs)
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
     prepopulated_fields = {"slug": ("name",)}
-    # Part R5 item 9: complements is an M2M to Product itself -- the
-    # autocomplete widget searches by ProductAdmin.search_fields above.
-    autocomplete_fields = ("category", "brand", "complements")
+    # Category is deliberately NOT an autocomplete (Task 3): the plain
+    # dropdown lists leaf categories only, each labelled with its full
+    # path. Complements (Part R5 item 9) is an M2M to Product itself --
+    # its autocomplete searches by ProductAdmin.search_fields above.
+    autocomplete_fields = ("brand", "complements")
     inlines = [ProductImageInline, ProductVariantInline]
     actions = [
         "activate_products", "deactivate_products", "mark_featured",
         "unmark_featured", "duplicate_product", "change_price_percentage",
+        "move_to_category",
     ]
     change_list_template = "admin/products/product_change_list.html"
     # B4d: anchored sections + live preview + client-side formatting.
@@ -548,6 +603,12 @@ class ProductAdmin(
                 "price-percent/",
                 self.admin_site.admin_view(self.price_percent_view),
                 name="products_product_price_percent",
+            ),
+            # Task 3: bulk «انتقال به دسته…» (leaf categories only).
+            path(
+                "move-to-category/",
+                self.admin_site.admin_view(self.move_to_category_view),
+                name="products_product_move_to_category",
             ),
         ]
         return custom + super().get_urls()
@@ -1528,6 +1589,99 @@ class ProductAdmin(
     PRICE_PERCENT_MIN = -99
     PRICE_PERCENT_MAX = 999
     PRICE_ROUNDINGS = {"none": "بدون گردکردن", "100": "گرد به ۱۰۰ تومان", "1000": "گرد به ۱٬۰۰۰ تومان"}
+
+    # --- Task 3: move products to a leaf category ----------------------------
+
+    @admin.action(description="انتقال به دسته…")
+    def move_to_category(self, request, queryset):
+        if not self.has_change_permission(request):
+            self.message_user(
+                request,
+                "برای انتقال محصول به دسترسی ویرایش محصولات نیاز دارید.",
+                messages.ERROR,
+            )
+            return None
+        ids = ",".join(
+            str(pk) for pk in queryset.order_by("pk").values_list("pk", flat=True)
+        )
+        context = {
+            **self.admin_site.each_context(request),
+            "title": "انتقال به دسته…",
+            "opts": self.model._meta,
+            "ids": ids,
+            "count": queryset.count(),
+            "leaf_categories": [
+                (category.pk, category.full_path)
+                for category in leaf_categories_queryset()
+            ],
+            "action_url": reverse("admin:products_product_move_to_category"),
+            "changelist_url": reverse("admin:products_product_changelist"),
+        }
+        return TemplateResponse(
+            request, "admin/products/product_move_to_category.html", context
+        )
+
+    def move_to_category_view(self, request):
+        """POST-only: move the chosen products to one leaf category."""
+        if request.method != "POST":
+            return HttpResponseRedirect(reverse("admin:products_product_changelist"))
+        if not self.has_change_permission(request):
+            raise PermissionDenied
+        changelist_url = reverse("admin:products_product_changelist")
+        try:
+            ids = sorted(
+                {int(x) for x in (request.POST.get("ids") or "").split(",") if x.strip()}
+            )
+            category_id = int(request.POST.get("category") or "")
+        except ValueError:
+            self.message_user(
+                request, "محصول یا دستهٔ انتخاب‌شده معتبر نیست.", messages.ERROR
+            )
+            return HttpResponseRedirect(changelist_url)
+        try:
+            target = Category.objects.get(pk=category_id)
+        except Category.DoesNotExist:
+            self.message_user(
+                request, "دستهٔ انتخاب‌شده پیدا نشد.", messages.ERROR
+            )
+            return HttpResponseRedirect(changelist_url)
+        if target.children.exists():
+            self.message_user(
+                request,
+                f"«{target.name}» دستهٔ والد است؛ "
+                + LEAF_CATEGORY_HELP,
+                messages.ERROR,
+            )
+            return HttpResponseRedirect(changelist_url)
+        products = list(
+            self.get_queryset(request).filter(pk__in=ids).order_by("sku")
+        )
+        if not products:
+            self.message_user(
+                request, "محصولی برای انتقال انتخاب نشده است.", messages.ERROR
+            )
+            return HttpResponseRedirect(changelist_url)
+        with transaction.atomic():
+            for product in products:
+                old_name = product.category.name if product.category_id else "—"
+                product.category = target
+                # Product.save() recomputes the search index (which
+                # embeds the category name); name the fields so the
+                # recomputed index is actually written.
+                product.save(
+                    update_fields=["category", "search_text", "search_name", "updated_at"]
+                )
+                self.log_change(
+                    request,
+                    product,
+                    f"انتقال دسته: «{old_name}» → «{target.full_path}»",
+                )
+        self.message_user(
+            request,
+            f"{fa_digits(len(products))} محصول به دستهٔ «{target.full_path}» منتقل شد.",
+            messages.SUCCESS,
+        )
+        return HttpResponseRedirect(changelist_url)
 
     @admin.action(description="تغییر درصدی قیمت (با پیش‌نمایش و تأیید)")
     def change_price_percentage(self, request, queryset):

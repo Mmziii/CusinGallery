@@ -190,8 +190,19 @@ class Command(BaseCommand):
                     "description": description,
                     "is_active": True,
                     "ordering": len(categories),
+                    # The first (parent-less) seed entry is the catalog
+                    # root; runtime code reads this flag, never the slug.
+                    "is_catalog_root": parent_slug is None,
                 },
             )
+            # Keep re-runs idempotent even on a database seeded before
+            # the flag existed.
+            if parent_slug is None and not category.is_catalog_root:
+                Category.objects.filter(is_catalog_root=True).exclude(
+                    pk=category.pk
+                ).update(is_catalog_root=False)
+                category.is_catalog_root = True
+                category.save(update_fields=["is_catalog_root", "updated_at"])
             categories[slug] = category
         self.stdout.write(f"Categories: {Category.objects.count()}")
 

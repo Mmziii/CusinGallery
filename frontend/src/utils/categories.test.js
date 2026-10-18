@@ -6,7 +6,15 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { categoryChain, categoryUrl, KITCHEN_ROOT_SLUG, mainGroups } from "./categories";
+import {
+  catalogRoot,
+  categoryChain,
+  categoryUrl,
+  categoryUrlFor,
+  isCatalogRootCategory,
+  KITCHEN_ROOT_SLUG,
+  mainGroups,
+} from "./categories";
 
 const TREE = [
   {
@@ -60,6 +68,42 @@ describe("mainGroups", () => {
     expect(mainGroups([{ id: 1, name: "آشپزخانه", slug: "kitchen", children: [] }])).toEqual(
       []
     );
+  });
+});
+
+describe("catalog root by flag (Task 3)", () => {
+  // A renamed root: BOTH name and slug changed after migration 0007.
+  const RENAMED_TREE = [
+    {
+      id: 1,
+      name: "خانه و آشپزخانه",
+      slug: "home",
+      is_catalog_root: true,
+      children: [
+        { id: 2, name: "ظروف پخت", slug: "cookware", is_catalog_root: false, children: [] },
+      ],
+    },
+  ];
+  const RENAMED_FLAT = [
+    { id: 1, name: "خانه و آشپزخانه", slug: "home", parent_slug: null, is_catalog_root: true },
+    { id: 2, name: "ظروف پخت", slug: "cookware", parent_slug: "home", is_catalog_root: false },
+  ];
+
+  it("finds the renamed root by flag, not by name/slug", () => {
+    expect(catalogRoot(RENAMED_TREE).slug).toBe("home");
+    expect(mainGroups(RENAMED_TREE).map((c) => c.slug)).toEqual(["cookware"]);
+  });
+
+  it("maps the renamed root to the shop by flag", () => {
+    expect(categoryUrlFor(RENAMED_TREE[0])).toBe("/shop/");
+    expect(categoryUrl("home", RENAMED_FLAT)).toBe("/shop/");
+    expect(isCatalogRootCategory(RENAMED_TREE[0])).toBe(true);
+    expect(isCatalogRootCategory(RENAMED_TREE[0].children[0])).toBe(false);
+  });
+
+  it("does not treat a same-slug group as root when the flag says no", () => {
+    const impostor = { id: 5, name: "آشپزی", slug: "kitchen", is_catalog_root: false };
+    expect(isCatalogRootCategory(impostor)).toBe(false);
   });
 });
 

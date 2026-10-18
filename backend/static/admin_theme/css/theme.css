@@ -4557,3 +4557,15 @@ body.popup .submit-row {
 body.popup .messagelist {
   margin: 0 0 12px;
 }
+
+/* --------------------------------------------------------------------------
+   23. Category tree changelist (Task 3)
+   -------------------------------------------------------------------------- */
+.cusin-tree-name {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}

@@ -33,6 +33,9 @@ class CategorySerializer(serializers.ModelSerializer):
         fields = [
             "id", "name", "slug", "image", "description",
             "parent", "parent_slug", "ordering", "product_count",
+            # The storefront finds the catalog root by this flag, never
+            # by name/slug, so renaming «آشپزخانه» cannot break grouping.
+            "is_catalog_root",
         ]
 
     def get_parent_slug(self, obj):
@@ -59,7 +62,10 @@ class CategoryTreeSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Category
-        fields = ["id", "name", "slug", "image", "ordering", "product_count", "children"]
+        fields = [
+            "id", "name", "slug", "image", "ordering", "product_count",
+            "is_catalog_root", "children",
+        ]
 
     def get_children(self, obj):
         depth = self.context.get("tree_depth", 0)
