@@ -50,6 +50,12 @@ class Brand(TimeStampedModel, ActivableModel):
         return self.name
 
     def save(self, *args, **kwargs):
+        if not self.slug or not self.slug.strip():
+            from .slugs import unique_brand_slug
+
+            self.slug = unique_brand_slug(self)
+            if kwargs.get("update_fields") is not None:
+                kwargs["update_fields"] = set(kwargs["update_fields"]) | {"slug"}
         # Part R5 item 7: detect a rename so the products' normalized
         # search index can be refreshed after the save.
         old_name = None

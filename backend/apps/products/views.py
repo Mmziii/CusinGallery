@@ -122,6 +122,9 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
         category_slug = request.query_params.get("category")
         if category_slug:
             products = products.filter(category__slug=category_slug, category__is_active=True)
+        brand_slug = request.query_params.get("brand")
+        if brand_slug:
+            products = products.filter(brand__slug__iexact=brand_slug, brand__is_active=True)
         rows = (
             ProductAttributeValue.objects.filter(
                 variants__is_active=True,

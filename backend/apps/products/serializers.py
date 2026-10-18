@@ -135,7 +135,7 @@ class ProductListSerializer(serializers.ModelSerializer):
     """
 
     category = CategoryMiniSerializer(read_only=True)
-    brand = BrandSerializer(read_only=True)
+    brand = serializers.SerializerMethodField()
     price_info = serializers.SerializerMethodField()
     primary_image = serializers.SerializerMethodField()
     stock_status = serializers.SerializerMethodField()
@@ -148,6 +148,11 @@ class ProductListSerializer(serializers.ModelSerializer):
             "price_info", "primary_image", "stock_status", "is_in_stock", "stock_quantity",
             "is_featured", "is_new", "is_best_seller",
         ]
+
+    def get_brand(self, obj):
+        if not obj.brand or not obj.brand.is_active:
+            return None
+        return BrandSerializer(obj.brand, context=self.context).data
 
     def get_price_info(self, obj):
         return PriceInfoSerializer(pricing.price_info_for_product(obj)).data

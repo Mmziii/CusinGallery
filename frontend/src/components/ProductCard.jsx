@@ -1,3 +1,4 @@
+import { brandUrl } from "../utils/brands";
 import { faDigits } from "../utils/faDigits";
 import useWishlistStore from "../store/useWishlistStore";
 import { useState } from "react";
@@ -128,7 +129,9 @@ function ProductCard({ product }) {
           {/* The brand line is rendered even when the product has none: its
               height is reserved so every card in a row keeps the same
               rhythm and the prices below stay aligned. */}
-          <div className="product-card__brand">{product.brand?.name || "\u00a0"}</div>
+          <div className="product-card__brand">
+            {product.brand?.slug ? <Link to={brandUrl(product.brand.slug)}>{faDigits(product.brand.name)}</Link> : faDigits(product.brand?.name) || "\u00a0"}
+          </div>
 
           {/* Price + action share the LAST row: the bold final price is
               pinned to the card bottom (so prices line up across a row) and
@@ -205,7 +208,9 @@ function ProductCard({ product }) {
         <Link to={productHref} className="product-card__name">
           {faDigits(product.name)}
         </Link>
-        <div className="product-card__brand">{product.brand?.name || "\u00a0"}</div>
+        <div className="product-card__brand">
+            {product.brand?.slug ? <Link to={brandUrl(product.brand.slug)}>{faDigits(product.brand.name)}</Link> : faDigits(product.brand?.name) || "\u00a0"}
+          </div>
 
         <PriceTag priceInfo={product.price_info} size="sm" />
 

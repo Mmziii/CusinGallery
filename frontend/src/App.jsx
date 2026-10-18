@@ -9,6 +9,7 @@ import OrderDetailPage from "./pages/account/OrderDetailPage.jsx";
 import OrdersPage from "./pages/account/OrdersPage.jsx";
 import ProfilePage from "./pages/account/ProfilePage.jsx";
 import ReviewsPage from "./pages/account/ReviewsPage.jsx";
+import BrandPage from "./pages/BrandPage.jsx";
 import CartPage from "./pages/CartPage.jsx";
 import CheckoutPage from "./pages/CheckoutPage.jsx";
 import Home from "./pages/Home.jsx";
@@ -43,6 +44,7 @@ function App() {
         <Route element={<MainLayout />}>
           <Route path="/" element={<Home />} />
           <Route path="/shop/" element={<ShopPage />} />
+          <Route path="/brands/:slug/" element={<BrandPage />} />
           <Route path="/products/:slug/" element={<ProductDetailPage />} />
           <Route path="/cart/" element={<CartPage />} />
           <Route path="/wishlist/" element={<ProtectedRoute><WishlistPage /></ProtectedRoute>} />

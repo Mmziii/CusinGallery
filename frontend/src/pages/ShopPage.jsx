@@ -19,6 +19,8 @@ import { errorMessage } from "../components/ui";
 import { normalizeApiError } from "../utils/apiError";
 import { formatPrice } from "../utils/formatPrice";
 import { shareImageUrl } from "../utils/shareImage";
+import { brandShape } from "../utils/shapes";
+import { brandUrl } from "../utils/brands";
 import { categoryChain, categoryUrl, KITCHEN_ROOT_SLUG } from "../utils/categories";
 
 /** Part S5 item 7: price inputs wait ~300ms after the last keystroke. */
@@ -89,7 +91,7 @@ const SORT_OPTIONS = [
  * back button behaves. Every param maps 1:1 to the backend's own filter
  * contract (apps/products/filters.py).
  */
-function ShopPage() {
+function ShopPage({ brand: fixedBrand = null }) {
   const [searchParams, setSearchParams] = useSearchParams();
   // Part S5 item 7: on small screens the whole filter column collapses
   // into a drawer; the open/close transition is a grid-template-rows
@@ -120,8 +122,10 @@ function ShopPage() {
       const value = searchParams.get(key);
       if (key.startsWith("attr_") && value) p[key] = value;
     }
+    // A brand URL is a fixed scope, not an optional query-string filter.
+    if (fixedBrand) p.brand = fixedBrand.slug;
     return p;
-  }, [searchParams]);
+  }, [searchParams, fixedBrand]);
 
   // The URL stays the single source of truth for paging (SEO + back button):
   // ?page=N means "the first N pages", so a deep link and the phone's
@@ -137,14 +141,14 @@ function ShopPage() {
     );
     const last = pages[pages.length - 1];
     return { ...last, results: pages.flatMap((page) => page.results || []) };
-  }, [searchParams.toString()]);
+  }, [searchParams.toString(), fixedBrand?.slug]);
   const categoriesState = useAsync(() => listCategories(), []);
   const brandsState = useAsync(() => listBrands(), []);
   // Facets re-scope whenever the selected category changes; the facet
   // counts then only cover that category's products.
   const facetsState = useAsync(
-    () => listFacets(params.category ? { category: params.category } : {}),
-    [params.category || ""]
+    () => listFacets({ ...(params.category ? { category: params.category } : {}), ...(params.brand ? { brand: params.brand } : {}) }),
+    [params.category || "", params.brand || ""]
   );
 
   // Part S4 item 2: a category or brand page shares ITS OWN image (the
@@ -166,17 +170,18 @@ function ShopPage() {
       })),
     [params.category, categories]
   );
-  const selectedBrand = brands.find((b) => b.slug === params.brand) || null;
-  const filtered = selectedCategory || selectedBrand;
+  const selectedBrand = fixedBrand || brands.find((b) => b.slug === params.brand) || null;
+  const filtered = fixedBrand || selectedCategory || selectedBrand;
   // Built by the shared helper (never by string concatenation): the
   // category image, the brand tile (or its logo), the placeholder.
   const listingShareImage = filtered
-    ? shareImageUrl(selectedCategory ? selectedCategory.image : selectedBrand.tile_image || selectedBrand.logo)
+    ? shareImageUrl(fixedBrand ? fixedBrand.tile_image || fixedBrand.logo : selectedCategory ? selectedCategory.image : selectedBrand.tile_image || selectedBrand.logo)
     : undefined;
   usePageMeta({
-    title: filtered ? filtered.name : "فروشگاه",
-    path: "/shop/",
+    title: fixedBrand ? `محصولات برند ${faDigits(fixedBrand.name)}` : filtered ? faDigits(filtered.name) : "فروشگاه",
+    path: fixedBrand ? brandUrl(fixedBrand.slug) : "/shop/",
     description:
+      (fixedBrand ? `خرید محصولات برند ${faDigits(fixedBrand.name)} از کازین گالری؛ قیمت به تومان و ارسال به سراسر ایران.` : "") ||
       (selectedCategory && selectedCategory.description) ||
       (filtered
         ? `خرید آنلاین ${filtered.name} از کازین گالری؛ ارسال به سراسر ایران.`
@@ -230,7 +235,7 @@ function ShopPage() {
   // position is stored per filter-set, so forward navigation starts fresh.
   const navigationType = useNavigationType();
   useEffect(() => {
-    const key = `cusin.shop.scroll.${searchParams.toString()}`;
+    const key = `cusin.shop.scroll.${fixedBrand?.slug || ""}.${searchParams.toString()}`;
     if (navigationType === "POP") {
       const saved = sessionStorage.getItem(key);
       if (saved) {
@@ -241,7 +246,7 @@ function ShopPage() {
     return () => {
       sessionStorage.setItem(key, String(window.scrollY));
     };
-  }, [searchParams, navigationType]);
+  }, [searchParams, navigationType, fixedBrand?.slug]);
 
   // Part S5 item 7: a new result set re-triggers the staggered entrance
   // (the key remounts the cards -- their boxes are aspect-ratio sized, so
@@ -303,11 +308,12 @@ function ShopPage() {
       <FilterGroup title="برند">
         <select
           aria-label="برند"
-          value={searchParams.get("brand") || ""}
+          value={params.brand || ""}
+          disabled={Boolean(fixedBrand)}
           onChange={(e) => setParam("brand", e.target.value)}
         >
-          <option value="">همه برندها</option>
-          {(brandsState.data?.results || []).map((brand) => (
+          {!fixedBrand ? <option value="">همه برندها</option> : null}
+          {(fixedBrand ? [fixedBrand] : brandsState.data?.results || []).map((brand) => (
             <option key={brand.id} value={brand.slug}>{brand.name}</option>
           ))}
         </select>
@@ -387,7 +393,9 @@ function ShopPage() {
         <Breadcrumbs
           items={[
             { label: "کازین گالری", to: "/" },
-            ...(params.category
+            ...(fixedBrand
+              ? [{ label: "برندها" }, { label: faDigits(fixedBrand.name) }]
+              : params.category
               ? categoryCrumbs
               : [
                   { label: "آشپزخانه", to: "/shop/" },
@@ -395,7 +403,7 @@ function ShopPage() {
                 ]),
           ]}
         />
-        <h1>فروشگاه</h1>
+        <h1>{fixedBrand ? `محصولات برند ${faDigits(fixedBrand.name)}` : "فروشگاه"}</h1>
       </div>
       {isMobile ? null : (
         <aside className="shop__sidebar">
@@ -584,7 +592,7 @@ function ShopPage() {
 
         {/* Part R2: visible active filters (e.g. arriving from a brand tile) */}
         {(() => {
-          const brandSlug = searchParams.get("brand");
+          const brandSlug = fixedBrand ? null : searchParams.get("brand");
           const categorySlug = searchParams.get("category");
           const brand = (brandsState.data?.results || []).find((b) => b.slug === brandSlug);
           const category = (categoriesState.data?.results || []).find((c) => c.slug === categorySlug);
@@ -711,5 +719,7 @@ function ShopPage() {
     </div>
   );
 }
+
+ShopPage.propTypes = { brand: brandShape };
 
 export default ShopPage;

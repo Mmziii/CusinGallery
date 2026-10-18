@@ -19,7 +19,7 @@ from django.contrib import admin
 from django.urls import include, path, re_path
 
 from apps.adminui.views import quick_search
-from apps.core.seo import product_meta, shop_meta
+from apps.core.seo import brand_meta, product_meta, shop_meta
 from apps.core.spa import spa_page
 from apps.core.views import healthz, robots_txt, sitemap_xml
 
@@ -57,6 +57,7 @@ urlpatterns = [
     # plain, minimal HTML documents, not part of the public API.
     path("seo/product/<str:slug>/", product_meta, name="seo-product"),
     path("seo/shop/", shop_meta, name="seo-shop"),
+    path("seo/brand/<str:slug>/", brand_meta, name="seo-brand"),
     # Alias of apps.payments' callback endpoint at the site root, matching
     # the PAYMENT_CALLBACK_URL shape documented in .env.example
     # (https://cusin.ir/payment/callback/). Same view either way -- see

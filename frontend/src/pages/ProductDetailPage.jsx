@@ -26,6 +26,7 @@ import useCartStore from "../store/useCartStore";
 import { normalizeApiError } from "../utils/apiError";
 import { recordView } from "../utils/recentlyViewed";
 import { shareImageUrl } from "../utils/shareImage";
+import { brandUrl } from "../utils/brands";
 import { categoryUrl } from "../utils/categories";
 import RecentlyViewed from "../components/RecentlyViewed";
 
@@ -402,7 +403,11 @@ function ProductDetailPage() {
         <div className="product-detail__info">
 
           <h1>{faDigits(product.name)}</h1>
-          {product.brand ? <div className="product-detail__brand">برند: {product.brand.name}</div> : null}
+          {product.brand ? (
+            <div className="product-detail__brand">
+              {product.brand.slug ? <Link to={brandUrl(product.brand.slug)}>برند: {faDigits(product.brand.name)}</Link> : `برند: ${faDigits(product.brand.name)}`}
+            </div>
+          ) : null}
           {product.short_description ? <p className="product-detail__short">{faDigits(product.short_description)}</p> : null}
 
           <PriceTag priceInfo={displayPrice} size="lg" />

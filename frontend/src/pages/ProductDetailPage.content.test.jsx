@@ -142,6 +142,7 @@ describe("Product page content (Part S5 item 5)", () => {
     // Title, brand, short description and price.
     expect(heading.tagName).toBe("H1");
     expect(container.textContent).toContain("برند: یونیک");
+    expect(screen.getByRole("link", { name: "برند: یونیک" }).getAttribute("href")).toBe("/brands/unique/");
     expect(container.textContent).toContain("قابلمه گرانیتی با کف ضخیم");
     expect(container.querySelector(".price__current")).not.toBeNull();
 
