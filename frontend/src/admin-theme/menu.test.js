@@ -17,11 +17,13 @@ const MENU = `
 </div>`;
 
 const SIDEBAR = `
-<div class="cusin-nav-groups">
-  <details data-cusin-nav-group="catalog" open>
-    <summary aria-expanded="true">فهرست کالاها</summary>
-    <ul><li><a href="/admin/products/product/">کالاها</a></li></ul>
-  </details>
+<div id="cusin-drawer">
+  <div class="cusin-nav-groups">
+    <details data-cusin-nav-group="catalog" open>
+      <summary aria-expanded="true">فهرست کالاها</summary>
+      <ul><li><a href="/admin/products/product/">کالاها</a></li></ul>
+    </details>
+  </div>
 </div>`;
 
 const BULK_FORM = `
@@ -124,10 +126,10 @@ describe("per-user sidebar group persistence", () => {
   it("restores and saves the group state under the current user key", async () => {
     mounted = mountAdminPage(SIDEBAR, []);
     const { doc, win } = mounted;
-    const values = new Map([["cusin-admin-nav:v1:41", JSON.stringify({ catalog: false })]]);
+    const values = new Map([["cusin-admin-nav:v2:41", JSON.stringify({ groups: { catalog: false } })]]);
     const reads = [];
     const writes = [];
-    Object.defineProperty(win, "localStorage", {
+    Object.defineProperty(win, "sessionStorage", {
       configurable: true,
       value: {
         getItem(key) { reads.push(key); return values.get(key) || null; },
@@ -146,15 +148,15 @@ describe("per-user sidebar group persistence", () => {
     await new Promise((resolve) => win.setTimeout(resolve, 0));
     expect(group.open).toBe(true);
     expect(summary.getAttribute("aria-expanded")).toBe("true");
-    expect(reads).toContain("cusin-admin-nav:v1:41");
-    expect(writes).toContain("cusin-admin-nav:v1:41");
-    expect(JSON.parse(values.get("cusin-admin-nav:v1:41")).catalog).toBe(true);
+    expect(reads).toContain("cusin-admin-nav:v2:41");
+    expect(writes).toContain("cusin-admin-nav:v2:41");
+    expect(JSON.parse(values.get("cusin-admin-nav:v2:41")).groups.catalog).toBe(true);
   });
 
   it("keeps native disclosure usable when browser storage throws", async () => {
     mounted = mountAdminPage(SIDEBAR, []);
     const { doc, win } = mounted;
-    Object.defineProperty(win, "localStorage", {
+    Object.defineProperty(win, "sessionStorage", {
       configurable: true,
       value: {
         getItem() { throw new win.DOMException("blocked", "SecurityError"); },
