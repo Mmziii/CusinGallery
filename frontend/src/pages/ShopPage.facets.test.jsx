@@ -64,7 +64,7 @@ describe("shop page attribute facets", () => {
     );
     expect(await screen.findByText("رنگ")).toBeTruthy();
     expect(await screen.findByText("قرمز")).toBeTruthy();
-    expect(await screen.findByText("(2)")).toBeTruthy();
+    expect(await screen.findByText("(۲)")).toBeTruthy();
   });
 
   it("ticking a value updates the URL and the product query", async () => {

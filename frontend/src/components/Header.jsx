@@ -577,7 +577,7 @@ function Header() {
                       <li key={line.key}>
                         <SmartImage image={{ image: line.image }} alt="" />
                         <div className="minicart__line-body">
-                          <span className="minicart__name">{line.name}</span>
+                          <span className="minicart__name">{faDigits(line.name)}</span>
                           {line.variant ? (
                             <span className="minicart__variant">{faDigits(line.variant)}</span>
                           ) : null}

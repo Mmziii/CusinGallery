@@ -123,7 +123,7 @@ function OrderDetailPage() {
                       {item.product_slug ? (
                         <Link to={`/products/${item.product_slug}/`}>{faDigits(item.product_name)}</Link>
                       ) : (
-                        item.product_name
+                        faDigits(item.product_name)
                       )}
                       <div className="muted" dir="ltr"><bdi dir="ltr">{item.sku}</bdi></div>
                     </span>

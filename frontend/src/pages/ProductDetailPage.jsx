@@ -215,7 +215,7 @@ function ComplementsSection({ complements }) {
     const failed = [];
     for (const item of items) {
       const result = await addItem(item.id, null, 1);
-      if (!result.success) failed.push(item.name);
+      if (!result.success) failed.push(faDigits(item.name));
     }
     setState(
       failed.length
@@ -297,8 +297,12 @@ function ProductDetailPage() {
   const shareSource = product ? product.primary_image || product.images?.[0] || null : null;
   const ogImage = product ? shareImageUrl(shareSource) : undefined;
   usePageMeta({
-    title: error?.response?.status === 404 ? "صفحه یافت نشد" : product?.name,
-    description: product?.short_description || undefined,
+    title: error?.response?.status === 404
+      ? "صفحه یافت نشد"
+      : product?.name
+        ? faDigits(product.name)
+        : undefined,
+    description: product?.short_description ? faDigits(product.short_description) : undefined,
     path: `/products/${slug}/`,
     image: ogImage,
   });
@@ -583,7 +587,7 @@ function ProductDetailPage() {
                 {product.specifications.map((spec) => (
                   <tr key={spec.attribute}>
                     <th>{faDigits(spec.attribute)}</th>
-                    <td>{spec.values.join("، ")}</td>
+                    <td>{faDigits(spec.values.join("، "))}</td>
                   </tr>
                 ))}
               </tbody>

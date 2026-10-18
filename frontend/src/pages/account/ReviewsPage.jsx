@@ -40,7 +40,7 @@ function ReviewsPage() {
         {reviews.map((review) => (
           <article key={review.id} className="review review--own">
             <header>
-              <Link to={`/products/${review.product_slug}/`}>{review.product_name}</Link>
+              <Link to={`/products/${review.product_slug}/`}>{faDigits(review.product_name)}</Link>
               <span className={`tag tag--review-${review.status}`}>
                 {STATUS_LABELS[review.status] || review.status}
               </span>
