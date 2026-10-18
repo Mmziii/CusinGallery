@@ -139,3 +139,60 @@ describe("item 6: KPI tiles fit a 9-digit amount on one line", () => {
     expect(style(".cusin-kpi-value", "overflow")).not.toBe("hidden");
   });
 });
+
+/*
+ * Task 4: the orders customer column painted over the status badge
+ * («00doodooltala» on «در انتظار تأیید»). The declarations below are
+ * what keep every long value inside its own cell at 1366px and
+ * 1024px; jsdom cannot measure pixels, so the browser check lives in
+ * e2e, but the cascade winners are pinned here.
+ */
+const ORDERS_HTML = `
+<div id="container"><div id="changelist"><div class="results">
+<table id="result_list">
+<thead><tr>
+  <th class="column-order_number_cell">شماره</th>
+  <th class="column-customer_cell">مشتری</th>
+  <th class="column-status_badge">وضعیت</th>
+</tr></thead>
+<tbody><tr>
+  <th class="field-order_number_cell"><span class="cusin-order-number">CG-1</span></th>
+  <td class="field-customer_cell"><span class="cusin-customer">
+    <span class="cusin-customer__name" title="00doodooltala-very-long">00doodooltala-very-long</span>
+    <bdi class="cusin-customer__phone" dir="ltr">۰۹۱۲۳۳۳۴۴۵۵</bdi>
+  </span></td>
+  <td class="field-status_badge"><span class="cusin-badge st-pending">در انتظار تأیید</span></td>
+</tr></tbody></table></div></div></div>`;
+
+function mountOrders(width) {
+  const mountedPage = mountWith(ORDERS_HTML, width);
+  mountedPage.doc.body.className = "cusin-admin app-orders model-order";
+  return mountedPage;
+}
+
+describe("task 4: orders customer cell never overlaps the status badge", () => {
+  for (const width of [1366, 1024]) {
+    it(`stacks name over phone and ellipsises both at ${width}px`, () => {
+      const { style } = mountOrders(width);
+      expect(style(".cusin-customer", "display")).toBe("flex");
+      expect(style(".cusin-customer", "flex-direction")).toBe("column");
+      expect(style(".cusin-customer__name", "overflow")).toBe("hidden");
+      expect(style(".cusin-customer__name", "text-overflow")).toBe("ellipsis");
+      expect(style(".cusin-customer__name", "white-space")).toBe("nowrap");
+      expect(style(".cusin-customer__phone", "overflow")).toBe("hidden");
+      expect(style(".cusin-customer__phone", "color")).toBe("var(--cusin-muted)");
+      expect(style("td.field-customer_cell", "overflow")).toBe("hidden");
+    });
+
+    it(`keeps the badge inside its own cell at ${width}px`, () => {
+      const { style } = mountOrders(width);
+      expect(style(".cusin-badge", "max-width")).toBe("100%");
+      expect(style(".cusin-badge", "overflow")).toBe("hidden");
+    });
+  }
+
+  it("sizes the real customer column (not the stale column-user) on desktop", () => {
+    const { style } = mountOrders(1366);
+    expect(style("th.column-customer_cell", "width")).toBe("20%");
+  });
+});

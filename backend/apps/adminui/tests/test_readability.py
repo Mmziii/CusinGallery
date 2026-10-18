@@ -123,8 +123,10 @@ class OrderCustomerColumnTests(TestCase):
         )
         self.assertIsNotNone(cell, "no customer column rendered")
         self.assertIn("زهرا احمدی", cell.group(1))
-        # the courier's number is the shipping phone, not the account's
-        self.assertIn("09123334455", cell.group(1))
+        # The courier's number is the shipping phone, not the account's;
+        # it is shown in Persian digits (Task 4: name on one line, the
+        # phone on a second muted line).
+        self.assertIn("۰۹۱۲۳۳۳۴۴۵۵", cell.group(1))
         self.assertIn("cusin-customer", cell.group(1))
 
     def test_the_username_is_no_longer_the_label(self):
@@ -162,7 +164,7 @@ class OrderCustomerColumnTests(TestCase):
         # no crash, and something legible is shown for the name
         self.assertNotEqual(
             re.search(
-                r'cusin-customer__name">([^<]*)<', cell.group(1)
+                r'cusin-customer__name"[^>]*>([^<]*)<', cell.group(1)
             ).group(1).strip(),
             "",
         )

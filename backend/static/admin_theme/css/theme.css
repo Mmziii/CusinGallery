@@ -4014,19 +4014,22 @@ body.cusin-admin #container .cusin-gallery-field input[type="file"] {
   body.cusin-admin #container #variants-group .tabular thead th:last-child,
   body.cusin-admin #container #variants-group .tabular tbody td.delete { width: 12%; }
 
-  /* Compact 1440px+ order grid: the least urgent facts move out of sight
-     on narrower screens, leaving the owner the customer, workflow and total. */
-  body.cusin-admin.app-orders.model-order #result_list th.action-checkbox-column { width: 4%; }
-  body.cusin-admin.app-orders.model-order #result_list th.column-order_number_cell { width: 14%; }
-  body.cusin-admin.app-orders.model-order #result_list th.column-user { width: 14%; }
-  body.cusin-admin.app-orders.model-order #result_list th.column-status_badge { width: 8%; }
-  body.cusin-admin.app-orders.model-order #result_list th.column-payment_badge { width: 8%; }
-  body.cusin-admin.app-orders.model-order #result_list th.column-total_fa { width: 12%; }
+  /* Order grid (Task 4: column names must match OrderAdmin's actual
+     list_display -- the old map sized a stale «column-user» and left
+     customer_cell / last_attempt_cell to share the leftovers, which
+     squeezed the customer into the status badge). Widths sum to 100. */
+  body.cusin-admin.app-orders.model-order #result_list th.action-checkbox-column { width: 3.5%; }
+  body.cusin-admin.app-orders.model-order #result_list th.column-order_number_cell { width: 12%; }
+  body.cusin-admin.app-orders.model-order #result_list th.column-customer_cell { width: 15%; }
+  body.cusin-admin.app-orders.model-order #result_list th.column-status_badge { width: 9%; }
+  body.cusin-admin.app-orders.model-order #result_list th.column-payment_badge { width: 9%; }
+  body.cusin-admin.app-orders.model-order #result_list th.column-last_attempt_cell { width: 10%; }
+  body.cusin-admin.app-orders.model-order #result_list th.column-total_fa { width: 10%; }
   body.cusin-admin.app-orders.model-order #result_list th.column-shipping_method_cell { width: 6%; }
-  body.cusin-admin.app-orders.model-order #result_list th.column-stock_restored_badge { width: 4%; }
-  body.cusin-admin.app-orders.model-order #result_list th.column-refund_badge { width: 10%; }
-  body.cusin-admin.app-orders.model-order #result_list th.column-created_at_jalali { width: 10%; }
-  body.cusin-admin.app-orders.model-order #result_list th.column-cusin-row-actions { width: 10%; }
+  body.cusin-admin.app-orders.model-order #result_list th.column-stock_restored_badge { width: 3.5%; }
+  body.cusin-admin.app-orders.model-order #result_list th.column-refund_badge { width: 7%; }
+  body.cusin-admin.app-orders.model-order #result_list th.column-created_at_jalali { width: 8%; }
+  body.cusin-admin.app-orders.model-order #result_list th.column-cusin-row-actions { width: 7%; }
   body.cusin-admin.app-orders.model-order #result_list td.field-status_badge .cusin-badge,
   body.cusin-admin.app-orders.model-order #result_list td.field-payment_badge .cusin-badge,
   body.cusin-admin.app-orders.model-order #result_list td.field-refund_badge .cusin-badge {
@@ -4047,12 +4050,14 @@ body.cusin-admin #container .cusin-gallery-field input[type="file"] {
     hyphens: none;
   }
 
+  /* Category tree (Task 3 columns). Widths sum to 100. */
   body.cusin-admin.app-categories.model-category #result_list th.action-checkbox-column { width: 5%; }
-  body.cusin-admin.app-categories.model-category #result_list th.column-name { width: 27%; }
-  body.cusin-admin.app-categories.model-category #result_list th.column-parent { width: 22%; }
-  body.cusin-admin.app-categories.model-category #result_list th.column-is_active { width: 10%; }
-  body.cusin-admin.app-categories.model-category #result_list th.column-ordering { width: 22%; }
-  body.cusin-admin.app-categories.model-category #result_list th.column-cusin-row-actions { width: 14%; }
+  body.cusin-admin.app-categories.model-category #result_list th.column-tree_name { width: 38%; }
+  body.cusin-admin.app-categories.model-category #result_list th.column-subtree_product_count { width: 14%; }
+  body.cusin-admin.app-categories.model-category #result_list th.column-active_badge { width: 11%; }
+  body.cusin-admin.app-categories.model-category #result_list th.column-ordering { width: 14%; }
+  body.cusin-admin.app-categories.model-category #result_list th.column-add_subcategory { width: 10%; }
+  body.cusin-admin.app-categories.model-category #result_list th.column-cusin-row-actions { width: 8%; }
 
   body.cusin-admin.app-accounts.model-user #result_list th.action-checkbox-column { width: 4%; }
   body.cusin-admin.app-accounts.model-user #result_list th.column-username { width: 15%; }
@@ -4152,11 +4157,12 @@ body.cusin-admin.cusin-import-page #content code {
     display: none !important;
   }
   body.cusin-admin.app-orders.model-order #result_list th.action-checkbox-column { width: 4%; }
-  body.cusin-admin.app-orders.model-order #result_list th.column-order_number_cell { width: 18%; }
-  body.cusin-admin.app-orders.model-order #result_list th.column-user { width: 20%; }
-  body.cusin-admin.app-orders.model-order #result_list th.column-status_badge { width: 14%; }
-  body.cusin-admin.app-orders.model-order #result_list th.column-payment_badge { width: 14%; }
-  body.cusin-admin.app-orders.model-order #result_list th.column-total_fa { width: 20%; }
+  body.cusin-admin.app-orders.model-order #result_list th.column-order_number_cell { width: 16%; }
+  body.cusin-admin.app-orders.model-order #result_list th.column-customer_cell { width: 20%; }
+  body.cusin-admin.app-orders.model-order #result_list th.column-status_badge { width: 12%; }
+  body.cusin-admin.app-orders.model-order #result_list th.column-payment_badge { width: 12%; }
+  body.cusin-admin.app-orders.model-order #result_list th.column-last_attempt_cell { width: 12%; }
+  body.cusin-admin.app-orders.model-order #result_list th.column-total_fa { width: 14%; }
   body.cusin-admin.app-orders.model-order #result_list th.column-cusin-row-actions { width: 10%; }
 }
 
@@ -4568,4 +4574,119 @@ body.popup .messagelist {
   text-overflow: ellipsis;
   white-space: nowrap;
   vertical-align: middle;
+}
+
+/* --------------------------------------------------------------------------
+   24. Changelist cells never overlap their neighbour (Task 4)
+   A long unbroken value (a login-like customer name such as
+   «00doodooltala», an email, a phone) used to paint over the next
+   cell's badge: cells wrap Persian words normally (never per
+   character) but had no overflow bound, and the customer cell had
+   no styles at all -- name and LTR phone shared one jumbled line.
+   Now: the customer is name on one line + Persian-digit phone on a
+   second muted line, every long value ellipsises inside its own
+   cell (full value in the title tooltip), and the payments list
+   gets the explicit column widths it never had. Nothing here
+   re-enables per-character breaking of Persian words.
+   -------------------------------------------------------------------------- */
+.cusin-customer {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  max-width: 100%;
+}
+.cusin-customer__name {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.cusin-customer__phone {
+  display: block;
+  align-self: flex-start;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--cusin-muted);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+.cusin-cell-ellipsis {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cusin-attempt {
+  max-width: 100%;
+  white-space: normal;
+}
+.cusin-attempt__label,
+.cusin-attempt small {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The cells that can hold an unbroken token clip inside themselves
+   (fixed-layout desktops and the auto-layout scrollport alike). */
+body.cusin-admin #result_list td.field-customer_cell,
+body.cusin-admin #result_list td.field-customer,
+body.cusin-admin #result_list td.field-order_number,
+body.cusin-admin #result_list td.field-username,
+body.cusin-admin #result_list td.field-email,
+body.cusin-admin #result_list td.field-phone,
+body.cusin-admin #result_list td.field-product_summary {
+  overflow: hidden;
+}
+body.cusin-admin #result_list td.field-customer_cell { max-width: 220px; }
+body.cusin-admin #result_list td.field-username > a,
+body.cusin-admin #result_list td.field-email,
+body.cusin-admin #result_list td.field-phone {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+body.cusin-admin #result_list td.field-username > a {
+  display: block;
+  max-width: 100%;
+  white-space: nowrap;
+}
+
+/* Badges may wrap inside a narrow status column; they must never
+   spill out of it (base .cusin-badge is nowrap for roomy contexts). */
+body.cusin-admin #result_list .cusin-badge {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+body.cusin-admin.app-orders.model-order #result_list .cusin-badge,
+body.cusin-admin.app-payments.model-payment #result_list .cusin-badge {
+  white-space: normal;
+  text-align: center;
+}
+
+/* Payments never had a width map; give it one (sums to 100 with the
+   JS-appended row-actions column). */
+@media (min-width: 1025px) {
+  body.cusin-admin.app-payments.model-payment #result_list th.action-checkbox-column { width: 4%; }
+  body.cusin-admin.app-payments.model-payment #result_list th.column-id { width: 6%; }
+  body.cusin-admin.app-payments.model-payment #result_list th.column-order_number { width: 15%; }
+  body.cusin-admin.app-payments.model-payment #result_list th.column-customer { width: 16%; }
+  body.cusin-admin.app-payments.model-payment #result_list th.column-amount_fa { width: 13%; }
+  body.cusin-admin.app-payments.model-payment #result_list th.column-gateway_name { width: 10%; }
+  body.cusin-admin.app-payments.model-payment #result_list th.column-status_badge { width: 10%; }
+  body.cusin-admin.app-payments.model-payment #result_list th.column-paid_at_jalali { width: 11%; }
+  body.cusin-admin.app-payments.model-payment #result_list th.column-created_at_jalali { width: 11%; }
+  body.cusin-admin.app-payments.model-payment #result_list th.column-cusin-row-actions { width: 4%; }
 }
