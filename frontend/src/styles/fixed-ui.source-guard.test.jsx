@@ -107,6 +107,7 @@ describe("fixed UI stylesheet guard", () => {
         expect.arrayContaining(["100vh", "100dvh"])
       );
     }
+    expect(valuesFor(".site-header__drawer-panel", "right")).toContain("0");
     expect(valuesFor(".site-header__drawer-panel", "overflow-y")).toContain("auto");
     expect(valuesFor(".site-header__drawer-panel", "overscroll-behavior")).toContain("contain");
     expect(valuesFor("body.body--scroll-locked", "overflow")).toContain("hidden");
