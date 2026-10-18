@@ -97,6 +97,9 @@ beforeAll(() => {
     if (/^\/products\/[^/]+\/$/.test(url)) {
       return { data: productResponse, status: 200, statusText: "OK", headers: {}, config };
     }
+    if (url === "/products/" && config.params?.ids === "99") {
+      return { data: { count: 1, next: null, results: [{ ...PRODUCT, id: 99, slug: "recent", name: "محصول دیده‌شده" }] }, status: 200, statusText: "OK", headers: {}, config };
+    }
     if (/^\/reviews\//.test(url)) {
       return { data: { count: 0, next: null, previous: null, results: [] }, status: 200, statusText: "OK", headers: {}, config };
     }
@@ -110,6 +113,7 @@ afterEach(() => {
   cleanup();
   productResponse = PRODUCT;
   window.matchMedia = originalMatchMedia;
+  localStorage.clear();
 });
 
 function renderProduct(path = "/products/pan/") {
@@ -175,6 +179,18 @@ describe("Product page content (Part S5 item 5)", () => {
     expect(container.querySelector(".product-detail__extra")).toBeNull();
     expect(screen.queryByRole("heading", { name: "پیشنهاد همراه" })).toBeNull();
     expect(screen.getByRole("heading", { name: "محصولات مرتبط" })).toBeTruthy();
+  });
+
+  it("has ONLY related products, reviews and recently viewed below the primary row, in that order", async () => {
+    localStorage.setItem("cusin_recently_viewed", JSON.stringify([99]));
+    const { container } = renderProduct();
+    await screen.findByText("اخیراً دیده‌اید");
+    const sections = container.querySelectorAll(".product-detail > section");
+    expect([...sections].map((section) => section.querySelector("h2")?.textContent)).toEqual([
+      "محصولات مرتبط", "نظرات کاربران", "اخیراً دیده‌اید",
+    ]);
+    const body = container.querySelector(".product-detail__body");
+    expect(body.contains(sections[0])).toBe(false);
   });
 
   it("renders Persian digits in product names/descriptions without changing the slug or SKU", async () => {

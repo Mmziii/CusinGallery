@@ -4,9 +4,11 @@
  * most-recent-first order regardless of the API's reply order, drops
  * unavailable products silently, and renders nothing when empty.
  */
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import fs from "node:fs";
+import path from "node:path";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import apiClient from "../services/apiClient";
 import { RECENT_KEY } from "../utils/recentlyViewed";
@@ -29,6 +31,7 @@ const row = (id, name) => ({
 });
 
 let lastParams = null;
+let allKnown = false;
 const originalAdapter = apiClient.defaults.adapter;
 
 beforeAll(() => {
@@ -42,7 +45,7 @@ beforeAll(() => {
         .filter(Boolean);
       // The "server" only knows products 1 and 3; anything else
       // (e.g. 99) is silently absent, exactly like the real API.
-      const known = ids.filter((id) => id === 1 || id === 3);
+      const known = ids.filter((id) => allKnown || id === 1 || id === 3);
       return {
         // Reply in REVERSE order to prove the widget re-sorts by the
         // stored most-recent-first order.
@@ -59,13 +62,14 @@ afterAll(() => {
 beforeEach(() => {
   localStorage.clear();
   lastParams = null;
+  allKnown = false;
 });
 afterEach(() => cleanup());
 
-function renderWidget() {
+function renderWidget(props = {}) {
   return render(
     <MemoryRouter>
-      <RecentlyViewed />
+      <RecentlyViewed {...props} />
     </MemoryRouter>
   );
 }
@@ -88,6 +92,48 @@ describe("recently viewed widget", () => {
     expect(screen.queryByText("کالا 99")).toBeNull();
     const cards = screen.getAllByText(/^کالا [۰-۹]+$/);
     expect(cards.map((node) => node.textContent)).toEqual(["کالا ۳", "کالا ۱"]);
+  });
+
+
+  it("shows ten prior products in one row, excluding the current product even after a reload", async () => {
+    allKnown = true;
+    localStorage.setItem(RECENT_KEY, JSON.stringify([11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1]));
+    const { container } = renderWidget({ excludeId: 11 });
+    await screen.findByText("اخیراً دیده‌اید");
+    expect(lastParams.ids).toBe("10,9,8,7,6,5,4,3,2,1");
+    expect(container.querySelectorAll(".recently-viewed__track > .recently-viewed__item").length).toBe(10);
+    expect(container.querySelector(".product-grid")).toBeNull();
+    expect(screen.queryByText("کالا ۱۱")).toBeNull();
+  });
+
+  it("shows only the scroll arrows that can move, and scrolls in the correct RTL direction", async () => {
+    localStorage.setItem(RECENT_KEY, JSON.stringify([3, 1]));
+    const { container } = renderWidget();
+    await screen.findByText("اخیراً دیده‌اید");
+    const track = container.querySelector(".recently-viewed__track");
+    Object.defineProperties(track, { clientWidth: { value: 500 }, scrollWidth: { value: 1500 } });
+    track.scrollBy = vi.fn();
+    fireEvent.resize(window);
+    expect(screen.queryByRole("button", { name: "محصولات قبلی" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "محصولات بعدی" }));
+    expect(track.scrollBy).toHaveBeenCalledWith({ left: -450, behavior: "smooth" });
+    track.scrollLeft = -1000;
+    fireEvent.scroll(track);
+    expect(screen.queryByRole("button", { name: "محصولات بعدی" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "محصولات قبلی" }));
+    expect(track.scrollBy).toHaveBeenLastCalledWith({ left: 450, behavior: "smooth" });
+    fireEvent.keyDown(track, { key: "ArrowRight" });
+    expect(track.scrollBy).toHaveBeenLastCalledWith({ left: 450, behavior: "smooth" });
+  });
+
+  it("never wraps cards; uses 5/4/3 desktop-to-tablet slots and a 2.3-card phone peek", () => {
+    const css = fs.readFileSync(path.resolve(__dirname, "../styles/storefront.css"), "utf8");
+    expect(css).toMatch(/\.recently-viewed__track\s*\{[^}]*display: flex; flex-wrap: nowrap/);
+    expect(css).toMatch(/\.recently-viewed__track\s*\{[^}]*scroll-snap-type: x mandatory/);
+    for (const [width, slots] of [[1279, 4], [1023, 3], [767, 2.3]]) {
+      expect(css).toMatch(new RegExp(`@media \\(max-width: ${width}px\\)\\s*\\{\\s*\\.recently-viewed__track\\s*\\{[^}]* / ${slots}\\)`));
+    }
+    expect(css).toContain("--recent-card-size: calc((100% - 4 * var(--space-3)) / 5)");
   });
 
   it("renders nothing when every stored id is unavailable", async () => {
