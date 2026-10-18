@@ -162,6 +162,10 @@ const ORDERS_HTML = `
     <bdi class="cusin-customer__phone" dir="ltr">۰۹۱۲۳۳۳۴۴۵۵</bdi>
   </span></td>
   <td class="field-status_badge"><span class="cusin-badge st-pending">در انتظار تأیید</span></td>
+  <td class="cusin-row-actions" data-cusin-row-actions>
+    <a class="cusin-row-edit" href="#">ویرایش</a>
+    <button type="button" class="cusin-menu-trigger cusin-row-more">…</button>
+  </td>
 </tr></tbody></table></div></div></div>`;
 
 function mountOrders(width) {
@@ -191,8 +195,31 @@ describe("task 4: orders customer cell never overlaps the status badge", () => {
     });
   }
 
+
+  // A 1024px (and zoomed 1280/1366) order desk must not clamp a row to one
+  // line: a two-line status badge and the customer's phone line grow the
+  // row, and the 44px action buttons wrap inside their own cell instead of
+  // hanging outside the row card.
+  for (const width of [1024, 1280, 1366]) {
+    it(`lets rows grow with the content at ${width}px`, () => {
+      const { style } = mountOrders(width);
+      expect(style("#result_list tbody tr", "height")).toBe("auto");
+      expect(style("#result_list tbody tr", "max-height")).toBe("none");
+      expect(style("td.field-customer_cell", "height")).toBe("auto");
+      expect(style("td.field-customer_cell", "max-height")).toBe("none");
+    });
+
+    it(`keeps the row actions inside the row card at ${width}px`, () => {
+      const { style } = mountOrders(width);
+      expect(style("td.cusin-row-actions", "flex-wrap")).toBe("wrap");
+      expect(style("td.cusin-row-actions", "min-width")).toBe("0");
+      expect(style("td.cusin-row-actions", "max-width")).toBe("100%");
+      expect(style("td.cusin-row-actions", "height")).toBe("auto");
+    });
+  }
+
   it("sizes the real customer column (not the stale column-user) on desktop", () => {
     const { style } = mountOrders(1366);
-    expect(style("th.column-customer_cell", "width")).toBe("20%");
+    expect(style("th.column-customer_cell", "width")).toBe("18%");
   });
 });

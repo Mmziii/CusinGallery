@@ -11,8 +11,6 @@ environment variable (default "admin/"). Set a hard-to-guess value in
 production (e.g. ADMIN_URL=panel-cusin-88) -- check_production warns
 while it stays the default. Always restart the backend after changing it.
 """
-import os
-
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
@@ -23,8 +21,10 @@ from apps.core.seo import brand_meta, product_meta, shop_meta
 from apps.core.spa import spa_page
 from apps.core.views import healthz, robots_txt, sitemap_xml
 
-_admin_path = os.environ.get("ADMIN_URL", "admin/").strip()
-_admin_path = (_admin_path.strip("/") + "/") if _admin_path.strip("/") else "admin/"
+# settings.ADMIN_PATH is the single source of truth (also used by
+# apps.core.middleware.AdminFrameOptionsMiddleware for the SAMEORIGIN
+# exception); mount it without the leading slash.
+_admin_path = settings.ADMIN_PATH.lstrip("/")
 
 # Part R4 item 4: admin two-factor gate -- swaps the admin site class to
 # django-otp's OTPAdminSite when ADMIN_2FA_REQUIRED is on (no-op in dev

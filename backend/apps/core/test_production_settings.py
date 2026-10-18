@@ -103,7 +103,18 @@ class ProductionSettingsAuditTests(TestCase):
     def test_security_headers(self):
         prod = self._production()
         self.assertTrue(prod.SECURE_CONTENT_TYPE_NOSNIFF)
+        # Storefront/API stay unframeable. The admin's own "+" popups need
+        # SAMEORIGIN, which apps.core.middleware.AdminFrameOptionsMiddleware
+        # applies to the admin prefix only -- never by loosening this.
         self.assertEqual(prod.X_FRAME_OPTIONS, "DENY")
+        self.assertEqual(prod.ADMIN_PATH, "/admin/")
+        self.assertIn("apps.core.middleware.AdminFrameOptionsMiddleware", prod.MIDDLEWARE)
+        self.assertGreater(
+            prod.MIDDLEWARE.index("apps.core.middleware.AdminFrameOptionsMiddleware"),
+            prod.MIDDLEWARE.index("django.middleware.clickjacking.XFrameOptionsMiddleware"),
+            "the admin-frame middleware must run on the response BEFORE "
+            "XFrameOptionsMiddleware, or the latter would set DENY first",
+        )
 
     # --- the single HTTPS switch ------------------------------------------------
 
