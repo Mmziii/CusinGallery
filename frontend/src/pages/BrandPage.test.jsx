@@ -60,9 +60,9 @@ describe("brand storefront pages", () => {
     expect(document.title).toBe("محصولات برند یونیک | کازین گالری");
     expect(document.querySelector('link[rel="canonical"]').getAttribute("href")).toBe(`https://cusin.ir/brands/${encodeURIComponent(brand.slug)}/`);
     expect(document.querySelector('meta[name="description"]').content).toContain("یونیک");
-    const brandSelect = screen.getByRole("combobox", { name: "برند" });
-    expect(brandSelect.disabled).toBe(true);
-    expect(brandSelect.value).toBe(brand.slug);
+    const brandOption = screen.getByRole("radio", { name: "یونیک" });
+    expect(brandOption.disabled).toBe(true);
+    expect(brandOption.checked).toBe(true);
   });
 
   it("preserves the brand when sorting, filtering or clearing query-string filters", async () => {

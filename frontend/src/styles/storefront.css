@@ -2407,3 +2407,31 @@ input, select, textarea { min-width: 0; max-width: 100%; }
 @media (prefers-reduced-motion: reduce) {
   .product-lightbox, .product-lightbox__stage .product-gallery__layer--active { animation: none; }
 }
+
+/* Shop selectors: searchable brands and an actual expandable category tree. */
+.filter-option { display: flex; align-items: center; gap: var(--space-2); min-height: 44px; cursor: pointer; font-size: var(--font-size-sm); }
+.filter-option input { flex: 0 0 auto; width: auto; accent-color: var(--brand-green-dark); }
+.brand-filter__options { max-height: 280px; overflow-y: auto; margin-top: var(--space-2); }
+.category-filter { max-height: 440px; overflow-y: auto; }
+.category-filter ul { list-style: none; margin: 0; padding: 0; }
+.category-filter ul ul { margin-inline-start: 12px; padding-inline-start: 12px; border-inline-start: 1px solid var(--color-border); }
+.category-filter__row { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+.category-filter__toggle { display: inline-grid; place-items: center; flex: 0 0 auto; width: 44px; height: 44px; padding: 0; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--brand-green-dark); cursor: pointer; }
+.category-filter__toggle[aria-expanded="false"] svg { transform: rotate(90deg); }
+/* One rail, two overlaid native sliders. Only their thumbs receive pointers. */
+.price-range__selected { display: block; font-size: var(--font-size-sm); font-weight: 700; }
+.price-range__control { position: relative; height: 52px; margin-inline: 4px; }
+.price-range__rail { position: absolute; inset-inline: 12px; top: 24px; height: 4px; background: var(--color-border); border-radius: 4px; }
+.price-range__rail span { position: absolute; height: 100%; background: var(--brand-green-dark); border-radius: inherit; }
+.price-range__input { position: absolute; inset: 0; width: 100%; height: 52px; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; appearance: none; -webkit-appearance: none; pointer-events: none; direction: rtl; touch-action: none; }
+.price-range__input::-webkit-slider-runnable-track { height: 4px; background: transparent; border: 0; }
+.price-range__input::-moz-range-track { height: 4px; background: transparent; border: 0; }
+.price-range__input::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; pointer-events: auto; width: 24px; height: 24px; margin-top: -10px; border: 2px solid var(--brand-green-dark); border-radius: 50%; background: #fff; cursor: grab; touch-action: none; }
+.price-range__input::-moz-range-thumb { pointer-events: auto; width: 20px; height: 20px; border: 2px solid var(--brand-green-dark); border-radius: 50%; background: #fff; cursor: grab; touch-action: none; }
+.price-range__input:focus-visible { outline: none; }
+.price-range__input:focus-visible::-webkit-slider-thumb { outline: 3px solid var(--brand-gold-deep); outline-offset: 3px; }
+.price-range__input:focus-visible::-moz-range-thumb { outline: 3px solid var(--brand-gold-deep); outline-offset: 3px; }
+.price-range__control--disabled { opacity: .5; }
+.price-range__input:disabled::-webkit-slider-thumb { pointer-events: none; cursor: default; }
+.price-range__input:disabled::-moz-range-thumb { pointer-events: none; cursor: default; }
+.price-range__extremes { margin: 0; font-size: var(--font-size-xs); color: var(--color-text-muted); line-height: 1.9; }

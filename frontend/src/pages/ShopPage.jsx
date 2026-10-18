@@ -1,11 +1,13 @@
 import { faDigits } from "../utils/faDigits";
-import { digitInput } from "../utils/iranianFields";
 import PropTypes from "prop-types";
 import { usePageMeta } from "../hooks/usePageMeta";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigationType, useSearchParams } from "react-router-dom";
 
 import Breadcrumbs from "../components/Breadcrumbs";
+import BrandFilter from "../components/BrandFilter";
+import CategoryFilterTree from "../components/CategoryFilterTree";
+import PriceRangeFilter from "../components/PriceRangeFilter";
 import Icon from "../components/Icon";
 import Portal from "../components/Portal";
 import ProductCard from "../components/ProductCard";
@@ -21,25 +23,7 @@ import { formatPrice } from "../utils/formatPrice";
 import { shareImageUrl } from "../utils/shareImage";
 import { brandShape } from "../utils/shapes";
 import { brandUrl } from "../utils/brands";
-import { categoryChain, categoryUrl, KITCHEN_ROOT_SLUG } from "../utils/categories";
-
-/** Part S5 item 7: price inputs wait ~300ms after the last keystroke. */
-const PRICE_DEBOUNCE_MS = 300;
-
-/** Small debounce hook for the price range inputs. */
-function useDebouncedCallback(callback, delay) {
-  const timer = useRef(null);
-  const latest = useRef(callback);
-  latest.current = callback;
-  useEffect(() => () => clearTimeout(timer.current), []);
-  return useCallback(
-    (...args) => {
-      clearTimeout(timer.current);
-      timer.current = setTimeout(() => latest.current(...args), delay);
-    },
-    [delay]
-  );
-}
+import { categoryChain, categoryUrl } from "../utils/categories";
 
 /** Part S5 item 7: max stagger steps (20ms each) for the card entrance. */
 const MAX_STAGGER_STEPS = 10;
@@ -256,24 +240,19 @@ function ShopPage({ brand: fixedBrand = null }) {
     if (productsState.data) setResultsKey((value) => value + 1);
   }, [productsState.data]);
 
-  // Part S5 item 7: the price inputs keep their own text state and push
-  // the value into the URL ~300ms after the last keystroke (and at once on
-  // blur), so typing never triggers a request per character.
-  const [priceText, setPriceText] = useState({
-    min_price: searchParams.get("min_price") || "",
-    max_price: searchParams.get("max_price") || "",
-  });
-  const debouncedSetParam = useDebouncedCallback((key, value) => setParam(key, value), PRICE_DEBOUNCE_MS);
-  const applyPrice = (key, raw) => {
-    const value = digitInput(raw);
-    setPriceText((current) => ({ ...current, [key]: value }));
-    debouncedSetParam(key, value);
+  const applyPriceRange = ({ min, max }) => {
+    const next = new URLSearchParams(searchParams);
+    if (min == null) next.delete("min_price");
+    else next.set("min_price", String(min));
+    if (max == null) next.delete("max_price");
+    else next.set("max_price", String(max));
+    next.delete("page");
+    setSearchParams(next);
   };
 
   const clearAllFilters = () => {
     const next = new URLSearchParams(searchParams);
     ["category", "brand", "min_price", "max_price", "in_stock", "page", ...attrKeys].forEach((k) => next.delete(k));
-    setPriceText({ min_price: "", max_price: "" });
     setSearchParams(next);
   };
 
@@ -287,36 +266,11 @@ function ShopPage({ brand: fixedBrand = null }) {
   const filtersPanel = (
     <div className="shop__filters-inner">
       <FilterGroup title="دسته‌بندی">
-        <select
-          aria-label="دسته‌بندی"
-          value={searchParams.get("category") || ""}
-          onChange={(e) => setParam("category", e.target.value)}
-        >
-          <option value="">همه دسته‌ها</option>
-          {/* Stage 1: the «آشپزخانه» root is a grouping
-              node with no products of its own -- the shop
-              filter offers its children (the main groups),
-              not the root. */}
-          {(categoriesState.data?.results || [])
-            .filter((category) => category.slug !== KITCHEN_ROOT_SLUG)
-            .map((category) => (
-              <option key={category.id} value={category.slug}>{category.name}</option>
-            ))}
-        </select>
+        <CategoryFilterTree categories={categories} selected={params.category || ""} onChange={(value) => setParam("category", value)} />
       </FilterGroup>
 
       <FilterGroup title="برند">
-        <select
-          aria-label="برند"
-          value={params.brand || ""}
-          disabled={Boolean(fixedBrand)}
-          onChange={(e) => setParam("brand", e.target.value)}
-        >
-          {!fixedBrand ? <option value="">همه برندها</option> : null}
-          {(fixedBrand ? [fixedBrand] : brandsState.data?.results || []).map((brand) => (
-            <option key={brand.id} value={brand.slug}>{brand.name}</option>
-          ))}
-        </select>
+        <BrandFilter brands={fixedBrand ? [fixedBrand] : brands} selected={params.brand || ""} locked={Boolean(fixedBrand)} onChange={(value) => setParam("brand", value)} />
       </FilterGroup>
 
       {/* Part R5 item 8: dynamic attribute facets, one checkbox group
@@ -341,29 +295,16 @@ function ShopPage({ brand: fixedBrand = null }) {
       })}
 
       <FilterGroup title="محدوده قیمت (تومان)">
-        <div className="filter-group__row">
-          <input
-            type="text"
-            inputMode="numeric"
-            placeholder="از"
-            aria-label="کمترین قیمت"
-            value={priceText.min_price ? formatPrice(priceText.min_price) : ""}
-            onChange={(e) => applyPrice("min_price", e.target.value)}
-            onBlur={(e) => setParam("min_price", digitInput(e.target.value))}
-          />
-          <input
-            type="text"
-            inputMode="numeric"
-            placeholder="تا"
-            aria-label="بیشترین قیمت"
-            value={priceText.max_price ? formatPrice(priceText.max_price) : ""}
-            onChange={(e) => applyPrice("max_price", e.target.value)}
-            onBlur={(e) => setParam("max_price", digitInput(e.target.value))}
-          />
-        </div>
+        <PriceRangeFilter
+          bounds={products?.price_bounds}
+          resultRange={products?.price_range}
+          minimum={params.min_price || ""}
+          maximum={params.max_price || ""}
+          onApply={applyPriceRange}
+          scopeKey={`${fixedBrand?.slug || ""}|${searchParams.toString()}`}
+        />
       </FilterGroup>
 
-      {priceText.min_price && priceText.max_price && Number(priceText.min_price) > Number(priceText.max_price) ? <p role="alert">کمترین قیمت نباید بیشتر از بیشترین قیمت باشد.</p> : null}
       <FilterGroup title="موجودی">
         <label className="checkbox">
           <input
