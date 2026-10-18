@@ -37,6 +37,14 @@ describe("S1 mobile + centering audit rules", () => {
     expect(css).toMatch(/\.chip,\s*\.pagination button,[^{}]*\{[^}]*display:\s*inline-flex/);
   });
 
+  it("animates the mobile navigation drawer with a reversible, reduced-motion-safe 250ms transition", () => {
+    expect(css).toMatch(/\.site-header__drawer-panel\s*\{[^}]*animation:\s*mobile-drawer-panel-in 250ms ease-out both;/);
+    expect(css).toMatch(/\.site-header__drawer-backdrop\s*\{[^}]*animation:\s*mobile-drawer-backdrop-in 250ms ease-out both;/);
+    expect(css).toMatch(/\.site-header__drawer\.is-closing[^}]*animation-direction:\s*reverse/);
+    expect(css).toMatch(/\.site-header__drawer-link\s*\{[^}]*min-height:\s*48px;/);
+    expect(css).toMatch(/@media \(prefers-reduced-motion:\s*reduce\)\s*\{[^}]*animation-duration:\s*\.01ms/);
+  });
+
   it("grows touch targets to at least 44px on touch devices", () => {
     expect(css).toMatch(/\.icon-btn\s*\{\s*width:\s*44px;\s*height:\s*44px;/);
     expect(css).toMatch(/\.qty-picker button\s*\{\s*width:\s*44px;\s*min-height:\s*44px;/);

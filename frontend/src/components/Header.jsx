@@ -1,6 +1,6 @@
 import { faDigits } from "../utils/faDigits";
 import useWishlistStore from "../store/useWishlistStore";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import Icon from "./Icon";
@@ -34,6 +34,8 @@ function Header() {
   const wishlist = useWishlistStore();
   const { refetch: refreshWishlist, reset: resetWishlist } = wishlist;
   const location = useLocation();
+  const currentRoute = `${location.pathname}${location.search}${location.hash}`;
+  const previousRoute = useRef(currentRoute);
   const navigate = useNavigate();
   const { user, isAuthenticated, isLoading, logout, fetchMe } = useAuthStore();
   useEffect(() => { if (isAuthenticated) refreshWishlist(); else resetWishlist(); }, [isAuthenticated, refreshWishlist, resetWishlist]);
@@ -46,7 +48,9 @@ function Header() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [suggestions, setSuggestions] = useState([]);
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuMounted, setMenuMounted] = useState(false);
+  const [menuClosing, setMenuClosing] = useState(false);
+  const menuOpen = menuMounted && !menuClosing;
   const [cartOpen, setCartOpen] = useState(false);
   const [megaOpen, setMegaOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -60,7 +64,7 @@ function Header() {
   // re-rendering the whole header on a breakpoint
   // change buys nothing here.)
   const hasOpenDrawer =
-    menuOpen || cartOpen || (megaOpen && !isDesktopViewport());
+    menuMounted || cartOpen || (megaOpen && !isDesktopViewport());
   const headerRef = useRef(null);
   const userMenuRef = useRef(null);
   const searchRef = useRef(null);
@@ -68,6 +72,7 @@ function Header() {
   // A response can arrive after the shopper has used the home brand action.
   // Versioning prevents that stale response from reopening suggestions.
   const searchRequestVersion = useRef(0);
+  const drawerCloseTimer = useRef(null);
   const drawerRef = useRef(null);
   const minicartRef = useRef(null);
   // Stage 2: the main groups are the children of the
@@ -75,11 +80,46 @@ function Header() {
   // active products anywhere in their subtree.
   const groups = catalogGroups(categories);
 
+  const openMenu = useCallback(() => {
+    if (drawerCloseTimer.current !== null) {
+      window.clearTimeout(drawerCloseTimer.current);
+      drawerCloseTimer.current = null;
+    }
+    setMenuClosing(false);
+    setMenuMounted(true);
+  }, []);
+
+  const closeMenu = useCallback((afterClose) => {
+    if (!menuMounted) {
+      afterClose?.();
+      return;
+    }
+    if (menuClosing) return;
+
+    setMenuClosing(true);
+    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    drawerCloseTimer.current = window.setTimeout(() => {
+      setMenuMounted(false);
+      setMenuClosing(false);
+      drawerCloseTimer.current = null;
+      afterClose?.();
+    }, reducedMotion ? 0 : 250);
+  }, [menuClosing, menuMounted]);
+
+  useEffect(() => () => {
+    if (drawerCloseTimer.current !== null) window.clearTimeout(drawerCloseTimer.current);
+  }, []);
+
+  useEffect(() => {
+    if (previousRoute.current === currentRoute) return;
+    previousRoute.current = currentRoute;
+    closeMenu();
+  }, [currentRoute, closeMenu]);
+
   // Part S2 item 8: focus trap + Escape + focus restore for the two
-  // full drawers (mobile menu, mini-cart). The hover-driven mega menu
-  // intentionally stays trap-free; it handles Escape below and returns
-  // focus to its trigger.
-  useFocusTrap(drawerRef, menuOpen, () => setMenuOpen(false));
+  // full drawers (mobile menu, mini-cart). Keep the trap and scroll lock
+  // active through the menu's reverse animation, then restore focus.
+  useFocusTrap(drawerRef, menuMounted, closeMenu);
   useFocusTrap(minicartRef, cartOpen, () => setCartOpen(false));
 
   // Both drawers are full-viewport dialogs. Lock the document while either
@@ -207,7 +247,7 @@ function Header() {
   const closeHeaderSurfaces = () => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
     searchRequestVersion.current += 1;
-    setMenuOpen(false);
+    closeMenu();
     setCartOpen(false);
     setMegaOpen(false);
     setUserMenuOpen(false);
@@ -230,12 +270,13 @@ function Header() {
     event.preventDefault();
     const query = searchTerm.trim();
     setSuggestions([]);
-    setMenuOpen(false);
+    closeMenu();
     navigate(query ? `/shop/?search=${encodeURIComponent(query)}` : "/shop/");
   };
 
   const handleLogout = async () => {
     setUserMenuOpen(false);
+    closeMenu();
     await logout();
     navigate("/");
   };
@@ -281,7 +322,7 @@ function Header() {
           aria-label="بازکردن منو"
           aria-expanded={menuOpen}
           aria-controls="mobile-navigation"
-          onClick={() => setMenuOpen((open) => !open)}
+          onClick={() => (menuOpen ? closeMenu() : openMenu())}
         >
           <span />
           <span />
@@ -393,44 +434,114 @@ function Header() {
         </div>
       </div>
 
-      {/* Full-viewport drawer stays portaled to body: it remains isolated from
-          all shell stacking/containing-block changes while the header scrolls. */}
-      {menuOpen ? (
+      {/* The mobile navigation drawer stays portaled to body so its overlay
+          and right-hand panel remain independent of the sticky header. */}
+      {menuMounted ? (
         <Portal>
-          <div id="mobile-navigation" className="site-header__drawer" role="dialog" aria-modal="true" aria-label="منوی اصلی" ref={drawerRef}>
-            <div className="site-header__drawer-head">
-              <Link
-                to="/"
-                className="site-header__brand site-header__drawer-brand"
-                aria-label="کازین گالری — صفحه اصلی"
-                onClick={handleHomeNavigation}
-              >
-                <img src="/brand/logo-gold.svg" alt="" className="site-header__logo" />
-                <span className="site-header__brand-name">کازین گالری</span>
-              </Link>
-              <button type="button" aria-label="بستن منو" onClick={() => setMenuOpen(false)}>
-                <Icon name="close" size={22} />
-              </button>
+          <div className={`site-header__drawer${menuClosing ? " is-closing" : ""}`}>
+            <div
+              className="site-header__drawer-backdrop"
+              aria-hidden="true"
+              onClick={() => closeMenu()}
+            />
+            <div
+              id="mobile-navigation"
+              className="site-header__drawer-panel"
+              role="dialog"
+              aria-modal="true"
+              aria-label="منوی اصلی"
+              ref={drawerRef}
+            >
+              <div className="site-header__drawer-head">
+                <button type="button" aria-label="بستن منو" onClick={() => closeMenu()}>
+                  <Icon name="close" size={22} />
+                </button>
+              </div>
+              <nav className="site-header__drawer-nav" aria-label="ناوبری اصلی">
+                <NavLink
+                  to="/"
+                  end
+                  className={({ isActive }) => `site-header__drawer-link${isActive ? " is-active" : ""}`}
+                  onClick={handleHomeNavigation}
+                >
+                  <Icon name="home" size={20} /><span>خانه</span>
+                </NavLink>
+                <NavLink
+                  to="/shop/"
+                  end
+                  className={({ isActive }) => `site-header__drawer-link${isActive ? " is-active" : ""}`}
+                  onClick={() => closeMenu()}
+                >
+                  <Icon name="store" size={20} /><span>فروشگاه</span>
+                </NavLink>
+                <button
+                  type="button"
+                  className="site-header__drawer-link"
+                  aria-haspopup="dialog"
+                  aria-controls="mega-menu-sheet"
+                  onClick={() => closeMenu(() => setMegaOpen(true))}
+                >
+                  <Icon name="grid" size={20} /><span>دسته‌بندی کالاها</span>
+                  <Icon name="chevron-left" size={16} />
+                </button>
+                <NavLink
+                  to="/wishlist/"
+                  end
+                  className={({ isActive }) => `site-header__drawer-link${isActive ? " is-active" : ""}`}
+                  onClick={() => closeMenu()}
+                >
+                  <Icon name="heart" size={20} /><span>علاقه‌مندی‌ها</span>
+                </NavLink>
+                <NavLink
+                  to="/cart/"
+                  end
+                  className={({ isActive }) => `site-header__drawer-link${isActive ? " is-active" : ""}`}
+                  onClick={() => closeMenu()}
+                >
+                  <Icon name="bag" size={20} /><span>سبد خرید</span>
+                </NavLink>
+                <NavLink
+                  to="/about/"
+                  end
+                  className={({ isActive }) => `site-header__drawer-link${isActive ? " is-active" : ""}`}
+                  onClick={() => closeMenu()}
+                >
+                  <Icon name="info" size={20} /><span>دربارهٔ ما</span>
+                </NavLink>
+                <NavLink
+                  to="/contact/"
+                  end
+                  className={({ isActive }) => `site-header__drawer-link${isActive ? " is-active" : ""}`}
+                  onClick={() => closeMenu()}
+                >
+                  <Icon name="phone" size={20} /><span>تماس با ما</span>
+                </NavLink>
+              </nav>
+              <div className="site-header__drawer-account">
+                {isAuthenticated ? (
+                  <>
+                    <NavLink
+                      to="/account/"
+                      className={({ isActive }) => `site-header__drawer-link${isActive ? " is-active" : ""}`}
+                      onClick={() => closeMenu()}
+                    >
+                      <Icon name="user" size={20} /><span>حساب کاربری</span>
+                    </NavLink>
+                    <button type="button" className="site-header__drawer-link" onClick={handleLogout}>
+                      <Icon name="logout" size={20} /><span>خروج</span>
+                    </button>
+                  </>
+                ) : (
+                  <NavLink
+                    to="/login/"
+                    className={({ isActive }) => `site-header__drawer-link${isActive ? " is-active" : ""}`}
+                    onClick={() => closeMenu()}
+                  >
+                    <Icon name="user" size={20} /><span>ورود / ثبت‌نام</span>
+                  </NavLink>
+                )}
+              </div>
             </div>
-            <NavLink to="/" onClick={() => setMenuOpen(false)}>خانه</NavLink>
-            <NavLink to="/shop/" onClick={() => setMenuOpen(false)}>فروشگاه</NavLink>
-            <NavLink to="/about/" onClick={() => setMenuOpen(false)}>درباره ما</NavLink>
-            <NavLink to="/contact/" onClick={() => setMenuOpen(false)}>تماس با ما</NavLink>
-            <NavLink to="/account/" onClick={() => setMenuOpen(false)}>حساب کاربری</NavLink>
-            {categories.map((category) => (
-              <NavLink
-                key={category.id}
-                to={`/shop/?category=${encodeURIComponent(category.slug)}`}
-                onClick={() => setMenuOpen(false)}
-              >
-                {category.name}
-              </NavLink>
-            ))}
-            {isAuthenticated ? (
-              <NavLink to="/wishlist/" onClick={() => setMenuOpen(false)}>علاقه‌مندی‌ها</NavLink>
-            ) : (
-              <NavLink to="/login/" onClick={() => setMenuOpen(false)}>ورود | ثبت‌نام</NavLink>
-            )}
           </div>
         </Portal>
       ) : null}

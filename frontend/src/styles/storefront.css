@@ -1199,26 +1199,58 @@ h1, h2, h3, .section__head h2 {
 .site-header__burger { display: none; background: none; border: none; cursor: pointer; padding: 8px; }
 .site-header__burger span { display: block; width: 22px; height: 2px; background: var(--brand-gold); margin: 5px 0; border-radius: 2px; }
 
-/* Part S5 follow-up 4: the full-viewport drawers are portaled to <body>
-   (see components/Portal.jsx) and sit ABOVE the floating contact cluster
-   (z-index 110) so the contact/back-to-top buttons can never cover a
-   drawer's own action button, and BELOW the toaster (120) so a toast stays
-   readable. The z-index ladder is pinned by a test
-   (src/styles/overlays.structure.test.jsx). */
+/* Part S5 follow-up 4: full-screen overlays are portaled to <body> and sit
+   above the floating contact cluster while preserving the toaster layer. */
 .site-header__drawer {
-  position: fixed; inset: 0; z-index: 115; background: var(--brand-green-dark);
-  /* `vh` is the fallback; dynamic viewport height tracks mobile browser UI. */
-  height: 100vh;
-  height: 100dvh;
-  padding: var(--space-4); display: flex; flex-direction: column; gap: 6px;
-  overflow-y: auto; overscroll-behavior: contain;
+  position: fixed; inset: 0; z-index: 115; height: 100vh; height: 100dvh;
+  pointer-events: none;
 }
-.site-header__drawer a { color: var(--brand-ivory); padding: 10px 4px; border-bottom: 1px solid rgba(206,180,100,.18); font-size: var(--font-size-md); }
-.site-header__drawer-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-3); }
-/* The full-screen drawer covers the original header, so its visible brand
-   remains a real home link rather than a decorative, unreachable label. */
-.site-header__drawer .site-header__drawer-brand { padding: 0; border-bottom: 0; color: var(--brand-gold); }
-.site-header__drawer-head button { background: none; border: none; color: var(--brand-gold); font-size: 1.6rem; cursor: pointer; }
+.site-header__drawer-backdrop {
+  position: absolute; inset: 0; background: rgba(20, 26, 10, .56);
+  pointer-events: auto; animation: mobile-drawer-backdrop-in 250ms ease-out both;
+}
+.site-header__drawer-panel {
+  position: absolute; inset-block: 0; inset-inline-end: 0;
+  width: min(380px, 90vw); max-width: 100vw;
+  padding: var(--space-3) var(--space-4);
+  display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain;
+  background: var(--brand-green-dark); color: var(--brand-ivory);
+  pointer-events: auto; animation: mobile-drawer-panel-in 250ms ease-out both;
+}
+@keyframes mobile-drawer-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes mobile-drawer-panel-in { from { transform: translateX(100%); } to { transform: translateX(0); } }
+.site-header__drawer.is-closing .site-header__drawer-backdrop,
+.site-header__drawer.is-closing .site-header__drawer-panel { animation-direction: reverse; }
+.site-header__drawer-head {
+  display: flex; justify-content: flex-start; align-items: center;
+  min-height: 48px; margin-bottom: var(--space-2);
+}
+.site-header__drawer-head button {
+  width: 48px; height: 48px; display: inline-grid; place-items: center;
+  background: none; border: 1px solid rgba(206,180,100,.35);
+  border-radius: 12px; color: var(--brand-gold); cursor: pointer;
+}
+.site-header__drawer-nav, .site-header__drawer-account { display: flex; flex-direction: column; gap: 4px; }
+.site-header__drawer-account {
+  margin-block-start: auto; padding-top: var(--space-3);
+  border-top: 1px solid rgba(206,180,100,.25);
+}
+.site-header__drawer-link {
+  width: 100%; min-height: 48px; display: flex; align-items: center; gap: 12px;
+  padding: 10px 12px; border: 0; border-radius: 12px;
+  background: transparent; color: var(--brand-ivory); font: inherit;
+  font-size: var(--font-size-md); line-height: 1.5; text-align: right;
+  text-decoration: none; cursor: pointer;
+}
+.site-header__drawer-link > .icon { flex: none; color: var(--brand-gold); }
+.site-header__drawer-link > .icon:last-child:not(:first-child) { margin-inline-start: auto; }
+.site-header__drawer-link:hover,
+.site-header__drawer-link:focus-visible,
+.site-header__drawer-link.is-active {
+  background: rgba(206,180,100,.12); color: var(--brand-gold);
+}
+.site-header__drawer-link.is-active { box-shadow: inset -3px 0 0 var(--brand-gold); font-weight: 700; }
+.site-header__drawer-link:focus-visible { outline: 2px solid var(--brand-gold); outline-offset: 2px; }
 
 /* category bar (pre-Part-3) hidden: replaced by mega menu */
 .category-bar { display: none; }
@@ -1671,7 +1703,7 @@ html { overflow-x: clip; }
   .search-suggest a { padding: 12px; }
   .mega-menu__roots button { padding: 12px 10px; }
   .mega-menu__panel a { padding: 10px 8px; }
-  .site-header__drawer a { padding: 14px 4px; }
+  .site-header__drawer-link { padding: 14px 12px; }
   .account__nav a { padding: 12px; }
   .link, .link-danger { padding-block: 10px; }
   .category-bar__inner a { min-height: 44px; }

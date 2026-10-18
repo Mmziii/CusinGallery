@@ -152,7 +152,7 @@ describe("mega menu", () => {
   it("lays out the panel Digikala-style: all-link on top, sub-category headings with children in columns", async () => {
     const { trigger, view } = await renderHeader();
     fireEvent.mouseEnter(trigger);
-    const menu = await untilMenu();
+    await untilMenu();
 
     const panel = view.container.querySelector(".mega-menu__panel");
     // «همهٔ محصولات <category> ›» leads the panel.
@@ -202,7 +202,7 @@ describe("mega menu", () => {
   });
 
   it("supports arrow keys within the main-category list", async () => {
-    const { trigger, view } = await renderHeader();
+    const { view } = await renderHeader();
     fireEvent.click(await screen.findByRole("button", { name: /دسته‌بندی کالاها/ }));
     await untilMenu();
 
