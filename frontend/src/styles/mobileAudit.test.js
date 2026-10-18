@@ -72,8 +72,11 @@ describe("S1 mobile + centering audit rules", () => {
     expect(css).toMatch(/\.site-footer\s*\{\s*padding-bottom:\s*96px/);
   });
 
-  it("keeps the PDP zoomed image inside its frame", () => {
-    expect(css).toMatch(/\.product-detail__main-image\s*\{\s*overflow:\s*hidden/);
+  it("contains gallery images and enlarges them in a fixed fullscreen lightbox, never in place", () => {
+    expect(css).toMatch(/\.product-gallery__stage\s*\{[^}]*overflow:\s*hidden/);
+    expect(css).toMatch(/\.product-gallery__layer img\s*\{[^}]*object-fit:\s*contain/);
+    expect(css).toMatch(/\.product-lightbox\s*\{[^}]*position:\s*fixed;[^}]*inset:\s*0/);
+    expect(css).not.toContain(".is-zoomed");
   });
 
   it("styles inline address field errors and the required marker", () => {

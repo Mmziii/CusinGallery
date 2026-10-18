@@ -8,8 +8,8 @@
  *  - when the new page lands, every card replays the fade+rise entrance
  *    with a ~20ms/card stagger that is CAPPED (no card waits more than
  *    MAX_STAGGER * 20ms);
- *  - the price inputs are debounced (~300ms) so typing a number does not
- *    fire one request per keystroke, while blur still applies instantly;
+ *  - both price thumbs stay local during dragging and apply together
+ *    after release plus a short debounce;
  *  - filter groups collapse with the grid-template-rows technique (the
  *    inputs stay in the DOM, they are only visually collapsed) and the
  *    mobile filter drawer toggles with an aria-expanded state.
@@ -42,6 +42,8 @@ const makeProduct = (id, name) => ({
 });
 
 const PAGE_A = {
+  price_bounds: { min: 75000, max: 12000000 },
+  price_range: { min: 75000, max: 12000000 },
   count: 2,
   next: null,
   previous: null,
@@ -68,7 +70,11 @@ beforeAll(() => {
       return { data: { count: 0, next: null, previous: null, results: [] }, status: 200, statusText: "OK", headers: {}, config };
     }
     if (/^\/categories\//.test(url)) {
-      return { data: { count: 0, next: null, previous: null, results: [] }, status: 200, statusText: "OK", headers: {}, config };
+      return { data: { count: 3, next: null, previous: null, results: [
+        { id: 9, name: "آشپزخانه", slug: "kitchen-root", parent: null, is_root: true },
+        { id: 1, name: "ظروف پخت", slug: "cookware", parent: 9, parent_slug: "kitchen-root", is_root: false },
+        { id: 2, name: "قابلمه", slug: "pots", parent: 1, parent_slug: "cookware" },
+      ] }, status: 200, statusText: "OK", headers: {}, config };
     }
     if (/^\/brands\//.test(url)) {
       const data = {
@@ -86,7 +92,7 @@ beforeAll(() => {
       if (deferredMode) {
         return new Promise((resolve) => pendingResponses.push(resolve));
       }
-      return { data: PAGE_A, status: 200, statusText: "OK", headers: {}, config };
+      return { data: Number(config.params?.page) === 2 ? PAGE_B : PAGE_A, status: 200, statusText: "OK", headers: {}, config };
     }
     return originalAdapter(config);
   };
@@ -184,28 +190,34 @@ describe("shop page filter transitions (Part S5 item 7)", () => {
     expect(new Set(delays).size).toBeLessThan(13);
   });
 
-  it("debounces the price inputs (~300ms) and applies them immediately on blur", async () => {
+  it("applies both price handles atomically after dragging ends and a debounce", async () => {
     renderShop();
     await screen.findByText("کالای اول");
     const before = productRequests.length;
-
-    const min = screen.getByLabelText("کمترین قیمت");
-    fireEvent.change(min, { target: { value: "1" } });
-    fireEvent.change(min, { target: { value: "12" } });
-    fireEvent.change(min, { target: { value: "123" } });
-    // Nothing yet: the three keystrokes are still inside the debounce window.
+    const min = screen.getByRole("slider", { name: "کمترین قیمت" });
+    const max = screen.getByRole("slider", { name: "بیشترین قیمت" });
+    fireEvent.pointerDown(min);
+    fireEvent.change(min, { target: { value: "100000" } });
+    fireEvent.change(min, { target: { value: "123000" } });
     expect(productRequests.length).toBe(before);
-    // The input itself stays responsive (controlled local state).
-    expect(min.value).toBe("۱۲۳");
+    expect(screen.getByText("از ۱۲۳٬۰۰۰ تا ۱۲٬۰۰۰٬۰۰۰ تومان")).toBeTruthy();
+    fireEvent.pointerUp(min);
+    fireEvent.pointerDown(max);
+    fireEvent.change(max, { target: { value: "500000" } });
+    fireEvent.pointerUp(max);
+    await waitFor(() => expect(productRequests.at(-1)).toMatchObject({ min_price: "123000", max_price: "500000" }));
+    expect(productRequests.length).toBe(before + 1);
+  });
 
-    await waitFor(() => expect(productRequests.some((p) => p.min_price === "123")).toBe(true));
-    // One request for the whole burst, not one per keystroke.
-    expect(productRequests.filter((p) => p.min_price).length).toBe(1);
-
-    // Blur does not wait for the timer: the next value is applied at once.
-    fireEvent.change(min, { target: { value: "456" } });
-    fireEvent.blur(min);
-    await waitFor(() => expect(productRequests.some((p) => p.min_price === "456")).toBe(true));
+  it("filters by a parent category and keeps all other filters when its subtree is expanded", async () => {
+    renderShop("?brand=unique&page=2");
+    await screen.findByText("کالای اول");
+    fireEvent.click(screen.getByRole("button", { name: "زیردسته‌های ظروف پخت" }));
+    expect(screen.getByRole("radio", { name: "قابلمه" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("radio", { name: "ظروف پخت" }));
+    await waitFor(() => expect(productRequests.at(-1)).toMatchObject({ category: "cookware", brand: "unique" }));
+    expect(productRequests.at(-1).page).toBeUndefined();
+    expect(screen.getByRole("link", { name: "آشپزخانه" }).getAttribute("href")).toBe("/shop/");
   });
 
   it("collapses a filter group with grid-template-rows while keeping its inputs in the DOM", async () => {
@@ -220,12 +232,9 @@ describe("shop page filter transitions (Part S5 item 7)", () => {
     fireEvent.click(toggle);
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
     expect(group.className).toContain("filter-group--collapsed");
-    // The select is only visually collapsed -- DOM and options survive, so
-    // reopening the group (or a keyboard user tabbing through) sees the
-    // same control.
-    const collapsedSelect = document.querySelector(".filter-group--collapsed select");
-    expect(collapsedSelect).toBeTruthy();
-    expect(collapsedSelect.options.length).toBeGreaterThan(0);
+    // Controls retain state while the group is collapsed.
+    const collapsedInput = document.querySelector(".filter-group--collapsed .category-filter input");
+    expect(collapsedInput).toBeTruthy();
     expect(document.querySelector(".filter-group--collapsed .filter-group__body-inner")).toBeTruthy();
 
     fireEvent.click(toggle);

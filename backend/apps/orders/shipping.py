@@ -22,6 +22,22 @@ from django.conf import settings
 from django.utils import timezone
 
 DEFAULT_METHOD = "standard"
+EXPRESS_UNAVAILABLE_MESSAGE = "ارسال اکسپرس فعلاً فقط برای شهر تهران"
+
+
+def is_express_eligible(province, city) -> bool:
+    """Tehran CITY, not every city in Tehran province.
+
+    Retain support for the official legacy address aliases ("Tehran")
+    and the explicit شهرستان تهران spelling; never use substring matches.
+    This only compares destinations and never rewrites historical data.
+    """
+    from apps.accounts.locations import normalize_city, normalize_province
+
+    province = " ".join((province or "").split())
+    city = " ".join((city or "").split())
+    return normalize_province(province) == "تهران" and normalize_city(city) in {"تهران", "شهرستان تهران"}
+
 
 
 def get_shipping_methods() -> dict:

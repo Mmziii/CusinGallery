@@ -80,6 +80,7 @@ _ROUTE_PATTERNS = [
     re.compile(r"^/account(/[^/]+)?(/[^/]+)?/?$"),
 ]
 
+_BRAND_RE = re.compile(r"^/brands/(?P<slug>[^/]+)/?$")
 _PRODUCT_RE = re.compile(r"^/products/(?P<slug>[^/]+)/?$")
 
 #: Path prefixes that are NOT pages: never answered with the storefront
@@ -105,7 +106,7 @@ def is_known_page(path, query=""):
     really render. Pure function of the database + the route table.
     """
     from apps.categories.models import Category
-    from apps.products.models import Product
+    from apps.products.models import Brand, Product
 
     path = path or "/"
     if any(path.startswith(prefix) for prefix in _NON_PAGE_PREFIXES):
@@ -115,6 +116,10 @@ def is_known_page(path, query=""):
     if match:
         slug = match.group("slug")
         return Product.objects.filter(slug=slug, is_active=True).exists()
+
+    match = _BRAND_RE.match(path)
+    if match:
+        return Brand.objects.filter(slug=match.group("slug"), is_active=True).exists()
 
     if not any(pattern.match(path) for pattern in _ROUTE_PATTERNS):
         return False

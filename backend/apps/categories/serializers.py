@@ -10,6 +10,7 @@ class CategorySerializer(serializers.ModelSerializer):
     """Used for the flat list/detail endpoints."""
 
     product_count = serializers.IntegerField(read_only=True)
+    is_root = serializers.BooleanField(read_only=True)
     # In addition to the raw `parent` id (kept for completeness/any
     # future FK-based lookup), `parent_slug` is exposed because the rest
     # of this API is slug-based (category/brand/product detail lookups
@@ -32,7 +33,7 @@ class CategorySerializer(serializers.ModelSerializer):
         model = Category
         fields = [
             "id", "name", "slug", "image", "description",
-            "parent", "parent_slug", "ordering", "product_count",
+            "parent", "parent_slug", "is_root", "ordering", "product_count",
         ]
 
     def get_parent_slug(self, obj):
@@ -56,10 +57,11 @@ class CategoryTreeSerializer(serializers.ModelSerializer):
 
     children = serializers.SerializerMethodField()
     product_count = serializers.IntegerField(read_only=True)
+    is_root = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = Category
-        fields = ["id", "name", "slug", "image", "ordering", "product_count", "children"]
+        fields = ["id", "name", "slug", "image", "ordering", "product_count", "is_root", "children"]
 
     def get_children(self, obj):
         depth = self.context.get("tree_depth", 0)

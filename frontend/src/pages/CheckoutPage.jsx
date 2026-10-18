@@ -18,6 +18,7 @@ import useSiteSettings from "../hooks/useSiteSettings";
 import { normalizeApiError } from "../utils/apiError";
 import { formatPrice } from "../utils/formatPrice";
 import { useMediaQuery } from "../hooks/useMediaQuery";
+import { EXPRESS_UNAVAILABLE_MESSAGE, isExpressEligible } from "../utils/shipping";
 
 /**
  * Checkout: choose a saved address (or enter a one-off inline address),
@@ -271,10 +272,22 @@ function CheckoutPage() {
   };
 
   const methods = shippingData?.methods || [];
-  const currentMethod = methods.find((m) => m.id === selectedMethod) || null;
-  const isPickup = currentMethod?.requires_address === false;
   const selectedAddress = addresses.find((a) => a.id === selectedAddressId) || null;
+  const destination = addressMode === "saved" ? selectedAddress : inlineAddress;
+  const expressEligible = isExpressEligible(destination?.province, destination?.city);
+  // Derive the safe choice synchronously as well as persisting it below:
+  // neither a fast submit nor a one-frame price preview can use an express
+  // selection left over from the previous saved/inline address.
+  const activeMethodId = selectedMethod === "express" && !expressEligible
+    ? (methods.some((method) => method.id === "standard") ? "standard" : null)
+    : selectedMethod;
+  const currentMethod = methods.find((m) => m.id === activeMethodId) || null;
+  const isPickup = currentMethod?.requires_address === false;
   const selectedAddressIncomplete = needsPlotAndUnit(selectedAddress);
+
+  useEffect(() => {
+    if (selectedMethod === "express" && !expressEligible) setSelectedMethod(activeMethodId);
+  }, [selectedMethod, expressEligible, activeMethodId]);
 
   /**
    * Every reason an order cannot be placed right now, as
@@ -300,7 +313,7 @@ function CheckoutPage() {
       push("shipping-loading", "shipping", "روش‌های ارسال در حال بارگیری است؛ چند لحظه صبر کنید.", "checkout-section-shipping");
     } else if (!methods.length) {
       push("shipping-empty", "shipping", "روش ارسال در دسترس نیست؛ لطفاً دوباره تلاش کنید یا با پشتیبانی تماس بگیرید.", "checkout-section-shipping");
-    } else if (!selectedMethod) {
+    } else if (!activeMethodId) {
       push("shipping-missing", "shipping", "روش ارسال را انتخاب کنید.", "checkout-section-shipping");
     }
 
@@ -411,7 +424,7 @@ function CheckoutPage() {
           ? { address_id: selectedAddressId }
           : { ...inlineAddress };
       if (couponPreview?.code) payload.coupon_code = couponPreview.code;
-      if (selectedMethod) payload.shipping_method = selectedMethod;
+      if (activeMethodId) payload.shipping_method = activeMethodId;
       const order = await checkout(payload);
       setPlacedOrder(order);
       setIssues([]);
@@ -534,7 +547,7 @@ function CheckoutPage() {
       : Object.keys(validateAddressPayload(inlineAddress)).length === 0;
   const doneSteps = [
     ...(addressDone ? [0] : []),
-    ...(addressDone && selectedMethod ? [1] : []),
+    ...(addressDone && activeMethodId ? [1] : []),
   ];
   const previewedShippingCost = currentMethod ? methodCostFor(currentMethod, cart.subtotal) : (cart.shipping_cost_preview || 0);
 
@@ -793,20 +806,19 @@ function CheckoutPage() {
               <div className="shipping-methods">
                 {methods.map((method) => {
                   const cost = methodCostFor(method, cart.subtotal);
+                  const unavailable = method.id === "express" && !expressEligible;
                   return (
                     <label
                       key={method.id}
-                      className={
-                        selectedMethod === method.id
-                          ? "shipping-method shipping-method--active"
-                          : "shipping-method"
-                      }
+                      className={`shipping-method${activeMethodId === method.id ? " shipping-method--active" : ""}${unavailable ? " shipping-method--disabled" : ""}`}
                     >
                       <input
                         type="radio"
                         name="shipping_method"
-                        checked={selectedMethod === method.id}
-                        onChange={() => setSelectedMethod(method.id)}
+                        checked={activeMethodId === method.id}
+                        disabled={unavailable}
+                        aria-describedby={unavailable ? "checkout-express-note" : undefined}
+                        onChange={() => { if (!unavailable) setSelectedMethod(method.id); }}
                       />
                       <span className="shipping-method__icon" aria-hidden="true">
                         <Icon
@@ -822,6 +834,7 @@ function CheckoutPage() {
                       </span>
                       <span className="shipping-method__body">
                         <strong>{method.label || methodLabel(method.id)}</strong>
+                        {unavailable ? <span id="checkout-express-note" className="muted">{EXPRESS_UNAVAILABLE_MESSAGE}</span> : null}
                         {method.id === "pickup" && siteSettings.pickup_address ? <span>نشانی دریافت: {siteSettings.pickup_address}</span> : null}
                         {method.id === "pickup" && siteSettings.pickup_hours ? <span>ساعات دریافت: {siteSettings.pickup_hours}</span> : null}
                         <span className="muted">

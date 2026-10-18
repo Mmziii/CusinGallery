@@ -58,8 +58,6 @@ describe("shop page brand param", () => {
     // active filter chip with the brand's display name
     expect(await screen.findByText(/برند: یونیک/)).toBeTruthy();
 
-    // the sidebar brand select (second select) mirrors the URL param
-    const brandSelect = document.querySelectorAll("select")[1];
-    expect(brandSelect.value).toBe("unique");
+    expect(screen.getByRole("radio", { name: "یونیک" }).checked).toBe(true);
   });
 });

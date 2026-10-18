@@ -1,40 +1,36 @@
-/**
- * Stage 1 helpers for the single-root catalog tree.
- *
- * The backend now has exactly ONE root category: «آشپزخانه»
- * (slug `kitchen`, see the categories 0006 data migration).
- * Everything a shopper browses lives under it. Surfaces that
- * present "the main groups" (header mega menu, home category
- * tiles, shop filters) must show its CHILDREN -- never the root
- * itself, which would render as one useless «آشپزخانه» tile.
- *
- * All helpers degrade gracefully when the tree has no kitchen
- * root (older API data, mocked trees in tests): they fall back
- * to the raw roots so nothing breaks before/after a deploy.
- */
-
-export const KITCHEN_ROOT_SLUG = "kitchen";
+import { normalizePersianText } from "./persianText";
 
 /**
- * The main groups of the catalog: the children of the
- * «آشپزخانه» root. Falls back to the given roots when there
- * is no kitchen root (unmigrated data / test fixtures).
+ * Root identity is API metadata or the top-level Persian name, NEVER a
+ * preferred slug. Migration 0006 can produce kitchen-root(-N) when an
+ * unrelated category already owns kitchen; published slugs may change too.
  */
+export function isCatalogRoot(category) {
+  if (!category || typeof category !== "object") return false;
+  if (typeof category.is_root === "boolean") return category.is_root;
+  return category.parent == null && !category.parent_slug
+    && normalizePersianText(category.name) === "آشپزخانه";
+}
+
+/** Main groups are the root's children, with a safe legacy-tree fallback. */
 export function mainGroups(roots) {
   const list = Array.isArray(roots) ? roots : [];
-  const kitchen = list.find((category) => category.slug === KITCHEN_ROOT_SLUG);
-  if (!kitchen) return list;
-  return kitchen.children || [];
+  const root = list.find(isCatalogRoot);
+  return root ? root.children || [] : list;
 }
 
 /**
- * Shop URL for a category slug. The kitchen root has no
- * products of its own (it is a grouping node), so it maps to
- * the shop itself instead of a dead `?category=kitchen` filter.
+ * Pass the category object so root breadcrumbs map to /shop/ regardless
+ * of its slug. A slug-only caller can supply the flat API list; otherwise
+ * it remains a literal filter, not a guessed root identity.
  */
-export function categoryUrl(slug) {
+export function categoryUrl(category, flatList = []) {
+  const slug = typeof category === "string" ? category : category?.slug;
   if (!slug) return "/shop/";
-  if (slug === KITCHEN_ROOT_SLUG) return "/shop/";
+  const row = typeof category === "object"
+    ? category
+    : (Array.isArray(flatList) ? flatList : []).find((item) => item.slug === slug);
+  if (isCatalogRoot(row)) return "/shop/";
   return `/shop/?category=${encodeURIComponent(slug)}`;
 }
 

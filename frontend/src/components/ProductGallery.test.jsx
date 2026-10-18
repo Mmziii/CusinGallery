@@ -6,7 +6,7 @@
  * keys), the cross-fade layer swap, swipe support, no thumbnail row for a
  * single-image product, and the shared placeholder for broken thumbnails.
  */
-import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import ProductGallery from "./ProductGallery";
@@ -103,17 +103,12 @@ describe("ProductGallery thumbnails (Part S5 item 3)", () => {
     expect(container.querySelector(".product-gallery__layer--active img")).not.toBeNull();
   });
 
-  it("keeps zoom working and resets it when the image changes", async () => {
+  it("opens a full-screen popup instead of zooming in place", () => {
     const { container } = render(<ProductGallery images={THREE} name="قابلمه" />);
-    const stage = container.querySelector(".product-gallery__stage");
-
-    fireEvent.click(stage);
-    expect(container.querySelector(".product-gallery__layer--active img.is-zoomed")).not.toBeNull();
-
-    fireEvent.click(container.querySelectorAll(".thumb")[1]);
-    await waitFor(() =>
-      expect(container.querySelector(".product-gallery__layer--active img.is-zoomed")).toBeNull()
-    );
+    fireEvent.click(screen.getByRole("button", { name: "نمایش تصاویر قابلمه" }));
+    expect(screen.getByRole("dialog", { name: "تصاویر قابلمه" })).toBeTruthy();
+    expect(container.querySelector(".is-zoomed")).toBeNull();
+    expect(container.querySelector(".product-lightbox")).toBeNull(); // portaled to body
   });
 
   it("falls back to the shared placeholder when an image is missing or broken", () => {

@@ -93,7 +93,7 @@ def robots_txt(request):
 
 
 def sitemap_xml(request):
-    from apps.products.models import Product
+    from apps.products.models import Brand, Product
 
     base = settings.FRONTEND_URL.rstrip("/")
     urls = []
@@ -110,6 +110,9 @@ def sitemap_xml(request):
             "weekly",
             "0.8",
         ))
+
+    for brand in Brand.objects.filter(is_active=True).exclude(slug="").only("slug", "updated_at").order_by("pk")[:20000]:
+        urls.append((f"{base}/brands/{brand.slug}/", brand.updated_at, "weekly", "0.7"))
 
     parts = ['<?xml version="1.0" encoding="UTF-8"?>',
              '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
