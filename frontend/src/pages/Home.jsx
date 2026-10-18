@@ -159,7 +159,7 @@ function Countdown({ endsAt, serverNow }) {
   const seconds = Math.floor((left % 60000) / 1000);
   const padFa = (n) => faDigits(String(n).padStart(2, "0"));
   return (
-    <span className="countdown" aria-label="زمان باقی‌مانده">
+    <span className="countdown" role="timer" aria-label="زمان باقی‌مانده">
       <span className="countdown__segment">
         <span className="countdown__value">{padFa(hours)}</span>
         <span className="countdown__label">ساعت</span>
@@ -196,10 +196,9 @@ function DailyDealsSection() {
           {data.results.map((deal) => {
             const originalPrice = deal.product.price_info?.price ?? null;
             const discount =
-              deal.product.price_info?.discount_percentage ??
-              (originalPrice && originalPrice > deal.sale_price
+              originalPrice > 0 && originalPrice > deal.sale_price
                 ? Math.round(((originalPrice - deal.sale_price) / originalPrice) * 100)
-                : 0);
+                : 0;
             return (
               <Link key={deal.id} to={`/products/${deal.product.slug}/`} className="deal-card">
                 <div className="deal-card__media">

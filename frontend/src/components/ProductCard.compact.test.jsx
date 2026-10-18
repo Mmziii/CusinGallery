@@ -190,7 +190,12 @@ describe("compact card CSS contract", () => {
     expect(CSS).toMatch(/\.product-card__heart \{[^}]*width: 32px; height: 32px;/);
   });
 
-  it("keeps home carousels at ~44% card width on a phone", () => {
-    expect(CSS).toMatch(/\.deals-grid > \* \{ flex: 0 0 44%;/);
+  it("keeps the daily deal card balanced with a prominent image", () => {
+    expect(CSS).toMatch(/\.deals-grid \{[^}]*max-width: 860px;[^}]*margin-inline: auto;/);
+    expect(CSS).toMatch(/\.deal-card \{[^}]*display: flex;[^}]*flex-direction: row;/);
+    expect(CSS).toMatch(/\.deal-card__media \{[^}]*flex: 0 0 60%;/);
+    expect(CSS).toMatch(/\.deal-card__media.*object-fit: contain;/);
+    expect(CSS).toMatch(/\.countdown__value \{[^}]*font-variant-numeric: tabular-nums;/);
+    expect(CSS).toMatch(/\.countdown__label \{/);
   });
 });
