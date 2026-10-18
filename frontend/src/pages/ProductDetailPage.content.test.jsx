@@ -127,6 +127,16 @@ function renderProduct(path = "/products/pan/") {
 }
 
 describe("Product page content (Part S5 item 5)", () => {
+  it("links the flagged fallback root to the shop, not a hardcoded kitchen filter", async () => {
+    productResponse = { ...PRODUCT, category: { ...PRODUCT.category, is_root: false, ancestors: [{ name: "آشپزخانه", slug: "kitchen-root-2", is_root: true }] } };
+    renderProduct();
+    await screen.findByRole("heading", { name: "قابلمه گرانیتی" });
+    expect(screen.getByRole("link", { name: "آشپزخانه" }).getAttribute("href")).toBe("/shop/");
+    expect(screen.getByRole("link", { name: "قابلمه", exact: true }).getAttribute("href")).toBe("/shop/?category=pots");
+    const crumbs = JSON.parse(document.getElementById("breadcrumb-jsonld").textContent);
+    expect(crumbs.itemListElement[1].item).toMatch(/\/shop\/$/);
+  });
+
   it("shows no shipping, delivery-cost, return or packaging content", async () => {
     const { container } = renderProduct();
     await screen.findByRole("heading", { name: "قابلمه گرانیتی" });

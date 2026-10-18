@@ -70,8 +70,9 @@ beforeAll(() => {
       return { data: { count: 0, next: null, previous: null, results: [] }, status: 200, statusText: "OK", headers: {}, config };
     }
     if (/^\/categories\//.test(url)) {
-      return { data: { count: 2, next: null, previous: null, results: [
-        { id: 1, name: "ظروف پخت", slug: "cookware", parent: null },
+      return { data: { count: 3, next: null, previous: null, results: [
+        { id: 9, name: "آشپزخانه", slug: "kitchen-root", parent: null, is_root: true },
+        { id: 1, name: "ظروف پخت", slug: "cookware", parent: 9, parent_slug: "kitchen-root", is_root: false },
         { id: 2, name: "قابلمه", slug: "pots", parent: 1, parent_slug: "cookware" },
       ] }, status: 200, statusText: "OK", headers: {}, config };
     }
@@ -216,6 +217,7 @@ describe("shop page filter transitions (Part S5 item 7)", () => {
     fireEvent.click(screen.getByRole("radio", { name: "ظروف پخت" }));
     await waitFor(() => expect(productRequests.at(-1)).toMatchObject({ category: "cookware", brand: "unique" }));
     expect(productRequests.at(-1).page).toBeUndefined();
+    expect(screen.getByRole("link", { name: "آشپزخانه" }).getAttribute("href")).toBe("/shop/");
   });
 
   it("collapses a filter group with grid-template-rows while keeping its inputs in the DOM", async () => {

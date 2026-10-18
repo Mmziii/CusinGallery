@@ -45,6 +45,16 @@ class Category(TimeStampedModel, ActivableModel, OrderableModel):
             models.Index(fields=["is_active", "ordering"]),
         ]
 
+    @property
+    def is_root(self):
+        """The catalog grouping root is identified by position and name.
+
+        Migration 0006 may choose kitchen-root (or a suffixed slug) when
+        kitchen is occupied. Slugs remain public identifiers, not types.
+        This derived flag needs no schema change or per-row database query.
+        """
+        return self.parent_id is None and self.name == "آشپزخانه"
+
     def __str__(self):
         return self.name
 

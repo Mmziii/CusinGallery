@@ -1,18 +1,18 @@
 /**
  * Stage 1: the single-root catalog helpers. The tree API now
- * returns exactly one root («آشپزخانه», slug kitchen) with
+ * returns one named/flagged root (with any slug) with
  * the main groups as its children -- these helpers decide
  * what each storefront surface shows.
  */
 import { describe, expect, it } from "vitest";
 
-import { categoryChain, categoryUrl, KITCHEN_ROOT_SLUG, mainGroups } from "./categories";
+import { categoryChain, categoryUrl, isCatalogRoot, mainGroups } from "./categories";
 
 const TREE = [
   {
     id: 1,
     name: "آشپزخانه",
-    slug: "kitchen",
+    slug: "kitchen-root", is_root: true,
     children: [
       { id: 2, name: "ظروف پخت", slug: "cookware", children: [] },
       {
@@ -26,23 +26,41 @@ const TREE = [
 ];
 
 const FLAT = [
-  { id: 1, name: "آشپزخانه", slug: "kitchen", parent_slug: null },
-  { id: 2, name: "ظروف پخت", slug: "cookware", parent_slug: "kitchen" },
+  { id: 1, name: "آشپزخانه", slug: "kitchen-root", is_root: true, parent_slug: null },
+  { id: 2, name: "ظروف پخت", slug: "cookware", parent_slug: "kitchen-root" },
   {
     id: 3,
     name: "قاشق، چنگال و کارد",
     slug: "cutlery",
-    parent_slug: "kitchen",
+    parent_slug: "kitchen-root",
   },
   { id: 4, name: "قاشق", slug: "spoon", parent_slug: "cutlery" },
 ];
+
+describe("root identity", () => {
+  it("uses the API flag or the single top-level Persian name, regardless of slug", () => {
+    expect(isCatalogRoot({ name: "آشپزخانه", slug: "kitchen-root-2", parent: null })).toBe(true);
+    expect(isCatalogRoot({ name: "گروه اصلی", slug: "catalog", is_root: true })).toBe(true);
+    expect(isCatalogRoot({ name: "آشپزخانه", slug: "nested", parent: 1 })).toBe(false);
+    expect(isCatalogRoot({ name: "آشپزخانه", slug: "nested", is_root: false })).toBe(false);
+    expect(isCatalogRoot({ name: "دسته قدیمی", slug: "kitchen", parent: null })).toBe(false);
+  });
+
+  it("never flattens a legacy kitchen category instead of the actual root", () => {
+    const legacy = { name: "دسته قدیمی", slug: "kitchen", is_root: false, children: [] };
+    const groups = mainGroups([{ ...TREE[0], children: [...TREE[0].children, legacy] }]);
+    expect(groups.map((row) => row.slug)).toEqual(["cookware", "cutlery", "kitchen"]);
+    expect(categoryUrl(legacy)).toBe("/shop/?category=kitchen");
+    expect(categoryUrl("kitchen")).toBe("/shop/?category=kitchen");
+  });
+});
 
 describe("mainGroups", () => {
   it("returns the children of the kitchen root, not the root", () => {
     const groups = mainGroups(TREE);
     expect(groups.map((c) => c.slug)).toEqual(["cookware", "cutlery"]);
     // The root itself never leaks into the main groups.
-    expect(groups.find((c) => c.slug === KITCHEN_ROOT_SLUG)).toBeUndefined();
+    expect(groups.find((c) => c.is_root)).toBeUndefined();
   });
 
   it("falls back to the raw roots when there is no kitchen root", () => {
@@ -65,7 +83,8 @@ describe("mainGroups", () => {
 
 describe("categoryUrl", () => {
   it("maps the kitchen root to the shop itself, not a dead filter", () => {
-    expect(categoryUrl("kitchen")).toBe("/shop/");
+    expect(categoryUrl(TREE[0])).toBe("/shop/");
+    expect(categoryUrl("kitchen-root", FLAT)).toBe("/shop/");
   });
 
   it("maps a group to its shop filter", () => {
@@ -82,7 +101,7 @@ describe("categoryChain", () => {
   it("walks parent_slug up to the kitchen root, top-most first", () => {
     const chain = categoryChain("spoon", FLAT);
     expect(chain.map((c) => c.slug)).toEqual([
-      "kitchen",
+      "kitchen-root",
       "cutlery",
       "spoon",
     ]);
@@ -90,7 +109,7 @@ describe("categoryChain", () => {
 
   it("returns the category itself for a main group", () => {
     expect(categoryChain("cookware", FLAT).map((c) => c.slug)).toEqual([
-      "kitchen",
+      "kitchen-root",
       "cookware",
     ]);
   });

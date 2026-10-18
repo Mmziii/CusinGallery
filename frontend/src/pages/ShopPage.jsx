@@ -149,8 +149,8 @@ function ShopPage({ brand: fixedBrand = null }) {
   const categoryCrumbs = useMemo(
     () =>
       categoryChain(params.category, categories).map((category) => ({
-        label: category.name,
-        to: categoryUrl(category.slug),
+        label: faDigits(category.name),
+        to: categoryUrl(category),
       })),
     [params.category, categories]
   );

@@ -4,11 +4,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import CategoryFilterTree from "./CategoryFilterTree";
 
 const categories = [
-  { id: 1, name: "آشپزخانه", slug: "kitchen", parent: null, parent_slug: null },
-  { id: 2, name: "ظروف پخت", slug: "cookware", parent: 1, parent_slug: "kitchen" },
+  { id: 1, name: "آشپزخانه", slug: "kitchen-root", is_root: true, parent: null, parent_slug: null },
+  { id: 2, name: "ظروف پخت", slug: "cookware", parent: 1, parent_slug: "kitchen-root" },
   { id: 3, name: "قابلمه", slug: "pots", parent: 2, parent_slug: "cookware" },
   { id: 4, name: "قابلمه گرانیتی", slug: "granite", parent: 3, parent_slug: "pots" },
-  { id: 5, name: "بلور", slug: "glass", parent: 1, parent_slug: "kitchen" },
+  { id: 5, name: "بلور", slug: "glass", parent: 1, parent_slug: "kitchen-root" },
+  { id: 6, name: "دسته قدیمی", slug: "kitchen", is_root: false, parent: 1, parent_slug: "kitchen-root" },
 ];
 afterEach(cleanup);
 
@@ -17,6 +18,7 @@ describe("category filter tree", () => {
     const onChange = vi.fn();
     render(<CategoryFilterTree categories={categories} selected="" onChange={onChange} />);
     expect(screen.queryByRole("radio", { name: "آشپزخانه" })).toBeNull();
+    expect(screen.getByRole("radio", { name: "دسته قدیمی" })).toBeTruthy();
     expect(screen.queryByRole("radio", { name: "قابلمه" })).toBeNull();
     const toggle = screen.getByRole("button", { name: "زیردسته‌های ظروف پخت" });
     expect(toggle.getAttribute("aria-expanded")).toBe("false");

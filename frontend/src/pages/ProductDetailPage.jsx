@@ -253,11 +253,11 @@ function ProductDetailPage() {
     const trail = [{ label: "کازین گالری", to: "/" }];
     if (product.category) {
       for (const ancestor of product.category.ancestors || []) {
-        trail.push({ label: ancestor.name, to: categoryUrl(ancestor.slug) });
+        trail.push({ label: faDigits(ancestor.name), to: categoryUrl(ancestor) });
       }
       trail.push({
-        label: product.category.name,
-        to: categoryUrl(product.category.slug),
+        label: faDigits(product.category.name),
+        to: categoryUrl(product.category),
       });
     }
     trail.push({ label: faDigits(product.name) });
