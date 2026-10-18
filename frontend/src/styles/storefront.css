@@ -1360,9 +1360,7 @@ h1, h2, h3, .section__head h2 {
 .section__head h2 { font-size: var(--font-size-xl); margin: 0; }
 .section__head a { margin-inline-start: auto; color: var(--brand-gold-deep); font-size: var(--font-size-sm); }
 .section__rule { flex: 1; height: 1px; background: linear-gradient(to left, transparent, rgba(206,180,100,.6)); }
-.section--dark { background: var(--brand-green-dark); padding-block: var(--space-6); margin-block: var(--space-6); }
-.section--dark h2 { color: var(--brand-gold); }
-.section--dark .section__rule { background: linear-gradient(to left, transparent, rgba(206,180,100,.5)); }
+
 
 /* --- Category tiles --- */
 .category-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--space-3); }
@@ -1422,17 +1420,33 @@ h1, h2, h3, .section__head h2 {
 .price__compare { color: var(--color-text-muted); }
 .price__badge { background: var(--brand-gold); color: var(--brand-green-dark); border-radius: 8px; padding: 1px 8px; font-size: var(--font-size-xs); }
 
-/* --- Deal cards --- */
-.deals-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--space-4); }
-.deal-card { background: #fff; border-radius: var(--radius-lg); overflow: hidden; border: 1px solid rgba(206,180,100,.5); display: flex; flex-direction: column; }
-.deal-card img { aspect-ratio: 16/10; object-fit: cover; }
-.deal-card__body { padding: var(--space-3); display: flex; flex-direction: column; gap: 6px; }
-.deal-card__name { color: var(--brand-ink); }
-.deal-card__sale { color: var(--brand-gold-deep); font-weight: 800; }
-.deal-card__regular { color: var(--color-text-muted); margin-inline-start: var(--space-2); }
-.countdown {
-  font-weight: 800; color: var(--brand-green-dark); background: var(--brand-green-tint);
-  border: var(--hairline); border-radius: 10px; padding: 4px 12px; width: max-content;
+/* --- Daily deal (پیشنهاد امروز) --- */
+.section--dark { background: var(--brand-green-dark); padding-block: var(--space-5); margin-block: var(--space-6); }
+.section--dark h2 { color: var(--brand-gold); }
+.section--dark .section__rule { background: linear-gradient(to left, transparent, rgba(206,180,100,.5)); }
+.deals-grid { display: grid; grid-template-columns: 1fr; gap: var(--space-4); max-width: 860px; margin-inline: auto; }
+.deal-card { background: #fff; border-radius: var(--radius-lg); overflow: hidden; border: 1px solid rgba(206,180,100,.5); display: flex; flex-direction: row; align-items: stretch; min-height: 340px; box-shadow: var(--shadow-sm); }
+.deal-card__media { flex: 0 0 60%; background: #fff; position: relative; aspect-ratio: 1 / 1; display: block; overflow: hidden; }
+.deal-card__media picture, .deal-card__media picture img, .deal-card__media img { width: 100%; height: 100%; object-fit: contain; }
+.deal-card__media .img-placeholder { position: absolute; inset: 0; aspect-ratio: auto; }
+.deal-card__badge { position: absolute; top: 12px; inset-inline-start: 12px; background: var(--brand-gold); color: var(--brand-green-dark); font-weight: 800; font-size: var(--font-size-sm); padding: 4px 10px; border-radius: 999px; }
+.deal-card__body { flex: 1; min-width: 0; padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-2); justify-content: center; }
+.deal-card__name { color: var(--brand-ink); font-weight: 800; font-size: var(--font-size-lg); line-height: 1.7; overflow-wrap: anywhere; }
+.deal-card__prices { display: flex; align-items: baseline; gap: var(--space-2); flex-wrap: wrap; }
+.deal-card__sale { color: var(--brand-gold-deep); font-weight: 800; font-size: var(--font-size-lg); }
+.deal-card__regular { color: var(--color-text-muted); font-size: var(--font-size-sm); }
+.deal-card__cta { margin-top: var(--space-2); align-self: flex-start; background: var(--brand-green-dark); color: var(--brand-gold); padding: 8px 14px; border-radius: 999px; font-weight: 700; font-size: var(--font-size-sm); }
+.countdown { display: inline-flex; align-items: center; gap: 6px; font-weight: 800; color: var(--brand-green-dark); background: var(--brand-green-tint); border: var(--hairline); border-radius: 10px; padding: 6px 12px; width: max-content; font-variant-numeric: tabular-nums; }
+.countdown__segment { display: inline-flex; flex-direction: column; align-items: center; min-width: 44px; gap: 1px; }
+.countdown__value { font-variant-numeric: tabular-nums; font-size: var(--font-size-md); line-height: 1; min-width: 2ch; text-align: center; }
+.countdown__label { font-size: 10px; font-weight: 600; color: var(--color-text-muted); line-height: 1; }
+.countdown__sep { font-weight: 800; color: var(--brand-green-dark); padding-inline: 1px; }
+.countdown.is-over { background: #fdecea; color: var(--color-danger); border-color: #f5c6c0; }
+@media (max-width: 767px) {
+  .deal-card { flex-direction: column; min-height: 0; }
+  .deal-card__media { flex: none; width: 100%; aspect-ratio: 1 / 1; }
+  .deal-card__body { padding: var(--space-3); }
+  .deal-card__name { font-size: var(--font-size-md); }
 }
 
 /* --- Review highlights & story --- */
@@ -1549,7 +1563,7 @@ html.js-reveal .reveal.is-revealed, .reveal.is-revealed { opacity: 1; transform:
 .cart-item .img-placeholder { width: 90px; height: 90px; border-radius: var(--radius-sm); flex: none; }
 .minicart__items .img-placeholder { width: 52px; height: 52px; border-radius: 10px; flex: none; }
 .search-suggest .img-placeholder { width: 40px; height: 40px; border-radius: 8px; flex: none; }
-.deal-card .img-placeholder { aspect-ratio: 16/10; height: auto; }
+/* deal placeholder sized by .deal-card__media rule above */
 .related-card .img-placeholder { height: 130px; }
 .product-detail__main-image .img-placeholder { height: 420px; border-radius: var(--radius-md); border: 1px solid var(--color-border); }
 .thumb .img-placeholder { width: 100%; height: 100%; }
@@ -2015,22 +2029,8 @@ input, select, textarea { min-width: 0; max-width: 100%; }
   }
 }
 
-/* Home-page carousels may stay horizontal on a phone; each card is then
-   ~44% of the viewport width, so two cards plus a peek of the third are
-   visible (item 1). Applies to the deals rail. */
-@media (max-width: 767px) {
-  .deals-grid {
-    display: flex;
-    gap: 8px;
-    overflow-x: auto;
-    scroll-snap-type: x proximity;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: thin;
-    padding-bottom: 4px;
-  }
-  .deals-grid > * { flex: 0 0 44%; scroll-snap-align: start; min-width: 0; }
-  .deal-card__name { font-size: var(--font-size-sm); }
-}
+/* Daily deal keeps its balanced single-column layout on phones; it is
+   not a horizontal carousel. */
 
 /* --- 4. Compact card (item 1) ---------------------------------------------
    Square, light image field with `object-fit: contain` (nothing is cropped

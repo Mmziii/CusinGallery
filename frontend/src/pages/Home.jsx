@@ -157,10 +157,23 @@ function Countdown({ endsAt, serverNow }) {
   const hours = Math.floor(left / 3600000);
   const minutes = Math.floor((left % 3600000) / 60000);
   const seconds = Math.floor((left % 60000) / 1000);
-  const pad = (n) => String(n).padStart(2, "0");
+  const padFa = (n) => faDigits(String(n).padStart(2, "0"));
   return (
-    <span className="countdown" dir="ltr" aria-label="زمان باقی‌مانده">
-      {formatPrice(hours)}:{pad(minutes)}:{pad(seconds)}
+    <span className="countdown" aria-label="زمان باقی‌مانده">
+      <span className="countdown__segment">
+        <span className="countdown__value">{padFa(hours)}</span>
+        <span className="countdown__label">ساعت</span>
+      </span>
+      <span className="countdown__sep" aria-hidden="true">:</span>
+      <span className="countdown__segment">
+        <span className="countdown__value">{padFa(minutes)}</span>
+        <span className="countdown__label">دقیقه</span>
+      </span>
+      <span className="countdown__sep" aria-hidden="true">:</span>
+      <span className="countdown__segment">
+        <span className="countdown__value">{padFa(seconds)}</span>
+        <span className="countdown__label">ثانیه</span>
+      </span>
     </span>
   );
 }
@@ -173,28 +186,42 @@ function DailyDealsSection() {
   if (error || !data?.results?.length) return null;
 
   return (
-    <section className="section section--dark reveal" ref={ref}>
+    <section className="section section--dark reveal" ref={ref} aria-label="پیشنهاد امروز">
       <div className="container">
         <div className="section__head">
           <h2>پیشنهاد امروز</h2>
           <span className="section__rule" aria-hidden="true" />
         </div>
         <div className="deals-grid">
-          {data.results.map((deal) => (
-            <Link key={deal.id} to={`/products/${deal.product.slug}/`} className="deal-card">
-              <SmartImage image={deal.product.primary_image || null} alt={deal.product.name} />
-              <div className="deal-card__body">
-                <div className="deal-card__name">{deal.product.name}</div>
-                <div className="deal-card__prices">
-                  <span className="deal-card__sale">{formatPrice(deal.sale_price)} تومان</span>
-                  {deal.product.price_info?.price > deal.sale_price ? (
-                    <s className="deal-card__regular">{formatPrice(deal.product.price_info.price)}</s>
+          {data.results.map((deal) => {
+            const originalPrice = deal.product.price_info?.price ?? null;
+            const discount =
+              deal.product.price_info?.discount_percentage ??
+              (originalPrice && originalPrice > deal.sale_price
+                ? Math.round(((originalPrice - deal.sale_price) / originalPrice) * 100)
+                : 0);
+            return (
+              <Link key={deal.id} to={`/products/${deal.product.slug}/`} className="deal-card">
+                <div className="deal-card__media">
+                  <SmartImage image={deal.product.primary_image || null} alt={faDigits(deal.product.name)} />
+                  {discount > 0 ? (
+                    <span className="deal-card__badge">{faDigits(discount)}٪ تخفیف</span>
                   ) : null}
                 </div>
-                <Countdown endsAt={deal.ends_at} serverNow={data.server_now} />
-              </div>
-            </Link>
-          ))}
+                <div className="deal-card__body">
+                  <div className="deal-card__name">{faDigits(deal.product.name)}</div>
+                  <div className="deal-card__prices">
+                    <span className="deal-card__sale">{formatPrice(deal.sale_price)} تومان</span>
+                    {originalPrice && originalPrice > deal.sale_price ? (
+                      <s className="deal-card__regular">{formatPrice(originalPrice)} تومان</s>
+                    ) : null}
+                  </div>
+                  <Countdown endsAt={deal.ends_at} serverNow={data.server_now} />
+                  <span className="deal-card__cta">مشاهده محصول</span>
+                </div>
+              </Link>
+            );
+          })}
         </div>
       </div>
     </section>
