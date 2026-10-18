@@ -4363,3 +4363,197 @@ body.cusin-admin .cusin-password-toggle:focus-visible {
 /* The login card sits on a dark gradient: keep the field readable there. */
 body.login .cusin-password-toggle { color: #4b5563; }
 body.login .cusin-password-toggle:hover { background: rgba(99, 112, 55, 0.16); }
+
+/* --------------------------------------------------------------------------
+   21. In-page modal for RelatedObjectLookups (Task 1)
+   Dimmed backdrop, centered panel (max 960px × 90vh, rounded, light theme),
+   title bar with page title and close ×, popup page in iframe,
+   fade + scale transition (respecting prefers-reduced-motion),
+   Escape and backdrop click close (dirty check via JS).
+   On phones the modal is full-screen.
+   -------------------------------------------------------------------------- */
+.cusin-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms var(--cusin-ease), visibility 180ms var(--cusin-ease);
+}
+.cusin-modal.is-open {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+}
+.cusin-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(17, 24, 39, 0.45);
+  backdrop-filter: blur(2px);
+}
+.cusin-modal-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(960px, 100%);
+  height: min(90vh, 900px);
+  max-width: 960px;
+  max-height: 90vh;
+  background: var(--cusin-surface, #ffffff);
+  border: 1px solid var(--cusin-border);
+  border-radius: 12px;
+  box-shadow: 0 24px 64px rgba(17, 24, 39, 0.28), 0 4px 16px rgba(17, 24, 39, 0.12);
+  overflow: hidden;
+  transform: scale(0.96);
+  opacity: 0;
+  transition: transform 180ms var(--cusin-ease), opacity 180ms var(--cusin-ease);
+}
+.cusin-modal.is-open .cusin-modal-panel {
+  transform: scale(1);
+  opacity: 1;
+}
+.cusin-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex: none;
+  min-height: 48px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--cusin-border);
+  background: var(--cusin-surface);
+}
+.cusin-modal-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--cusin-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.5;
+}
+.cusin-modal-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border: 1px solid transparent;
+  border-radius: var(--cusin-radius-sm);
+  background: transparent;
+  color: var(--cusin-text);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.cusin-modal-close:hover {
+  background: var(--cusin-surface-2);
+  border-color: var(--cusin-border);
+}
+.cusin-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+  background: var(--cusin-surface);
+}
+.cusin-modal-iframe {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: var(--cusin-surface);
+}
+@media (prefers-reduced-motion: reduce) {
+  .cusin-modal,
+  .cusin-modal-panel,
+  .cusin-modal-backdrop {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+@media (max-width: 767px) {
+  .cusin-modal {
+    padding: 0;
+    align-items: stretch;
+  }
+  .cusin-modal-panel {
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    border-radius: 0;
+    border: 0;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   22. Popup page layout bug (Task 1)
+   In popup mode the page must have no header/sidebar, no top gap, and the
+   tab bar must not cover content. The base template already hides header/
+   sidebar when is_popup, but the product form's sticky tab bar and preview
+   card need extra resets.
+   -------------------------------------------------------------------------- */
+body.popup {
+  background: var(--cusin-surface);
+}
+body.popup #container {
+  min-height: auto;
+}
+body.popup #header,
+body.popup .cusin-topbar-wrap,
+body.popup .cusin-breadcrumbs-wrap,
+body.popup #cusin-drawer,
+body.popup .cusin-drawer,
+body.popup .cusin-drawer-scrim {
+  display: none !important;
+}
+body.popup .main,
+body.popup #main {
+  display: block;
+}
+body.cusin-admin.popup #container .content {
+  padding: 0;
+  margin: 0;
+  max-width: 100%;
+}
+body.cusin-admin.popup #content {
+  padding: 12px 16px;
+}
+body.popup #content > h1:first-child {
+  margin-top: 0;
+}
+body.popup .cusin-anchor-nav {
+  position: static !important;
+  top: auto !important;
+  z-index: auto !important;
+  margin: 0 0 12px;
+  box-shadow: none;
+}
+body.cusin-admin.popup .cusin-product-enh {
+  grid-template-columns: minmax(0, 1fr);
+  margin: 0 0 12px;
+  gap: 12px;
+}
+body.popup .cusin-preview-card {
+  margin: 0;
+}
+body.popup #footer {
+  display: none;
+}
+body.popup .submit-row {
+  position: sticky;
+  bottom: 0;
+}
+body.popup .messagelist {
+  margin: 0 0 12px;
+}
