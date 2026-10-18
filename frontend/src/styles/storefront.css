@@ -1043,27 +1043,142 @@ h1, h2, h3, .section__head h2 {
   background: rgba(206,180,100,.14); color: var(--brand-gold);
   border: 1px solid rgba(206,180,100,.4); border-radius: 10px;
   padding: 8px 14px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+  font: inherit;
 }
-/* Part R1: NO physical gap between trigger and panel -- the wrapper's
-   padding-top is the invisible bridge, so moving the pointer "through the
-   gap" never leaves the hover area (and a 200 ms hover-intent delay in
-   Header.jsx covers the rest). */
+.site-header__mega-btn .icon { flex: none; }
+/* Stage 2 (Digikala-style mega menu): NO physical gap between
+   trigger and panel -- the wrapper's padding-top is the invisible
+   bridge, so moving the pointer "through the gap" never leaves the
+   hover area (a 150 ms open-intent / 200 ms close-grace delay in
+   MegaMenu.jsx covers the rest). */
+/* The trigger stays static so the PANEL positions
+   against the whole HEADER (Digikala-style full-width
+   bar), not against the narrow button. The panel is
+   still a DOM child of the trigger wrapper, so the
+   wrapper's hover area (and the invisible padding
+   bridge below) keeps the menu alive while the
+   pointer crosses the gap. */
+.site-header__mega-trigger { position: static; }
 .mega-menu {
-  position: absolute; top: 100%; inset-inline: 0; padding-top: 8px;
+  position: absolute; top: 100%; left: 0; right: 0; padding-top: 8px;
   background: transparent; z-index: 65;
 }
+/* Dimmed overlay over the page content BEHIND the panel (below
+   the header itself, which stays bright and usable). */
+.mega-menu__overlay {
+  position: fixed; top: var(--site-header-height, 76px);
+  inset-inline: 0; bottom: 0;
+  background: rgba(20, 26, 10, .35);
+  z-index: 64;
+  animation: fade-in .2s ease-out;
+}
 .mega-menu__inner {
+  position: relative; z-index: 65;
+  width: min(1150px, 94vw);
+  margin-inline: auto;
   background: #fff; color: var(--brand-ink); border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg); display: flex; overflow: hidden;
+  /* The panel scrolls on its own -- never the page. */
+  max-height: 70vh;
+  /* Stage 2: fade + 8px slide down on open
+     (mount animation, like the drawers). */
+  animation: mega-menu-in .2s ease-out;
 }
-.mega-menu__roots { list-style: none; margin: 0; padding: var(--space-3); background: var(--brand-green-tint); min-width: 200px; }
-.mega-menu__roots button { display: block; width: 100%; text-align: right; background: none; border: none; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
-.mega-menu__roots button.is-active, .mega-menu__roots button:hover { background: #fff; color: var(--brand-green-mid); font-weight: 700; }
-.mega-menu__panel { padding: var(--space-3) var(--space-4); display: flex; flex-direction: column; gap: 4px; flex: 1; }
-.mega-menu__panel a { padding: 7px 8px; border-radius: 8px; color: var(--brand-ink); }
-.mega-menu__panel a:first-child { color: var(--brand-gold-deep); font-weight: 700; }
-.mega-menu__panel a:hover { background: var(--brand-green-tint); }
-.site-header__mega-trigger { position: relative; }
+@keyframes mega-menu-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+.mega-menu__roots {
+  list-style: none; margin: 0; padding: var(--space-3);
+  background: var(--brand-green-tint); min-width: 220px;
+  max-height: 70vh; overflow-y: auto;
+}
+.mega-menu__roots button {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; text-align: right; background: none; border: none;
+  padding: 9px 10px; border-radius: 8px; cursor: pointer;
+  color: var(--brand-ink); font: inherit; font-size: var(--font-size-md);
+}
+.mega-menu__roots button:hover { background: #fff; color: var(--brand-green-mid); }
+/* The active main category: white chip + gold line on the RIGHT
+   (the side the roots column sits on in RTL). */
+.mega-menu__roots button.is-active {
+  background: #fff; color: var(--brand-green-mid); font-weight: 700;
+  box-shadow: inset -3px 0 0 var(--brand-gold);
+}
+.mega-menu__root-icon { width: 28px; height: 28px; flex: none; display: grid; place-items: center; }
+.mega-menu__root-icon img, .mega-menu__root-icon .img-placeholder { width: 28px; height: 28px; object-fit: contain; border-radius: 6px; }
+.mega-menu__root-icon .icon { color: var(--brand-gold-deep); }
+.mega-menu__root-name { flex: 1; }
+.mega-menu__panel { flex: 1; padding: var(--space-4); overflow-y: auto; max-height: 70vh; }
+.mega-menu__all {
+  display: inline-flex; align-items: center; gap: 6px;
+  color: var(--brand-gold-deep); font-weight: 800;
+  padding: 6px 8px; border-radius: 8px; margin-bottom: var(--space-3);
+}
+.mega-menu__all:hover { background: var(--brand-green-tint); }
+.mega-menu__columns { display: flex; flex-wrap: wrap; gap: var(--space-3) var(--space-6); }
+.mega-menu__col { min-width: 160px; }
+.mega-menu__subhead {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-weight: 800; color: var(--brand-ink);
+  padding: 6px 8px; border-radius: 8px; margin-bottom: 2px;
+}
+.mega-menu__subhead:hover { background: var(--brand-green-tint); color: var(--brand-green-mid); }
+.mega-menu__col ul { list-style: none; margin: 0; padding: 0; }
+.mega-menu__col a { display: block; padding: 5px 8px; border-radius: 8px; color: var(--brand-ink); font-size: var(--font-size-sm); }
+.mega-menu__col a:hover { background: var(--brand-green-tint); }
+/* Phones show the sheet, desktops the panel (the wrong
+   surface is hidden here, not in JS, so hover handlers
+   stay attached for touch laptops). */
+@media (max-width: 1023px) {
+  .mega-menu { display: none; }
+}
+@media (min-width: 1024px) {
+  .mega-sheet { display: none; }
+}
+
+/* --- Mobile category sheet (stage 2) --- */
+.mega-sheet { position: fixed; inset: 0; z-index: 115; height: 100vh; height: 100dvh; }
+.mega-sheet__backdrop { position: absolute; inset: 0; background: rgba(20,26,10,.5); animation: fade-in .25s ease-out; }
+.mega-sheet__panel {
+  position: absolute; top: 0; bottom: 0; inset-inline-start: 0;
+  width: min(320px, 88vw); background: #fff; color: var(--brand-ink);
+  display: flex; flex-direction: column; overflow: hidden;
+  /* Full-height sheet sliding in from the RIGHT (250 ms). */
+  animation: mega-sheet-in .25s ease-out;
+}
+@keyframes mega-sheet-in { from { transform: translateX(100%); } to { transform: translateX(0); } }
+.mega-sheet__head { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-3); border-bottom: 1px solid var(--color-border); }
+.mega-sheet__back, .mega-sheet__close { display: inline-grid; place-items: center; background: none; border: none; cursor: pointer; color: var(--brand-ink); padding: 8px; border-radius: 8px; min-width: 48px; min-height: 48px; }
+.mega-sheet__back { font: inherit; font-size: var(--font-size-md); gap: 4px; grid-template-columns: auto auto; }
+.mega-sheet__title { flex: 1; margin: 0; text-align: center; font-size: var(--font-size-md); }
+.mega-sheet__head-spacer { min-width: 48px; }
+.mega-sheet__all {
+  display: flex; align-items: center; gap: 6px;
+  padding: 12px var(--space-3); min-height: 48px;
+  color: var(--brand-gold-deep); font-weight: 700;
+  border-bottom: 1px solid var(--color-border);
+}
+.mega-sheet__all .icon { margin-inline-start: auto; }
+.mega-sheet__list { flex: 1; overflow-y: auto; overscroll-behavior: contain; list-style: none; margin: 0; padding: var(--space-2); }
+.mega-sheet__list li button, .mega-sheet__list li a {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; min-height: 48px; padding: 10px 12px;
+  border: none; background: none; cursor: pointer;
+  font: inherit; font-size: var(--font-size-md); color: var(--brand-ink);
+  text-align: right; border-radius: 10px;
+}
+.mega-sheet__list li button:hover, .mega-sheet__list li a:hover { background: var(--brand-green-tint); }
+.mega-sheet__icon { width: 28px; height: 28px; flex: none; display: grid; place-items: center; }
+.mega-sheet__icon img, .mega-sheet__icon .img-placeholder { width: 28px; height: 28px; object-fit: contain; border-radius: 6px; }
+.mega-sheet__icon .icon { color: var(--brand-gold-deep); }
+.mega-sheet__chevron { margin-inline-start: auto; color: var(--color-text-muted); }
+/* Drill levels slide in from the forward (left, RTL) side;
+   «بازگشت» slides them back from the right. */
+.mega-sheet__list[data-direction="forward"] { animation: mega-sheet-level-in .22s ease-out; }
+.mega-sheet__list[data-direction="back"] { animation: mega-sheet-level-in-back .22s ease-out; }
+@keyframes mega-sheet-level-in { from { transform: translateX(-30%); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes mega-sheet-level-in-back { from { transform: translateX(30%); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 
 .cart-link { position: relative; background: none; border: none; color: var(--brand-ivory); cursor: pointer; padding: 6px; }
 .cart-link:hover { color: var(--brand-gold); }

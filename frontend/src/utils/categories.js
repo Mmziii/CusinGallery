@@ -57,3 +57,30 @@ export function categoryChain(slug, flatList) {
   }
   return slug && chain.length === 0 ? [{ slug, name: slug }] : chain;
 }
+
+/**
+ * Stage 2: drop categories with no active products anywhere in
+ * their subtree (the tree API annotates every node with
+ * `product_count`). A node whose count is missing (mocked trees
+ * in tests, older payloads) is assumed non-empty rather than
+ * dropped -- emptiness must be PROVEN, never guessed.
+ */
+export function pruneEmptyCategories(categories) {
+  return (Array.isArray(categories) ? categories : [])
+    .map((category) => ({
+      ...category,
+      children: pruneEmptyCategories(category.children),
+    }))
+    .filter((category) => {
+      if (typeof category.product_count !== "number") return true;
+      return category.product_count > 0 || (category.children || []).length > 0;
+    });
+}
+
+/**
+ * The menu-ready catalog: main groups (children of the
+ * «آشپزخانه» root), pruned of empty subtrees.
+ */
+export function catalogGroups(roots) {
+  return pruneEmptyCategories(mainGroups(roots));
+}

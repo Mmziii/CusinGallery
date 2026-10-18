@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import Icon from "./Icon";
+import MegaMenu from "./MegaMenu";
 import Portal from "./Portal";
 import PriceTag from "./PriceTag";
 import SmartImage from "./SmartImage";
@@ -11,7 +12,8 @@ import useFocusTrap from "../hooks/useFocusTrap";
 import useAuthStore from "../store/useAuthStore";
 import useCartStore from "../store/useCartStore";
 import { getCategoryTree, listProducts } from "../services/catalogApi";
-import { mainGroups } from "../utils/categories";
+import { catalogGroups } from "../utils/categories";
+import { isDesktopViewport } from "../utils/viewport";
 import {
   lineTotalForLine,
   priceInfoForLine,
@@ -47,11 +49,18 @@ function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
   const [megaOpen, setMegaOpen] = useState(false);
-  const [megaCategory, setMegaCategory] = useState(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [compact, setCompact] = useState(false);
   const [categories, setCategories] = useState([]);
-  const hasOpenDrawer = menuOpen || cartOpen;
+  // The mega menu's mobile sheet is a full-viewport
+  // dialog (<1024px, per CSS) -- it joins the drawers
+  // that lock the document while open. (Lazy viewport
+  // check, not the reactive hook: the mega menu's
+  // hover handlers must work on touch laptops, and
+  // re-rendering the whole header on a breakpoint
+  // change buys nothing here.)
+  const hasOpenDrawer =
+    menuOpen || cartOpen || (megaOpen && !isDesktopViewport());
   const headerRef = useRef(null);
   const userMenuRef = useRef(null);
   const searchRef = useRef(null);
@@ -59,10 +68,12 @@ function Header() {
   // A response can arrive after the shopper has used the home brand action.
   // Versioning prevents that stale response from reopening suggestions.
   const searchRequestVersion = useRef(0);
-  const megaRef = useRef(null);
-  const megaCloseTimer = useRef(null);
   const drawerRef = useRef(null);
   const minicartRef = useRef(null);
+  // Stage 2: the main groups are the children of the
+  // «آشپزخانه» root, pruned of categories with no
+  // active products anywhere in their subtree.
+  const groups = catalogGroups(categories);
 
   // Part S2 item 8: focus trap + Escape + focus restore for the two
   // full drawers (mobile menu, mini-cart). The hover-driven mega menu
@@ -163,69 +174,10 @@ function Header() {
       if (searchRef.current && !searchRef.current.contains(event.target)) {
         setSuggestions([]);
       }
-      if (megaRef.current && !megaRef.current.contains(event.target)) {
-        setMegaOpen(false);
-      }
     }
     document.addEventListener("mousedown", onClick);
     return () => document.removeEventListener("mousedown", onClick);
   }, []);
-
-  // Mega menu (Part R1): hover-intent open/close. The panel is a DOM child of
-  // the trigger wrapper and its CSS adds an invisible padding bridge, so the
-  // pointer never "leaves" while crossing the visual gap; closing is further
-  // delayed ~200 ms and cancelled when the pointer re-enters trigger OR panel.
-  // Click/keyboard (Enter/Space on the button) toggles it for touch devices;
-  // Escape closes.
-  const cancelMegaClose = () => {
-    if (megaCloseTimer.current) {
-      clearTimeout(megaCloseTimer.current);
-      megaCloseTimer.current = null;
-    }
-  };
-  const megaBtnRef = useRef(null);
-  const megaFocusPending = useRef(false);
-  // Stage 1: the catalog has one root («آشپزخانه») -- the
-  // mega menu's main categories are its CHILDREN, never the
-  // root itself.
-  const groups = mainGroups(categories);
-
-  const openMega = () => {
-    cancelMegaClose();
-    setMegaOpen(true);
-    setMegaCategory((current) => current || groups[0] || null);
-  };
-  const closeMega = () => {
-    cancelMegaClose();
-    setMegaOpen(false);
-  };
-  const scheduleMegaClose = () => {
-    cancelMegaClose();
-    megaCloseTimer.current = setTimeout(() => setMegaOpen(false), 200);
-  };
-  useEffect(() => () => cancelMegaClose(), []);
-
-  useEffect(() => {
-    if (!megaOpen) return undefined;
-    function onKey(event) {
-      if (event.key === "Escape") {
-        setMegaOpen(false);
-        // Part S2 item 8: focus restore for keyboard users.
-        megaBtnRef.current?.focus();
-      }
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [megaOpen]);
-
-  // Part S2 item 8: when the mega menu was opened by CLICK/keyboard (not
-  // hover), move focus to the first category so Tab users land inside.
-  useEffect(() => {
-    if (!megaOpen || !megaFocusPending.current) return;
-    megaFocusPending.current = false;
-    const first = megaRef.current?.querySelector(".mega-menu__roots button");
-    if (first) first.focus();
-  }, [megaOpen, megaCategory]);
 
   // Debounced live suggestions.
   useEffect(() => {
@@ -253,8 +205,6 @@ function Header() {
   // page. This is deliberately shared by the main header and the copies
   // inside full-screen drawers, where the original header is covered.
   const closeHeaderSurfaces = () => {
-    cancelMegaClose();
-    megaFocusPending.current = false;
     if (searchTimer.current) clearTimeout(searchTimer.current);
     searchRequestVersion.current += 1;
     setMenuOpen(false);
@@ -386,61 +336,11 @@ function Header() {
           ) : null}
         </div>
 
+        {/* Stage 2: the trigger lives OUTSIDE .site-header__nav
+            (which phones hide) so «دسته‌بندی کالاها» is
+            reachable on every screen size. */}
+        <MegaMenu groups={groups} open={megaOpen} onOpen={() => setMegaOpen(true)} onClose={() => setMegaOpen(false)} />
         <nav className="site-header__nav" aria-label="ناوبری اصلی">
-          <div
-            className="site-header__mega-trigger"
-            ref={megaRef}
-            onMouseEnter={openMega}
-            onMouseLeave={scheduleMegaClose}
-          >
-            <button
-              type="button"
-              className="site-header__mega-btn"
-              ref={megaBtnRef}
-              aria-haspopup="true"
-              aria-expanded={megaOpen}
-              onClick={() => {
-                if (megaOpen) {
-                  closeMega();
-                } else {
-                  megaFocusPending.current = true;
-                  openMega();
-                }
-              }}
-            >
-              دسته‌بندی کالاها
-              <Icon name="chevron-down" size={16} />
-            </button>
-            {megaOpen && megaCategory ? (
-              <div className="mega-menu">
-                <div className="mega-menu__inner">
-                  <ul className="mega-menu__roots">
-                    {groups.map((category) => (
-                      <li key={category.id}>
-                        <button
-                          type="button"
-                          className={megaCategory?.id === category.id ? "is-active" : ""}
-                          onMouseEnter={() => setMegaCategory(category)}
-                        >
-                          {category.name}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                  <div className="mega-menu__panel">
-                    <Link to={`/shop/?category=${encodeURIComponent(megaCategory.slug)}`} onClick={closeMega}>
-                      همهٔ {megaCategory.name}
-                    </Link>
-                    {(megaCategory.children || []).map((child) => (
-                      <Link key={child.id} to={`/shop/?category=${encodeURIComponent(child.slug)}`} onClick={closeMega}>
-                        {child.name}
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ) : null}
-          </div>
           <NavLink to="/shop/">فروشگاه</NavLink>
           {isAuthenticated ? <NavLink to="/wishlist/">علاقه‌مندی‌ها {wishlist.items.length > 0 ? <span key={wishlist.revision} className="wishlist-badge">{formatPrice(wishlist.items.length)}</span> : null}</NavLink> : null}
         </nav>
