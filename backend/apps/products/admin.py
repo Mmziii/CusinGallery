@@ -1411,10 +1411,15 @@ class ProductAdmin(
         count = queryset.update(is_active=True)
         self.message_user(request, f"{count} محصول فعال شد.", messages.SUCCESS)
 
-    @admin.action(description="غیرفعال‌سازی محصولات انتخاب‌شده (عدم نمایش در فروشگاه)")
+    @admin.action(description="پنهان کردن از فروشگاه")
     def deactivate_products(self, request, queryset):
         count = queryset.update(is_active=False)
-        self.message_user(request, f"{count} محصول غیرفعال شد.", messages.SUCCESS)
+        self.message_user(
+            request,
+            f"{fa_digits(count)} محصول از فروشگاه پنهان شد؛ "
+            "هر وقت خواستید با «فعال‌سازی محصولات انتخاب‌شده» برمی‌گردند.",
+            messages.SUCCESS,
+        )
 
     @admin.action(description="ویژه‌کردن محصولات انتخاب‌شده")
     def mark_featured(self, request, queryset):
@@ -1746,9 +1751,36 @@ class ProductVariantAdmin(AdminSkuDirectionMixin, admin.ModelAdmin):
 from .models import BackInStockSubscription
 
 
+def _product_delete_permission(request, extra_codenames=()):
+    """True when staff may delete a product (or one of ``extra_codenames``).
+
+    Derived/helper rows (back-in-stock subscriptions, mined
+    frequently-bought-together pairs) already cascade with their
+    product at the database level, but Django's delete confirmation
+    also asks each related model's admin for delete permission and
+    blocks the whole deletion when it is refused. Returning False
+    unconditionally therefore made products with helper rows
+    undeletable even for a superuser. Delegating to the product
+    delete permission keeps the signup/pair lists read-only for
+    everyone else while letting a product deletion take its helper
+    rows with it.
+    """
+    user = getattr(request, "user", None)
+    if user is None or not getattr(user, "is_authenticated", False):
+        return False
+    if user.has_perm("products.delete_product"):
+        return True
+    return any(user.has_perm(codename) for codename in extra_codenames)
+
+
 @admin.register(BackInStockSubscription)
 class BackInStockSubscriptionAdmin(admin.ModelAdmin):
-    """Strictly read-only audit of "notify me" signups (Part 2)."""
+    """Strictly read-only audit of "notify me" signups (Part 2).
+
+    The one exception is deletion by staff who may delete the product
+    (or variant) itself -- see ``_product_delete_permission`` -- so a
+    product deletion is never blocked by its own subscription rows.
+    """
 
     list_display = (
         "phone", "product", "variant",
@@ -1766,7 +1798,9 @@ class BackInStockSubscriptionAdmin(admin.ModelAdmin):
         return False
 
     def has_delete_permission(self, request, obj=None):
-        return False
+        return _product_delete_permission(
+            request, extra_codenames=("products.delete_productvariant",)
+        )
 
 
 from .models import FrequentlyBoughtTogether  # noqa: E402
@@ -1779,7 +1813,9 @@ class FrequentlyBoughtTogetherAdmin(admin.ModelAdmin):
     Data is owned by the rebuild_frequently_bought_together command
     (full idempotent rebuild, run daily by the production scheduler);
     hand-editing rows here would be wiped at the next rebuild, so the
-    admin is strictly read-only.
+    admin is read-only -- except deletion by staff who may delete the
+    product itself, so a product deletion is never blocked by its own
+    derived pairs (see ``_product_delete_permission``).
     """
 
     list_display = ("product", "complement", "co_count", "updated_at")
@@ -1794,4 +1830,4 @@ class FrequentlyBoughtTogetherAdmin(admin.ModelAdmin):
         return False
 
     def has_delete_permission(self, request, obj=None):
-        return False
+        return _product_delete_permission(request)

@@ -1,0 +1,50 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls static adminui_extras %}
+{% comment %}
+Product delete confirmation (Task 2). Same stock flow and context as
+django.contrib.admin's delete_confirmation.html, with the consequences
+spelled out in plain Persian: exactly what is removed together with the
+product, and the fact that past orders keep their recorded name/price.
+{% endcomment %}
+
+{% block extrahead %}
+    {{ block.super }}
+    {{ media }}
+    <script src="{% static 'admin/js/cancel.js' %}" async></script>
+{% endblock %}
+
+{% block bodyclass %}{{ block.super }} app-{{ opts.app_label }} model-{{ opts.model_name }} delete-confirmation{% endblock %}
+
+{% block content %}
+{% if perms_lacking %}
+  <p>حذف محصول «{{ object }}» ممکن نیست، چون همراه آن باید موارد زیر هم حذف شوند و شما برای حذف آن‌ها دسترسی ندارید:</p>
+  <ul id="deleted-objects">{{ perms_lacking|unordered_list }}</ul>
+  <p>اگر فقط نمی‌خواهید این محصول در فروشگاه دیده شود، نیازی به حذف نیست: به فهرست محصولات برگردید و از اقدام «پنهان کردن از فروشگاه» استفاده کنید.</p>
+{% elif protected %}
+  <p>حذف محصول «{{ object }}» ممکن نیست، چون موارد زیر به آن وابسته‌اند و نباید حذف شوند:</p>
+  <ul id="deleted-objects">{{ protected|unordered_list }}</ul>
+  <p>اگر فقط نمی‌خواهید این محصول در فروشگاه دیده شود، نیازی به حذف نیست: به فهرست محصولات برگردید و از اقدام «پنهان کردن از فروشگاه» استفاده کنید.</p>
+{% else %}
+  <p>آیا از حذف محصول «{{ object }}» مطمئن هستید؟ این کار برگشت‌پذیر نیست.</p>
+  <h2>همراه این محصول، موارد زیر هم برای همیشه حذف می‌شوند:</h2>
+  <ul>
+      {% for model_name, object_count in model_count %}
+      <li>{{ model_name|capfirst }}: {{ object_count|numfa }} مورد</li>
+      {% endfor %}
+  </ul>
+  <p>خریدهای همراه (خودکار) و اطلاع‌رسانی‌های موجودیِ مربوط به این محصول هم خودکار حذف می‌شوند؛ دوباره ساخته‌شدن آن‌ها برای محصولات دیگر مشکلی ندارد.</p>
+  <p><strong>سفارش‌های گذشته حذف نمی‌شوند.</strong> نام و قیمت این محصول در سفارش‌هایی که قبلاً ثبت شده‌اند، دقیقاً همان‌طور که آن زمان بوده باقی می‌ماند.</p>
+  <p>اگر فقط نمی‌خواهید این محصول در فروشگاه دیده شود، حذف نکنید: انصراف بدهید و در فهرست محصولات از اقدام «پنهان کردن از فروشگاه» استفاده کنید.</p>
+  <h2>جزئیات موارد حذف‌شونده</h2>
+  <ul id="deleted-objects">{{ deleted_objects|unordered_list }}</ul>
+  <form method="post">{% csrf_token %}
+  <div>
+  <input type="hidden" name="post" value="yes">
+  {% if is_popup %}<input type="hidden" name="{{ is_popup_var }}" value="1">{% endif %}
+  {% if to_field %}<input type="hidden" name="{{ to_field_var }}" value="{{ to_field }}">{% endif %}
+  <input type="submit" value="بله، حذف شود">
+  <a href="#" class="button cancel-link">انصراف</a>
+  </div>
+  </form>
+{% endif %}
+{% endblock content %}
