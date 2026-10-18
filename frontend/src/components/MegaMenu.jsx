@@ -117,8 +117,8 @@ export default function MegaMenu({ groups, open, onOpen, onClose }) {
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Outside click closes (desktop panel AND mobile sheet).
-  // The panel is a DOM child of the trigger wrapper, so
-  // checking the wrapper covers it.
+  // The desktop panel is within the trigger wrapper; the
+  // dimming overlay is a sibling and counts as outside too.
   useEffect(() => {
     if (!open) return undefined;
     function onClick(event) {
@@ -194,6 +194,13 @@ export default function MegaMenu({ groups, open, onOpen, onClose }) {
 
   return (
     <>
+      {open ? (
+        <div
+          className="mega-menu__overlay"
+          aria-hidden="true"
+          onClick={close}
+        />
+      ) : null}
       <div
         className={`site-header__mega-trigger${open ? " is-open" : ""}`}
         ref={triggerRef}
@@ -230,7 +237,6 @@ export default function MegaMenu({ groups, open, onOpen, onClose }) {
           onMouseEnter={cancelClose}
           onMouseLeave={scheduleClose}
         >
-          <div className="mega-menu__overlay" aria-hidden="true" />
           <div className="mega-menu__inner" aria-label="دسته‌بندی کالاها">
             <ul className="mega-menu__roots" onKeyDown={rovingKeys}>
               {groups.map((category) => (

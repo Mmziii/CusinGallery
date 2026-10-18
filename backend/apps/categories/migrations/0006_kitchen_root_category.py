@@ -1,33 +1,59 @@
-"""Data migration: introduce the root category «آشپزخانه» (slug ``kitchen``).
+"""Data migration: introduce the root category «آشپزخانه».
 
 Every category that is currently top-level becomes a child of it, so
-the storefront gains exactly ONE catalog root (breadcrumbs, the header
-mega menu, home category tiles) while the existing groups keep their
+there is exactly ONE catalog root while the existing groups keep their
 names, slugs, URLs, products and display order untouched -- only the
 ``parent`` of the former roots changes.
 
-Idempotent by construction: if a root with slug ``kitchen`` already
-exists the migration does nothing, so re-running it (or running it on
-a database that already has the root) is a no-op. Reversible: the
-groups are moved back to the top level and the root is removed (or,
-only if somebody somehow attached products/children to it directly,
-deactivated instead of deleted -- deleting would either cascade to
-those products or violate the PROTECT on children).
+The preferred root slug is ``kitchen``. If that slug is already assigned
+to any category (including a non-root), a free ``kitchen-root`` slug is
+used instead. The migration is idempotent when the named root already
+exists with either slug family. Reversible: groups move back to the top
+level and the root is removed (or deactivated if it has direct products
+or children).
 """
 from django.db import migrations
 
 KITCHEN_SLUG = "kitchen"
+KITCHEN_FALLBACK_SLUG = "kitchen-root"
 KITCHEN_NAME = "آشپزخانه"
+
+
+def _is_kitchen_root_slug(slug):
+    if slug in (KITCHEN_SLUG, KITCHEN_FALLBACK_SLUG):
+        return True
+    prefix = f"{KITCHEN_FALLBACK_SLUG}-"
+    suffix = slug[len(prefix):] if slug.startswith(prefix) else ""
+    return bool(suffix) and suffix.isascii() and suffix.isdigit()
+
+
+def _named_kitchen_root(Category):
+    roots = Category.objects.filter(name=KITCHEN_NAME, parent__isnull=True)
+    return next((root for root in roots if _is_kitchen_root_slug(root.slug)), None)
+
+
+def _next_kitchen_slug(Category):
+    if not Category.objects.filter(slug=KITCHEN_SLUG).exists():
+        return KITCHEN_SLUG
+
+    candidate = KITCHEN_FALLBACK_SLUG
+    suffix = 1
+    while Category.objects.filter(slug=candidate).exists():
+        candidate = f"{KITCHEN_FALLBACK_SLUG}-{suffix}"
+        suffix += 1
+    return candidate
 
 
 def forward(apps, schema_editor):
     Category = apps.get_model("categories", "Category")
-    if Category.objects.filter(slug=KITCHEN_SLUG, parent__isnull=True).exists():
-        # Already migrated (or a pre-existing root with that slug):
-        # nothing to do -- running twice must change nothing.
+    if _named_kitchen_root(Category) is not None:
         return
+
     kitchen = Category.objects.create(
-        name=KITCHEN_NAME, slug=KITCHEN_SLUG, is_active=True, ordering=0
+        name=KITCHEN_NAME,
+        slug=_next_kitchen_slug(Category),
+        is_active=True,
+        ordering=0,
     )
     # Reparent every CURRENT top-level category under the new root.
     # Products are untouched: their FK points at the (unchanged) leaf
@@ -39,10 +65,14 @@ def forward(apps, schema_editor):
 
 def backward(apps, schema_editor):
     Category = apps.get_model("categories", "Category")
-    try:
-        kitchen = Category.objects.get(slug=KITCHEN_SLUG, parent__isnull=True)
-    except Category.DoesNotExist:
+    kitchen = Category.objects.filter(
+        slug=KITCHEN_SLUG, parent__isnull=True
+    ).first()
+    if kitchen is None:
+        kitchen = _named_kitchen_root(Category)
+    if kitchen is None:
         return
+
     # Undo the reparenting: the main groups go back to the top level.
     Category.objects.filter(parent=kitchen).update(parent=None)
     if kitchen.products.exists() or kitchen.children.exists():

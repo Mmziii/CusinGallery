@@ -254,6 +254,60 @@ class KitchenRootMigrationTests(TestCase):
         )
         self.assertEqual(Category.objects.filter(slug="kitchen").count(), 1)
 
+    def test_forward_uses_fallback_when_kitchen_slug_belongs_to_non_root(self):
+        migration = _kitchen_root_migration()
+        migration.backward(apps, None)
+        archive = make_category("Legacy catalog", slug="legacy-catalog")
+        legacy_kitchen = make_category(
+            "Legacy kitchen", slug="kitchen", parent=archive
+        )
+        make_category("Pots", slug="pots")
+
+        migration.forward(apps, None)
+
+        kitchen = Category.objects.get(name="آشپزخانه", parent__isnull=True)
+        self.assertEqual(kitchen.slug, "kitchen-root")
+        archive.refresh_from_db()
+        legacy_kitchen.refresh_from_db()
+        self.assertEqual(archive.parent, kitchen)
+        self.assertEqual(legacy_kitchen.parent, archive)
+
+        first_pass = list(Category.objects.values_list("slug", "parent__slug"))
+        migration.forward(apps, None)
+        self.assertEqual(
+            list(Category.objects.values_list("slug", "parent__slug")),
+            first_pass,
+        )
+        self.assertEqual(
+            Category.objects.filter(name="آشپزخانه", parent__isnull=True).count(),
+            1,
+        )
+
+        migration.backward(apps, None)
+        self.assertFalse(Category.objects.filter(slug="kitchen-root").exists())
+        archive.refresh_from_db()
+        self.assertIsNone(archive.parent)
+
+    def test_forward_uses_first_available_kitchen_root_suffix(self):
+        migration = _kitchen_root_migration()
+        migration.backward(apps, None)
+        archive = make_category("Legacy catalog", slug="legacy-catalog")
+        make_category("Legacy kitchen", slug="kitchen", parent=archive)
+        make_category("Reserved kitchen root", slug="kitchen-root", parent=archive)
+        make_category("Reserved kitchen root 1", slug="kitchen-root-1", parent=archive)
+
+        migration.forward(apps, None)
+
+        kitchen = Category.objects.get(name="آشپزخانه", parent__isnull=True)
+        self.assertEqual(kitchen.slug, "kitchen-root-2")
+
+        migration.forward(apps, None)
+        self.assertEqual(
+            Category.objects.filter(name="آشپزخانه", parent__isnull=True).count(),
+            1,
+        )
+        self.assertTrue(Category.objects.filter(slug="kitchen-root-2").exists())
+
     def test_backward_restores_top_level_and_removes_the_root(self):
         migration = _kitchen_root_migration()
         migration.backward(apps, None)

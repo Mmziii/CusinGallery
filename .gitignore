@@ -9,6 +9,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.sqlite3
+backend/dev.db
 backend/staticfiles/
 # Ignore uploaded media content but keep the folder structure tracked in
 # git (via .gitkeep) so a fresh clone has the right directories before any

@@ -1130,7 +1130,7 @@ h1, h2, h3, .section__head h2 {
    surface is hidden here, not in JS, so hover handlers
    stay attached for touch laptops). */
 @media (max-width: 1023px) {
-  .mega-menu { display: none; }
+  .mega-menu, .mega-menu__overlay { display: none; }
 }
 @media (min-width: 1024px) {
   .mega-sheet { display: none; }

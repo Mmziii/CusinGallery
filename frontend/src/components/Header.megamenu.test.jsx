@@ -129,6 +129,35 @@ describe("mega menu", () => {
     expect(button.getAttribute("aria-expanded")).toBe("false");
   });
 
+  it("closes when the dimmed page overlay is clicked", async () => {
+    const { button, trigger } = await renderHeader();
+    fireEvent.mouseEnter(trigger);
+    await untilMenu();
+
+    const overlay = document.querySelector(".mega-menu__overlay");
+    expect(overlay).not.toBeNull();
+    expect(trigger.contains(overlay)).toBe(false);
+
+    fireEvent.click(overlay);
+    await waitFor(() => expect(document.querySelector(".mega-menu")).toBeNull());
+    expect(button.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("closes after the 200ms grace when the pointer leaves the panel for the page", async () => {
+    const { button, trigger } = await renderHeader();
+    fireEvent.mouseEnter(trigger);
+    await untilMenu();
+
+    const panel = document.querySelector(".mega-menu");
+    const overlay = document.querySelector(".mega-menu__overlay");
+    fireEvent.mouseLeave(panel, { relatedTarget: overlay });
+
+    await sleep(80);
+    expect(document.querySelector(".mega-menu")).not.toBeNull();
+    await waitFor(() => expect(document.querySelector(".mega-menu")).toBeNull(), { timeout: 1000 });
+    expect(button.getAttribute("aria-expanded")).toBe("false");
+  });
+
   it("opens on click/keyboard and closes on Escape (touch-friendly)", async () => {
     const { button, view } = await renderHeader();
     expect(button.getAttribute("aria-expanded")).toBe("false");
