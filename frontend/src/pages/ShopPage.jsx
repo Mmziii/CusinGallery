@@ -327,7 +327,7 @@ function ShopPage() {
                   checked={selected.includes(entry.value)}
                   onChange={() => toggleAttrValue(attribute.slug, entry.value)}
                 />
-                {entry.value} <span className="filter-group__count">({entry.count})</span>
+                {faDigits(entry.value)} <span className="filter-group__count">({faDigits(entry.count)})</span>
               </label>
             ))}
           </FilterGroup>
@@ -578,7 +578,7 @@ function ShopPage() {
 
         {searchParams.get("search") ? (
           <p className="shop__search-note">
-            نتایج جستجو برای «{searchParams.get("search")}»
+            نتایج جستجو برای «{faDigits(searchParams.get("search"))}»
           </p>
         ) : null}
 
@@ -606,7 +606,7 @@ function ShopPage() {
             <div className="shop__chips">
               {brand ? (
                 <span className="shop__chip">
-                  برند: {brand.name}
+                  برند: {faDigits(brand.name)}
                   <button type="button" aria-label="حذف فیلتر برند" onClick={() => setParam("brand", "")}>
                     <Icon name="close" size={14} />
                   </button>
@@ -614,7 +614,7 @@ function ShopPage() {
               ) : null}
               {category ? (
                 <span className="shop__chip">
-                  دسته: {category.name}
+                  دسته: {faDigits(category.name)}
                   <button type="button" aria-label="حذف فیلتر دسته" onClick={() => setParam("category", "")}>
                     <Icon name="close" size={14} />
                   </button>
@@ -622,7 +622,7 @@ function ShopPage() {
               ) : null}
               {activeAttrs.map((entry) => (
                 <span className="shop__chip" key={entry.key}>
-                  {entry.name}: {entry.values}
+                  {faDigits(entry.name)}: {faDigits(entry.values)}
                   <button type="button" aria-label={`حذف فیلتر ${entry.name}`} onClick={() => setParam(entry.key, "")}>
                     <Icon name="close" size={14} />
                   </button>

@@ -147,7 +147,7 @@ function GuestCartView() {
                 <div className="cart-item__body">
                   <div className="cart-item__name">{product ? faDigits(product.name) : "—"}</div>
                   {variantLabel(variant) ? (
-                    <div className="cart-item__variant">{variantLabel(variant)}</div>
+                    <div className="cart-item__variant">{faDigits(variantLabel(variant))}</div>
                   ) : null}
                   <div className="cart-item__unit">
                     {priceInfo ? <PriceTag priceInfo={priceInfo} size="sm" /> : "—"}

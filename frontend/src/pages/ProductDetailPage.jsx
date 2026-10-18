@@ -239,9 +239,9 @@ function ComplementsSection({ complements }) {
               onChange={() => toggle(item.id)}
             />
             <Link to={`/products/${item.slug}/`} className="complements__media">
-              <SmartImage image={item.primary_image || null} alt={item.name} />
+              <SmartImage image={item.primary_image || null} alt={faDigits(item.name)} />
             </Link>
-            <Link to={`/products/${item.slug}/`} className="complements__name">{item.name}</Link>
+            <Link to={`/products/${item.slug}/`} className="complements__name">{faDigits(item.name)}</Link>
             <span className="complements__price">{formatPrice(item.price_info.price)} تومان</span>
           </label>
         ))}
@@ -320,7 +320,7 @@ function ProductDetailPage() {
         to: categoryUrl(product.category.slug),
       });
     }
-    trail.push({ label: product.name });
+    trail.push({ label: faDigits(product.name) });
     return trail;
   }, [product]);
 
@@ -462,7 +462,7 @@ function ProductDetailPage() {
 
         <h1>{faDigits(product.name)}</h1>
         {product.brand ? <div className="product-detail__brand">برند: {product.brand.name}</div> : null}
-        {product.short_description ? <p className="product-detail__short">{product.short_description}</p> : null}
+        {product.short_description ? <p className="product-detail__short">{faDigits(product.short_description)}</p> : null}
 
         <PriceTag priceInfo={displayPrice} size="lg" />
 
@@ -474,7 +474,7 @@ function ProductDetailPage() {
           <div className="variant-select">
             {attributeOptions.map(({ attribute, values }) => (
               <div key={attribute} className="variant-select__group">
-                <span>{attribute}:</span>
+                <span>{faDigits(attribute)}:</span>
                 {values.map((value) => (
                   <button
                     key={value}
@@ -482,7 +482,7 @@ function ProductDetailPage() {
                     className={selected[attribute] === value ? "chip chip--active" : "chip"}
                     onClick={() => setSelected((s) => ({ ...s, [attribute]: value }))}
                   >
-                    {value}
+                    {faDigits(value)}
                   </button>
                 ))}
               </div>
@@ -571,7 +571,7 @@ function ProductDetailPage() {
         <section>
           <h2>توضیحات</h2>
           <p className="product-detail__description">
-            {product.description || product.short_description || "توضیحاتی ثبت نشده است."}
+            {faDigits(product.description || product.short_description || "توضیحاتی ثبت نشده است.")}
           </p>
         </section>
 
@@ -582,7 +582,7 @@ function ProductDetailPage() {
               <tbody>
                 {product.specifications.map((spec) => (
                   <tr key={spec.attribute}>
-                    <th>{spec.attribute}</th>
+                    <th>{faDigits(spec.attribute)}</th>
                     <td>{spec.values.join("، ")}</td>
                   </tr>
                 ))}

@@ -579,7 +579,7 @@ function Header() {
                         <div className="minicart__line-body">
                           <span className="minicart__name">{line.name}</span>
                           {line.variant ? (
-                            <span className="minicart__variant">{line.variant}</span>
+                            <span className="minicart__variant">{faDigits(line.variant)}</span>
                           ) : null}
                           <span className="minicart__unit">
                             {line.priceInfo ? (
