@@ -42,6 +42,7 @@ import AccountLayout from "./account/AccountLayout";
 import CartPage from "./CartPage";
 import CheckoutPage from "./CheckoutPage";
 import ShopPage from "./ShopPage";
+import ProductDetailPage from "./ProductDetailPage";
 
 const CSS_PATH = path.resolve(__dirname, "../styles/storefront.css");
 
@@ -105,6 +106,14 @@ beforeAll(() => {
   apiClient.defaults.adapter = async (config) => {
     const url = config.url || "";
     const ok = (data) => ({ data, status: 200, statusText: "OK", headers: {}, config });
+    if (url === "/products/large-pan/") {
+      return ok({
+        ...PRODUCT, id: 2, name: "قابلمه بزرگ", slug: "large-pan", sku: "POT-2",
+        description: "توضیحات کامل محصول", images: [], variants: [],
+        stock_quantity: 5, stock_status: "in_stock", is_in_stock: true,
+        related_products: [PRODUCT], specifications: [{ attribute: "جنس", values: ["استیل"] }],
+      });
+    }
     if (url === "/products/") {
       const ids = String((config.params || {}).ids || "");
       return ok(ids ? { count: 1, next: null, previous: null, results: [PRODUCT] }
@@ -170,6 +179,25 @@ function assertStickyTravelSafe(summary, forbiddenSelector, label) {
 }
 
 describe("sticky summary containment (item 4)", () => {
+  it("product gallery: its travel ends at the full-content row before related, reviews and recently viewed", async () => {
+    const view = render(
+      <MemoryRouter initialEntries={["/products/large-pan/"]}>
+        <Routes><Route path="/products/:slug/" element={<ProductDetailPage />} /></Routes>
+      </MemoryRouter>
+    );
+    await screen.findByRole("heading", { name: "قابلمه بزرگ" });
+    await screen.findByText("اخیراً دیده‌اید");
+    const gallery = view.container.querySelector(".product-detail__gallery");
+    const body = view.container.querySelector(".product-detail__body");
+    expect(stickyTravelBox(gallery)).toBe(body);
+    expect(body.children.length).toBe(2);
+    expect(body.querySelector(".product-detail__description")).toBeTruthy();
+    expect(body.querySelector(".specs")).toBeTruthy();
+    for (const section of [".product-detail__related", ".reviews", ".recently-viewed"]) {
+      assertStickyTravelSafe(gallery, section, "product gallery");
+    }
+  });
+
   it("guest cart: the sticky summary cannot travel over «اخیراً دیده‌اید»", async () => {
     const view = render(
       <MemoryRouter initialEntries={["/cart/"]}>
@@ -272,7 +300,7 @@ describe("sticky CSS contract (item 4)", () => {
       }
     }
     // A new entry here means a new sticky element: it must get a dedicated
-    // parent that ends before the next section, a z-index below the header
+    // parent that ends before the next section, a stacking level below the header
     // and a `position: static` reset below its desktop breakpoint.
     //
     // `.shop__mobile-bar` (Audit 19 item 1) is the phone's filter/sort bar.
@@ -285,10 +313,25 @@ describe("sticky CSS contract (item 4)", () => {
       ".account__nav",
       ".cart-page__summary",
       ".checkout__summary",
+      ".product-detail__gallery",
       ".shop__mobile-bar",
       ".shop__sidebar",
       ".site-header",
     ]);
+  });
+
+  it("audits the product gallery: adjacent desktop columns and a header-aware offset without a raised stacking layer", () => {
+    const rules = parseCss();
+    const body = effectiveDeclarations(rules, ".product-detail__body", null);
+    expect(body.display).toBe("grid");
+    expect(body["grid-template-columns"]).toBe("minmax(0, .9fr) minmax(0, 1.1fr)");
+    expect(body["align-items"]).toBe("start");
+    const gallery = effectiveDeclarations(rules, ".product-detail__gallery", null);
+    expect(gallery.position).toBe("sticky");
+    expect(gallery.top).toBe("calc(var(--site-header-height, 76px) + 16px)");
+    // Its automatic stacking level is already below the header; no z-index
+    // bump can make it cover navigation or content below its own row.
+    expect(Number(gallery["z-index"] || 0)).toBeLessThan(60);
   });
 
   it("audits the phone shop toolbar: opaque, under the header, phone-only", () => {
@@ -352,6 +395,7 @@ describe("sticky CSS contract (item 4)", () => {
     const rules = parseCss();
     // selector -> the media query it must be reset in
     const OFF_AT = {
+      ".product-detail__gallery": "(max-width: 767px)",
       ".shop__sidebar": "(max-width: 1024px)",
       ".cart-page__summary": "(max-width: 768px)",
       ".checkout__summary": "(max-width: 768px)",

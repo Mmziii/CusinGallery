@@ -209,8 +209,8 @@ function ProductCard({ product }) {
           {faDigits(product.name)}
         </Link>
         <div className="product-card__brand">
-            {product.brand?.slug ? <Link to={brandUrl(product.brand.slug)}>{faDigits(product.brand.name)}</Link> : faDigits(product.brand?.name) || "\u00a0"}
-          </div>
+          {product.brand?.slug ? <Link to={brandUrl(product.brand.slug)}>{faDigits(product.brand.name)}</Link> : faDigits(product.brand?.name) || "\u00a0"}
+        </div>
 
         <PriceTag priceInfo={product.price_info} size="sm" />
 

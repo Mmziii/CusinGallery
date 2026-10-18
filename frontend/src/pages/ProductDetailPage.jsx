@@ -401,7 +401,6 @@ function ProductDetailPage() {
         </div>
 
         <div className="product-detail__info">
-
           <h1>{faDigits(product.name)}</h1>
           {product.brand ? (
             <div className="product-detail__brand">
@@ -454,44 +453,44 @@ function ProductDetailPage() {
             >
               {outOfStock ? "ناموجود" : hasVariants && !activeVariant ? "انتخاب گزینه‌ها" : "افزودن به سبد خرید"}
             </button>
-          {outOfStock ? (
-            <div className="back-in-stock">
-              <p className="muted">این کالا فعلاً موجود نیست. شمارهٔ موبایل‌تان را بگذارید تا وقتی موجود شد خبرتان کنیم.</p>
-              <div className="back-in-stock__row">
-                <input
-                  type="text"
-                  dir="ltr"
-                  inputMode="numeric"
-                  placeholder="شماره موبایل"
-                  maxLength={20}
-                  value={bisPhone}
-                  onChange={(e) => setBisPhone(normalizePhone(e.target.value))}
-                  aria-label="شماره موبایل برای اطلاع‌رسانی موجودی"
-                />
-                <button
-                  type="button"
-                  className="btn btn--outline"
-                  disabled={bisState === "busy" || !isValidIranianPhone(bisPhone)}
-                  onClick={async () => {
-                    setBisState("busy");
-                    try {
-                      await subscribeBackInStock(product.id, activeVariant?.id ?? null, bisPhone.trim());
-                      setBisState("done");
-                    } catch (err) {
-                      setBisState(errorMessage(normalizeApiError(err)));
-                    }
-                  }}
-                >
-                  اطلاع به من
-                </button>
+            {outOfStock ? (
+              <div className="back-in-stock">
+                <p className="muted">این کالا فعلاً موجود نیست. شمارهٔ موبایل‌تان را بگذارید تا وقتی موجود شد خبرتان کنیم.</p>
+                <div className="back-in-stock__row">
+                  <input
+                    type="text"
+                    dir="ltr"
+                    inputMode="numeric"
+                    placeholder="شماره موبایل"
+                    maxLength={20}
+                    value={bisPhone}
+                    onChange={(e) => setBisPhone(normalizePhone(e.target.value))}
+                    aria-label="شماره موبایل برای اطلاع‌رسانی موجودی"
+                  />
+                  <button
+                    type="button"
+                    className="btn btn--outline"
+                    disabled={bisState === "busy" || !isValidIranianPhone(bisPhone)}
+                    onClick={async () => {
+                      setBisState("busy");
+                      try {
+                        await subscribeBackInStock(product.id, activeVariant?.id ?? null, bisPhone.trim());
+                        setBisState("done");
+                      } catch (err) {
+                        setBisState(errorMessage(normalizeApiError(err)));
+                      }
+                    }}
+                  >
+                    اطلاع به من
+                  </button>
+                </div>
+                {bisState === "done" ? (
+                  <p className="field-help">ثبت شد؛ به محض موجودشدن اطلاع‌رسانی می‌شود.</p>
+                ) : bisState && bisState !== "busy" ? (
+                  <p className="field-help field-help--error">{bisState}</p>
+                ) : null}
               </div>
-              {bisState === "done" ? (
-                <p className="field-help">ثبت شد؛ به محض موجودشدن اطلاع‌رسانی می‌شود.</p>
-              ) : bisState && bisState !== "busy" ? (
-                <p className="field-help field-help--error">{bisState}</p>
-              ) : null}
-            </div>
-          ) : null}
+            ) : null}
 
             <button
               type="button"

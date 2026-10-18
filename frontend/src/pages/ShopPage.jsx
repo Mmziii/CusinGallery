@@ -140,7 +140,7 @@ function ShopPage({ brand: fixedBrand = null }) {
   // an absolute URL, and falls back to the shared brand placeholder when
   // that item has no image at all. An unfiltered /shop/ keeps the
   // site-wide og:image from index.html.
-  const categories = categoriesState.data?.results || [];
+  const categories = useMemo(() => categoriesState.data?.results || [], [categoriesState.data]);
   const brands = brandsState.data?.results || [];
   const selectedCategory = categories.find((c) => c.slug === params.category) || null;
   // Stage 1: breadcrumbs walk the REAL tree (parent_slug chain,
