@@ -11,6 +11,7 @@ import useFocusTrap from "../hooks/useFocusTrap";
 import useAuthStore from "../store/useAuthStore";
 import useCartStore from "../store/useCartStore";
 import { getCategoryTree, listProducts } from "../services/catalogApi";
+import { mainGroups } from "../utils/categories";
 import {
   lineTotalForLine,
   priceInfoForLine,
@@ -184,10 +185,15 @@ function Header() {
   };
   const megaBtnRef = useRef(null);
   const megaFocusPending = useRef(false);
+  // Stage 1: the catalog has one root («آشپزخانه») -- the
+  // mega menu's main categories are its CHILDREN, never the
+  // root itself.
+  const groups = mainGroups(categories);
+
   const openMega = () => {
     cancelMegaClose();
     setMegaOpen(true);
-    setMegaCategory((current) => current || categories[0] || null);
+    setMegaCategory((current) => current || groups[0] || null);
   };
   const closeMega = () => {
     cancelMegaClose();
@@ -409,7 +415,7 @@ function Header() {
               <div className="mega-menu">
                 <div className="mega-menu__inner">
                   <ul className="mega-menu__roots">
-                    {categories.map((category) => (
+                    {groups.map((category) => (
                       <li key={category.id}>
                         <button
                           type="button"

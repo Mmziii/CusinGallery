@@ -19,6 +19,7 @@ import { normalizeApiError } from "../utils/apiError";
 import { formatPrice } from "../utils/formatPrice";
 import { fetchBanners, fetchDailyDeals } from "../services/bannersApi";
 import { getCategoryTree, listProducts } from "../services/catalogApi";
+import { mainGroups } from "../utils/categories";
 import { fetchProductReviews } from "../services/reviewsApi";
 
 /**
@@ -288,6 +289,9 @@ function Home() {
   const categoriesState = useAsync(() => getCategoryTree(), []);
   const bestSellersState = useAsync(() => listProducts({ is_best_seller: true, page_size: 4 }), []);
   const categoriesRef = useReveal();
+  // Stage 1: the tiles show the main groups (children of
+  // the «آشپزخانه» root), never the root itself.
+  const categoryGroups = mainGroups(categoriesState.data || []);
 
   return (
     <div className="home">
@@ -295,14 +299,14 @@ function Home() {
       <HeroSlider banners={bannersState.data || []} isLoading={bannersState.isLoading} />
       <TrustStrip />
 
-      {categoriesState.data?.length ? (
+      {categoryGroups.length ? (
         <section className="section container reveal" ref={categoriesRef}>
           <div className="section__head">
             <h2>دسته‌بندی‌ها</h2>
             <span className="section__rule" aria-hidden="true" />
           </div>
           <div className="category-grid">
-            {categoriesState.data.map((category) => (
+            {categoryGroups.map((category) => (
               <Link
                 key={category.id}
                 to={`/shop/?category=${encodeURIComponent(category.slug)}`}

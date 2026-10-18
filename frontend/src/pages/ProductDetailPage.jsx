@@ -27,6 +27,7 @@ import { normalizeApiError } from "../utils/apiError";
 import { formatPrice } from "../utils/formatPrice";
 import { recordView } from "../utils/recentlyViewed";
 import { shareImageUrl } from "../utils/shareImage";
+import { categoryUrl } from "../utils/categories";
 import RecentlyViewed from "../components/RecentlyViewed";
 
 function Stars({ value, size = "md" }) {
@@ -302,6 +303,51 @@ function ProductDetailPage() {
     image: ogImage,
   });
 
+  // Stage 1: the breadcrumb trail as data -- shared by the
+  // visible <Breadcrumbs> and the JSON-LD BreadcrumbList
+  // below. کازین گالری › آشپزخانه (the catalog root,
+  // first ancestor) › … intermediate groups … › the product's
+  // own category › the product.
+  const crumbTrail = useMemo(() => {
+    if (!product) return [];
+    const trail = [{ label: "کازین گالری", to: "/" }];
+    if (product.category) {
+      for (const ancestor of product.category.ancestors || []) {
+        trail.push({ label: ancestor.name, to: categoryUrl(ancestor.slug) });
+      }
+      trail.push({
+        label: product.category.name,
+        to: categoryUrl(product.category.slug),
+      });
+    }
+    trail.push({ label: product.name });
+    return trail;
+  }, [product]);
+
+  // Stage 1: JSON-LD BreadcrumbList (same trail as the visible
+  // breadcrumbs) for search engines that DO run JavaScript.
+  // Replaced per product, removed on unmount.
+  useEffect(() => {
+    if (!product) return undefined;
+    const script = document.createElement("script");
+    script.type = "application/ld+json";
+    script.id = "breadcrumb-jsonld";
+    script.textContent = JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: crumbTrail.map((crumb, index) => ({
+        "@type": "ListItem",
+        position: index + 1,
+        name: crumb.label,
+        ...(crumb.to
+          ? { item: `${window.location.origin}${crumb.to}` }
+          : {}),
+      })),
+    });
+    document.head.appendChild(script);
+    return () => script.remove();
+  }, [product, crumbTrail]);
+
   // Part S4 item 2: JSON-LD Product for search engines that DO run
   // JavaScript (Google). It uses the same image as og:image, so a product
   // preview is never imageless. Replaced per product, removed on unmount.
@@ -400,17 +446,10 @@ function ProductDetailPage() {
 
   return (
     <div className="product-detail">
-      {/* Part S2 item 7: breadcrumbs on the product page */}
-      <Breadcrumbs
-        items={[
-          { label: "خانه", to: "/" },
-          { label: "فروشگاه", to: "/shop/" },
-          ...(product.category
-            ? [{ label: product.category.name, to: `/shop/?category=${encodeURIComponent(product.category.slug)}` }]
-            : []),
-          { label: product.name },
-        ]}
-      />
+      {/* Part S2 item 7: breadcrumbs on the product page.
+          Stage 1: every trail starts کازین گالری ›
+          آشپزخانه, then the deeper levels of the tree. */}
+      <Breadcrumbs items={crumbTrail} />
       <div className="product-detail__gallery">
         {/* Part S5 item 3: main image + thumbnail row (cross-fade, keyboard,
             swipe, scroll-snap) -- every image still goes through the shared
