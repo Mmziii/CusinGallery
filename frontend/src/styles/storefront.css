@@ -2435,3 +2435,7 @@ input, select, textarea { min-width: 0; max-width: 100%; }
 .price-range__input:disabled::-webkit-slider-thumb { pointer-events: none; cursor: default; }
 .price-range__input:disabled::-moz-range-thumb { pointer-events: none; cursor: default; }
 .price-range__extremes { margin: 0; font-size: var(--font-size-xs); color: var(--color-text-muted); line-height: 1.9; }
+
+.shipping-method--disabled { background: var(--color-bg); cursor: not-allowed; }
+.shipping-method--disabled .shipping-method__icon,
+.shipping-method--disabled strong { color: var(--color-text-muted); }
