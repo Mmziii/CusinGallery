@@ -8,7 +8,9 @@
  * the content rules: NO shipping text on the product page, and everything
  * a shopper needs to buy is still there.
  */
-import { cleanup, render, screen, within } from "@testing-library/react";
+import fs from "node:fs";
+import path from "node:path";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
@@ -86,6 +88,7 @@ const PRODUCT = {
 };
 
 const originalAdapter = apiClient.defaults.adapter;
+const originalMatchMedia = window.matchMedia;
 let productResponse = PRODUCT;
 
 beforeAll(() => {
@@ -106,6 +109,7 @@ afterAll(() => {
 afterEach(() => {
   cleanup();
   productResponse = PRODUCT;
+  window.matchMedia = originalMatchMedia;
 });
 
 function renderProduct(path = "/products/pan/") {
@@ -149,7 +153,7 @@ describe("Product page content (Part S5 item 5)", () => {
     expect(screen.getAllByRole("button", { name: "افزودن به سبد خرید" }).length).toBeGreaterThan(0);
   });
 
-  it("keeps the description, the attributes table, complements and related products", async () => {
+  it("keeps the full description and specifications in the info column beside the gallery", async () => {
     const { container } = renderProduct();
     await screen.findByRole("heading", { name: "قابلمه گرانیتی" });
 
@@ -161,7 +165,14 @@ describe("Product page content (Part S5 item 5)", () => {
     expect(within(specs).getByText("جنس")).toBeTruthy();
     expect(within(specs).getByText("گرانیت، آلومینیوم")).toBeTruthy();
 
-    expect(screen.getByRole("heading", { name: "پیشنهاد همراه" })).toBeTruthy();
+    const info = container.querySelector(".product-detail__info");
+    const body = container.querySelector(".product-detail__body");
+    expect(info.contains(specs)).toBe(true);
+    expect(info.contains(container.querySelector(".product-detail__description"))).toBe(true);
+    expect(body.children[0].className).toBe("product-detail__gallery");
+    expect(body.children[1]).toBe(info);
+    expect(container.querySelector(".product-detail__extra")).toBeNull();
+    expect(screen.queryByRole("heading", { name: "پیشنهاد همراه" })).toBeNull();
     expect(screen.getByRole("heading", { name: "محصولات مرتبط" })).toBeTruthy();
   });
 
@@ -187,7 +198,7 @@ describe("Product page content (Part S5 item 5)", () => {
     expect(jsonLd.url).toMatch(/\/products\/pan-model-123\/$/);
   });
 
-  it("keeps the SKU in the machine-readable product data (it was never a visible line)", async () => {
+  it("shows an unclipped muted SKU below the image and preserves the machine-readable SKU", async () => {
     renderProduct();
     await screen.findByRole("heading", { name: "قابلمه گرانیتی" });
 
@@ -195,6 +206,30 @@ describe("Product page content (Part S5 item 5)", () => {
       document.head.querySelector('script[id="product-jsonld"]')?.textContent || "{}"
     );
     expect(jsonLd.sku).toBe("PAN-1");
+    const sku = screen.getByText("PAN-۱").closest(".product-detail__sku");
+    expect(sku.closest(".product-detail__gallery")).toBeTruthy();
+    expect(sku.closest(".product-gallery__stage")).toBeNull();
+  });
+
+
+  it("uses collapsible description/specs after the purchase controls on phones", async () => {
+    window.matchMedia = (query) => ({ ...originalMatchMedia(query), matches: query === "(max-width: 767px)" });
+    const { container } = renderProduct();
+    await screen.findByRole("heading", { name: "قابلمه گرانیتی" });
+    const sections = container.querySelectorAll("details.product-detail__section");
+    expect(sections.length).toBe(2);
+    expect([...sections].every((section) => !section.open)).toBe(true);
+    expect(sections[0].textContent).toContain("توضیحات کامل محصول");
+    fireEvent.click(sections[0].querySelector("summary"));
+    expect(sections[0].open).toBe(true);
+    expect(container.querySelector(".product-detail__buy").compareDocumentPosition(sections[0]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("bounds the sticky gallery to the primary row and disables stickiness on phones", () => {
+    const css = fs.readFileSync(path.resolve(__dirname, "../styles/storefront.css"), "utf8");
+    expect(css).toMatch(/\.product-detail__body\s*\{[^}]*display: grid;[^}]*grid-template-columns: minmax\(0, \.9fr\) minmax\(0, 1\.1fr\)/);
+    expect(css).toMatch(/\.product-detail__gallery\s*\{[^}]*position: sticky/);
+    expect(css).toMatch(/@media \(max-width: 767px\)\s*\{[^}]*\}\s*\.product-detail__gallery\s*\{ position: static/);
   });
 
   it("still links the shipping policy page from the footer (where it belongs)", () => {

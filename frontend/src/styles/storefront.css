@@ -457,7 +457,25 @@ input:focus, textarea:focus, select:focus {
 
 /* ======================================================= Product detail */
 
-.product-detail { display: grid; grid-template-columns: minmax(320px, 460px) 1fr; gap: var(--space-5); padding-block: var(--space-4); }
+/* The gallery's sticky travel ends at the primary row, before related/reviews. */
+.product-detail { padding-block: var(--space-4); }
+.product-detail__body { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: var(--space-5); align-items: start; }
+.product-detail__gallery { min-width: 0; position: sticky; top: calc(var(--site-header-height, 76px) + 16px); }
+.product-detail__sku { color: var(--color-text-muted); font-size: var(--font-size-xs); margin-block: var(--space-2) 0; }
+.product-detail__content { margin-top: var(--space-5); }
+.product-detail__section { border-top: 1px solid var(--color-border); padding-block: var(--space-3); }
+.product-detail__section h2 { font-size: var(--font-size-lg); margin: 0 0 var(--space-3); }
+.product-detail__section summary { display: flex; align-items: center; justify-content: space-between; cursor: pointer; list-style: none; min-height: 44px; }
+.product-detail__section summary::-webkit-details-marker { display: none; }
+.product-detail__section summary h2 { margin: 0; }
+.product-detail__section[open] summary { margin-bottom: var(--space-3); }
+.product-detail__section[open] summary svg { transform: rotate(180deg); }
+.product-detail__related { margin-top: var(--space-5); }
+@media (max-width: 767px) {
+  .product-detail__body { grid-template-columns: minmax(0, 1fr); gap: var(--space-3); }
+  .product-detail__gallery { position: static; }
+  .product-detail__section .specs th { width: 35%; }
+}
 .product-detail__main-image img { width: 100%; height: 420px; object-fit: cover; border-radius: var(--radius-md); border: 1px solid var(--color-border); }
 
 /* --- Part S5 item 3: gallery (main image + thumbnail row) --- */
@@ -528,7 +546,6 @@ input:focus, textarea:focus, select:focus {
 }
 .chip--active { border-color: var(--color-accent); color: var(--color-accent); font-weight: 700; }
 
-.product-detail__extra { grid-column: 1 / -1; display: flex; flex-direction: column; gap: var(--space-4); }
 .product-detail__description { white-space: pre-line; line-height: 2; }
 
 .specs { width: 100%; border-collapse: collapse; }
@@ -547,28 +564,6 @@ input:focus, textarea:focus, select:focus {
 }
 .related-card img { width: 100%; height: 130px; object-fit: cover; }
 .related-card span { padding: 6px 12px 0; }
-
-/* Part R5 item 9: «پیشنهاد همراه» (manual / mined complements with
-   bulk add-to-cart). Reuses the related-card visual language. */
-.complements { margin-top: var(--space-5); }
-.complements__hint { color: var(--color-text-muted); font-size: var(--font-size-sm); margin-bottom: var(--space-3); }
-.complements__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: var(--space-3); }
-.complements__card {
-  position: relative;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  font-size: var(--font-size-sm);
-  cursor: pointer;
-}
-.complements__card > input[type="checkbox"] { position: absolute; top: 8px; right: 8px; z-index: 1; width: auto; }
-.complements__media img { width: 100%; height: 130px; object-fit: cover; }
-.complements__name { padding: 8px 12px 0; color: var(--color-text); }
-.complements__price { padding: 4px 12px 10px; color: var(--color-text-muted); }
-.complements__actions { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; margin-top: var(--space-3); }
 
 /* Part R5 item 10: recently-viewed strip (home / product / cart). */
 .recently-viewed { margin-top: var(--space-5); }
@@ -816,7 +811,6 @@ input:focus, textarea:focus, select:focus {
 /* ========================================================== Responsive */
 
 @media (max-width: 1024px) {
-  .product-detail { grid-template-columns: 1fr; }
   .shop { grid-template-columns: 1fr; }
   .shop__sidebar { position: static; }
 }
