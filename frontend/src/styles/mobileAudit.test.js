@@ -37,6 +37,21 @@ describe("S1 mobile + centering audit rules", () => {
     expect(css).toMatch(/\.chip,\s*\.pagination button,[^{}]*\{[^}]*display:\s*inline-flex/);
   });
 
+  it("animates the mobile navigation drawer with a reversible, reduced-motion-safe 250ms transition", () => {
+    expect(css).toMatch(/\.site-header__drawer-panel\s*\{[^}]*animation:\s*mobile-drawer-panel-in 250ms ease-out both;/);
+    expect(css).toMatch(/\.site-header__drawer-backdrop\s*\{[^}]*animation:\s*mobile-drawer-backdrop-in 250ms ease-out both;/);
+    expect(css).toMatch(/\.site-header__drawer\.is-closing[^}]*animation-direction:\s*reverse/);
+    expect(css).toMatch(/\.site-header__drawer-link\s*\{[^}]*min-height:\s*48px;/);
+    expect(css).toMatch(/@media \(prefers-reduced-motion:\s*reduce\)\s*\{[^}]*animation-duration:\s*\.01ms/);
+  });
+
+  it("keeps the five trust benefits in one desktop row and scroll-snaps full items on phones", () => {
+    expect(css).toMatch(/\.trust-strip__inner\s*\{[^}]*grid-template-columns:\s*repeat\(5,\s*minmax\(0,\s*1fr\)\)/);
+    expect(css).toMatch(/@media \(max-width:\s*767px\)\s*\{\s*\.trust-strip__inner\s*\{[^}]*scroll-snap-type:\s*x mandatory/);
+    expect(css).toMatch(/\.trust-strip__item\s*\{[^}]*flex:\s*0 0 100%/);
+    expect(css).toMatch(/\.trust-strip__item\s*\{[^}]*line-height:\s*1\.7/);
+  });
+
   it("grows touch targets to at least 44px on touch devices", () => {
     expect(css).toMatch(/\.icon-btn\s*\{\s*width:\s*44px;\s*height:\s*44px;/);
     expect(css).toMatch(/\.qty-picker button\s*\{\s*width:\s*44px;\s*min-height:\s*44px;/);

@@ -86,12 +86,13 @@ const PRODUCT = {
 };
 
 const originalAdapter = apiClient.defaults.adapter;
+let productResponse = PRODUCT;
 
 beforeAll(() => {
   apiClient.defaults.adapter = async (config) => {
     const url = config.url || "";
-    if (url === "/products/pan/") {
-      return { data: PRODUCT, status: 200, statusText: "OK", headers: {}, config };
+    if (/^\/products\/[^/]+\/$/.test(url)) {
+      return { data: productResponse, status: 200, statusText: "OK", headers: {}, config };
     }
     if (/^\/reviews\//.test(url)) {
       return { data: { count: 0, next: null, previous: null, results: [] }, status: 200, statusText: "OK", headers: {}, config };
@@ -102,11 +103,14 @@ beforeAll(() => {
 afterAll(() => {
   apiClient.defaults.adapter = originalAdapter;
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  productResponse = PRODUCT;
+});
 
-function renderProduct() {
+function renderProduct(path = "/products/pan/") {
   return render(
-    <MemoryRouter initialEntries={["/products/pan/"]}>
+    <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route path="/products/:slug/" element={<ProductDetailPage />} />
       </Routes>
@@ -159,6 +163,28 @@ describe("Product page content (Part S5 item 5)", () => {
 
     expect(screen.getByRole("heading", { name: "پیشنهاد همراه" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "محصولات مرتبط" })).toBeTruthy();
+  });
+
+  it("renders Persian digits in product names/descriptions without changing the slug or SKU", async () => {
+    productResponse = {
+      ...PRODUCT,
+      name: "قابلمه مدل 123",
+      slug: "pan-model-123",
+      sku: "PAN-123",
+      short_description: "ظرفیت 2 لیتر",
+      description: "بدنه با ضخامت 4 میلی‌متر",
+    };
+    const { container } = renderProduct("/products/pan-model-123/");
+
+    expect(await screen.findByRole("heading", { name: "قابلمه مدل ۱۲۳" })).toBeTruthy();
+    expect(container.querySelector(".product-detail__short").textContent).toBe("ظرفیت ۲ لیتر");
+    expect(container.querySelector(".product-detail__description").textContent).toBe("بدنه با ضخامت ۴ میلی‌متر");
+    expect(document.title).toContain("قابلمه مدل ۱۲۳");
+
+    const jsonLd = JSON.parse(document.head.querySelector('script[id="product-jsonld"]')?.textContent || "{}");
+    expect(jsonLd.name).toBe("قابلمه مدل 123");
+    expect(jsonLd.sku).toBe("PAN-123");
+    expect(jsonLd.url).toMatch(/\/products\/pan-model-123\/$/);
   });
 
   it("keeps the SKU in the machine-readable product data (it was never a visible line)", async () => {

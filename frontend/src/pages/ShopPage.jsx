@@ -19,6 +19,7 @@ import { errorMessage } from "../components/ui";
 import { normalizeApiError } from "../utils/apiError";
 import { formatPrice } from "../utils/formatPrice";
 import { shareImageUrl } from "../utils/shareImage";
+import { categoryChain, categoryUrl, KITCHEN_ROOT_SLUG } from "../utils/categories";
 
 /** Part S5 item 7: price inputs wait ~300ms after the last keystroke. */
 const PRICE_DEBOUNCE_MS = 300;
@@ -154,6 +155,17 @@ function ShopPage() {
   const categories = categoriesState.data?.results || [];
   const brands = brandsState.data?.results || [];
   const selectedCategory = categories.find((c) => c.slug === params.category) || null;
+  // Stage 1: breadcrumbs walk the REAL tree (parent_slug chain,
+  // top-most first) so a filtered shop shows
+  // کازین گالری › آشپزخانه › <group> › … › <category>.
+  const categoryCrumbs = useMemo(
+    () =>
+      categoryChain(params.category, categories).map((category) => ({
+        label: category.name,
+        to: categoryUrl(category.slug),
+      })),
+    [params.category, categories]
+  );
   const selectedBrand = brands.find((b) => b.slug === params.brand) || null;
   const filtered = selectedCategory || selectedBrand;
   // Built by the shared helper (never by string concatenation): the
@@ -276,9 +288,15 @@ function ShopPage() {
           onChange={(e) => setParam("category", e.target.value)}
         >
           <option value="">همه دسته‌ها</option>
-          {(categoriesState.data?.results || []).map((category) => (
-            <option key={category.id} value={category.slug}>{category.name}</option>
-          ))}
+          {/* Stage 1: the «آشپزخانه» root is a grouping
+              node with no products of its own -- the shop
+              filter offers its children (the main groups),
+              not the root. */}
+          {(categoriesState.data?.results || [])
+            .filter((category) => category.slug !== KITCHEN_ROOT_SLUG)
+            .map((category) => (
+              <option key={category.id} value={category.slug}>{category.name}</option>
+            ))}
         </select>
       </FilterGroup>
 
@@ -309,7 +327,7 @@ function ShopPage() {
                   checked={selected.includes(entry.value)}
                   onChange={() => toggleAttrValue(attribute.slug, entry.value)}
                 />
-                {entry.value} <span className="filter-group__count">({entry.count})</span>
+                {faDigits(entry.value)} <span className="filter-group__count">({faDigits(entry.count)})</span>
               </label>
             ))}
           </FilterGroup>
@@ -362,21 +380,19 @@ function ShopPage() {
   return (
     <div className="shop">
       <div className="shop__heading">
-        {/* Part S2 item 7: breadcrumbs (category name once loaded) */}
+        {/* Part S2 item 7: breadcrumbs (category chain once
+            loaded). Stage 1: every storefront trail starts with
+            «کازین گالری», then «آشپزخانه», then the deeper
+            levels. */}
         <Breadcrumbs
           items={[
-            { label: "خانه", to: "/" },
-            { label: "فروشگاه", to: "/shop/" },
-            ...(searchParams.get("category")
-              ? [
-                  {
-                    label:
-                      (categoriesState.data?.results || []).find(
-                        (c) => c.slug === searchParams.get("category")
-                      )?.name || searchParams.get("category"),
-                  },
-                ]
-              : []),
+            { label: "کازین گالری", to: "/" },
+            ...(params.category
+              ? categoryCrumbs
+              : [
+                  { label: "آشپزخانه", to: "/shop/" },
+                  { label: "فروشگاه" },
+                ]),
           ]}
         />
         <h1>فروشگاه</h1>
@@ -562,7 +578,7 @@ function ShopPage() {
 
         {searchParams.get("search") ? (
           <p className="shop__search-note">
-            نتایج جستجو برای «{searchParams.get("search")}»
+            نتایج جستجو برای «{faDigits(searchParams.get("search"))}»
           </p>
         ) : null}
 
@@ -590,7 +606,7 @@ function ShopPage() {
             <div className="shop__chips">
               {brand ? (
                 <span className="shop__chip">
-                  برند: {brand.name}
+                  برند: {faDigits(brand.name)}
                   <button type="button" aria-label="حذف فیلتر برند" onClick={() => setParam("brand", "")}>
                     <Icon name="close" size={14} />
                   </button>
@@ -598,7 +614,7 @@ function ShopPage() {
               ) : null}
               {category ? (
                 <span className="shop__chip">
-                  دسته: {category.name}
+                  دسته: {faDigits(category.name)}
                   <button type="button" aria-label="حذف فیلتر دسته" onClick={() => setParam("category", "")}>
                     <Icon name="close" size={14} />
                   </button>
@@ -606,7 +622,7 @@ function ShopPage() {
               ) : null}
               {activeAttrs.map((entry) => (
                 <span className="shop__chip" key={entry.key}>
-                  {entry.name}: {entry.values}
+                  {faDigits(entry.name)}: {faDigits(entry.values)}
                   <button type="button" aria-label={`حذف فیلتر ${entry.name}`} onClick={() => setParam(entry.key, "")}>
                     <Icon name="close" size={14} />
                   </button>

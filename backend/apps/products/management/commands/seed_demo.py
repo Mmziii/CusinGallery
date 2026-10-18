@@ -76,10 +76,13 @@ def make_image_bytes(color_a, color_b, size=(800, 600), variant=0):
 
 CATEGORIES = [
     # (name, slug, parent_slug, description)
-    ("ظروف پخت‌وپز", "cookware", None, "قابلمه، تابه و ظروف پخت"),
-    ("ظروف سرو و پذیرایی", "serving", None, "ظروف سرو، دیس و کاسه"),
-    ("لیوان و ماگ", "cups-mugs", None, "ماگ، لیوان و فنجان"),
-    ("کریستال و دکوری", "crystal-decor", None, "ظروف کریستال و دکوراتیو"),
+    # One catalog root («آشپزخانه», slug kitchen -- see the
+    # categories migration 0006) with the main groups under it.
+    ("آشپزخانه", "kitchen", None, "ریشهٔ دسته‌بندی‌های فروشگاه"),
+    ("ظروف پخت‌وپز", "cookware", "kitchen", "قابلمه، تابه و ظروف پخت"),
+    ("ظروف سرو و پذیرایی", "serving", "kitchen", "ظروف سرو، دیس و کاسه"),
+    ("لیوان و ماگ", "cups-mugs", "kitchen", "ماگ، لیوان و فنجان"),
+    ("کریستال و دکوری", "crystal-decor", "kitchen", "ظروف کریستال و دکوراتیو"),
     ("ست‌های آشپزخانه", "kitchen-sets", "cookware", "ست‌های کامل آشپزخانه"),
 ]
 

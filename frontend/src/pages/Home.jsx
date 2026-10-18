@@ -19,6 +19,7 @@ import { normalizeApiError } from "../utils/apiError";
 import { formatPrice } from "../utils/formatPrice";
 import { fetchBanners, fetchDailyDeals } from "../services/bannersApi";
 import { getCategoryTree, listProducts } from "../services/catalogApi";
+import { mainGroups } from "../utils/categories";
 import { fetchProductReviews } from "../services/reviewsApi";
 
 /**
@@ -119,26 +120,27 @@ function HeroSlider({ banners, isLoading }) {
   );
 }
 
+const TRUST_ITEMS = [
+  { icon: "shield-check", label: "تضمین اصالت کالا و سلامت فیزیکی اجناس" },
+  { icon: "box", label: "بسته‌بندی ضدضربهٔ کالا" },
+  { icon: "truck", label: "ارسال به سراسر ایران" },
+  { icon: "lock", label: "پرداخت امن اینترنتی" },
+  { icon: "bolt-fast", label: "امکان تحویل اکسپرس" },
+];
+
 function TrustStrip() {
   const ref = useReveal();
-  const items = [
-    ["check", "کالای اصل و تضمین سلامت"],
-    ["box", "بسته‌بندی ضدضربه برای ظروف شکستنی"],
-    ["truck", "ارسال سریع به سراسر ایران"],
-    ["lock", "پرداخت امن اینترنتی"],
-    ["undo", "مرجوعی آسان تا ۷ روز"],
-  ];
   return (
-    <div className="trust-strip reveal" ref={ref}>
+    <section className="trust-strip reveal" ref={ref} aria-label="مزایای خرید از کازین گالری">
       <div className="container trust-strip__inner">
-        {items.map(([icon, label]) => (
+        {TRUST_ITEMS.map(({ icon, label }) => (
           <div key={label} className="trust-strip__item">
-            <Icon name={icon} size={18} />
+            <Icon name={icon} size={20} />
             <span>{label}</span>
           </div>
         ))}
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -155,10 +157,23 @@ function Countdown({ endsAt, serverNow }) {
   const hours = Math.floor(left / 3600000);
   const minutes = Math.floor((left % 3600000) / 60000);
   const seconds = Math.floor((left % 60000) / 1000);
-  const pad = (n) => String(n).padStart(2, "0");
+  const padFa = (n) => faDigits(String(n).padStart(2, "0"));
   return (
-    <span className="countdown" dir="ltr" aria-label="زمان باقی‌مانده">
-      {formatPrice(hours)}:{pad(minutes)}:{pad(seconds)}
+    <span className="countdown" role="timer" aria-label="زمان باقی‌مانده">
+      <span className="countdown__segment">
+        <span className="countdown__value">{padFa(hours)}</span>
+        <span className="countdown__label">ساعت</span>
+      </span>
+      <span className="countdown__sep" aria-hidden="true">:</span>
+      <span className="countdown__segment">
+        <span className="countdown__value">{padFa(minutes)}</span>
+        <span className="countdown__label">دقیقه</span>
+      </span>
+      <span className="countdown__sep" aria-hidden="true">:</span>
+      <span className="countdown__segment">
+        <span className="countdown__value">{padFa(seconds)}</span>
+        <span className="countdown__label">ثانیه</span>
+      </span>
     </span>
   );
 }
@@ -171,28 +186,41 @@ function DailyDealsSection() {
   if (error || !data?.results?.length) return null;
 
   return (
-    <section className="section section--dark reveal" ref={ref}>
+    <section className="section section--dark reveal" ref={ref} aria-label="پیشنهاد امروز">
       <div className="container">
         <div className="section__head">
           <h2>پیشنهاد امروز</h2>
           <span className="section__rule" aria-hidden="true" />
         </div>
         <div className="deals-grid">
-          {data.results.map((deal) => (
-            <Link key={deal.id} to={`/products/${deal.product.slug}/`} className="deal-card">
-              <SmartImage image={deal.product.primary_image || null} alt={deal.product.name} />
-              <div className="deal-card__body">
-                <div className="deal-card__name">{deal.product.name}</div>
-                <div className="deal-card__prices">
-                  <span className="deal-card__sale">{formatPrice(deal.sale_price)} تومان</span>
-                  {deal.product.price_info?.price > deal.sale_price ? (
-                    <s className="deal-card__regular">{formatPrice(deal.product.price_info.price)}</s>
+          {data.results.map((deal) => {
+            const originalPrice = deal.product.price_info?.price ?? null;
+            const discount =
+              originalPrice > 0 && originalPrice > deal.sale_price
+                ? Math.round(((originalPrice - deal.sale_price) / originalPrice) * 100)
+                : 0;
+            return (
+              <Link key={deal.id} to={`/products/${deal.product.slug}/`} className="deal-card">
+                <div className="deal-card__media">
+                  <SmartImage image={deal.product.primary_image || null} alt={faDigits(deal.product.name)} />
+                  {discount > 0 ? (
+                    <span className="deal-card__badge">{faDigits(discount)}٪ تخفیف</span>
                   ) : null}
                 </div>
-                <Countdown endsAt={deal.ends_at} serverNow={data.server_now} />
-              </div>
-            </Link>
-          ))}
+                <div className="deal-card__body">
+                  <div className="deal-card__name">{faDigits(deal.product.name)}</div>
+                  <div className="deal-card__prices">
+                    <span className="deal-card__sale">{formatPrice(deal.sale_price)} تومان</span>
+                    {originalPrice && originalPrice > deal.sale_price ? (
+                      <s className="deal-card__regular">{formatPrice(originalPrice)} تومان</s>
+                    ) : null}
+                  </div>
+                  <Countdown endsAt={deal.ends_at} serverNow={data.server_now} />
+                  <span className="deal-card__cta">مشاهده محصول</span>
+                </div>
+              </Link>
+            );
+          })}
         </div>
       </div>
     </section>
@@ -288,6 +316,9 @@ function Home() {
   const categoriesState = useAsync(() => getCategoryTree(), []);
   const bestSellersState = useAsync(() => listProducts({ is_best_seller: true, page_size: 4 }), []);
   const categoriesRef = useReveal();
+  // Stage 1: the tiles show the main groups (children of
+  // the «آشپزخانه» root), never the root itself.
+  const categoryGroups = mainGroups(categoriesState.data || []);
 
   return (
     <div className="home">
@@ -295,14 +326,14 @@ function Home() {
       <HeroSlider banners={bannersState.data || []} isLoading={bannersState.isLoading} />
       <TrustStrip />
 
-      {categoriesState.data?.length ? (
+      {categoryGroups.length ? (
         <section className="section container reveal" ref={categoriesRef}>
           <div className="section__head">
             <h2>دسته‌بندی‌ها</h2>
             <span className="section__rule" aria-hidden="true" />
           </div>
           <div className="category-grid">
-            {categoriesState.data.map((category) => (
+            {categoryGroups.map((category) => (
               <Link
                 key={category.id}
                 to={`/shop/?category=${encodeURIComponent(category.slug)}`}

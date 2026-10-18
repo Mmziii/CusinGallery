@@ -1043,27 +1043,142 @@ h1, h2, h3, .section__head h2 {
   background: rgba(206,180,100,.14); color: var(--brand-gold);
   border: 1px solid rgba(206,180,100,.4); border-radius: 10px;
   padding: 8px 14px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+  font: inherit;
 }
-/* Part R1: NO physical gap between trigger and panel -- the wrapper's
-   padding-top is the invisible bridge, so moving the pointer "through the
-   gap" never leaves the hover area (and a 200 ms hover-intent delay in
-   Header.jsx covers the rest). */
+.site-header__mega-btn .icon { flex: none; }
+/* Stage 2 (Digikala-style mega menu): NO physical gap between
+   trigger and panel -- the wrapper's padding-top is the invisible
+   bridge, so moving the pointer "through the gap" never leaves the
+   hover area (a 150 ms open-intent / 200 ms close-grace delay in
+   MegaMenu.jsx covers the rest). */
+/* The trigger stays static so the PANEL positions
+   against the whole HEADER (Digikala-style full-width
+   bar), not against the narrow button. The panel is
+   still a DOM child of the trigger wrapper, so the
+   wrapper's hover area (and the invisible padding
+   bridge below) keeps the menu alive while the
+   pointer crosses the gap. */
+.site-header__mega-trigger { position: static; }
 .mega-menu {
-  position: absolute; top: 100%; inset-inline: 0; padding-top: 8px;
+  position: absolute; top: 100%; left: 0; right: 0; padding-top: 8px;
   background: transparent; z-index: 65;
 }
+/* Dimmed overlay over the page content BEHIND the panel (below
+   the header itself, which stays bright and usable). */
+.mega-menu__overlay {
+  position: fixed; top: var(--site-header-height, 76px);
+  inset-inline: 0; bottom: 0;
+  background: rgba(20, 26, 10, .35);
+  z-index: 64;
+  animation: fade-in .2s ease-out;
+}
 .mega-menu__inner {
+  position: relative; z-index: 65;
+  width: min(1150px, 94vw);
+  margin-inline: auto;
   background: #fff; color: var(--brand-ink); border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg); display: flex; overflow: hidden;
+  /* The panel scrolls on its own -- never the page. */
+  max-height: 70vh;
+  /* Stage 2: fade + 8px slide down on open
+     (mount animation, like the drawers). */
+  animation: mega-menu-in .2s ease-out;
 }
-.mega-menu__roots { list-style: none; margin: 0; padding: var(--space-3); background: var(--brand-green-tint); min-width: 200px; }
-.mega-menu__roots button { display: block; width: 100%; text-align: right; background: none; border: none; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
-.mega-menu__roots button.is-active, .mega-menu__roots button:hover { background: #fff; color: var(--brand-green-mid); font-weight: 700; }
-.mega-menu__panel { padding: var(--space-3) var(--space-4); display: flex; flex-direction: column; gap: 4px; flex: 1; }
-.mega-menu__panel a { padding: 7px 8px; border-radius: 8px; color: var(--brand-ink); }
-.mega-menu__panel a:first-child { color: var(--brand-gold-deep); font-weight: 700; }
-.mega-menu__panel a:hover { background: var(--brand-green-tint); }
-.site-header__mega-trigger { position: relative; }
+@keyframes mega-menu-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+.mega-menu__roots {
+  list-style: none; margin: 0; padding: var(--space-3);
+  background: var(--brand-green-tint); min-width: 220px;
+  max-height: 70vh; overflow-y: auto;
+}
+.mega-menu__roots button {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; text-align: right; background: none; border: none;
+  padding: 9px 10px; border-radius: 8px; cursor: pointer;
+  color: var(--brand-ink); font: inherit; font-size: var(--font-size-md);
+}
+.mega-menu__roots button:hover { background: #fff; color: var(--brand-green-mid); }
+/* The active main category: white chip + gold line on the RIGHT
+   (the side the roots column sits on in RTL). */
+.mega-menu__roots button.is-active {
+  background: #fff; color: var(--brand-green-mid); font-weight: 700;
+  box-shadow: inset -3px 0 0 var(--brand-gold);
+}
+.mega-menu__root-icon { width: 28px; height: 28px; flex: none; display: grid; place-items: center; }
+.mega-menu__root-icon img, .mega-menu__root-icon .img-placeholder { width: 28px; height: 28px; object-fit: contain; border-radius: 6px; }
+.mega-menu__root-icon .icon { color: var(--brand-gold-deep); }
+.mega-menu__root-name { flex: 1; }
+.mega-menu__panel { flex: 1; padding: var(--space-4); overflow-y: auto; max-height: 70vh; }
+.mega-menu__all {
+  display: inline-flex; align-items: center; gap: 6px;
+  color: var(--brand-gold-deep); font-weight: 800;
+  padding: 6px 8px; border-radius: 8px; margin-bottom: var(--space-3);
+}
+.mega-menu__all:hover { background: var(--brand-green-tint); }
+.mega-menu__columns { display: flex; flex-wrap: wrap; gap: var(--space-3) var(--space-6); }
+.mega-menu__col { min-width: 160px; }
+.mega-menu__subhead {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-weight: 800; color: var(--brand-ink);
+  padding: 6px 8px; border-radius: 8px; margin-bottom: 2px;
+}
+.mega-menu__subhead:hover { background: var(--brand-green-tint); color: var(--brand-green-mid); }
+.mega-menu__col ul { list-style: none; margin: 0; padding: 0; }
+.mega-menu__col a { display: block; padding: 5px 8px; border-radius: 8px; color: var(--brand-ink); font-size: var(--font-size-sm); }
+.mega-menu__col a:hover { background: var(--brand-green-tint); }
+/* Phones show the sheet, desktops the panel (the wrong
+   surface is hidden here, not in JS, so hover handlers
+   stay attached for touch laptops). */
+@media (max-width: 1023px) {
+  .mega-menu, .mega-menu__overlay { display: none; }
+}
+@media (min-width: 1024px) {
+  .mega-sheet { display: none; }
+}
+
+/* --- Mobile category sheet (stage 2) --- */
+.mega-sheet { position: fixed; inset: 0; z-index: 115; height: 100vh; height: 100dvh; }
+.mega-sheet__backdrop { position: absolute; inset: 0; background: rgba(20,26,10,.5); animation: fade-in .25s ease-out; }
+.mega-sheet__panel {
+  position: absolute; top: 0; bottom: 0; inset-inline-start: 0;
+  width: min(320px, 88vw); background: #fff; color: var(--brand-ink);
+  display: flex; flex-direction: column; overflow: hidden;
+  /* Full-height sheet sliding in from the RIGHT (250 ms). */
+  animation: mega-sheet-in .25s ease-out;
+}
+@keyframes mega-sheet-in { from { transform: translateX(100%); } to { transform: translateX(0); } }
+.mega-sheet__head { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-3); border-bottom: 1px solid var(--color-border); }
+.mega-sheet__back, .mega-sheet__close { display: inline-grid; place-items: center; background: none; border: none; cursor: pointer; color: var(--brand-ink); padding: 8px; border-radius: 8px; min-width: 48px; min-height: 48px; }
+.mega-sheet__back { font: inherit; font-size: var(--font-size-md); gap: 4px; grid-template-columns: auto auto; }
+.mega-sheet__title { flex: 1; margin: 0; text-align: center; font-size: var(--font-size-md); }
+.mega-sheet__head-spacer { min-width: 48px; }
+.mega-sheet__all {
+  display: flex; align-items: center; gap: 6px;
+  padding: 12px var(--space-3); min-height: 48px;
+  color: var(--brand-gold-deep); font-weight: 700;
+  border-bottom: 1px solid var(--color-border);
+}
+.mega-sheet__all .icon { margin-inline-start: auto; }
+.mega-sheet__list { flex: 1; overflow-y: auto; overscroll-behavior: contain; list-style: none; margin: 0; padding: var(--space-2); }
+.mega-sheet__list li button, .mega-sheet__list li a {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; min-height: 48px; padding: 10px 12px;
+  border: none; background: none; cursor: pointer;
+  font: inherit; font-size: var(--font-size-md); color: var(--brand-ink);
+  text-align: right; border-radius: 10px;
+}
+.mega-sheet__list li button:hover, .mega-sheet__list li a:hover { background: var(--brand-green-tint); }
+.mega-sheet__icon { width: 28px; height: 28px; flex: none; display: grid; place-items: center; }
+.mega-sheet__icon img, .mega-sheet__icon .img-placeholder { width: 28px; height: 28px; object-fit: contain; border-radius: 6px; }
+.mega-sheet__icon .icon { color: var(--brand-gold-deep); }
+.mega-sheet__chevron { margin-inline-start: auto; color: var(--color-text-muted); }
+/* Drill levels slide in from the forward (left, RTL) side;
+   «بازگشت» slides them back from the right. */
+.mega-sheet__list[data-direction="forward"] { animation: mega-sheet-level-in .22s ease-out; }
+.mega-sheet__list[data-direction="back"] { animation: mega-sheet-level-in-back .22s ease-out; }
+@keyframes mega-sheet-level-in { from { transform: translateX(-30%); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes mega-sheet-level-in-back { from { transform: translateX(30%); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 
 .cart-link { position: relative; background: none; border: none; color: var(--brand-ivory); cursor: pointer; padding: 6px; }
 .cart-link:hover { color: var(--brand-gold); }
@@ -1084,26 +1199,58 @@ h1, h2, h3, .section__head h2 {
 .site-header__burger { display: none; background: none; border: none; cursor: pointer; padding: 8px; }
 .site-header__burger span { display: block; width: 22px; height: 2px; background: var(--brand-gold); margin: 5px 0; border-radius: 2px; }
 
-/* Part S5 follow-up 4: the full-viewport drawers are portaled to <body>
-   (see components/Portal.jsx) and sit ABOVE the floating contact cluster
-   (z-index 110) so the contact/back-to-top buttons can never cover a
-   drawer's own action button, and BELOW the toaster (120) so a toast stays
-   readable. The z-index ladder is pinned by a test
-   (src/styles/overlays.structure.test.jsx). */
+/* Part S5 follow-up 4: full-screen overlays are portaled to <body> and sit
+   above the floating contact cluster while preserving the toaster layer. */
 .site-header__drawer {
-  position: fixed; inset: 0; z-index: 115; background: var(--brand-green-dark);
-  /* `vh` is the fallback; dynamic viewport height tracks mobile browser UI. */
-  height: 100vh;
-  height: 100dvh;
-  padding: var(--space-4); display: flex; flex-direction: column; gap: 6px;
-  overflow-y: auto; overscroll-behavior: contain;
+  position: fixed; inset: 0; z-index: 115; height: 100vh; height: 100dvh;
+  pointer-events: none;
 }
-.site-header__drawer a { color: var(--brand-ivory); padding: 10px 4px; border-bottom: 1px solid rgba(206,180,100,.18); font-size: var(--font-size-md); }
-.site-header__drawer-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-3); }
-/* The full-screen drawer covers the original header, so its visible brand
-   remains a real home link rather than a decorative, unreachable label. */
-.site-header__drawer .site-header__drawer-brand { padding: 0; border-bottom: 0; color: var(--brand-gold); }
-.site-header__drawer-head button { background: none; border: none; color: var(--brand-gold); font-size: 1.6rem; cursor: pointer; }
+.site-header__drawer-backdrop {
+  position: absolute; inset: 0; background: rgba(20, 26, 10, .56);
+  pointer-events: auto; animation: mobile-drawer-backdrop-in 250ms ease-out both;
+}
+.site-header__drawer-panel {
+  position: absolute; inset-block: 0; right: 0;
+  width: min(380px, 90vw); max-width: 100vw;
+  padding: var(--space-3) var(--space-4);
+  display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain;
+  background: var(--brand-green-dark); color: var(--brand-ivory);
+  pointer-events: auto; animation: mobile-drawer-panel-in 250ms ease-out both;
+}
+@keyframes mobile-drawer-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes mobile-drawer-panel-in { from { transform: translateX(100%); } to { transform: translateX(0); } }
+.site-header__drawer.is-closing .site-header__drawer-backdrop,
+.site-header__drawer.is-closing .site-header__drawer-panel { animation-direction: reverse; }
+.site-header__drawer-head {
+  display: flex; justify-content: flex-start; align-items: center;
+  min-height: 48px; margin-bottom: var(--space-2);
+}
+.site-header__drawer-head button {
+  width: 48px; height: 48px; display: inline-grid; place-items: center;
+  background: none; border: 1px solid rgba(206,180,100,.35);
+  border-radius: 12px; color: var(--brand-gold); cursor: pointer;
+}
+.site-header__drawer-nav, .site-header__drawer-account { display: flex; flex-direction: column; gap: 4px; }
+.site-header__drawer-account {
+  margin-block-start: auto; padding-top: var(--space-3);
+  border-top: 1px solid rgba(206,180,100,.25);
+}
+.site-header__drawer-link {
+  width: 100%; min-height: 48px; display: flex; align-items: center; gap: 12px;
+  padding: 10px 12px; border: 0; border-radius: 12px;
+  background: transparent; color: var(--brand-ivory); font: inherit;
+  font-size: var(--font-size-md); line-height: 1.5; text-align: right;
+  text-decoration: none; cursor: pointer;
+}
+.site-header__drawer-link > .icon { flex: none; color: var(--brand-gold); }
+.site-header__drawer-link > .icon:last-child:not(:first-child) { margin-inline-start: auto; }
+.site-header__drawer-link:hover,
+.site-header__drawer-link:focus-visible,
+.site-header__drawer-link.is-active {
+  background: rgba(206,180,100,.12); color: var(--brand-gold);
+}
+.site-header__drawer-link.is-active { box-shadow: inset -3px 0 0 var(--brand-gold); font-weight: 700; }
+.site-header__drawer-link:focus-visible { outline: 2px solid var(--brand-gold); outline-offset: 2px; }
 
 /* category bar (pre-Part-3) hidden: replaced by mega menu */
 .category-bar { display: none; }
@@ -1183,9 +1330,29 @@ h1, h2, h3, .section__head h2 {
 
 /* --- Trust strip --- */
 .trust-strip { background: var(--brand-green-tint); border-block: var(--hairline); }
-.trust-strip__inner { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-3); padding-block: var(--space-3); }
-.trust-strip__item { display: flex; align-items: center; gap: var(--space-2); font-size: var(--font-size-sm); color: var(--brand-green-dark); font-weight: 600; }
-.trust-strip__item span:first-child { color: var(--brand-gold-deep); }
+.trust-strip__inner {
+  display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-items: stretch; gap: var(--space-2); padding-block: var(--space-3);
+}
+.trust-strip__item {
+  min-width: 0; display: flex; align-items: center; justify-content: center;
+  gap: var(--space-2); padding-inline: 6px;
+  font-size: var(--font-size-sm); line-height: 1.7; color: var(--brand-green-dark); font-weight: 600;
+}
+.trust-strip__item .icon { flex: none; color: var(--brand-gold-deep); }
+.trust-strip__item span { min-width: 0; }
+@media (max-width: 767px) {
+  .trust-strip__inner {
+    display: flex; flex-wrap: nowrap; justify-content: flex-start; gap: 0;
+    overflow-x: auto; overscroll-behavior-inline: contain;
+    scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+  .trust-strip__item {
+    flex: 0 0 100%; width: 100%; justify-content: flex-start;
+    scroll-snap-align: start; padding: 6px 12px;
+  }
+}
 
 /* --- Sections --- */
 .section { margin-block: var(--space-6); }
@@ -1193,9 +1360,7 @@ h1, h2, h3, .section__head h2 {
 .section__head h2 { font-size: var(--font-size-xl); margin: 0; }
 .section__head a { margin-inline-start: auto; color: var(--brand-gold-deep); font-size: var(--font-size-sm); }
 .section__rule { flex: 1; height: 1px; background: linear-gradient(to left, transparent, rgba(206,180,100,.6)); }
-.section--dark { background: var(--brand-green-dark); padding-block: var(--space-6); margin-block: var(--space-6); }
-.section--dark h2 { color: var(--brand-gold); }
-.section--dark .section__rule { background: linear-gradient(to left, transparent, rgba(206,180,100,.5)); }
+
 
 /* --- Category tiles --- */
 .category-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--space-3); }
@@ -1255,17 +1420,34 @@ h1, h2, h3, .section__head h2 {
 .price__compare { color: var(--color-text-muted); }
 .price__badge { background: var(--brand-gold); color: var(--brand-green-dark); border-radius: 8px; padding: 1px 8px; font-size: var(--font-size-xs); }
 
-/* --- Deal cards --- */
-.deals-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--space-4); }
-.deal-card { background: #fff; border-radius: var(--radius-lg); overflow: hidden; border: 1px solid rgba(206,180,100,.5); display: flex; flex-direction: column; }
-.deal-card img { aspect-ratio: 16/10; object-fit: cover; }
-.deal-card__body { padding: var(--space-3); display: flex; flex-direction: column; gap: 6px; }
-.deal-card__name { color: var(--brand-ink); }
-.deal-card__sale { color: var(--brand-gold-deep); font-weight: 800; }
-.deal-card__regular { color: var(--color-text-muted); margin-inline-start: var(--space-2); }
-.countdown {
-  font-weight: 800; color: var(--brand-green-dark); background: var(--brand-green-tint);
-  border: var(--hairline); border-radius: 10px; padding: 4px 12px; width: max-content;
+/* --- Daily deal (پیشنهاد امروز) --- */
+.section--dark { background: var(--brand-green-dark); padding-block: var(--space-5); margin-block: var(--space-6); }
+.section--dark h2 { color: var(--brand-gold); }
+.section--dark .section__rule { background: linear-gradient(to left, transparent, rgba(206,180,100,.5)); }
+.deals-grid { display: grid; grid-template-columns: 1fr; gap: var(--space-4); max-width: 860px; margin-inline: auto; }
+.deal-card { background: #fff; border-radius: var(--radius-lg); overflow: hidden; border: 1px solid rgba(206,180,100,.5); display: flex; flex-direction: row; align-items: stretch; gap: 0; padding: 0; min-height: 340px; box-shadow: var(--shadow-sm); }
+.deal-card__media { flex: 0 0 60%; background: #fff; position: relative; aspect-ratio: 1 / 1; display: block; overflow: hidden; }
+.deal-card__media picture { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
+.deal-card__media img { display: block; width: 100%; height: 100%; object-fit: contain; border-radius: 0; }
+.deal-card__media .img-placeholder { position: absolute; inset: 0; aspect-ratio: auto; }
+.deal-card__badge { position: absolute; top: 12px; inset-inline-start: 12px; background: var(--brand-gold); color: var(--brand-green-dark); font-weight: 800; font-size: var(--font-size-sm); padding: 4px 10px; border-radius: 999px; }
+.deal-card__body { flex: 1; min-width: 0; padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-2); justify-content: center; }
+.deal-card__name { color: var(--brand-ink); font-weight: 800; font-size: var(--font-size-lg); line-height: 1.7; margin: 0; overflow-wrap: anywhere; }
+.deal-card__prices { display: flex; align-items: baseline; gap: var(--space-2); flex-wrap: wrap; }
+.deal-card__sale { color: var(--brand-gold-deep); font-weight: 800; font-size: var(--font-size-lg); }
+.deal-card__regular { color: var(--color-text-muted); font-size: var(--font-size-sm); margin-inline-start: 0; }
+.deal-card__cta { margin-top: var(--space-2); align-self: flex-start; background: var(--brand-green-dark); color: var(--brand-gold); padding: 8px 14px; border-radius: 999px; font-weight: 700; font-size: var(--font-size-sm); }
+.countdown { display: inline-flex; align-items: center; gap: 6px; font-weight: 800; color: var(--brand-green-dark); background: var(--brand-green-tint); border: var(--hairline); border-radius: 10px; padding: 6px 12px; width: max-content; font-variant-numeric: tabular-nums; }
+.countdown__segment { display: inline-flex; flex-direction: column; align-items: center; min-width: 44px; gap: 1px; }
+.countdown__value { font-variant-numeric: tabular-nums; font-size: var(--font-size-md); line-height: 1; min-width: 2ch; text-align: center; }
+.countdown__label { font-size: 10px; font-weight: 600; color: var(--color-text-muted); line-height: 1; }
+.countdown__sep { font-weight: 800; color: var(--brand-green-dark); padding-inline: 1px; }
+.countdown.is-over { background: #fdecea; color: var(--color-danger); border-color: #f5c6c0; }
+@media (max-width: 767px) {
+  .deal-card { flex-direction: column; min-height: 0; }
+  .deal-card__media { flex: none; width: 100%; aspect-ratio: 1 / 1; }
+  .deal-card__body { padding: var(--space-3); }
+  .deal-card__name { font-size: var(--font-size-md); }
 }
 
 /* --- Review highlights & story --- */
@@ -1382,7 +1564,7 @@ html.js-reveal .reveal.is-revealed, .reveal.is-revealed { opacity: 1; transform:
 .cart-item .img-placeholder { width: 90px; height: 90px; border-radius: var(--radius-sm); flex: none; }
 .minicart__items .img-placeholder { width: 52px; height: 52px; border-radius: 10px; flex: none; }
 .search-suggest .img-placeholder { width: 40px; height: 40px; border-radius: 8px; flex: none; }
-.deal-card .img-placeholder { aspect-ratio: 16/10; height: auto; }
+/* deal placeholder sized by .deal-card__media rule above */
 .related-card .img-placeholder { height: 130px; }
 .product-detail__main-image .img-placeholder { height: 420px; border-radius: var(--radius-md); border: 1px solid var(--color-border); }
 .thumb .img-placeholder { width: 100%; height: 100%; }
@@ -1556,7 +1738,7 @@ html { overflow-x: clip; }
   .search-suggest a { padding: 12px; }
   .mega-menu__roots button { padding: 12px 10px; }
   .mega-menu__panel a { padding: 10px 8px; }
-  .site-header__drawer a { padding: 14px 4px; }
+  .site-header__drawer-link { padding: 14px 12px; }
   .account__nav a { padding: 12px; }
   .link, .link-danger { padding-block: 10px; }
   .category-bar__inner a { min-height: 44px; }
@@ -1848,22 +2030,8 @@ input, select, textarea { min-width: 0; max-width: 100%; }
   }
 }
 
-/* Home-page carousels may stay horizontal on a phone; each card is then
-   ~44% of the viewport width, so two cards plus a peek of the third are
-   visible (item 1). Applies to the deals rail. */
-@media (max-width: 767px) {
-  .deals-grid {
-    display: flex;
-    gap: 8px;
-    overflow-x: auto;
-    scroll-snap-type: x proximity;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: thin;
-    padding-bottom: 4px;
-  }
-  .deals-grid > * { flex: 0 0 44%; scroll-snap-align: start; min-width: 0; }
-  .deal-card__name { font-size: var(--font-size-sm); }
-}
+/* Daily deal keeps its balanced single-column layout on phones; it is
+   not a horizontal carousel. */
 
 /* --- 4. Compact card (item 1) ---------------------------------------------
    Square, light image field with `object-fit: contain` (nothing is cropped

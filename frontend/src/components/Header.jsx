@@ -1,9 +1,10 @@
 import { faDigits } from "../utils/faDigits";
 import useWishlistStore from "../store/useWishlistStore";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import Icon from "./Icon";
+import MegaMenu from "./MegaMenu";
 import Portal from "./Portal";
 import PriceTag from "./PriceTag";
 import SmartImage from "./SmartImage";
@@ -11,6 +12,8 @@ import useFocusTrap from "../hooks/useFocusTrap";
 import useAuthStore from "../store/useAuthStore";
 import useCartStore from "../store/useCartStore";
 import { getCategoryTree, listProducts } from "../services/catalogApi";
+import { catalogGroups } from "../utils/categories";
+import { isDesktopViewport } from "../utils/viewport";
 import {
   lineTotalForLine,
   priceInfoForLine,
@@ -31,6 +34,8 @@ function Header() {
   const wishlist = useWishlistStore();
   const { refetch: refreshWishlist, reset: resetWishlist } = wishlist;
   const location = useLocation();
+  const currentRoute = `${location.pathname}${location.search}${location.hash}`;
+  const previousRoute = useRef(currentRoute);
   const navigate = useNavigate();
   const { user, isAuthenticated, isLoading, logout, fetchMe } = useAuthStore();
   useEffect(() => { if (isAuthenticated) refreshWishlist(); else resetWishlist(); }, [isAuthenticated, refreshWishlist, resetWishlist]);
@@ -43,14 +48,23 @@ function Header() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [suggestions, setSuggestions] = useState([]);
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuMounted, setMenuMounted] = useState(false);
+  const [menuClosing, setMenuClosing] = useState(false);
+  const menuOpen = menuMounted && !menuClosing;
   const [cartOpen, setCartOpen] = useState(false);
   const [megaOpen, setMegaOpen] = useState(false);
-  const [megaCategory, setMegaCategory] = useState(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [compact, setCompact] = useState(false);
   const [categories, setCategories] = useState([]);
-  const hasOpenDrawer = menuOpen || cartOpen;
+  // The mega menu's mobile sheet is a full-viewport
+  // dialog (<1024px, per CSS) -- it joins the drawers
+  // that lock the document while open. (Lazy viewport
+  // check, not the reactive hook: the mega menu's
+  // hover handlers must work on touch laptops, and
+  // re-rendering the whole header on a breakpoint
+  // change buys nothing here.)
+  const hasOpenDrawer =
+    menuMounted || cartOpen || (megaOpen && !isDesktopViewport());
   const headerRef = useRef(null);
   const userMenuRef = useRef(null);
   const searchRef = useRef(null);
@@ -58,16 +72,54 @@ function Header() {
   // A response can arrive after the shopper has used the home brand action.
   // Versioning prevents that stale response from reopening suggestions.
   const searchRequestVersion = useRef(0);
-  const megaRef = useRef(null);
-  const megaCloseTimer = useRef(null);
+  const drawerCloseTimer = useRef(null);
   const drawerRef = useRef(null);
   const minicartRef = useRef(null);
+  // Stage 2: the main groups are the children of the
+  // «آشپزخانه» root, pruned of categories with no
+  // active products anywhere in their subtree.
+  const groups = catalogGroups(categories);
+
+  const openMenu = useCallback(() => {
+    if (drawerCloseTimer.current !== null) {
+      window.clearTimeout(drawerCloseTimer.current);
+      drawerCloseTimer.current = null;
+    }
+    setMenuClosing(false);
+    setMenuMounted(true);
+  }, []);
+
+  const closeMenu = useCallback((afterClose) => {
+    if (!menuMounted) {
+      afterClose?.();
+      return;
+    }
+    if (menuClosing) return;
+
+    setMenuClosing(true);
+    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    drawerCloseTimer.current = window.setTimeout(() => {
+      setMenuMounted(false);
+      setMenuClosing(false);
+      drawerCloseTimer.current = null;
+      afterClose?.();
+    }, reducedMotion ? 0 : 250);
+  }, [menuClosing, menuMounted]);
+
+  useEffect(() => () => {
+    if (drawerCloseTimer.current !== null) window.clearTimeout(drawerCloseTimer.current);
+  }, []);
+
+  useEffect(() => {
+    if (previousRoute.current === currentRoute) return;
+    previousRoute.current = currentRoute;
+    closeMenu();
+  }, [currentRoute, closeMenu]);
 
   // Part S2 item 8: focus trap + Escape + focus restore for the two
-  // full drawers (mobile menu, mini-cart). The hover-driven mega menu
-  // intentionally stays trap-free; it handles Escape below and returns
-  // focus to its trigger.
-  useFocusTrap(drawerRef, menuOpen, () => setMenuOpen(false));
+  // full drawers (mobile menu, mini-cart). Keep the trap and scroll lock
+  // active through the menu's reverse animation, then restore focus.
+  useFocusTrap(drawerRef, menuMounted, closeMenu);
   useFocusTrap(minicartRef, cartOpen, () => setCartOpen(false));
 
   // Both drawers are full-viewport dialogs. Lock the document while either
@@ -162,64 +214,10 @@ function Header() {
       if (searchRef.current && !searchRef.current.contains(event.target)) {
         setSuggestions([]);
       }
-      if (megaRef.current && !megaRef.current.contains(event.target)) {
-        setMegaOpen(false);
-      }
     }
     document.addEventListener("mousedown", onClick);
     return () => document.removeEventListener("mousedown", onClick);
   }, []);
-
-  // Mega menu (Part R1): hover-intent open/close. The panel is a DOM child of
-  // the trigger wrapper and its CSS adds an invisible padding bridge, so the
-  // pointer never "leaves" while crossing the visual gap; closing is further
-  // delayed ~200 ms and cancelled when the pointer re-enters trigger OR panel.
-  // Click/keyboard (Enter/Space on the button) toggles it for touch devices;
-  // Escape closes.
-  const cancelMegaClose = () => {
-    if (megaCloseTimer.current) {
-      clearTimeout(megaCloseTimer.current);
-      megaCloseTimer.current = null;
-    }
-  };
-  const megaBtnRef = useRef(null);
-  const megaFocusPending = useRef(false);
-  const openMega = () => {
-    cancelMegaClose();
-    setMegaOpen(true);
-    setMegaCategory((current) => current || categories[0] || null);
-  };
-  const closeMega = () => {
-    cancelMegaClose();
-    setMegaOpen(false);
-  };
-  const scheduleMegaClose = () => {
-    cancelMegaClose();
-    megaCloseTimer.current = setTimeout(() => setMegaOpen(false), 200);
-  };
-  useEffect(() => () => cancelMegaClose(), []);
-
-  useEffect(() => {
-    if (!megaOpen) return undefined;
-    function onKey(event) {
-      if (event.key === "Escape") {
-        setMegaOpen(false);
-        // Part S2 item 8: focus restore for keyboard users.
-        megaBtnRef.current?.focus();
-      }
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [megaOpen]);
-
-  // Part S2 item 8: when the mega menu was opened by CLICK/keyboard (not
-  // hover), move focus to the first category so Tab users land inside.
-  useEffect(() => {
-    if (!megaOpen || !megaFocusPending.current) return;
-    megaFocusPending.current = false;
-    const first = megaRef.current?.querySelector(".mega-menu__roots button");
-    if (first) first.focus();
-  }, [megaOpen, megaCategory]);
 
   // Debounced live suggestions.
   useEffect(() => {
@@ -247,11 +245,9 @@ function Header() {
   // page. This is deliberately shared by the main header and the copies
   // inside full-screen drawers, where the original header is covered.
   const closeHeaderSurfaces = () => {
-    cancelMegaClose();
-    megaFocusPending.current = false;
     if (searchTimer.current) clearTimeout(searchTimer.current);
     searchRequestVersion.current += 1;
-    setMenuOpen(false);
+    closeMenu();
     setCartOpen(false);
     setMegaOpen(false);
     setUserMenuOpen(false);
@@ -274,12 +270,13 @@ function Header() {
     event.preventDefault();
     const query = searchTerm.trim();
     setSuggestions([]);
-    setMenuOpen(false);
+    closeMenu();
     navigate(query ? `/shop/?search=${encodeURIComponent(query)}` : "/shop/");
   };
 
   const handleLogout = async () => {
     setUserMenuOpen(false);
+    closeMenu();
     await logout();
     navigate("/");
   };
@@ -325,7 +322,7 @@ function Header() {
           aria-label="بازکردن منو"
           aria-expanded={menuOpen}
           aria-controls="mobile-navigation"
-          onClick={() => setMenuOpen((open) => !open)}
+          onClick={() => (menuOpen ? closeMenu() : openMenu())}
         >
           <span />
           <span />
@@ -380,61 +377,11 @@ function Header() {
           ) : null}
         </div>
 
+        {/* Stage 2: the trigger lives OUTSIDE .site-header__nav
+            (which phones hide) so «دسته‌بندی کالاها» is
+            reachable on every screen size. */}
+        <MegaMenu groups={groups} open={megaOpen} onOpen={() => setMegaOpen(true)} onClose={() => setMegaOpen(false)} />
         <nav className="site-header__nav" aria-label="ناوبری اصلی">
-          <div
-            className="site-header__mega-trigger"
-            ref={megaRef}
-            onMouseEnter={openMega}
-            onMouseLeave={scheduleMegaClose}
-          >
-            <button
-              type="button"
-              className="site-header__mega-btn"
-              ref={megaBtnRef}
-              aria-haspopup="true"
-              aria-expanded={megaOpen}
-              onClick={() => {
-                if (megaOpen) {
-                  closeMega();
-                } else {
-                  megaFocusPending.current = true;
-                  openMega();
-                }
-              }}
-            >
-              دسته‌بندی کالاها
-              <Icon name="chevron-down" size={16} />
-            </button>
-            {megaOpen && megaCategory ? (
-              <div className="mega-menu">
-                <div className="mega-menu__inner">
-                  <ul className="mega-menu__roots">
-                    {categories.map((category) => (
-                      <li key={category.id}>
-                        <button
-                          type="button"
-                          className={megaCategory?.id === category.id ? "is-active" : ""}
-                          onMouseEnter={() => setMegaCategory(category)}
-                        >
-                          {category.name}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                  <div className="mega-menu__panel">
-                    <Link to={`/shop/?category=${encodeURIComponent(megaCategory.slug)}`} onClick={closeMega}>
-                      همهٔ {megaCategory.name}
-                    </Link>
-                    {(megaCategory.children || []).map((child) => (
-                      <Link key={child.id} to={`/shop/?category=${encodeURIComponent(child.slug)}`} onClick={closeMega}>
-                        {child.name}
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ) : null}
-          </div>
           <NavLink to="/shop/">فروشگاه</NavLink>
           {isAuthenticated ? <NavLink to="/wishlist/">علاقه‌مندی‌ها {wishlist.items.length > 0 ? <span key={wishlist.revision} className="wishlist-badge">{formatPrice(wishlist.items.length)}</span> : null}</NavLink> : null}
         </nav>
@@ -487,44 +434,114 @@ function Header() {
         </div>
       </div>
 
-      {/* Full-viewport drawer stays portaled to body: it remains isolated from
-          all shell stacking/containing-block changes while the header scrolls. */}
-      {menuOpen ? (
+      {/* The mobile navigation drawer stays portaled to body so its overlay
+          and right-hand panel remain independent of the sticky header. */}
+      {menuMounted ? (
         <Portal>
-          <div id="mobile-navigation" className="site-header__drawer" role="dialog" aria-modal="true" aria-label="منوی اصلی" ref={drawerRef}>
-            <div className="site-header__drawer-head">
-              <Link
-                to="/"
-                className="site-header__brand site-header__drawer-brand"
-                aria-label="کازین گالری — صفحه اصلی"
-                onClick={handleHomeNavigation}
-              >
-                <img src="/brand/logo-gold.svg" alt="" className="site-header__logo" />
-                <span className="site-header__brand-name">کازین گالری</span>
-              </Link>
-              <button type="button" aria-label="بستن منو" onClick={() => setMenuOpen(false)}>
-                <Icon name="close" size={22} />
-              </button>
+          <div className={`site-header__drawer${menuClosing ? " is-closing" : ""}`}>
+            <div
+              className="site-header__drawer-backdrop"
+              aria-hidden="true"
+              onClick={() => closeMenu()}
+            />
+            <div
+              id="mobile-navigation"
+              className="site-header__drawer-panel"
+              role="dialog"
+              aria-modal="true"
+              aria-label="منوی اصلی"
+              ref={drawerRef}
+            >
+              <div className="site-header__drawer-head">
+                <button type="button" aria-label="بستن منو" onClick={() => closeMenu()}>
+                  <Icon name="close" size={22} />
+                </button>
+              </div>
+              <nav className="site-header__drawer-nav" aria-label="ناوبری اصلی">
+                <NavLink
+                  to="/"
+                  end
+                  className={({ isActive }) => `site-header__drawer-link${isActive ? " is-active" : ""}`}
+                  onClick={handleHomeNavigation}
+                >
+                  <Icon name="home" size={20} /><span>خانه</span>
+                </NavLink>
+                <NavLink
+                  to="/shop/"
+                  end
+                  className={({ isActive }) => `site-header__drawer-link${isActive ? " is-active" : ""}`}
+                  onClick={() => closeMenu()}
+                >
+                  <Icon name="store" size={20} /><span>فروشگاه</span>
+                </NavLink>
+                <button
+                  type="button"
+                  className="site-header__drawer-link"
+                  aria-haspopup="dialog"
+                  aria-controls="mega-menu-sheet"
+                  onClick={() => closeMenu(() => setMegaOpen(true))}
+                >
+                  <Icon name="grid" size={20} /><span>دسته‌بندی کالاها</span>
+                  <Icon name="chevron-left" size={16} />
+                </button>
+                <NavLink
+                  to="/wishlist/"
+                  end
+                  className={({ isActive }) => `site-header__drawer-link${isActive ? " is-active" : ""}`}
+                  onClick={() => closeMenu()}
+                >
+                  <Icon name="heart" size={20} /><span>علاقه‌مندی‌ها</span>
+                </NavLink>
+                <NavLink
+                  to="/cart/"
+                  end
+                  className={({ isActive }) => `site-header__drawer-link${isActive ? " is-active" : ""}`}
+                  onClick={() => closeMenu()}
+                >
+                  <Icon name="bag" size={20} /><span>سبد خرید</span>
+                </NavLink>
+                <NavLink
+                  to="/about/"
+                  end
+                  className={({ isActive }) => `site-header__drawer-link${isActive ? " is-active" : ""}`}
+                  onClick={() => closeMenu()}
+                >
+                  <Icon name="info" size={20} /><span>دربارهٔ ما</span>
+                </NavLink>
+                <NavLink
+                  to="/contact/"
+                  end
+                  className={({ isActive }) => `site-header__drawer-link${isActive ? " is-active" : ""}`}
+                  onClick={() => closeMenu()}
+                >
+                  <Icon name="phone" size={20} /><span>تماس با ما</span>
+                </NavLink>
+              </nav>
+              <div className="site-header__drawer-account">
+                {isAuthenticated ? (
+                  <>
+                    <NavLink
+                      to="/account/"
+                      className={({ isActive }) => `site-header__drawer-link${isActive ? " is-active" : ""}`}
+                      onClick={() => closeMenu()}
+                    >
+                      <Icon name="user" size={20} /><span>حساب کاربری</span>
+                    </NavLink>
+                    <button type="button" className="site-header__drawer-link" onClick={handleLogout}>
+                      <Icon name="logout" size={20} /><span>خروج</span>
+                    </button>
+                  </>
+                ) : (
+                  <NavLink
+                    to="/login/"
+                    className={({ isActive }) => `site-header__drawer-link${isActive ? " is-active" : ""}`}
+                    onClick={() => closeMenu()}
+                  >
+                    <Icon name="user" size={20} /><span>ورود / ثبت‌نام</span>
+                  </NavLink>
+                )}
+              </div>
             </div>
-            <NavLink to="/" onClick={() => setMenuOpen(false)}>خانه</NavLink>
-            <NavLink to="/shop/" onClick={() => setMenuOpen(false)}>فروشگاه</NavLink>
-            <NavLink to="/about/" onClick={() => setMenuOpen(false)}>درباره ما</NavLink>
-            <NavLink to="/contact/" onClick={() => setMenuOpen(false)}>تماس با ما</NavLink>
-            <NavLink to="/account/" onClick={() => setMenuOpen(false)}>حساب کاربری</NavLink>
-            {categories.map((category) => (
-              <NavLink
-                key={category.id}
-                to={`/shop/?category=${encodeURIComponent(category.slug)}`}
-                onClick={() => setMenuOpen(false)}
-              >
-                {category.name}
-              </NavLink>
-            ))}
-            {isAuthenticated ? (
-              <NavLink to="/wishlist/" onClick={() => setMenuOpen(false)}>علاقه‌مندی‌ها</NavLink>
-            ) : (
-              <NavLink to="/login/" onClick={() => setMenuOpen(false)}>ورود | ثبت‌نام</NavLink>
-            )}
           </div>
         </Portal>
       ) : null}
@@ -560,9 +577,9 @@ function Header() {
                       <li key={line.key}>
                         <SmartImage image={{ image: line.image }} alt="" />
                         <div className="minicart__line-body">
-                          <span className="minicart__name">{line.name}</span>
+                          <span className="minicart__name">{faDigits(line.name)}</span>
                           {line.variant ? (
-                            <span className="minicart__variant">{line.variant}</span>
+                            <span className="minicart__variant">{faDigits(line.variant)}</span>
                           ) : null}
                           <span className="minicart__unit">
                             {line.priceInfo ? (

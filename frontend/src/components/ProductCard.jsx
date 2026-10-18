@@ -113,7 +113,7 @@ function ProductCard({ product }) {
           <Link to={productHref} className="product-card__media">
             <SmartImage
               image={product.primary_image || { image: primary }}
-              alt={product.primary_image?.alt_text || product.name}
+              alt={faDigits(product.primary_image?.alt_text || product.name)}
               className="product-card__img product-card__img--main"
             />
             {badges}
@@ -164,7 +164,7 @@ function ProductCard({ product }) {
             product has no image or the file 404s (onError). */}
         <SmartImage
           image={product.primary_image || { image: primary }}
-          alt={product.primary_image?.alt_text || product.name}
+          alt={faDigits(product.primary_image?.alt_text || product.name)}
           className="product-card__img product-card__img--main"
         />
         {/* @catalog-img-allowed: reviewed exception to the

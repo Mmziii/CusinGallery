@@ -27,6 +27,7 @@ import { normalizeApiError } from "../utils/apiError";
 import { formatPrice } from "../utils/formatPrice";
 import { recordView } from "../utils/recentlyViewed";
 import { shareImageUrl } from "../utils/shareImage";
+import { categoryUrl } from "../utils/categories";
 import RecentlyViewed from "../components/RecentlyViewed";
 
 function Stars({ value, size = "md" }) {
@@ -214,7 +215,7 @@ function ComplementsSection({ complements }) {
     const failed = [];
     for (const item of items) {
       const result = await addItem(item.id, null, 1);
-      if (!result.success) failed.push(item.name);
+      if (!result.success) failed.push(faDigits(item.name));
     }
     setState(
       failed.length
@@ -238,9 +239,9 @@ function ComplementsSection({ complements }) {
               onChange={() => toggle(item.id)}
             />
             <Link to={`/products/${item.slug}/`} className="complements__media">
-              <SmartImage image={item.primary_image || null} alt={item.name} />
+              <SmartImage image={item.primary_image || null} alt={faDigits(item.name)} />
             </Link>
-            <Link to={`/products/${item.slug}/`} className="complements__name">{item.name}</Link>
+            <Link to={`/products/${item.slug}/`} className="complements__name">{faDigits(item.name)}</Link>
             <span className="complements__price">{formatPrice(item.price_info.price)} تومان</span>
           </label>
         ))}
@@ -296,11 +297,60 @@ function ProductDetailPage() {
   const shareSource = product ? product.primary_image || product.images?.[0] || null : null;
   const ogImage = product ? shareImageUrl(shareSource) : undefined;
   usePageMeta({
-    title: error?.response?.status === 404 ? "صفحه یافت نشد" : product?.name,
-    description: product?.short_description || undefined,
+    title: error?.response?.status === 404
+      ? "صفحه یافت نشد"
+      : product?.name
+        ? faDigits(product.name)
+        : undefined,
+    description: product?.short_description ? faDigits(product.short_description) : undefined,
     path: `/products/${slug}/`,
     image: ogImage,
   });
+
+  // Stage 1: the breadcrumb trail as data -- shared by the
+  // visible <Breadcrumbs> and the JSON-LD BreadcrumbList
+  // below. کازین گالری › آشپزخانه (the catalog root,
+  // first ancestor) › … intermediate groups … › the product's
+  // own category › the product.
+  const crumbTrail = useMemo(() => {
+    if (!product) return [];
+    const trail = [{ label: "کازین گالری", to: "/" }];
+    if (product.category) {
+      for (const ancestor of product.category.ancestors || []) {
+        trail.push({ label: ancestor.name, to: categoryUrl(ancestor.slug) });
+      }
+      trail.push({
+        label: product.category.name,
+        to: categoryUrl(product.category.slug),
+      });
+    }
+    trail.push({ label: faDigits(product.name) });
+    return trail;
+  }, [product]);
+
+  // Stage 1: JSON-LD BreadcrumbList (same trail as the visible
+  // breadcrumbs) for search engines that DO run JavaScript.
+  // Replaced per product, removed on unmount.
+  useEffect(() => {
+    if (!product) return undefined;
+    const script = document.createElement("script");
+    script.type = "application/ld+json";
+    script.id = "breadcrumb-jsonld";
+    script.textContent = JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: crumbTrail.map((crumb, index) => ({
+        "@type": "ListItem",
+        position: index + 1,
+        name: crumb.label,
+        ...(crumb.to
+          ? { item: `${window.location.origin}${crumb.to}` }
+          : {}),
+      })),
+    });
+    document.head.appendChild(script);
+    return () => script.remove();
+  }, [product, crumbTrail]);
 
   // Part S4 item 2: JSON-LD Product for search engines that DO run
   // JavaScript (Google). It uses the same image as og:image, so a product
@@ -400,17 +450,10 @@ function ProductDetailPage() {
 
   return (
     <div className="product-detail">
-      {/* Part S2 item 7: breadcrumbs on the product page */}
-      <Breadcrumbs
-        items={[
-          { label: "خانه", to: "/" },
-          { label: "فروشگاه", to: "/shop/" },
-          ...(product.category
-            ? [{ label: product.category.name, to: `/shop/?category=${encodeURIComponent(product.category.slug)}` }]
-            : []),
-          { label: product.name },
-        ]}
-      />
+      {/* Part S2 item 7: breadcrumbs on the product page.
+          Stage 1: every trail starts کازین گالری ›
+          آشپزخانه, then the deeper levels of the tree. */}
+      <Breadcrumbs items={crumbTrail} />
       <div className="product-detail__gallery">
         {/* Part S5 item 3: main image + thumbnail row (cross-fade, keyboard,
             swipe, scroll-snap) -- every image still goes through the shared
@@ -423,7 +466,7 @@ function ProductDetailPage() {
 
         <h1>{faDigits(product.name)}</h1>
         {product.brand ? <div className="product-detail__brand">برند: {product.brand.name}</div> : null}
-        {product.short_description ? <p className="product-detail__short">{product.short_description}</p> : null}
+        {product.short_description ? <p className="product-detail__short">{faDigits(product.short_description)}</p> : null}
 
         <PriceTag priceInfo={displayPrice} size="lg" />
 
@@ -435,7 +478,7 @@ function ProductDetailPage() {
           <div className="variant-select">
             {attributeOptions.map(({ attribute, values }) => (
               <div key={attribute} className="variant-select__group">
-                <span>{attribute}:</span>
+                <span>{faDigits(attribute)}:</span>
                 {values.map((value) => (
                   <button
                     key={value}
@@ -443,7 +486,7 @@ function ProductDetailPage() {
                     className={selected[attribute] === value ? "chip chip--active" : "chip"}
                     onClick={() => setSelected((s) => ({ ...s, [attribute]: value }))}
                   >
-                    {value}
+                    {faDigits(value)}
                   </button>
                 ))}
               </div>
@@ -532,7 +575,7 @@ function ProductDetailPage() {
         <section>
           <h2>توضیحات</h2>
           <p className="product-detail__description">
-            {product.description || product.short_description || "توضیحاتی ثبت نشده است."}
+            {faDigits(product.description || product.short_description || "توضیحاتی ثبت نشده است.")}
           </p>
         </section>
 
@@ -543,8 +586,8 @@ function ProductDetailPage() {
               <tbody>
                 {product.specifications.map((spec) => (
                   <tr key={spec.attribute}>
-                    <th>{spec.attribute}</th>
-                    <td>{spec.values.join("، ")}</td>
+                    <th>{faDigits(spec.attribute)}</th>
+                    <td>{faDigits(spec.values.join("، "))}</td>
                   </tr>
                 ))}
               </tbody>

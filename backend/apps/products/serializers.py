@@ -42,6 +42,24 @@ class CategoryMiniSerializer(serializers.Serializer):
     id = serializers.IntegerField()
     name = serializers.CharField()
     slug = serializers.SlugField()
+    # Stage 1 (root category «آشپزخانه»): storefront breadcrumbs
+    # need the FULL ancestor chain (top-most first, NOT including
+    # the category itself) -- کازین گالری › آشپزخانه › <group> ›
+    # <category> › <product> -- without a second request. The walk
+    # is bounded by the tree depth (a guard caps pathological
+    # cycles, which model.clean() already prevents in the admin).
+    ancestors = serializers.SerializerMethodField()
+
+    def get_ancestors(self, obj):
+        chain = []
+        node = obj.parent
+        guard = 0
+        while node is not None and guard < 10:
+            chain.append({"slug": node.slug, "name": node.name})
+            node = node.parent
+            guard += 1
+        chain.reverse()
+        return chain
 
 
 class ProductImageSerializer(serializers.ModelSerializer):

@@ -103,6 +103,57 @@ const PATHS = {
     </>
   ),
   "bolt-fast": <path d="M13 2 4.5 13.5H11l-1 8.5L19 10.5h-6.5z" />,
+  // Stage 2/3: hamburger menu, category tiles, account surfaces.
+  menu: <path d="M4 7h16M4 12h16M4 17h16" />,
+  home: (
+    <>
+      <path d="M3 10.5 12 3l9 7.5" />
+      <path d="M5 9.8V21h14V9.8" />
+      <path d="M10 21v-6h4v6" />
+    </>
+  ),
+  grid: (
+    <>
+      <rect x="3.5" y="3.5" width="7" height="7" rx="1.5" />
+      <rect x="13.5" y="3.5" width="7" height="7" rx="1.5" />
+      <rect x="3.5" y="13.5" width="7" height="7" rx="1.5" />
+      <rect x="13.5" y="13.5" width="7" height="7" rx="1.5" />
+    </>
+  ),
+  user: (
+    <>
+      <circle cx="12" cy="8" r="3.5" />
+      <path d="M5 20a7 7 0 0 1 14 0" />
+    </>
+  ),
+  info: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v5" />
+      <path d="M12 7.5v.01" />
+    </>
+  ),
+  logout: (
+    <>
+      <path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4" />
+      <path d="m10 8-4 4 4 4" />
+      <path d="M6 12h10" />
+    </>
+  ),
+  // Stage 4: authenticity guarantee.
+  "shield-check": (
+    <>
+      <path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z" />
+      <path d="m9 11.5 2 2 4-4" />
+    </>
+  ),
+  // Stage 5: countdown / express delivery.
+  clock: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </>
+  ),
 };
 
 function Icon({ name, size = 20, filled = false, className = "" }) {

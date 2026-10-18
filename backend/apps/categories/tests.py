@@ -1,3 +1,7 @@
+import importlib
+
+from django.apps import apps
+from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -31,7 +35,11 @@ class CategoryListDetailTests(APITestCase):
         response = self.client.get(reverse("category-list"))
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         names = [c["name"] for c in response.data["results"]]
-        self.assertEqual(names, ["Cookware"])
+        # (The migrated «آشپزخانه» root is active too, so this is
+        # a membership check, not an exact-list check -- see the
+        # kitchen-root migration tests below.)
+        self.assertIn("Cookware", names)
+        self.assertNotIn("Discontinued", names)
 
     def test_detail_lookup_by_slug(self):
         category = make_category("Glassware")
@@ -94,7 +102,10 @@ class CategoryListDetailTests(APITestCase):
 
 class CategoryTreeTests(APITestCase):
     def test_tree_returns_nested_active_children_only(self):
-        root = make_category("Kitchen")
+        # Deliberately NOT slug "kitchen": the 0006 data migration
+        # already created the «آشپزخانه» root with that slug in
+        # every (migrated) database, and slugs are unique.
+        root = make_category("Catalog", slug="catalog")
         child = make_category("Cookware", parent=root)
         make_category("Discontinued Child", parent=root, is_active=False)
         grandchild = make_category("Non-stick Pans", parent=child)
@@ -104,7 +115,7 @@ class CategoryTreeTests(APITestCase):
         for key in ("count", "next", "previous", "results"):
             self.assertIn(key, response.data)
 
-        [root_data] = [c for c in response.data["results"] if c["slug"] == "kitchen"]
+        [root_data] = [c for c in response.data["results"] if c["slug"] == "catalog"]
         self.assertEqual(len(root_data["children"]), 1)
         self.assertEqual(root_data["children"][0]["slug"], "cookware")
         self.assertEqual(root_data["children"][0]["children"][0]["slug"], "non-stick-pans")
@@ -127,7 +138,9 @@ class CategoryTreeTests(APITestCase):
         level actually traversed -- a literal "always 5" would be wrong
         for every tree shallower than TREE_PREFETCH_DEPTH.
         """
-        root = make_category("Kitchen")
+        # Not slug "kitchen": the 0006 migration already created
+        # the «آشپزخانه» root with that slug.
+        root = make_category("Catalog", slug="catalog")
         for i in range(10):
             make_category(f"Child {i}", parent=root)
 
@@ -168,3 +181,172 @@ class CategoryTreeTests(APITestCase):
             response = self.client.get(reverse("category-tree"))
             assert response.status_code == status.HTTP_200_OK, response.content
         return len(ctx.captured_queries)
+
+
+def _kitchen_root_migration():
+    # The module name starts with a digit, so it cannot be
+    # imported with a regular statement.
+    return importlib.import_module(
+        "apps.categories.migrations.0006_kitchen_root_category"
+    )
+
+
+class KitchenRootMigrationTests(TestCase):
+    """Stage 1: the «آشپزخانه» root data migration (0006).
+
+    The test database is built by running every migration, so
+    the root already exists here; tests that need the
+    PRE-migration state get it by running the migration's own
+    ``backward`` first, then exercising ``forward`` directly.
+    """
+
+    def test_forward_creates_root_and_reparents_top_level_categories(self):
+        migration = _kitchen_root_migration()
+        migration.backward(apps, None)
+        pots = make_category("Pots", slug="pots")
+        pans = make_category("Pans", slug="pans")
+        make_category("Non-stick", slug="non-stick", parent=pots)
+        product = make_product(pans, name="Frying pan")
+
+        migration.forward(apps, None)
+
+        kitchen = Category.objects.get(slug="kitchen")
+        self.assertEqual(kitchen.name, "آشپزخانه")
+        self.assertIsNone(kitchen.parent)
+        self.assertTrue(kitchen.is_active)
+        pots.refresh_from_db()
+        pans.refresh_from_db()
+        self.assertEqual(pots.parent, kitchen)
+        self.assertEqual(pans.parent, kitchen)
+        # Deeper levels keep their parent; products keep their
+        # category; slugs (hence every category URL) unchanged.
+        self.assertEqual(Category.objects.get(slug="non-stick").parent, pots)
+        product.refresh_from_db()
+        self.assertEqual(product.category, pans)
+        self.assertEqual(
+            sorted(Category.objects.filter(parent=kitchen).values_list("slug", flat=True)),
+            ["pans", "pots"],
+        )
+
+    def test_forward_is_idempotent(self):
+        migration = _kitchen_root_migration()
+        migration.backward(apps, None)
+        make_category("Cookware", slug="cookware")
+        migration.forward(apps, None)
+        first_pass = list(Category.objects.values_list("slug", "parent__slug"))
+
+        migration.forward(apps, None)  # a second run must change nothing
+
+        self.assertEqual(
+            list(Category.objects.values_list("slug", "parent__slug")),
+            first_pass,
+        )
+        self.assertEqual(Category.objects.filter(slug="kitchen").count(), 1)
+
+    def test_forward_is_a_noop_when_the_root_already_exists(self):
+        migration = _kitchen_root_migration()
+        # Exactly the state after `migrate` has run the migration.
+        before = list(Category.objects.values_list("slug", "parent__slug"))
+        migration.forward(apps, None)
+        self.assertEqual(
+            list(Category.objects.values_list("slug", "parent__slug")),
+            before,
+        )
+        self.assertEqual(Category.objects.filter(slug="kitchen").count(), 1)
+
+    def test_forward_uses_fallback_when_kitchen_slug_belongs_to_non_root(self):
+        migration = _kitchen_root_migration()
+        migration.backward(apps, None)
+        archive = make_category("Legacy catalog", slug="legacy-catalog")
+        legacy_kitchen = make_category(
+            "Legacy kitchen", slug="kitchen", parent=archive
+        )
+        make_category("Pots", slug="pots")
+
+        migration.forward(apps, None)
+
+        kitchen = Category.objects.get(name="آشپزخانه", parent__isnull=True)
+        self.assertEqual(kitchen.slug, "kitchen-root")
+        archive.refresh_from_db()
+        legacy_kitchen.refresh_from_db()
+        self.assertEqual(archive.parent, kitchen)
+        self.assertEqual(legacy_kitchen.parent, archive)
+
+        first_pass = list(Category.objects.values_list("slug", "parent__slug"))
+        migration.forward(apps, None)
+        self.assertEqual(
+            list(Category.objects.values_list("slug", "parent__slug")),
+            first_pass,
+        )
+        self.assertEqual(
+            Category.objects.filter(name="آشپزخانه", parent__isnull=True).count(),
+            1,
+        )
+
+        migration.backward(apps, None)
+        self.assertFalse(Category.objects.filter(slug="kitchen-root").exists())
+        archive.refresh_from_db()
+        self.assertIsNone(archive.parent)
+
+    def test_forward_uses_first_available_kitchen_root_suffix(self):
+        migration = _kitchen_root_migration()
+        migration.backward(apps, None)
+        archive = make_category("Legacy catalog", slug="legacy-catalog")
+        make_category("Legacy kitchen", slug="kitchen", parent=archive)
+        make_category("Reserved kitchen root", slug="kitchen-root", parent=archive)
+        make_category("Reserved kitchen root 1", slug="kitchen-root-1", parent=archive)
+
+        migration.forward(apps, None)
+
+        kitchen = Category.objects.get(name="آشپزخانه", parent__isnull=True)
+        self.assertEqual(kitchen.slug, "kitchen-root-2")
+
+        migration.forward(apps, None)
+        self.assertEqual(
+            Category.objects.filter(name="آشپزخانه", parent__isnull=True).count(),
+            1,
+        )
+        self.assertTrue(Category.objects.filter(slug="kitchen-root-2").exists())
+
+    def test_backward_restores_top_level_and_removes_the_root(self):
+        migration = _kitchen_root_migration()
+        migration.backward(apps, None)
+        make_category("Pots", slug="pots")
+        migration.forward(apps, None)
+        self.assertTrue(Category.objects.filter(parent__slug="kitchen").exists())
+
+        migration.backward(apps, None)
+
+        self.assertFalse(Category.objects.filter(slug="kitchen").exists())
+        pots = Category.objects.get(slug="pots")
+        self.assertIsNone(pots.parent)
+
+    def test_backward_without_the_root_is_a_noop(self):
+        migration = _kitchen_root_migration()
+        migration.backward(apps, None)
+        migration.backward(apps, None)  # must not raise
+        self.assertFalse(Category.objects.filter(slug="kitchen").exists())
+
+
+class KitchenRootTreeTests(APITestCase):
+    """Stage 1: the API tree after the root migration."""
+
+    def test_tree_has_exactly_one_root_the_kitchen(self):
+        response = self.client.get(reverse("category-tree"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        roots = response.data["results"]
+        self.assertEqual([c["slug"] for c in roots], ["kitchen"])
+        self.assertEqual(roots[0]["name"], "آشپزخانه")
+
+    def test_main_groups_are_children_of_the_kitchen_root(self):
+        kitchen = Category.objects.get(slug="kitchen")
+        group = make_category("قاشق، چنگال و کارد", slug="cutlery", parent=kitchen)
+        make_category("قاشق", slug="spoon", parent=group)
+
+        response = self.client.get(reverse("category-tree"))
+
+        [root] = response.data["results"]
+        self.assertEqual(root["children"][0]["slug"], "cutlery")
+        self.assertEqual(
+            root["children"][0]["children"][0]["slug"], "spoon"
+        )

@@ -142,12 +142,12 @@ function GuestCartView() {
               <div className="cart-item" key={`${line.product_id}-${line.variant_id ?? 0}`}>
                 <SmartImage
                   image={product?.primary_image || variant?.image?.image || null}
-                  alt={product?.name || ""}
+                  alt={faDigits(product?.name || "")}
                 />
                 <div className="cart-item__body">
                   <div className="cart-item__name">{product ? faDigits(product.name) : "—"}</div>
                   {variantLabel(variant) ? (
-                    <div className="cart-item__variant">{variantLabel(variant)}</div>
+                    <div className="cart-item__variant">{faDigits(variantLabel(variant))}</div>
                   ) : null}
                   <div className="cart-item__unit">
                     {priceInfo ? <PriceTag priceInfo={priceInfo} size="sm" /> : "—"}
@@ -251,7 +251,7 @@ function CartPage() {
           <div className="cart-page__items">
             {cart.items.map((item) => (
               <div key={item.id} className={`cart-item ${item.is_available ? "" : "cart-item--unavailable"}`}>
-                <SmartImage image={item.product?.primary_image || null} alt={item.product?.name || ""} />
+                <SmartImage image={item.product?.primary_image || null} alt={faDigits(item.product?.name || "")} />
 
                 <div className="cart-item__info">
                   <Link to={`/products/${item.product.slug}/`} className="cart-item__name">
@@ -259,7 +259,7 @@ function CartPage() {
                   </Link>
                   {item.variant ? (
                     <div className="cart-item__variant">
-                      {item.variant.attribute_values.map((av) => `${av.attribute}: ${av.value}`).join("، ")}
+                      {faDigits(item.variant.attribute_values.map((av) => `${av.attribute}: ${av.value}`).join("، "))}
                     </div>
                   ) : null}
                   <div className="cart-item__unit">

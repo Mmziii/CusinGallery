@@ -3,7 +3,7 @@
  * mount the real Header with its router, portals and asynchronous search so
  * the assertions cover navigation and surface cleanup rather than link hrefs.
  */
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -108,15 +108,15 @@ describe("home brand navigation", () => {
       expect(node).toBeTruthy();
       return node;
     });
-    // The full-viewport drawer covers the header, so it exposes its own
-    // keyboard-accessible logo/name action instead of hiding the way home.
-    const drawerBrand = drawer.querySelector('a[aria-label="کازین گالری — صفحه اصلی"]');
-    expect(drawerBrand).toBeTruthy();
+    // The drawer is deliberately limited to the requested navigation
+    // items; its home link remains keyboard-accessible.
+    const drawerHome = within(drawer).getByRole("link", { name: "خانه" });
+    expect(within(drawer).queryByRole("link", { name: "کازین گالری — صفحه اصلی" })).toBeNull();
     expect(document.body.querySelector(".minicart__brand")).toBeTruthy();
-    drawerBrand.focus();
-    expect(document.activeElement).toBe(drawerBrand);
+    drawerHome.focus();
+    expect(document.activeElement).toBe(drawerHome);
 
-    fireEvent.click(drawerBrand);
+    fireEvent.click(drawerHome);
 
     await waitFor(() => {
       expect(screen.getByTestId("location").textContent).toBe("/");
