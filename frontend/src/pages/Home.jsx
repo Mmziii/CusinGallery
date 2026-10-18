@@ -120,26 +120,27 @@ function HeroSlider({ banners, isLoading }) {
   );
 }
 
+const TRUST_ITEMS = [
+  { icon: "shield-check", label: "تضمین اصالت کالا و سلامت فیزیکی اجناس" },
+  { icon: "box", label: "بسته‌بندی ضدضربهٔ کالا" },
+  { icon: "truck", label: "ارسال به سراسر ایران" },
+  { icon: "lock", label: "پرداخت امن اینترنتی" },
+  { icon: "bolt-fast", label: "امکان تحویل اکسپرس" },
+];
+
 function TrustStrip() {
   const ref = useReveal();
-  const items = [
-    ["check", "کالای اصل و تضمین سلامت"],
-    ["box", "بسته‌بندی ضدضربه برای ظروف شکستنی"],
-    ["truck", "ارسال سریع به سراسر ایران"],
-    ["lock", "پرداخت امن اینترنتی"],
-    ["undo", "مرجوعی آسان تا ۷ روز"],
-  ];
   return (
-    <div className="trust-strip reveal" ref={ref}>
+    <section className="trust-strip reveal" ref={ref} aria-label="مزایای خرید از کازین گالری">
       <div className="container trust-strip__inner">
-        {items.map(([icon, label]) => (
+        {TRUST_ITEMS.map(({ icon, label }) => (
           <div key={label} className="trust-strip__item">
-            <Icon name={icon} size={18} />
+            <Icon name={icon} size={20} />
             <span>{label}</span>
           </div>
         ))}
       </div>
-    </div>
+    </section>
   );
 }
 
