@@ -14,11 +14,11 @@ Body::
     }
 
 Guarantees (see the tests):
-* anonymous + CSRF-exempt from the client's point of view, because the
-  storefront must be able to send events even before a CSRF cookie
-  exists -- DRF's APIView is CSRF-exempt and no session authentication is
-  enforced here; the user is read from the already-authenticated Django
-  request;
+* anonymous + CSRF-free by design, because the storefront must be able
+  to send events even before a CSRF cookie exists. A logged-in shopper is
+  still identified from the session through a SessionAuthentication
+  subclass whose ``enforce_csrf`` is a deliberate no-op -- the endpoint
+  appends non-sensitive rows and never returns anything but a count;
 * bots are ignored (the User-Agent is tested, never stored);
 * a per-session fixed-window rate limit (default 60 batches/minute);
 * invalid/unknown entries are skipped, never a 400 that could surface in

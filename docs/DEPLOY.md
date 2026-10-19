@@ -412,6 +412,9 @@ docker-compose.prod.yml restart nginx` و بعد همان `curl`های بالا 
     docker compose -f docker-compose.prod.yml exec backend \
       python manage.py rebuild_frequently_bought_together
     ```
+  - روزانه: حذف رخدادهای رفتاری قدیمی‌تر از `ANALYTICS_RETENTION_DAYS`
+    (پیش‌فرض ۳۶۵ روز) با `prune_analytics_events` -- جزئیات در
+    `docs/ANALYTICS.md`.
 
 ### پیامک یادآور سبد خرید (اختیاری، پیش‌فرض خاموش)
 

@@ -311,15 +311,3 @@ def csv_response(data: bytes, filename: str) -> HttpResponse:
     response = HttpResponse(data, content_type=CSV_CONTENT_TYPE)
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
     return response
-
-
-# ---------------------------------------------------------------------------
-# admin changelist actions (orders / customers / products)
-# ---------------------------------------------------------------------------
-
-def action_rows(rows, headers, numeric_columns, *, filename: str, sheet_title: str):
-    """Shared body of every «خروجی اکسل» admin action."""
-    data, written = xlsx_bytes(
-        headers, rows, sheet_title=sheet_title, numeric_columns=numeric_columns,
-    )
-    return xlsx_response(data, filename), written
