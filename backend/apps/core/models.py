@@ -13,6 +13,18 @@ of these.
 """
 from django.db import models
 
+from .theme import (
+    BASE_FONT_SIZE_CHOICES,
+    BUTTON_RADIUS_CHOICES,
+    CARD_SHADOW_CHOICES,
+    DEFAULT_BASE_FONT_SIZE,
+    DEFAULT_BUTTON_RADIUS,
+    DEFAULT_CARD_SHADOW,
+    DEFAULT_PRESET,
+    THEME_PRESET_CHOICES,
+    validate_hex_color,
+)
+
 
 class TimeStampedModel(models.Model):
     """Adds created_at / updated_at, auto-managed on save."""
@@ -266,6 +278,64 @@ class SiteSettings(TimeStampedModel):
     floating_instagram = models.BooleanField(
         "نمایش اینستاگرام", default=False,
         help_text="فقط وقتی اینستاگرام در بخش فوتر پر شده باشد.",
+    )
+
+    # --- ظاهر سایت (تم) ------------------------------------------------
+    # A preset is a complete palette; each color below is an OPTIONAL
+    # override (blank = inherit the preset). The admin form refuses a
+    # palette whose text/background pairs fail WCAG AA (see theme.py).
+    theme_preset = models.CharField(
+        "تم آماده", max_length=30, choices=THEME_PRESET_CHOICES,
+        default=DEFAULT_PRESET,
+        help_text="پالت پایه. رنگ‌های سفارشی پایین، هر کدام که پر شوند، "
+        "مقدار همان رنگ را در تم آماده بازنویسی می‌کنند.",
+    )
+    theme_primary = models.CharField(
+        "رنگ اصلی", max_length=7, blank=True, default="",
+        validators=[validate_hex_color],
+        help_text="خالی = رنگ اصلی تم آماده (مثال: #637037).",
+    )
+    theme_accent = models.CharField(
+        "رنگ تأکیدی (طلایی)", max_length=7, blank=True, default="",
+        validators=[validate_hex_color],
+        help_text="خالی = رنگ تأکیدی تم آماده (مثال: #CEB464).",
+    )
+    theme_background = models.CharField(
+        "رنگ پس‌زمینه", max_length=7, blank=True, default="",
+        validators=[validate_hex_color],
+        help_text="خالی = پس‌زمینهٔ تم آماده (مثال: #FAF7F0).",
+    )
+    theme_text = models.CharField(
+        "رنگ متن", max_length=7, blank=True, default="",
+        validators=[validate_hex_color],
+        help_text="خالی = رنگ متن تم آماده (مثال: #1E2412).",
+    )
+    theme_header_background = models.CharField(
+        "پس‌زمینهٔ هدر", max_length=7, blank=True, default="",
+        validators=[validate_hex_color],
+        help_text="خالی = پس‌زمینهٔ هدر تم آماده (مثال: #FFFFFF).",
+    )
+    theme_header_text = models.CharField(
+        "متن هدر", max_length=7, blank=True, default="",
+        validators=[validate_hex_color],
+        help_text="خالی = متن هدر تم آماده (مثال: #1E2412).",
+    )
+    theme_button_text = models.CharField(
+        "متن دکمه", max_length=7, blank=True, default="",
+        validators=[validate_hex_color],
+        help_text="رنگ نوشتهٔ روی دکمه‌های اصلی (مثال: #FFFFFF).",
+    )
+    theme_button_radius = models.CharField(
+        "گردی گوشهٔ دکمه‌ها", max_length=10, choices=BUTTON_RADIUS_CHOICES,
+        default=DEFAULT_BUTTON_RADIUS,
+    )
+    theme_base_font_size = models.CharField(
+        "اندازهٔ متن پایه", max_length=10, choices=BASE_FONT_SIZE_CHOICES,
+        default=DEFAULT_BASE_FONT_SIZE,
+    )
+    theme_card_shadow = models.CharField(
+        "سایهٔ کارت‌ها", max_length=10, choices=CARD_SHADOW_CHOICES,
+        default=DEFAULT_CARD_SHADOW,
     )
 
     class Meta:

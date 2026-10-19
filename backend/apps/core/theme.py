@@ -20,6 +20,8 @@ from __future__ import annotations
 
 import re
 
+from django.core.exceptions import ValidationError
+
 from .digits import fa_digits
 
 #: Every preset is a complete palette; the first one is the original brand
@@ -145,6 +147,12 @@ _FONT_SIZES = {"small": "0.9375rem", "normal": "1rem", "large": "1.125rem"}
 # ---------------------------------------------------------------------------
 def is_hex_color(value) -> bool:
     return bool(_HEX_RE.match(str(value or "").strip()))
+
+
+def validate_hex_color(value) -> None:
+    """Model/form validation: empty is allowed, anything else must be hex."""
+    if value and not is_hex_color(value):
+        raise ValidationError("رنگ را به شکل کد شش‌رقمی وارد کنید؛ مثال: #637037.")
 
 
 def normalize_hex(value, fallback: str = "") -> str:
@@ -303,6 +311,11 @@ def effective_theme(source) -> dict:
         "--color-header-text": colors["header_text"],
         "--color-header-brand": _header_brand_color(
             colors["header_background"], colors["header_text"], primary
+        ),
+        "--color-header-accent": (
+            colors["header_text"]
+            if relative_luminance(colors["header_background"]) < 0.4
+            else accent_text
         ),
         "--color-button-text": colors["button_text"],
         "--color-border": mix(text_color, background, 0.84),

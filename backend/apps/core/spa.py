@@ -36,6 +36,7 @@ Where the shell comes from, in order:
 """
 from __future__ import annotations
 
+import json
 import logging
 import re
 import time
@@ -47,6 +48,11 @@ from django.http import Http404, HttpResponse
 from django.views.decorators.http import require_GET
 
 logger = logging.getLogger("django")
+
+#: Marker in frontend/index.html where the server injects the owner's theme.
+#: It sits in <head>, BEFORE the stylesheet/JS, so the very first paint uses
+#: the saved colors -- no flash of the default theme.
+THEME_MARKER = "<!-- CUSIN_THEME_VARS -->"
 
 #: ``noindex`` marker added to the 404 document. The SPA sets its own
 #: per-page robots meta at runtime; this one is what a crawler sees BEFORE
@@ -225,6 +231,59 @@ def shell_html():
     return html
 
 
+def theme_head_fragment():
+    """The inline <style> + bootstrap script for the owner-selected theme.
+
+    Read from the same cached public payload as /api/v1/site/content/, so a
+    save in the admin is reflected on the next page request (the signals in
+    apps/core/signals.py delete the cache entry). Never raises: a broken
+    theme row must not turn every storefront page into a 500.
+    """
+    try:
+        from .content import get_content_payload
+
+        theme = get_content_payload().get("theme") or {}
+        variables = theme.get("css_variables") or {}
+    except Exception:  # noqa: BLE001 - a page must never die over a theme
+        logger.warning("spa: theme variables unavailable", exc_info=True)
+        return ""
+    if not variables:
+        return ""
+    css = ":root{" + "".join(
+        f"{str(name).strip()}:{str(value).strip()};" for name, value in variables.items()
+    ) + "}"
+    bootstrap = json.dumps(
+        {
+            "theme": {
+                "preset": theme.get("preset", ""),
+                "css_variables": variables,
+                "button_radius": theme.get("button_radius", ""),
+                "base_font_size": theme.get("base_font_size", ""),
+                "card_shadow": theme.get("card_shadow", ""),
+            }
+        },
+        ensure_ascii=False,
+    ).replace("</", "<\\/")
+    return (
+        f'<style id="cusin-theme-vars">{css}</style>\n'
+        f"<script>window.__CUSIN_THEME__={bootstrap};</script>"
+    )
+
+
+def _with_theme(html):
+    """Inject the theme into the shell's <head> (marker or, for an older
+    build without the marker, right before </head>)."""
+    fragment = theme_head_fragment()
+    if not fragment:
+        return html
+    if THEME_MARKER in html:
+        return html.replace(THEME_MARKER, fragment, 1)
+    index = html.lower().find("</head>")
+    if index == -1:
+        return fragment + html
+    return f"{html[:index]}{fragment}\n{html[index:]}"
+
+
 def _fallback_document(title, heading, body):
     """Built-in, dependency-free Persian document (never blank, never 200)."""
     return "\n".join(
@@ -312,5 +371,5 @@ def spa_page(request, spa_path=""):
         return _page_response(html, 200 if known else 404)
 
     if known:
-        return _page_response(html, 200)
-    return _page_response(_with_noindex(html), 404)
+        return _page_response(_with_theme(html), 200)
+    return _page_response(_with_theme(_with_noindex(html)), 404)

@@ -93,6 +93,22 @@ class SiteSettingsAdmin(admin.ModelAdmin):
             },
         ),
         (
+            _("ظاهر سایت (تم)"),
+            {
+                "fields": (
+                    "theme_preset",
+                    "theme_primary", "theme_accent", "theme_background",
+                    "theme_text", "theme_header_background", "theme_header_text",
+                    "theme_button_text",
+                    "theme_button_radius", "theme_base_font_size", "theme_card_shadow",
+                ),
+                "description": "تم آماده را انتخاب کنید و در صورت نیاز رنگ‌ها را "
+                "بازنویسی کنید. پیش‌نمایش پایین همین صفحه تغییرات را نشان می‌دهد. "
+                "اگر کنتراست متن و پس‌زمینه کمتر از ۴٫۵ به ۱ باشد، ذخیره انجام "
+                "نمی‌شود.",
+            },
+        ),
+        (
             _("دریافت حضوری"),
             {
                 "fields": ("pickup_address", "pickup_hours"),
