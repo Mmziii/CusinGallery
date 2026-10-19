@@ -34,6 +34,9 @@ urlpatterns = [
     path("payments/", include("apps.payments.urls")),
     path("reviews/", include("apps.reviews.urls")),
     path("banners/", include("apps.banners.urls")),
+    # Batched, fire-and-forget storefront behaviour events (privacy-friendly:
+    # no IP, no user agent -- see apps/analytics/models.py).
+    path("analytics/", include("apps.analytics.urls")),
     # Public store contact/branding settings (Part 1): footer, contact
     # page, pickup info, floating contact button.
     path("site/settings/", apps_core_views.SiteSettingsView.as_view(), name="site-settings"),

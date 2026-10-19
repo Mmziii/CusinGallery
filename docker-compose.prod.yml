@@ -119,6 +119,8 @@ services:
             echo "[scheduler] $$(date -u +%FT%TZ) running rebuild_frequently_bought_together (daily)"
             python manage.py rebuild_frequently_bought_together || echo "[scheduler] fbt rebuild failed (will retry tomorrow)"
             echo "$$today" > /tmp/fbt_last
+            echo "[scheduler] $$(date -u +%FT%TZ) running prune_analytics_events (daily)"
+            python manage.py prune_analytics_events || echo "[scheduler] analytics prune failed (will retry tomorrow)"
           fi
           sleep 3600
         done

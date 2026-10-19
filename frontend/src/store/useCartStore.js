@@ -3,6 +3,7 @@ import { create } from "zustand";
 import * as cartApi from "../services/cartApi";
 import * as catalogApi from "../services/catalogApi";
 import { normalizeApiError } from "../utils/apiError";
+import { trackEvent } from "../utils/behaviour";
 import {
   clearGuestLines,
   getMergeToken,
@@ -98,6 +99,10 @@ const useCartStore = create((set, get) => ({
     }
     set({ guestLines: lines });
     get()._syncGuest();
+    // Guests have no server cart, so their add is reported here. An
+    // authenticated add is recorded by Django itself (cart API), which
+    // keeps that event even if this tab is closed mid-request.
+    trackEvent("add_to_cart", { product_id: productId });
     return { success: true };
   },
 
@@ -115,6 +120,7 @@ const useCartStore = create((set, get) => ({
     }
     set({ guestLines: lines });
     get()._syncGuest();
+    if (quantity <= 0) trackEvent("remove_from_cart", { product_id: productId });
     return { success: true };
   },
 

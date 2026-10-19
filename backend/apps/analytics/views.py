@@ -1,0 +1,165 @@
+"""Batched, fire-and-forget storefront tracking endpoint.
+
+``POST /api/v1/analytics/events/``
+
+Body::
+
+    {
+      "session_key": "<anonymous random key>",
+      "events": [
+        {"type": "product_view", "product_id": 12},
+        {"type": "search", "query": "کتری", "results": 4},
+        ...
+      ]
+    }
+
+Guarantees (see the tests):
+* anonymous + CSRF-exempt from the client's point of view, because the
+  storefront must be able to send events even before a CSRF cookie
+  exists -- DRF's APIView is CSRF-exempt and no session authentication is
+  enforced here; the user is read from the already-authenticated Django
+  request;
+* bots are ignored (the User-Agent is tested, never stored);
+* a per-session fixed-window rate limit (default 60 batches/minute);
+* invalid/unknown entries are skipped, never a 400 that could surface in
+  the UI;
+* the response is always tiny and the client never waits on it.
+"""
+from __future__ import annotations
+
+import time
+
+from django.conf import settings
+from django.core.cache import cache
+from rest_framework import permissions, status
+from rest_framework.authentication import SessionAuthentication
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from apps.products.models import Product
+
+from .models import Event
+from .tracking import (
+    MAX_BATCH_SIZE,
+    MAX_SEARCH_QUERY,
+    clean_session_key,
+    is_bot,
+    record_event,
+    session_key_from_request,
+)
+
+RATE_WINDOW_SECONDS = 60
+DEFAULT_RATE_LIMIT = 60
+
+
+def _rate_limit() -> int:
+    return int(getattr(settings, "ANALYTICS_RATE_LIMIT_PER_MINUTE", DEFAULT_RATE_LIMIT) or DEFAULT_RATE_LIMIT)
+
+
+def _throttled(session_key: str) -> bool:
+    """Fixed-window counter per anonymous session (never per IP)."""
+    bucket = int(time.time()) // RATE_WINDOW_SECONDS
+    key = f"analytics:rl:{session_key or 'anonymous'}:{bucket}"
+    cache.add(key, 0, RATE_WINDOW_SECONDS * 2)
+    try:
+        count = cache.incr(key)
+    except ValueError:  # pragma: no cover - window rollover race
+        count = 0
+    return count > _rate_limit()
+
+
+def _product_for(raw_product_id):
+    try:
+        product_id = int(raw_product_id)
+    except (TypeError, ValueError):
+        return None
+    if product_id <= 0:
+        return None
+    return Product.objects.filter(pk=product_id).first()
+
+
+def _clean_type(value) -> str:
+    return str(value or "").strip().lower()
+
+
+class _TrackOnlySessionAuthentication(SessionAuthentication):
+    """Identify a logged-in shopper WITHOUT requiring a CSRF token.
+
+    A fire-and-forget beacon must never fail because the page happens to
+    have no csrftoken cookie yet (first visit) or because the browser is
+    restoring a tab. The endpoint only appends non-sensitive analytics
+    rows, is rate limited per anonymous session, and never exposes
+    anything back -- so CSRF protection would buy nothing here while
+    costing real events. The ``X-Cusin-Session`` key, not the CSRF
+    token, is what reports depend on.
+    """
+
+    def enforce_csrf(self, request):  # noqa: ARG002 - deliberate no-op
+        return
+
+
+class EventBatchView(APIView):
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = [_TrackOnlySessionAuthentication]
+
+    def post(self, request):
+        plain = getattr(request, "_request", request)
+        if is_bot(plain.headers.get("User-Agent")):
+            return Response({"accepted": 0, "ignored": "bot"}, status=status.HTTP_202_ACCEPTED)
+
+        payload = request.data if isinstance(request.data, dict) else {}
+        session_key = (
+            session_key_from_request(request)
+            or clean_session_key(payload.get("session_key"))
+        )
+        if not session_key:
+            # No anonymous key => nothing to attribute the batch to. Silently
+            # accept (the storefront must never see an error) and store nothing.
+            return Response({"accepted": 0, "ignored": "no-session"}, status=status.HTTP_202_ACCEPTED)
+
+        if _throttled(session_key):
+            return Response(
+                {"detail": "تعداد رویدادها بیش از حد مجاز است."},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+        raw_events = payload.get("events")
+        if not isinstance(raw_events, list):
+            return Response(
+                {"events": ["فهرست رویدادها الزامی است."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        raw_events = raw_events[: int(getattr(settings, "ANALYTICS_MAX_BATCH", MAX_BATCH_SIZE) or MAX_BATCH_SIZE)]
+
+        django_user = getattr(request, "user", None)
+        user = django_user if getattr(django_user, "is_authenticated", False) else None
+
+        accepted = 0
+        for raw in raw_events:
+            if not isinstance(raw, dict):
+                continue
+            event_type = _clean_type(raw.get("type"))
+            if event_type not in Event.Type.values:
+                continue
+
+            product = None
+            if raw.get("product_id") not in (None, "", 0, "0"):
+                product = _product_for(raw.get("product_id"))
+
+            query = str(raw.get("query") or "").strip()[:MAX_SEARCH_QUERY]
+            results = raw.get("results")
+            if event_type == Event.Type.SEARCH and not query:
+                continue
+
+            event = record_event(
+                event_type,
+                product=product,
+                user=user,
+                session_key=session_key,
+                search_query=query,
+                search_results=results if event_type == Event.Type.SEARCH else None,
+            )
+            if event is not None:
+                accepted += 1
+
+        return Response({"accepted": accepted}, status=status.HTTP_202_ACCEPTED)

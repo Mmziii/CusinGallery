@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import * as api from "../services/wishlistApi";
 import { normalizeApiError } from "../utils/apiError";
+import { trackEvent } from "../utils/behaviour";
 import { toast } from "../utils/toast";
 let pending;
 let generation = 0;
@@ -22,6 +23,7 @@ const useWishlistStore = create((set, get) => ({
       if (existing) await api.removeWishlistItem(existing.id);
       else {
         const item = await api.addWishlistItem(productId);
+        trackEvent("wishlist_add", { product_id: productId });
         set(state => ({ items: [...state.items.filter(row => row.product.id !== productId), item], revision: state.revision + 1 }));
       }
       if (existing) set(state => ({ items: state.items.filter(item => item.id !== existing.id), revision: state.revision + 1 }));

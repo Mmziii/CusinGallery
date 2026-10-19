@@ -24,6 +24,7 @@ import * as reviewsApi from "../services/reviewsApi";
 import useAuthStore from "../store/useAuthStore";
 import useCartStore from "../store/useCartStore";
 import { normalizeApiError } from "../utils/apiError";
+import { trackEvent } from "../utils/behaviour";
 import { recordView } from "../utils/recentlyViewed";
 import { shareImageUrl } from "../utils/shareImage";
 import { brandUrl } from "../utils/brands";
@@ -219,6 +220,8 @@ function ProductDetailPage() {
   // Part R5 item 10: record the view in browser-local storage only.
   useEffect(() => {
     if (product?.id) recordView(product.id);
+    // Privacy-friendly analytics: one product_view per product page.
+    if (product?.id) trackEvent("product_view", { product_id: product.id });
   }, [product?.id]);
 
   // Per-product SEO/social metadata (Phase E). Values start undefined

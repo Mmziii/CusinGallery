@@ -76,6 +76,8 @@ LOCAL_APPS = [
     "apps.notifications",
     "apps.reviews",
     "apps.banners",
+    # Privacy-friendly behaviour events + the owner's reports page.
+    "apps.analytics",
     # Admin-panel tooling (theme helpers, Jalali display filter, dashboard,
     # quick search, staff groups). Model-less: adds no tables.
     "apps.adminui",
@@ -663,6 +665,23 @@ PRODUCT_IMAGE_IMPORT_BATCH_SIZE = env.int(
 # (the admin always shows the naming rules inline). Leave empty to show
 # the plain reference to docs/OWNER_GUIDE.fa.md.
 OWNER_GUIDE_URL = env("OWNER_GUIDE_URL", default="")
+
+# ---------------------------------------------------------------------------
+# Behaviour analytics (privacy-friendly) -- see apps/analytics/
+# ---------------------------------------------------------------------------
+# How long raw events are kept. `manage.py prune_analytics_events` (run
+# daily by the production scheduler) deletes anything older; orders,
+# customers and carts are never touched.
+ANALYTICS_RETENTION_DAYS = env.int("ANALYTICS_RETENTION_DAYS", default=365)
+# Fixed-window limit for the batched storefront endpoint, per anonymous
+# session key (never per IP -- no IP is read or stored).
+ANALYTICS_RATE_LIMIT_PER_MINUTE = env.int("ANALYTICS_RATE_LIMIT_PER_MINUTE", default=60)
+# The `event` field's own limit: a single batched POST carries at most
+# this many entries (extra entries are ignored, never an error).
+ANALYTICS_MAX_BATCH = env.int("ANALYTICS_MAX_BATCH", default=25)
+# Exports (reports + admin changelist actions) stop at this many rows and
+# say so in Persian, so one click can never time out a worker.
+ANALYTICS_EXPORT_ROW_LIMIT = env.int("ANALYTICS_EXPORT_ROW_LIMIT", default=50000)
 
 # ---------------------------------------------------------------------------
 # Placeholder (sample) content -- see apps/core/placeholders.py
