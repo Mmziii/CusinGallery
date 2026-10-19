@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import PropTypes from "prop-types";
 
 /**
@@ -39,9 +39,15 @@ function SmartImage({ image, alt, className, eager = false, sizes }) {
   const src = (typeof image === "string" ? image : image?.image) || null;
   const [failed, setFailed] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const imageRef = useRef(null);
 
-  // A new src (e.g. switching gallery image) gets a fresh chance.
-  useEffect(() => { setFailed(false); setLoaded(false); }, [src]);
+  // A new src (e.g. switching gallery image) gets a fresh chance. Cached
+  // images can complete before React attaches onLoad, so detect that state.
+  useEffect(() => {
+    setFailed(false);
+    const imageElement = imageRef.current;
+    setLoaded(Boolean(imageElement?.complete && imageElement.naturalWidth > 0));
+  }, [src]);
 
   if (!src || failed) {
     // Context CSS (storefront.css) sizes the placeholder exactly like the
@@ -69,6 +75,7 @@ function SmartImage({ image, alt, className, eager = false, sizes }) {
         />
       ) : null}
       <img
+        ref={imageRef}
         src={src}
         alt={alt || ""}
         className={`${className || ""} smart-image ${loaded ? "is-loaded" : ""}`}

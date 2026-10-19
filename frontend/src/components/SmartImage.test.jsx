@@ -4,11 +4,11 @@
  * placeholder in the image area (never a broken <img> or a layout shift).
  */
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import SmartImage from "./SmartImage";
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe("SmartImage placeholder", () => {
   it("renders the placeholder when there is no image at all", () => {
@@ -35,6 +35,15 @@ describe("SmartImage placeholder", () => {
     render(<SmartImage image={{ image: "/media/ok.jpg" }} alt="خوب" />);
     const img = screen.getByAltText("خوب");
     expect(img.getAttribute("src")).toBe("/media/ok.jpg");
+  });
+
+  it("reveals a cached image whose load event fired before the component mounted", async () => {
+    vi.spyOn(HTMLImageElement.prototype, "complete", "get").mockReturnValue(true);
+    vi.spyOn(HTMLImageElement.prototype, "naturalWidth", "get").mockReturnValue(320);
+    const { container } = render(<SmartImage image="/media/cached.jpg" alt="ذخیره‌شده" />);
+    await screen.findByAltText("ذخیره‌شده");
+    expect(container.querySelector("img").className).toContain("is-loaded");
+    vi.restoreAllMocks();
   });
 
   it("uses responsive webp variants when provided", () => {
