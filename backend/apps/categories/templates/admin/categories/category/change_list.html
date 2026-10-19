@@ -1,0 +1,33 @@
+{% extends "admin/change_list.html" %}
+{% load i18n adminui_extras %}
+{% comment %}
+Category tree changelist (Task 3): the stock list, plus an in-place
+warning when products still sit on a parent (grouping) category.
+Products belong on leaf sub-categories only; the product list's
+«انتقال به دسته…» action moves them.
+{% endcomment %}
+
+{% block content_title %}
+{{ block.super }}
+{% if products_on_parents %}
+<div class="cusin-quick-warning" role="alert">
+  {% cusin_icon "alert-triangle" %}
+  <span>
+    این محصولات در دستهٔ والد هستند؛ آن‌ها را به یک زیردسته منتقل کنید
+    ({{ products_on_parents_count|numfa }} محصول).
+    محصول فقط در زیردسته‌ها قرار می‌گیرد و دسته‌های والد فقط گروه‌بندی‌اند.
+    برای جابه‌جایی گروهی، در
+    <a href="{{ products_changelist_url }}">فهرست محصولات</a>
+    آن‌ها را انتخاب و از اقدام «انتقال به دسته…» استفاده کنید:
+    <ul>
+      {% for row in products_on_parents %}
+      <li>
+        <a href="{{ row.change_url }}">{{ row.product.name }}</a>
+        — اکنون در «{{ row.product.category.name }}» (دستهٔ والد)
+      </li>
+      {% endfor %}
+    </ul>
+  </span>
+</div>
+{% endif %}
+{% endblock %}

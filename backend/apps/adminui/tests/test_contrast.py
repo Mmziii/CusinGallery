@@ -10,7 +10,7 @@ from pathlib import Path
 from django.conf import settings
 from django.test import SimpleTestCase
 
-from .test_responsive_css import _strip_comments, _without_media
+from .test_responsive_css import _rules, _strip_comments, _without_media
 
 CSS_PATH = Path(settings.BASE_DIR) / "static" / "admin_theme" / "css" / "theme.css"
 WHITE = "#ffffff"
@@ -161,6 +161,57 @@ class CssContrastTests(SimpleTestCase):
         self.assertNotIn("color_theme_toggle", base_template)
         self.assertNotIn("theme-toggle", base_template)
         self.assertNotRegex(theme_script, r"(?i)dark.?mode|color_theme_toggle")
+
+
+    def test_delete_confirmation_buttons_are_readable(self):
+        """The confirm button was white on #f9e7e3 and cancel white on #f5f6f8.
+
+        Stock base.css styles `.delete-confirmation form input[type="submit"]`
+        with `--delete-button-bg` (the pale pink reserved for the row delete
+        link) and `.cancel-link` with `--close-button-bg`, both keeping the
+        white `--button-fg`. The theme must override both for every model's
+        delete page -- Django's stock templates and the product ones share
+        `body.delete-confirmation`.
+        """
+        rules = _rules(self.flat_css)
+        confirm = rules[".delete-confirmation form input[type=\"submit\"]"]
+        self.assertEqual(confirm["background"], "var(--cg-danger)")
+        self.assertEqual(confirm["color"], WHITE)
+        self.assertGreaterEqual(
+            contrast(WHITE, self.token("--cg-danger")), 4.5,
+            "confirm button text on solid red must meet AA",
+        )
+        hover = rules[".delete-confirmation form input[type=\"submit\"]:hover"]
+        self.assertEqual(hover["background"], "#962816")
+        self.assertEqual(hover["color"], WHITE)
+        self.assertGreaterEqual(contrast(WHITE, "#962816"), 4.5, "confirm hover")
+
+        cancel = rules[".delete-confirmation form .cancel-link"]
+        self.assertEqual(cancel["background"], "var(--cusin-surface)")
+        self.assertEqual(cancel["color"], "var(--cusin-text)")
+        self.assertEqual(cancel["border"], "1px solid var(--cusin-border-strong)")
+        self.assertGreaterEqual(
+            contrast(self.token("--cusin-text"), WHITE), 4.5, "cancel button text"
+        )
+        hover_cancel = rules[".delete-confirmation form .cancel-link:hover"]
+        self.assertEqual(hover_cancel["color"], "var(--cusin-text)")
+        self.assertGreaterEqual(
+            contrast(self.token("--cusin-text"), PAGE), 4.5, "cancel hover text"
+        )
+
+        # Every delete flow (single object, bulk, any model) shares the
+        # `delete-confirmation` body class -- including the two product
+        # templates this repo ships.
+        for template in (
+            Path(settings.BASE_DIR) / "apps" / "products" / "templates" / "admin"
+            / "products" / "product" / "delete_confirmation.html",
+            Path(settings.BASE_DIR) / "apps" / "products" / "templates" / "admin"
+            / "products" / "product" / "delete_selected_confirmation.html",
+        ):
+            source = template.read_text(encoding="utf-8")
+            with self.subTest(template=template.name):
+                self.assertIn("delete-confirmation", source)
+                self.assertIn('class="button cancel-link"', source)
 
     def test_luminance_math_on_reference_values(self):
         self.assertAlmostEqual(luminance("#000000"), 0.0, places=4)

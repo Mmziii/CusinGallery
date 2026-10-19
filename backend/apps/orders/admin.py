@@ -32,7 +32,7 @@ from django.utils.html import format_html
 from apps.adminui.admin_dates import jalali_date as _jalali_date, jalali_range
 from apps.adminui.jalali import format_jalali_datetime
 from apps.adminui.search import NormalizedSearchMixin
-from apps.adminui.templatetags.adminui_extras import toman_filter
+from apps.adminui.templatetags.adminui_extras import to_fa_digits, toman_filter
 from apps.payments.models import Payment
 
 from .models import Order, OrderItem
@@ -341,13 +341,19 @@ class OrderAdmin(NormalizedSearchMixin, admin.ModelAdmin):
         # account phone is the fallback when the customer ordered for
         # someone else.
         mobile = obj.shipping_phone or getattr(user, "phone", "") or ""
+        # Task 4: name on one line, phone (Persian digits, isolated LTR)
+        # on a second muted line; both ellipsize inside the cell with
+        # the full value in the title tooltip (theme.css section 24).
+        mobile_fa = to_fa_digits(str(mobile)) if mobile else "—"
         return format_html(
             '<span class="cusin-customer">'
-            '<span class="cusin-customer__name">{}</span>'
-            '<bdi class="cusin-customer__phone" dir="ltr">{}</bdi>'
+            '<span class="cusin-customer__name" title="{}">{}</span>'
+            '<bdi class="cusin-customer__phone" dir="ltr" title="{}">{}</bdi>'
             "</span>",
             name,
-            mobile or "—",
+            name,
+            mobile_fa,
+            mobile_fa,
         )
 
     @admin.display(description="وضعیت", ordering="status")
@@ -382,13 +388,16 @@ class OrderAdmin(NormalizedSearchMixin, admin.ModelAdmin):
             return format_html('<span class="cusin-muted">—</span>')
         phrase = LAST_ATTEMPT_PHRASES.get(payment.status, payment.get_status_display())
         when = timezone.localtime(payment.created_at)
+        when_fa = format_jalali_datetime(when)
         return format_html(
-            '<span class="cusin-attempt attempt-{}" title="{}">{}'
-            '<small class="cusin-muted"> — {}</small></span>',
+            '<span class="cusin-attempt attempt-{}" title="{} — {}">'
+            '<span class="cusin-attempt__label">{}</span>'
+            '<small class="cusin-muted">{}</small></span>',
             payment.status,
-            payment.get_status_display(),
             phrase,
-            format_jalali_datetime(when),
+            when_fa,
+            phrase,
+            when_fa,
         )
 
     @admin.display(description="مبلغ (تومان)", ordering="total")

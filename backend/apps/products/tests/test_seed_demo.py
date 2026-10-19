@@ -78,7 +78,7 @@ class SeedDemoTests(TestCase):
         self.assertEqual(Banner.objects.count(), counts["banners"])
         self.assertEqual(DailyDeal.objects.count(), counts["deals"])
 
-    def test_seed_reuses_the_named_root_when_a_legacy_category_owns_kitchen(self):
+    def test_seed_reuses_the_flagged_root_when_a_legacy_category_owns_kitchen(self):
         root = Category.objects.get(name="آشپزخانه", parent__isnull=True)
         root.slug = "kitchen-root"
         root.save(update_fields=["slug"])

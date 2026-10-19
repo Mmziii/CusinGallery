@@ -4,12 +4,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import CategoryFilterTree from "./CategoryFilterTree";
 
 const categories = [
-  { id: 1, name: "آشپزخانه", slug: "kitchen-root", is_root: true, parent: null, parent_slug: null },
+  { id: 1, name: "آشپزخانه", slug: "kitchen-root", is_catalog_root: true, parent: null, parent_slug: null },
   { id: 2, name: "ظروف پخت", slug: "cookware", parent: 1, parent_slug: "kitchen-root" },
   { id: 3, name: "قابلمه", slug: "pots", parent: 2, parent_slug: "cookware" },
   { id: 4, name: "قابلمه گرانیتی", slug: "granite", parent: 3, parent_slug: "pots" },
   { id: 5, name: "بلور", slug: "glass", parent: 1, parent_slug: "kitchen-root" },
-  { id: 6, name: "دسته قدیمی", slug: "kitchen", is_root: false, parent: 1, parent_slug: "kitchen-root" },
+  { id: 6, name: "دسته قدیمی", slug: "kitchen", is_catalog_root: false, parent: 1, parent_slug: "kitchen-root" },
 ];
 afterEach(cleanup);
 

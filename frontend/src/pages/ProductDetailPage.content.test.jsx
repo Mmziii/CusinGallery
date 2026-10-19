@@ -128,7 +128,7 @@ function renderProduct(path = "/products/pan/") {
 
 describe("Product page content (Part S5 item 5)", () => {
   it("links the flagged fallback root to the shop, not a hardcoded kitchen filter", async () => {
-    productResponse = { ...PRODUCT, category: { ...PRODUCT.category, is_root: false, ancestors: [{ name: "آشپزخانه", slug: "kitchen-root-2", is_root: true }] } };
+    productResponse = { ...PRODUCT, category: { ...PRODUCT.category, is_catalog_root: false, ancestors: [{ name: "آشپزخانه", slug: "kitchen-root-2", is_catalog_root: true }] } };
     renderProduct();
     await screen.findByRole("heading", { name: "قابلمه گرانیتی" });
     expect(screen.getByRole("link", { name: "آشپزخانه" }).getAttribute("href")).toBe("/shop/");

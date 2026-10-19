@@ -95,11 +95,21 @@ class PaymentAdmin(admin.ModelAdmin):
 
     @admin.display(description="شماره سفارش")
     def order_number(self, obj):
-        return obj.order.order_number
+        # Same isolated-LTR, ellipsised rendering as the orders list
+        # (theme.css section 24): a long order number can never push
+        # into the neighbouring customer/status cells.
+        return format_html(
+            '<span class="cusin-order-number" dir="ltr" title="{}">{}</span>',
+            obj.order.order_number,
+            obj.order.order_number,
+        )
 
     @admin.display(description="مشتری")
     def customer(self, obj):
-        return obj.order.user.get_full_name() or obj.order.user.username
+        name = obj.order.user.get_full_name() or obj.order.user.username
+        return format_html(
+            '<span class="cusin-cell-ellipsis" title="{}">{}</span>', name, name
+        )
 
     @admin.display(description="درگاه", ordering="gateway")
     def gateway_name(self, obj):

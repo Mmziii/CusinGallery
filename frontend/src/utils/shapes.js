@@ -36,7 +36,7 @@ export const categoryShape = PropTypes.shape({
   image: PropTypes.string,
   ordering: PropTypes.number,
   product_count: PropTypes.number,
-  is_root: PropTypes.bool,
+  is_catalog_root: PropTypes.bool,
   parent: PropTypes.number,
   parent_slug: PropTypes.string,
   children: PropTypes.array,

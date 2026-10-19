@@ -190,16 +190,24 @@ class Command(BaseCommand):
                 "ordering": len(categories),
             }
             if parent_slug is None:
-                # Resolve the migrated root by NAME + top-level position;
-                # never attach demo groups to a legacy row just because
-                # that unrelated category owns the preferred slug.
-                category = Category.objects.filter(name=name, parent__isnull=True).first()
+                # The catalog root is the flagged row -- never a name/slug
+                # match, so demo groups cannot land on a legacy row that
+                # merely owns the preferred slug.
+                category = Category.catalog_root()
                 if category is None:
                     candidate, suffix = slug, 0
                     while Category.objects.filter(slug=candidate).exists():
                         suffix += 1
                         candidate = f"{slug}-root" if suffix == 1 else f"{slug}-root-{suffix - 1}"
                     category = Category.objects.create(slug=candidate, **defaults)
+                # Keep re-runs idempotent even on a database seeded before
+                # the flag existed.
+                if not category.is_catalog_root:
+                    Category.objects.filter(is_catalog_root=True).exclude(
+                        pk=category.pk
+                    ).update(is_catalog_root=False)
+                    category.is_catalog_root = True
+                    category.save(update_fields=["is_catalog_root", "updated_at"])
             else:
                 category, _ = Category.objects.get_or_create(slug=slug, defaults=defaults)
             categories[slug] = category

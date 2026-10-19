@@ -1,36 +1,62 @@
-import { normalizePersianText } from "./persianText";
-
 /**
- * Root identity is API metadata or the top-level Persian name, NEVER a
- * preferred slug. Migration 0006 can produce kitchen-root(-N) when an
- * unrelated category already owns kitchen; published slugs may change too.
+ * Stage 1 helpers for the single-root catalog tree.
+ *
+ * The backend has exactly ONE catalog root («آشپزخانه»), marked with
+ * the API flag `is_catalog_root` (categories migration 0007).
+ * Everything a shopper browses lives under it. Surfaces that
+ * present "the main groups" (header mega menu, home category
+ * tiles, shop filters) must show its CHILDREN -- never the root
+ * itself, which would render as one useless tile.
+ *
+ * Root identity is the flag alone. Migration 0006 may publish the
+ * root as kitchen-root(-N), and the owner may rename it (name or
+ * slug) afterwards, so no helper may fall back to either field.
  */
-export function isCatalogRoot(category) {
-  if (!category || typeof category !== "object") return false;
-  if (typeof category.is_root === "boolean") return category.is_root;
-  return category.parent == null && !category.parent_slug
-    && normalizePersianText(category.name) === "آشپزخانه";
+
+/** The catalog-root row of a root list, by flag. */
+export function catalogRoot(roots) {
+  const list = Array.isArray(roots) ? roots : [];
+  return list.find((category) => category.is_catalog_root === true) || null;
 }
 
-/** Main groups are the root's children, with a safe legacy-tree fallback. */
+/** True when this category OBJECT is the flagged catalog root. */
+export function isCatalogRoot(category) {
+  return Boolean(category) && typeof category === "object" && category.is_catalog_root === true;
+}
+
+/** True when a category object (or a slug, resolved in `flatList`) is the root. */
+export function isCatalogRootCategory(category, flatList) {
+  if (!category) return false;
+  if (typeof category === "object") return isCatalogRoot(category);
+  const list = Array.isArray(flatList) ? flatList : [];
+  return list.some((item) => item.slug === category && item.is_catalog_root === true);
+}
+
+/**
+ * The main groups of the catalog: the children of the catalog
+ * root. Falls back to the given roots when there is no flagged
+ * root (unmigrated data / test fixtures).
+ */
 export function mainGroups(roots) {
   const list = Array.isArray(roots) ? roots : [];
-  const root = list.find(isCatalogRoot);
-  return root ? root.children || [] : list;
+  const root = catalogRoot(list);
+  if (!root) return list;
+  return root.children || [];
 }
 
 /**
- * Pass the category object so root breadcrumbs map to /shop/ regardless
- * of its slug. A slug-only caller can supply the flat API list; otherwise
- * it remains a literal filter, not a guessed root identity.
+ * Shop URL for a category. The catalog root has no products
+ * of its own (it is a grouping node), so it maps to the shop
+ * itself instead of a dead filter.
+ *
+ * Pass the category OBJECT so the root is recognised by its flag.
+ * A slug-only caller can supply the flat API list; otherwise the
+ * slug is treated as a literal filter, never as a guessed root.
  */
 export function categoryUrl(category, flatList = []) {
   const slug = typeof category === "string" ? category : category?.slug;
   if (!slug) return "/shop/";
-  const row = typeof category === "object"
-    ? category
-    : (Array.isArray(flatList) ? flatList : []).find((item) => item.slug === slug);
-  if (isCatalogRoot(row)) return "/shop/";
+  if (isCatalogRootCategory(category, flatList)) return "/shop/";
   return `/shop/?category=${encodeURIComponent(slug)}`;
 }
 
@@ -73,10 +99,7 @@ export function pruneEmptyCategories(categories) {
     });
 }
 
-/**
- * The menu-ready catalog: main groups (children of the
- * «آشپزخانه» root), pruned of empty subtrees.
- */
+/** The menu-ready catalog: main groups, pruned of empty subtrees. */
 export function catalogGroups(roots) {
   return pruneEmptyCategories(mainGroups(roots));
 }

@@ -96,7 +96,19 @@ MIDDLEWARE = [
     "django_otp.middleware.OTPMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # Task 1: the admin's own "+" popups render in an in-page iframe, so
+    # admin responses must stay frameable by this origin (SAMEORIGIN)
+    # while the storefront/API keep the global DENY. MUST stay after
+    # XFrameOptionsMiddleware: response middleware runs in reverse, so
+    # this sets the header first and Django's middleware keeps it.
+    "apps.core.middleware.AdminFrameOptionsMiddleware",
 ]
+
+# The admin panel path, normalised to "/<path>/". ONE source of truth:
+# config/urls.py mounts the admin here and the framing middleware scopes
+# its SAMEORIGIN exception to the same prefix. Part R3: configurable
+# through the ADMIN_URL environment variable (default "admin/").
+ADMIN_PATH = "/" + (env("ADMIN_URL", default="admin/").strip().strip("/") or "admin") + "/"
 
 ROOT_URLCONF = "config.urls"
 

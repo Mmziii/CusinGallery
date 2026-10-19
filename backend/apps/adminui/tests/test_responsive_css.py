@@ -92,6 +92,9 @@ class ResponsiveCssTests(SimpleTestCase):
         cls.tablet = _rules(_media_block(cls.css, "(max-width: 1024px)"))
         cls.phone = _rules(_media_block(cls.css, "(max-width: 767px)"))
         cls.desktop = _rules(_media_block(cls.css, "(min-width: 1025px)"))
+        cls.tablet_wide = _rules(
+            _media_block(cls.css, "(min-width: 768px) and (max-width: 1024px)")
+        )
         cls.narrow_desktop = _rules(_media_block(cls.css, "(max-width: 1439px)"))
 
     def _effective(self, selector, prop):
@@ -223,7 +226,7 @@ class ResponsiveCssTests(SimpleTestCase):
         for selector in (
             "body.cusin-admin.app-products.model-product #container #changelist #result_list .cusin-product-summary__sku",
             "body.cusin-admin.app-products.model-productvariant #container #changelist #result_list td.field-sku",
-            "body.cusin-admin.app-orders.model-order #container #changelist #result_list td.field-user",
+            ".cusin-customer__phone",
             "body.cusin-admin.app-accounts.model-user #container #changelist #result_list td.field-username",
             "body.cusin-admin.app-accounts.model-user #container #changelist #result_list td.field-email",
             "body.cusin-admin.app-accounts.model-user #container #changelist #result_list td.field-phone",
@@ -260,10 +263,10 @@ class ResponsiveCssTests(SimpleTestCase):
                     self.assertEqual(self.narrow_desktop[selector]["display"], "none !important")
 
         widths = {
-            "action-checkbox-column": "4%", "column-order_number_cell": "18%",
-            "column-user": "20%", "column-status_badge": "14%",
-            "column-payment_badge": "14%", "column-total_fa": "20%",
-            "column-cusin-row-actions": "10%",
+            "action-checkbox-column": "4%", "column-order_number_cell": "16%",
+            "column-customer_cell": "18%", "column-status_badge": "13%",
+            "column-payment_badge": "13%", "column-last_attempt_cell": "9%",
+            "column-total_fa": "14%", "column-cusin-row-actions": "13%",
         }
         for column, width in widths.items():
             selector = f"body.cusin-admin.app-orders.model-order #result_list th.{column}"
@@ -279,17 +282,18 @@ class ResponsiveCssTests(SimpleTestCase):
                 "column-is_featured": "5%", "column-cusin-row-actions": "10%",
             },
             "app-orders.model-order": {
-                "action-checkbox-column": "4%", "column-order_number_cell": "14%",
-                "column-user": "14%", "column-status_badge": "8%",
-                "column-payment_badge": "8%", "column-total_fa": "12%",
-                "column-shipping_method_cell": "6%", "column-stock_restored_badge": "4%",
-                "column-refund_badge": "10%", "column-created_at_jalali": "10%",
-                "column-cusin-row-actions": "10%",
+                "action-checkbox-column": "3.5%", "column-order_number_cell": "12%",
+                "column-customer_cell": "15%", "column-status_badge": "9%",
+                "column-payment_badge": "9%", "column-last_attempt_cell": "10%",
+                "column-total_fa": "10%", "column-shipping_method_cell": "6%",
+                "column-stock_restored_badge": "3.5%", "column-refund_badge": "7%",
+                "column-created_at_jalali": "8%", "column-cusin-row-actions": "7%",
             },
             "app-categories.model-category": {
-                "action-checkbox-column": "5%", "column-name": "27%",
-                "column-parent": "22%", "column-is_active": "10%",
-                "column-ordering": "22%", "column-cusin-row-actions": "14%",
+                "action-checkbox-column": "5%", "column-tree_name": "38%",
+                "column-subtree_product_count": "14%", "column-active_badge": "11%",
+                "column-ordering": "14%", "column-add_subcategory": "10%",
+                "column-cusin-row-actions": "8%",
             },
             "app-accounts.model-user": {
                 "action-checkbox-column": "4%", "column-username": "15%",
@@ -317,6 +321,53 @@ class ResponsiveCssTests(SimpleTestCase):
                 selector = f"body.cusin-admin.{body_classes} #result_list th.{column}"
                 with self.subTest(selector=selector):
                     self.assertEqual(self.desktop[selector]["width"], expected_width)
+
+    def test_orders_rows_grow_to_fit_and_actions_stay_inside_the_row_at_1024(self):
+        """1024px used to mix desktop widths with the coarse-pointer card
+        layout: the two-line status badge and the customer's phone line
+        spilled below the row, and the 44px action buttons (… / edit)
+        painted outside the row card. Rows must grow with their content,
+        and the actions must wrap inside their own cell."""
+        row = self.base["#result_list tbody tr"]
+        self.assertEqual(row["height"], "auto")
+        self.assertEqual(row["max-height"], "none")
+        cell = self.base["#result_list tbody tr > td"]
+        self.assertEqual(cell["height"], "auto")
+        self.assertEqual(cell["max-height"], "none")
+
+        actions = self.base[".cusin-row-actions"]
+        self.assertEqual(actions["flex-wrap"], "wrap")
+        self.assertEqual(actions["min-width"], "0")
+        self.assertEqual(actions["max-width"], "100%")
+
+        # The tablet grid is fixed, like the >=1025 one.
+        table = self.tablet_wide[
+            "body.cusin-admin #container #changelist .results #result_list"
+        ]
+        self.assertEqual(table["table-layout"], "fixed")
+        self.assertEqual(table["width"], "100%")
+        self.assertEqual(table["min-width"], "0")
+        cards = self.tablet_wide[
+            "body.cusin-admin #container #changelist #result_list tbody td"
+        ]
+        self.assertEqual(cards["height"], "auto")
+        self.assertEqual(cards["max-height"], "none")
+        self.assertEqual(cards["white-space"], "normal")
+        tablet_actions = self.tablet_wide[
+            "body.cusin-admin #container #changelist #result_list tbody td.cusin-row-actions"
+        ]
+        self.assertEqual(tablet_actions["flex-wrap"], "wrap")
+        self.assertEqual(tablet_actions["min-width"], "0")
+
+        # A coarse pointer only enlarges the tap targets; the phone card
+        # layout is max-width: 767px, never `pointer: coarse`.
+        self.assertIn(
+            "@media (pointer: coarse), (max-width: 767px) {",
+            self.css,
+            "touch tap targets must still apply on coarse-pointer desktops",
+        )
+        self.assertNotIn("@media (pointer: coarse), (max-width: 767px) {\n  .content", self.css)
+        self.assertIn("@media (max-width: 767px) {\n  .content { padding: 14px 12px 48px; }", self.css)
 
     def test_desktop_row_actions_stay_compact_and_product_numeric_inputs_fit_nine_digits(self):
         actions = self.desktop[

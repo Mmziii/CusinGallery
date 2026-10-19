@@ -42,7 +42,9 @@ class CategoryMiniSerializer(serializers.Serializer):
     id = serializers.IntegerField()
     name = serializers.CharField()
     slug = serializers.SlugField()
-    is_root = serializers.BooleanField(read_only=True)
+    # The storefront marks the «آشپزخانه» root by this flag alone;
+    # name/slug are never treated as root identity.
+    is_catalog_root = serializers.BooleanField(required=False, default=False)
     # Stage 1 (root category «آشپزخانه»): storefront breadcrumbs
     # need the FULL ancestor chain (top-most first, NOT including
     # the category itself) -- کازین گالری › آشپزخانه › <group> ›
@@ -56,7 +58,11 @@ class CategoryMiniSerializer(serializers.Serializer):
         node = obj.parent
         guard = 0
         while node is not None and guard < 10:
-            chain.append({"slug": node.slug, "name": node.name, "is_root": node.is_root})
+            chain.append({
+                "slug": node.slug,
+                "name": node.name,
+                "is_catalog_root": node.is_catalog_root,
+            })
             node = node.parent
             guard += 1
         chain.reverse()

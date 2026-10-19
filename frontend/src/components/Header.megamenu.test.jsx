@@ -66,7 +66,7 @@ beforeAll(() => {
   apiClient.defaults.adapter = async (config) => {
     if (/categories\/tree/.test(config.url || "")) {
       return {
-        data: { count: 1, next: null, previous: null, results: [{ id: 99, name: "آشپزخانه", slug: "kitchen-root", is_root: true, children: TREE }] },
+        data: { count: 1, next: null, previous: null, results: [{ id: 99, name: "آشپزخانه", slug: "kitchen-root", is_catalog_root: true, children: TREE }] },
         status: 200,
         statusText: "OK",
         headers: {},

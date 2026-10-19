@@ -7,15 +7,15 @@ import Home from "./Home";
 
 const originalAdapter = apiClient.defaults.adapter;
 const GROUPS = [
-  { id: 2, name: "ظروف پخت", slug: "cookware", is_root: false, children: [] },
-  { id: 3, name: "دسته قدیمی", slug: "kitchen", is_root: false, children: [] },
+  { id: 2, name: "ظروف پخت", slug: "cookware", is_catalog_root: false, children: [] },
+  { id: 3, name: "دسته قدیمی", slug: "kitchen", is_catalog_root: false, children: [] },
 ];
 
 beforeEach(() => {
   apiClient.defaults.adapter = async (config) => {
     if ((config.url || "").includes("/categories/tree/")) {
       return {
-        data: { count: 1, next: null, previous: null, results: [{ id: 1, name: "آشپزخانه", slug: "kitchen-root-2", is_root: true, children: GROUPS }] },
+        data: { count: 1, next: null, previous: null, results: [{ id: 1, name: "آشپزخانه", slug: "kitchen-root-2", is_catalog_root: true, children: GROUPS }] },
         status: 200, statusText: "OK", headers: {}, config,
       };
     }

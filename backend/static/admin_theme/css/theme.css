@@ -712,13 +712,46 @@ a.deletelink:hover { background: var(--delete-button-hover-bg); }
 .submit-row a.deletelink:focus,
 .submit-row a.deletelink:active { background: var(--delete-button-hover-bg); }
 
-/* delete confirmation pages */
-.delete-confirmation .delete-confirmation-warning,
-.delete-confirmation form { margin-bottom: 16px; }
-.delete-confirmation input[type="submit"] {
+/* Delete confirmation pages (single object AND bulk delete, every model:
+   Django's own templates carry `body.delete-confirmation`, and the product
+   templates extend that same flow).
+
+   The stock base.css rule `.delete-confirmation form input[type="submit"]`
+   paints the confirm button with `--delete-button-bg` (the pale pink used
+   for the *row* delete link) and `--button-fg` (white): white on #f9e7e3,
+   unreadable. `--close-button-bg` did the same to «انصراف» (white on
+   #f5f6f8). Both are overridden here at the same-or-higher specificity,
+   loaded after the stock stylesheets, so every delete flow gets a solid
+   red confirm (white text, 6.5:1) and a plain outlined cancel button
+   (dark ink on white). */
+.delete-confirmation form input[type="submit"] {
   background: var(--cg-danger);
+  border: 1px solid var(--cg-danger);
+  color: #ffffff;
+  font-weight: 700;
 }
-.delete-confirmation input[type="submit"]:hover { background: #962816; }
+.delete-confirmation form input[type="submit"]:hover,
+.delete-confirmation form input[type="submit"]:focus,
+.delete-confirmation form input[type="submit"]:active {
+  background: #962816;
+  border-color: #962816;
+  color: #ffffff;
+}
+.delete-confirmation form .cancel-link,
+.delete-confirmation form .cancel-link:link,
+.delete-confirmation form .cancel-link:visited {
+  background: var(--cusin-surface);
+  border: 1px solid var(--cusin-border-strong);
+  color: var(--cusin-text);
+  font-weight: 600;
+}
+.delete-confirmation form .cancel-link:hover,
+.delete-confirmation form .cancel-link:focus,
+.delete-confirmation form .cancel-link:active {
+  background: var(--cusin-surface-2);
+  border-color: var(--cusin-text);
+  color: var(--cusin-text);
+}
 
 /* --------------------------------------------------------------------------
    8. Changelists (A4)
@@ -3076,7 +3109,13 @@ body.cusin-admin .skip-to-content-link {
   background: var(--cusin-surface);
   color: var(--cusin-text);
   vertical-align: middle;
+  /* Rows are sized by their content -- never by a fixed height. A
+     two-line status badge or a customer's second (phone) line must grow
+     the row instead of spilling below the card. */
+  height: auto;
+  max-height: none;
 }
+#result_list tbody tr { height: auto; max-height: none; }
 #result_list tbody tr > :first-child { border-inline-start: 1px solid var(--cusin-border); border-start-start-radius: var(--cusin-radius); border-end-start-radius: var(--cusin-radius); }
 #result_list tbody tr > :last-child { border-inline-end: 1px solid var(--cusin-border); border-start-end-radius: var(--cusin-radius); border-end-end-radius: var(--cusin-radius); }
 #result_list tbody tr { box-shadow: 0 2px 8px rgba(17, 24, 39, 0.05); }
@@ -3095,8 +3134,13 @@ body.cusin-admin .skip-to-content-link {
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 6px;
-  min-width: 96px;
+  /* The cell owns the width (the column map); its buttons wrap inside
+     it rather than painting past the row card. */
+  min-width: 0;
+  max-width: 100%;
+  height: auto;
   white-space: nowrap;
 }
 .cusin-row-edit {
@@ -3575,7 +3619,9 @@ body.login #footer { display: none; }
 .jalali-datepicker .selected,
 .jalali-calendar .selected { background: var(--cusin-accent-bg); color: var(--cg-olive-hover); }
 
-/* Touch controls reach 44px; phones keep the existing card and drawer layout. */
+/* Touch controls reach 44px on any coarse pointer (a touch laptop at
+   1024px included) and on phones. Kept separate from the phone layout
+   below: a coarse pointer must not turn a desktop changelist into cards. */
 @media (pointer: coarse), (max-width: 767px) {
   body.cusin-admin button,
   body.cusin-admin input[type="submit"],
@@ -3616,6 +3662,13 @@ body.login #footer { display: none; }
   body.cusin-admin textarea,
   body.cusin-admin .vTextField,
   body.cusin-admin .vLargeTextField { min-height: 44px; }
+}
+
+/* Phones: the card/drawer layout. Deliberately NOT shared with
+   `pointer: coarse` -- a touch laptop at 1024/1280/1366 keeps the
+   desktop changelist table (rows that grow to fit, actions inside
+   the row card). */
+@media (max-width: 767px) {
   .content { padding: 14px 12px 48px; }
   .cusin-topbar { flex-wrap: wrap; padding: 6px 10px; gap: 8px; }
   .cusin-search-trigger { order: 3; width: 100%; margin: 0; }
@@ -3857,11 +3910,72 @@ body.cusin-admin #container .cusin-gallery-field input[type="file"] {
   body.cusin-admin #container .cusin-gallery-card { box-sizing: border-box; width: 100%; }
 }
 
+/* --------------------------------------------------------------------------
+   Tablet-width desktops (768-1024 CSS px: a 1024px window, a zoomed
+   laptop) never had the >=1025 fixed grid, so the table fell back to
+   auto layout -- a long status badge widened its column, squeezed the
+   actions column, and the two action buttons (44px on a coarse pointer)
+   painted outside the row card. The same fixed grid applies here, the
+   rows grow with their content, and the actions wrap inside their cell.
+   -------------------------------------------------------------------------- */
+@media (min-width: 768px) and (max-width: 1024px) {
+  body.cusin-admin #container #changelist .results #result_list {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    table-layout: fixed;
+  }
+  body.cusin-admin #container #changelist #result_list thead th,
+  body.cusin-admin #container #changelist #result_list tbody td,
+  body.cusin-admin #container #changelist #result_list tbody th {
+    box-sizing: border-box;
+    min-width: 0;
+    max-width: 100%;
+    height: auto;
+    max-height: none;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    vertical-align: middle;
+  }
+  body.cusin-admin #container #changelist #result_list tbody td.cusin-row-actions {
+    min-width: 0;
+    max-width: 100%;
+    height: auto;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 4px;
+    white-space: normal;
+  }
+  /* Order workflow badges keep their words on one line where the column
+     allows it; a long label wraps and the row grows instead. */
+  body.cusin-admin.app-orders.model-order #result_list td.field-status_badge .cusin-badge,
+  body.cusin-admin.app-orders.model-order #result_list td.field-payment_badge .cusin-badge,
+  body.cusin-admin.app-orders.model-order #result_list td.field-refund_badge .cusin-badge {
+    box-sizing: border-box;
+    display: inline-block;
+    max-width: 100%;
+    height: auto;
+    padding-inline: 6px;
+    font-size: 14px;
+    line-height: 1.6;
+    text-align: center;
+    white-space: normal;
+    overflow-wrap: normal;
+    word-break: normal;
+    hyphens: none;
+  }
+  body.cusin-admin.app-orders.model-order #result_list td.field-customer_cell .cusin-customer {
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+
 /* Follow-up 4: on wide screens every changelist shares the full results box.
    The fixed desktop grid wraps content instead of letting long values or
    Django's editable product inputs force the table past its actions column.
-   At <=1024px the existing results scrollport remains available; phones keep
-   the labeled-card layout above. */
+   At <=1024px the tablet grid above keeps the same guarantee; phones keep
+   the labeled-card layout. */
 @media (min-width: 1025px) {
   /* Django's original-object paragraph is absolutely positioned over every
      row. It is redundant for these read-only form links; keep its hidden
@@ -4014,19 +4128,22 @@ body.cusin-admin #container .cusin-gallery-field input[type="file"] {
   body.cusin-admin #container #variants-group .tabular thead th:last-child,
   body.cusin-admin #container #variants-group .tabular tbody td.delete { width: 12%; }
 
-  /* Compact 1440px+ order grid: the least urgent facts move out of sight
-     on narrower screens, leaving the owner the customer, workflow and total. */
-  body.cusin-admin.app-orders.model-order #result_list th.action-checkbox-column { width: 4%; }
-  body.cusin-admin.app-orders.model-order #result_list th.column-order_number_cell { width: 14%; }
-  body.cusin-admin.app-orders.model-order #result_list th.column-user { width: 14%; }
-  body.cusin-admin.app-orders.model-order #result_list th.column-status_badge { width: 8%; }
-  body.cusin-admin.app-orders.model-order #result_list th.column-payment_badge { width: 8%; }
-  body.cusin-admin.app-orders.model-order #result_list th.column-total_fa { width: 12%; }
+  /* Order grid (Task 4: column names must match OrderAdmin's actual
+     list_display -- the old map sized a stale «column-user» and left
+     customer_cell / last_attempt_cell to share the leftovers, which
+     squeezed the customer into the status badge). Widths sum to 100. */
+  body.cusin-admin.app-orders.model-order #result_list th.action-checkbox-column { width: 3.5%; }
+  body.cusin-admin.app-orders.model-order #result_list th.column-order_number_cell { width: 12%; }
+  body.cusin-admin.app-orders.model-order #result_list th.column-customer_cell { width: 15%; }
+  body.cusin-admin.app-orders.model-order #result_list th.column-status_badge { width: 9%; }
+  body.cusin-admin.app-orders.model-order #result_list th.column-payment_badge { width: 9%; }
+  body.cusin-admin.app-orders.model-order #result_list th.column-last_attempt_cell { width: 10%; }
+  body.cusin-admin.app-orders.model-order #result_list th.column-total_fa { width: 10%; }
   body.cusin-admin.app-orders.model-order #result_list th.column-shipping_method_cell { width: 6%; }
-  body.cusin-admin.app-orders.model-order #result_list th.column-stock_restored_badge { width: 4%; }
-  body.cusin-admin.app-orders.model-order #result_list th.column-refund_badge { width: 10%; }
-  body.cusin-admin.app-orders.model-order #result_list th.column-created_at_jalali { width: 10%; }
-  body.cusin-admin.app-orders.model-order #result_list th.column-cusin-row-actions { width: 10%; }
+  body.cusin-admin.app-orders.model-order #result_list th.column-stock_restored_badge { width: 3.5%; }
+  body.cusin-admin.app-orders.model-order #result_list th.column-refund_badge { width: 7%; }
+  body.cusin-admin.app-orders.model-order #result_list th.column-created_at_jalali { width: 8%; }
+  body.cusin-admin.app-orders.model-order #result_list th.column-cusin-row-actions { width: 7%; }
   body.cusin-admin.app-orders.model-order #result_list td.field-status_badge .cusin-badge,
   body.cusin-admin.app-orders.model-order #result_list td.field-payment_badge .cusin-badge,
   body.cusin-admin.app-orders.model-order #result_list td.field-refund_badge .cusin-badge {
@@ -4047,12 +4164,14 @@ body.cusin-admin #container .cusin-gallery-field input[type="file"] {
     hyphens: none;
   }
 
+  /* Category tree (Task 3 columns). Widths sum to 100. */
   body.cusin-admin.app-categories.model-category #result_list th.action-checkbox-column { width: 5%; }
-  body.cusin-admin.app-categories.model-category #result_list th.column-name { width: 27%; }
-  body.cusin-admin.app-categories.model-category #result_list th.column-parent { width: 22%; }
-  body.cusin-admin.app-categories.model-category #result_list th.column-is_active { width: 10%; }
-  body.cusin-admin.app-categories.model-category #result_list th.column-ordering { width: 22%; }
-  body.cusin-admin.app-categories.model-category #result_list th.column-cusin-row-actions { width: 14%; }
+  body.cusin-admin.app-categories.model-category #result_list th.column-tree_name { width: 38%; }
+  body.cusin-admin.app-categories.model-category #result_list th.column-subtree_product_count { width: 14%; }
+  body.cusin-admin.app-categories.model-category #result_list th.column-active_badge { width: 11%; }
+  body.cusin-admin.app-categories.model-category #result_list th.column-ordering { width: 14%; }
+  body.cusin-admin.app-categories.model-category #result_list th.column-add_subcategory { width: 10%; }
+  body.cusin-admin.app-categories.model-category #result_list th.column-cusin-row-actions { width: 8%; }
 
   body.cusin-admin.app-accounts.model-user #result_list th.action-checkbox-column { width: 4%; }
   body.cusin-admin.app-accounts.model-user #result_list th.column-username { width: 15%; }
@@ -4152,12 +4271,17 @@ body.cusin-admin.cusin-import-page #content code {
     display: none !important;
   }
   body.cusin-admin.app-orders.model-order #result_list th.action-checkbox-column { width: 4%; }
-  body.cusin-admin.app-orders.model-order #result_list th.column-order_number_cell { width: 18%; }
-  body.cusin-admin.app-orders.model-order #result_list th.column-user { width: 20%; }
-  body.cusin-admin.app-orders.model-order #result_list th.column-status_badge { width: 14%; }
-  body.cusin-admin.app-orders.model-order #result_list th.column-payment_badge { width: 14%; }
-  body.cusin-admin.app-orders.model-order #result_list th.column-total_fa { width: 20%; }
-  body.cusin-admin.app-orders.model-order #result_list th.column-cusin-row-actions { width: 10%; }
+  body.cusin-admin.app-orders.model-order #result_list th.column-order_number_cell { width: 16%; }
+  body.cusin-admin.app-orders.model-order #result_list th.column-customer_cell { width: 18%; }
+  /* 13% keeps the short workflow labels («تأیید شده», «ارسال شده») on one
+     line; the long «در حال پرداخت در درگاه» wraps and the row grows. */
+  body.cusin-admin.app-orders.model-order #result_list th.column-status_badge { width: 13%; }
+  body.cusin-admin.app-orders.model-order #result_list th.column-payment_badge { width: 13%; }
+  body.cusin-admin.app-orders.model-order #result_list th.column-last_attempt_cell { width: 9%; }
+  body.cusin-admin.app-orders.model-order #result_list th.column-total_fa { width: 14%; }
+  /* Two 44px tap targets (coarse pointer) plus gap and cell padding must
+     fit: 13% of the results box at 1024px is ~129px. */
+  body.cusin-admin.app-orders.model-order #result_list th.column-cusin-row-actions { width: 13%; }
 }
 
 /* Global changelist typography: never make Persian or Latin words break by
@@ -4363,3 +4487,328 @@ body.cusin-admin .cusin-password-toggle:focus-visible {
 /* The login card sits on a dark gradient: keep the field readable there. */
 body.login .cusin-password-toggle { color: #4b5563; }
 body.login .cusin-password-toggle:hover { background: rgba(99, 112, 55, 0.16); }
+
+/* --------------------------------------------------------------------------
+   21. In-page modal for RelatedObjectLookups (Task 1)
+   Dimmed backdrop, centered panel (max 960px × 90vh, rounded, light theme),
+   title bar with page title and close ×, popup page in iframe,
+   fade + scale transition (respecting prefers-reduced-motion),
+   Escape and backdrop click close (dirty check via JS).
+   On phones the modal is full-screen.
+   -------------------------------------------------------------------------- */
+.cusin-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms var(--cusin-ease), visibility 180ms var(--cusin-ease);
+}
+.cusin-modal.is-open {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+}
+.cusin-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(17, 24, 39, 0.45);
+  backdrop-filter: blur(2px);
+}
+.cusin-modal-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(960px, 100%);
+  height: min(90vh, 900px);
+  max-width: 960px;
+  max-height: 90vh;
+  background: var(--cusin-surface, #ffffff);
+  border: 1px solid var(--cusin-border);
+  border-radius: 12px;
+  box-shadow: 0 24px 64px rgba(17, 24, 39, 0.28), 0 4px 16px rgba(17, 24, 39, 0.12);
+  overflow: hidden;
+  transform: scale(0.96);
+  opacity: 0;
+  transition: transform 180ms var(--cusin-ease), opacity 180ms var(--cusin-ease);
+}
+.cusin-modal.is-open .cusin-modal-panel {
+  transform: scale(1);
+  opacity: 1;
+}
+.cusin-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex: none;
+  min-height: 48px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--cusin-border);
+  background: var(--cusin-surface);
+}
+.cusin-modal-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--cusin-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.5;
+}
+.cusin-modal-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border: 1px solid transparent;
+  border-radius: var(--cusin-radius-sm);
+  background: transparent;
+  color: var(--cusin-text);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.cusin-modal-close:hover {
+  background: var(--cusin-surface-2);
+  border-color: var(--cusin-border);
+}
+.cusin-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+  background: var(--cusin-surface);
+}
+.cusin-modal-iframe {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: var(--cusin-surface);
+}
+@media (prefers-reduced-motion: reduce) {
+  .cusin-modal,
+  .cusin-modal-panel,
+  .cusin-modal-backdrop {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+@media (max-width: 767px) {
+  .cusin-modal {
+    padding: 0;
+    align-items: stretch;
+  }
+  .cusin-modal-panel {
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    border-radius: 0;
+    border: 0;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   22. Popup page layout bug (Task 1)
+   In popup mode the page must have no header/sidebar, no top gap, and the
+   tab bar must not cover content. The base template already hides header/
+   sidebar when is_popup, but the product form's sticky tab bar and preview
+   card need extra resets.
+   -------------------------------------------------------------------------- */
+body.popup {
+  background: var(--cusin-surface);
+}
+body.popup #container {
+  min-height: auto;
+}
+body.popup #header,
+body.popup .cusin-topbar-wrap,
+body.popup .cusin-breadcrumbs-wrap,
+body.popup #cusin-drawer,
+body.popup .cusin-drawer,
+body.popup .cusin-drawer-scrim {
+  display: none !important;
+}
+body.popup .main,
+body.popup #main {
+  display: block;
+}
+body.cusin-admin.popup #container .content {
+  padding: 0;
+  margin: 0;
+  max-width: 100%;
+}
+body.cusin-admin.popup #content {
+  padding: 12px 16px;
+}
+body.popup #content > h1:first-child {
+  margin-top: 0;
+}
+body.popup .cusin-anchor-nav {
+  position: static !important;
+  top: auto !important;
+  z-index: auto !important;
+  margin: 0 0 12px;
+  box-shadow: none;
+}
+body.cusin-admin.popup .cusin-product-enh {
+  grid-template-columns: minmax(0, 1fr);
+  margin: 0 0 12px;
+  gap: 12px;
+}
+body.popup .cusin-preview-card {
+  margin: 0;
+}
+body.popup #footer {
+  display: none;
+}
+body.popup .submit-row {
+  position: sticky;
+  bottom: 0;
+}
+body.popup .messagelist {
+  margin: 0 0 12px;
+}
+
+/* --------------------------------------------------------------------------
+   23. Category tree changelist (Task 3)
+   -------------------------------------------------------------------------- */
+.cusin-tree-name {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+/* --------------------------------------------------------------------------
+   24. Changelist cells never overlap their neighbour (Task 4)
+   A long unbroken value (a login-like customer name such as
+   «00doodooltala», an email, a phone) used to paint over the next
+   cell's badge: cells wrap Persian words normally (never per
+   character) but had no overflow bound, and the customer cell had
+   no styles at all -- name and LTR phone shared one jumbled line.
+   Now: the customer is name on one line + Persian-digit phone on a
+   second muted line, every long value ellipsises inside its own
+   cell (full value in the title tooltip), and the payments list
+   gets the explicit column widths it never had. Nothing here
+   re-enables per-character breaking of Persian words.
+   -------------------------------------------------------------------------- */
+.cusin-customer {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  max-width: 100%;
+}
+.cusin-customer__name {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.cusin-customer__phone {
+  display: block;
+  align-self: flex-start;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* A phone number is an LTR token (Persian digits, fixed order) inside
+     an RTL cell: isolate it so the name line above never reorders it. */
+  direction: ltr;
+  unicode-bidi: isolate;
+  white-space: nowrap;
+  color: var(--cusin-muted);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+.cusin-cell-ellipsis {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cusin-attempt {
+  max-width: 100%;
+  white-space: normal;
+}
+.cusin-attempt__label,
+.cusin-attempt small {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The cells that can hold an unbroken token clip inside themselves
+   (fixed-layout desktops and the auto-layout scrollport alike). */
+body.cusin-admin #result_list td.field-customer_cell,
+body.cusin-admin #result_list td.field-customer,
+body.cusin-admin #result_list td.field-order_number,
+body.cusin-admin #result_list td.field-username,
+body.cusin-admin #result_list td.field-email,
+body.cusin-admin #result_list td.field-phone,
+body.cusin-admin #result_list td.field-product_summary {
+  overflow: hidden;
+}
+body.cusin-admin #result_list td.field-customer_cell { max-width: 220px; }
+body.cusin-admin #result_list td.field-username > a,
+body.cusin-admin #result_list td.field-email,
+body.cusin-admin #result_list td.field-phone {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+body.cusin-admin #result_list td.field-username > a {
+  display: block;
+  max-width: 100%;
+  white-space: nowrap;
+}
+
+/* Badges may wrap inside a narrow status column; they must never
+   spill out of it (base .cusin-badge is nowrap for roomy contexts). */
+body.cusin-admin #result_list .cusin-badge {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+body.cusin-admin.app-orders.model-order #result_list .cusin-badge,
+body.cusin-admin.app-payments.model-payment #result_list .cusin-badge {
+  white-space: normal;
+  text-align: center;
+}
+
+/* Payments never had a width map; give it one (sums to 100 with the
+   JS-appended row-actions column). */
+@media (min-width: 1025px) {
+  body.cusin-admin.app-payments.model-payment #result_list th.action-checkbox-column { width: 4%; }
+  body.cusin-admin.app-payments.model-payment #result_list th.column-id { width: 6%; }
+  body.cusin-admin.app-payments.model-payment #result_list th.column-order_number { width: 15%; }
+  body.cusin-admin.app-payments.model-payment #result_list th.column-customer { width: 16%; }
+  body.cusin-admin.app-payments.model-payment #result_list th.column-amount_fa { width: 13%; }
+  body.cusin-admin.app-payments.model-payment #result_list th.column-gateway_name { width: 10%; }
+  body.cusin-admin.app-payments.model-payment #result_list th.column-status_badge { width: 10%; }
+  body.cusin-admin.app-payments.model-payment #result_list th.column-paid_at_jalali { width: 11%; }
+  body.cusin-admin.app-payments.model-payment #result_list th.column-created_at_jalali { width: 11%; }
+  body.cusin-admin.app-payments.model-payment #result_list th.column-cusin-row-actions { width: 4%; }
+}

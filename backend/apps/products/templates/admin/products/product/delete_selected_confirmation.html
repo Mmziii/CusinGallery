@@ -1,0 +1,51 @@
+{% extends "admin/base_site.html" %}
+{% load i18n l10n admin_urls static adminui_extras %}
+{% comment %}
+Bulk product delete confirmation (Task 2) -- stock delete_selected flow
+with the consequences in plain Persian. See delete_confirmation.html.
+{% endcomment %}
+
+{% block extrahead %}
+    {{ block.super }}
+    {{ media }}
+    <script src="{% static 'admin/js/cancel.js' %}" async></script>
+{% endblock %}
+
+{% block bodyclass %}{{ block.super }} app-{{ opts.app_label }} model-{{ opts.model_name }} delete-confirmation delete-selected-confirmation{% endblock %}
+
+{% block content %}
+{% if perms_lacking %}
+    <p>حذف محصولات انتخاب‌شده ممکن نیست، چون همراه آن‌ها باید موارد زیر هم حذف شوند و شما برای حذف آن‌ها دسترسی ندارید:</p>
+    <ul>{{ perms_lacking|unordered_list }}</ul>
+    <p>اگر فقط نمی‌خواهید این محصولات در فروشگاه دیده شوند، نیازی به حذف نیست: برگردید و از اقدام «پنهان کردن از فروشگاه» استفاده کنید.</p>
+{% elif protected %}
+    <p>حذف محصولات انتخاب‌شده ممکن نیست، چون موارد زیر به آن‌ها وابسته‌اند و نباید حذف شوند:</p>
+    <ul>{{ protected|unordered_list }}</ul>
+    <p>اگر فقط نمی‌خواهید این محصولات در فروشگاه دیده شوند، نیازی به حذف نیست: برگردید و از اقدام «پنهان کردن از فروشگاه» استفاده کنید.</p>
+{% else %}
+    <p>آیا از حذف محصولات انتخاب‌شده مطمئن هستید؟ این کار برگشت‌پذیر نیست. همهٔ موارد زیر همراه آن‌ها برای همیشه حذف می‌شوند:</p>
+    <ul>
+        {% for model_name, object_count in model_count %}
+        <li>{{ model_name|capfirst }}: {{ object_count|numfa }} مورد</li>
+        {% endfor %}
+    </ul>
+    <p>خریدهای همراه (خودکار) و اطلاع‌رسانی‌های موجودیِ مربوط به این محصولات هم خودکار حذف می‌شوند.</p>
+    <p><strong>سفارش‌های گذشته حذف نمی‌شوند.</strong> نام و قیمت این محصولات در سفارش‌های قبلی همان‌طور که ثبت شده‌اند باقی می‌مانند.</p>
+    <p>اگر فقط نمی‌خواهید این محصولات در فروشگاه دیده شوند، حذف نکنید: انصراف بدهید و از اقدام «پنهان کردن از فروشگاه» استفاده کنید.</p>
+    <h2>جزئیات موارد حذف‌شونده</h2>
+    {% for deletable_object in deletable_objects %}
+        <ul>{{ deletable_object|unordered_list }}</ul>
+    {% endfor %}
+    <form method="post">{% csrf_token %}
+    <div>
+    {% for obj in queryset %}
+    <input type="hidden" name="{{ action_checkbox_name }}" value="{{ obj.pk|unlocalize }}">
+    {% endfor %}
+    <input type="hidden" name="action" value="delete_selected">
+    <input type="hidden" name="post" value="yes">
+    <input type="submit" value="بله، حذف شوند">
+    <a href="#" class="button cancel-link">انصراف</a>
+    </div>
+    </form>
+{% endif %}
+{% endblock %}

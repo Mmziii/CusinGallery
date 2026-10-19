@@ -1,0 +1,38 @@
+{% extends "admin/base_site.html" %}
+{% load i18n adminui_extras %}
+{% comment %}
+Task 3: «انتقال به دسته…» -- pick one LEAF category (full paths) for the
+selected products. Posts only ids + category back; the view re-checks
+that the target really has no sub-categories.
+{% endcomment %}
+
+{% block content %}
+<div class="cusin-percent-flow">
+  <div class="cusin-card">
+    <div class="cusin-card-head">
+      <h2>انتقال {{ count|numfa }} محصول به یک زیردسته</h2>
+    </div>
+    <p>محصول را فقط در زیردسته‌ها قرار دهید؛ دسته‌های والد فقط گروه‌بندی هستند. به همین دلیل در این فهرست فقط دسته‌هایی آمده‌اند که خودشان زیردسته ندارند و مسیر کامل هر دسته نوشته شده است.</p>
+    <form method="post" action="{{ action_url }}">
+      {% csrf_token %}
+      <input type="hidden" name="ids" value="{{ ids }}">
+      <div class="cusin-form-grid">
+        <div class="cusin-field">
+          <label for="cusin-move-category">زیردستهٔ مقصد</label>
+          <select id="cusin-move-category" name="category" required>
+            <option value="">— یک زیردسته انتخاب کنید —</option>
+            {% for pk, path in leaf_categories %}
+            <option value="{{ pk }}">{{ path }}</option>
+            {% endfor %}
+          </select>
+          <p class="help">مثلاً «آشپزخانه › پخت‌وپز › قابلمه»: محصول در آخرین دسته (قابلمه) قرار می‌گیرد.</p>
+        </div>
+      </div>
+      <div class="cusin-form-actions">
+        <button type="submit" class="cusin-btn">انتقال محصولات</button>
+        <a class="cusin-btn cusin-btn--ghost" href="{{ changelist_url }}">انصراف</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
