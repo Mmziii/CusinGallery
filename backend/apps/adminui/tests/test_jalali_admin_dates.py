@@ -18,6 +18,7 @@ from __future__ import annotations
 import datetime as dt
 import re
 
+from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
@@ -25,6 +26,7 @@ from django.utils import timezone
 
 from apps.adminui.admin_dates import jalali_column, jalali_date, jalali_range
 from apps.adminui.jalali import gregorian_to_jalali
+from apps.adminui.jalali_forms import JalaliDateField, JalaliDateTimeField, JalaliDateInput, JalaliDateTimeInput
 
 from .helpers import make_order, make_product, make_superuser
 
@@ -71,6 +73,41 @@ def result_table(html: str) -> str:
     if start == -1:
         return html
     return html[start:html.find("</table>", start)]
+
+
+class JalaliAdminInputTests(TestCase):
+    def test_date_field_accepts_latin_and_persian_jalali_formats(self):
+        expected = dt.date(2026, 10, 19)
+        self.assertEqual(JalaliDateField().clean("1405/07/27"), expected)
+        self.assertEqual(JalaliDateField().clean("۱۴۰۵-۰۷-۲۷"), expected)
+
+    def test_datetime_field_converts_to_local_aware_datetime(self):
+        with timezone.override("Asia/Tehran"):
+            value = JalaliDateTimeField().clean("1405-07-27 10:35")
+        self.assertEqual(timezone.localtime(value).date(), dt.date(2026, 10, 19))
+        self.assertEqual(timezone.localtime(value).time(), dt.time(10, 35))
+        self.assertTrue(timezone.is_aware(value))
+
+    def test_widgets_display_jalali_date_and_tehran_time(self):
+        date_widget = JalaliDateInput()
+        self.assertEqual(date_widget.format_value(dt.date(2026, 10, 19)), "۱۴۰۵/۰۷/۲۷")
+        with timezone.override("Asia/Tehran"):
+            value = timezone.make_aware(dt.datetime(2026, 10, 19, 7, 5), dt.timezone.utc)
+            self.assertEqual(JalaliDateTimeInput().format_value(value), "۱۴۰۵/۰۷/۲۷ ۱۰:۳۵")
+
+    def test_invalid_jalali_day_is_rejected(self):
+        field = JalaliDateField()
+        with self.assertRaises(ValidationError):
+            field.clean("1405/12/31")
+
+    def test_coupon_admin_date_fields_use_jalali_widgets(self):
+        from django.contrib import admin
+        from apps.discounts.models import Coupon
+
+        model_admin = admin.site._registry[Coupon]
+        form = model_admin.get_form(type("Request", (), {"user": make_superuser()})())
+        self.assertIsInstance(form.base_fields["start_date"].widget, JalaliDateTimeInput)
+        self.assertIsInstance(form.base_fields["expiration_date"].widget, JalaliDateTimeInput)
 
 
 class JalaliRangeTests(TestCase):

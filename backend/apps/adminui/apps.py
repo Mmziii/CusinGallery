@@ -18,7 +18,9 @@ class AdminuiConfig(AppConfig):
         # Persian titles for the django-otp admins (see third_party_admin.py).
         # Runs after django.contrib.admin's autodiscover, which registers them.
         from .admin_actions import install_persian_admin_actions
+        from .jalali_forms import install_jalali_admin_fields
         from .third_party_admin import register_persian_otp_admins
 
+        install_jalali_admin_fields()
         register_persian_otp_admins()
         install_persian_admin_actions()
