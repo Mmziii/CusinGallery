@@ -24,10 +24,14 @@
  *    that calls them programmatically, plus a capture-phase fallback
  *    for dynamically added rows and for view-related links (which
  *    Django does not mark data-popup="yes").
- *  - saving renders popup_response.html; its popup_response.js calls
- *    opener.dismiss* which fails inside an iframe (opener is null),
- *    so on iframe load we read the same data-popup-response JSON and
- *    invoke the matching dismiss handler with a synthetic win object.
+ *  - saving renders popup_response.html. This project overrides that
+ *    template (templates/admin/popup_response.html): inside the modal
+ *    iframe it never loads Django's popup_response.js, so window.opener
+ *    is never touched and the old
+ *    "Cannot read properties of null (reading 'dismissAddRelatedObjectPopup')"
+ *    console error cannot happen. On iframe load we read the documented
+ *    data-popup-response JSON and invoke the matching dismiss handler
+ *    with a synthetic win object.
  */
 (function () {
   "use strict";
@@ -244,10 +248,10 @@
 
     // Keep window.name in sync so nested popups compute __2, __3...
     try { if (currentPopupName) win.name = currentPopupName; } catch (e) {}
-    // Best-effort opener proxy for any third-party popup script.
-    try {
-      Object.defineProperty(win, "opener", { value: window, configurable: true, writable: true });
-    } catch (e) { try { win.opener = window; } catch (e2) {} }
+    // Deliberately NO window.opener proxy: the iframe flow must never touch
+    // opener (it is null in an iframe and caused the console error fixed by
+    // templates/admin/popup_response.html). The popup response JSON is read
+    // by handlePopupResponse above.
 
     // Raw-id lookup chooser links inside the iframe.
     doc.querySelectorAll("a[data-popup-opener]").forEach(function (link) {

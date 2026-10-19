@@ -1,0 +1,19 @@
+{% load i18n static %}<!DOCTYPE html>
+<html lang="{{ LANGUAGE_CODE|default:'fa' }}"{% if LANGUAGE_BIDI %} dir="rtl"{% endif %}>
+  <head>
+    <meta charset="utf-8">
+    <title>{% translate 'Popup closing…' %}</title>
+  </head>
+  <body>
+    {# The JSON payload is read by the in-page modal (parent document) when #}
+    {# this document finishes loading inside its iframe. It deliberately has #}
+    {# no src: Django's stock popup_response.js would run here and call the #}
+    {# global `opener`, which is null inside an iframe -- that was the #}
+    {# "Cannot read properties of null (reading 'dismissAddRelatedObjectPopup')" #}
+    {# console error. #}
+    <script id="django-admin-popup-response-constants"
+            data-popup-response="{{ popup_response_data }}"></script>
+    <script src="{% static 'admin_theme/js/popup_response_bridge.js' %}"
+            data-popup-response-script="{% static 'admin/js/popup_response.js' %}"></script>
+  </body>
+</html>
