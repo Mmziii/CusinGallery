@@ -359,8 +359,24 @@ input:focus, textarea:focus, select:focus {
   padding: var(--space-3);
   align-self: start;
   position: sticky;
-  top: 120px;
+  top: calc(var(--site-header-height, 76px) + var(--space-4, 16px));
+  max-height: calc(100vh - var(--site-header-height, 76px) - var(--space-4, 16px) - var(--space-4, 16px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
   z-index: 1;
+}
+
+.shop__sidebar::-webkit-scrollbar {
+  width: 6px;
+}
+.shop__sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.shop__sidebar::-webkit-scrollbar-thumb {
+  background-color: var(--color-border);
+  border-radius: 3px;
 }
 .shop__sidebar h2 { font-size: var(--font-size-lg); margin-top: 0; }
 .filter-group { margin-bottom: var(--space-4); }
@@ -833,7 +849,7 @@ input:focus, textarea:focus, select:focus {
 
 @media (max-width: 1024px) {
   .shop { grid-template-columns: 1fr; }
-  .shop__sidebar { position: static; }
+  .shop__sidebar { position: static; max-height: none; overflow-y: visible; }
 }
 
 @media (max-width: 768px) {

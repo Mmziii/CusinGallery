@@ -364,6 +364,16 @@ describe("sticky CSS contract (item 4)", () => {
     expect(phone.top).toBe("var(--site-header-height, 76px)");
   });
 
+  it("audits the shop sidebar on desktop: sticky with header-aware max-height, auto scroll and thin scrollbar", () => {
+    const rules = parseCss();
+    const sidebar = effectiveDeclarations(rules, ".shop__sidebar", null);
+    expect(sidebar.position).toBe("sticky");
+    expect(sidebar["overflow-y"]).toBe("auto");
+    expect(sidebar["scrollbar-width"]).toBe("thin");
+    expect(sidebar["max-height"]).toContain("100vh");
+    expect(sidebar["max-height"]).toContain("var(--site-header-height");
+  });
+
   it("gives the cart/checkout wrappers their own stacking context", () => {
     const rules = parseCss();
     for (const wrapper of [".cart-page__body", ".checkout__body"]) {
