@@ -2435,3 +2435,68 @@ input, select, textarea { min-width: 0; max-width: 100%; }
 .shipping-method--disabled { background: var(--color-bg); cursor: not-allowed; }
 .shipping-method--disabled .shipping-method__icon,
 .shipping-method--disabled strong { color: var(--color-text-muted); }
+
+/* --- Owner-editable content (Task 3) --- */
+
+/* Text hero shown when no banner exists yet: same copy block as a slide,
+   on the brand's dark surface, so a fresh install is never headless. */
+.hero--copy {
+  background: var(--brand-green-dark);
+  min-height: clamp(220px, 34vw, 340px);
+  display: flex;
+  align-items: flex-end;
+}
+.hero--copy .hero__copy { padding-block: var(--space-6); }
+.hero--copy .hero__copy p { margin-bottom: var(--space-4); }
+
+.site-footer__tagline { color: var(--brand-gold); font-weight: 600; margin-bottom: var(--space-2); }
+.site-footer__contact p { margin: 0 0 var(--space-1); }
+.site-footer__contact a { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
+.site-footer__social {
+  list-style: none;
+  display: flex;
+  gap: var(--space-2);
+  padding: 0;
+  margin: var(--space-3) 0 0;
+}
+.site-footer__social a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(206, 180, 100, .5);
+  color: var(--brand-gold);
+}
+.site-footer__social a:hover { background: rgba(206, 180, 100, .15); }
+
+/* Owner-written rich text (sanitised allowlist: p, strong, em, h2, ul/ol,
+   li, a, blockquote). Persian line-height and RTL list markers; no
+   <script>/<style>/inline styles ever reach this container. */
+.rich-text > :first-child { margin-top: 0; }
+.rich-text > :last-child { margin-bottom: 0; }
+.rich-text p { margin: 0 0 var(--space-3); }
+.rich-text h2 { font-size: var(--font-size-lg); margin: var(--space-4) 0 var(--space-2); }
+.rich-text h3 { font-size: var(--font-size-md); margin: var(--space-3) 0 var(--space-2); }
+.rich-text ul, .rich-text ol { padding-inline-start: var(--space-4); margin: 0 0 var(--space-3); }
+.rich-text li { margin-bottom: var(--space-2); }
+.rich-text a { color: var(--color-primary-dark); text-decoration: underline; text-underline-offset: 3px; }
+.rich-text a:hover { color: var(--color-accent); }
+.rich-text blockquote {
+  margin: var(--space-3) 0;
+  padding-inline-start: var(--space-3);
+  border-inline-start: 3px solid var(--brand-gold);
+  color: var(--color-text-muted);
+}
+
+.skeleton-line {
+  height: 14px;
+  margin-bottom: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: linear-gradient(90deg, var(--color-border), var(--color-bg), var(--color-border));
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.2s linear infinite;
+}
+.skeleton-line--short { width: 45%; }
+@keyframes skeleton-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }

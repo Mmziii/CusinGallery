@@ -94,8 +94,13 @@ describe("raw catalog <img> elements", () => {
 
   it("documents the reviewed exceptions", () => {
     const allowed = FILES.filter(({ rawLines }) => /@catalog-img-allowed/.test(rawLines.join("\n")));
-    // Exactly one today: ProductCard's decorative hover layer.
-    expect(allowed.map((f) => f.rel)).toEqual([path.join("components", "ProductCard.jsx")]);
+    // Two reviewed exceptions today: the owner-uploaded brand MARK in the
+    // header (site chrome, SVG-first, not catalog data), and ProductCard's
+    // decorative hover layer.
+    expect(allowed.map((f) => f.rel)).toEqual([
+      path.join("components", "Header.jsx"),
+      path.join("components", "ProductCard.jsx"),
+    ]);
   });
 });
 

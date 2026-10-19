@@ -9,7 +9,6 @@ pin the new behaviour: placeholders fail the card, each missing item is
 named in Persian, and the legal pages are checked too.
 """
 import re
-from unittest import mock
 
 from django.test import TestCase, override_settings
 
@@ -143,38 +142,35 @@ class LegalPageReadinessTests(CacheIsolationMixin, TestCase):
         assert_persian(self, card["label"], "legal_pages label")
 
     def test_sample_pages_fail_and_name_themselves(self):
+        from apps.core.models import InfoPage
+
+        page = InfoPage.objects.get(slug="about")
+        page.body = "<p>[متن نمونه — بعداً جایگزین شود]</p>"
+        page.save()
+
         card = readiness_by_id()["legal_pages"]
         self.assertFalse(card["ok"])
         assert_persian(self, card["detail"], "legal_pages detail")
-        self.assertTrue(card["missing"])
-        for page in card["missing"]:
-            assert_persian(self, page["label"], "page label")
+        self.assertEqual([item["slug"] for item in card["missing"]], ["about"])
+        for item in card["missing"]:
+            assert_persian(self, item["label"], "page label")
             # named once -- in the list, not spelled out in the sentence
-            self.assertNotIn(page["label"], card["detail"])
+            self.assertNotIn(item["label"], card["detail"])
 
     def test_card_passes_when_no_page_is_marked(self):
-        from pathlib import Path
-        import tempfile
-
-        directory = Path(tempfile.mkdtemp())
-        (directory / "TermsPage.jsx").write_text(
-            "export default function T() {\n"
-            "  return <InfoPageLayout placeholder={false}>متن حقوقی واقعی"
-            "</InfoPageLayout>;\n}\n",
-            encoding="utf-8",
-        )
-        with mock.patch("apps.core.placeholders.LEGAL_PAGES_DIR", directory):
-            card = readiness_by_id()["legal_pages"]
+        # The data migration copied the current texts into every row, so a
+        # fresh install is complete until the owner empties or unpublishes
+        # a page.
+        card = readiness_by_id()["legal_pages"]
         self.assertTrue(card["ok"])
 
-    def test_missing_frontend_sources_never_read_as_done(self):
-        from pathlib import Path
-        import tempfile
+    def test_missing_row_is_never_read_as_done(self):
+        from apps.core.models import InfoPage
 
-        absent = Path(tempfile.gettempdir()) / "no-frontend-here"
-        with mock.patch("apps.core.placeholders.LEGAL_PAGES_DIR", absent):
-            card = readiness_by_id()["legal_pages"]
+        InfoPage.objects.filter(slug="contact").delete()
+        card = readiness_by_id()["legal_pages"]
         self.assertFalse(card["ok"])
+        self.assertEqual([item["slug"] for item in card["missing"]], ["contact"])
 
 def outer_li(html, check_id):
     """The inner HTML of one readiness row (``<li data-check=…>``).
@@ -257,8 +253,13 @@ class ReadinessCardMarkupTests(CacheIsolationMixin, TestCase):
         self.assert_named_once(row, ["تلفن پشتیبانی", "نشانی فروشگاه"])
 
     def test_the_legal_pages_row_names_them_once_too(self):
+        from apps.core.models import InfoPage
+
+        page = InfoPage.objects.get(slug="privacy")
+        page.is_published = False
+        page.save()
         row = outer_li(self.dashboard(), "legal_pages")
-        self.assert_named_once(row, [])
+        self.assert_named_once(row, ["حریم خصوصی"])
 
     def test_the_item_is_one_full_width_block_not_a_row_of_columns(self):
         """Icon + title on the first row, then the sentence, then the

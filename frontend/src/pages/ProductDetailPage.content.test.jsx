@@ -10,7 +10,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
@@ -133,7 +133,14 @@ describe("Product page content (Part S5 item 5)", () => {
     await screen.findByRole("heading", { name: "قابلمه گرانیتی" });
     expect(screen.getByRole("link", { name: "آشپزخانه" }).getAttribute("href")).toBe("/shop/");
     expect(screen.getByRole("link", { name: "قابلمه", exact: true }).getAttribute("href")).toBe("/shop/?category=pots");
-    const crumbs = JSON.parse(document.getElementById("breadcrumb-jsonld").textContent);
+    // The JSON-LD block is appended in a passive effect; findByRole can
+    // resolve on the same commit, so wait for the script itself.
+    const breadcrumbScript = await waitFor(() => {
+      const node = document.getElementById("breadcrumb-jsonld");
+      expect(node).toBeTruthy();
+      return node;
+    });
+    const crumbs = JSON.parse(breadcrumbScript.textContent);
     expect(crumbs.itemListElement[1].item).toMatch(/\/shop\/$/);
   });
 
