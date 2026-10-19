@@ -315,7 +315,7 @@ describe("mini-cart prices (item 3)", () => {
 describe("checkout final amount (item 3)", () => {
   it("shows the server-computed «مبلغ قابل پرداخت» before the payment step", async () => {
     useAuthStore.setState({ user: ACCOUNT, isAuthenticated: true, isLoading: false });
-    const view = renderAt("/checkout/", <CheckoutPage />);
+    const view = renderAt("/checkout/?step=review", <CheckoutPage />);
     await screen.findByRole("heading", { name: "ثبت سفارش" });
 
     const summary = await waitFor(() => {
@@ -327,7 +327,7 @@ describe("checkout final amount (item 3)", () => {
     // 160,000 products + 45,000 standard shipping, straight from the API.
     expect(summary.textContent).toContain(formatPrice(205000));
 
-    fireEvent.click(screen.getByRole("button", { name: /ثبت سفارش/ }));
+    fireEvent.click(screen.getAllByRole("button", { name: /ثبت سفارش/ })[0]);
 
     // After the order is created (server) and before the gateway redirect,
     // the page shows the server's own total -- including gift wrapping.
