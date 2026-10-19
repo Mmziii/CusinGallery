@@ -118,6 +118,56 @@ class JalaliAdminInputTests(TestCase):
         self.assertIsInstance(form.base_fields["start_date"].widget, JalaliDateTimeInput)
         self.assertIsInstance(form.base_fields["expiration_date"].widget, JalaliDateTimeInput)
 
+    def test_daily_deal_and_banner_admin_date_fields_use_jalali_widgets(self):
+        from django.contrib import admin
+        from apps.banners.models import DailyDeal, Banner
+
+        user = make_superuser(username="deal_banner_admin", phone="09128889900")
+        deal_admin = admin.site._registry[DailyDeal]
+        form = deal_admin.get_form(type("Request", (), {"user": user})())
+        self.assertIsInstance(form.base_fields["starts_at"].widget, JalaliDateTimeInput)
+        self.assertIsInstance(form.base_fields["ends_at"].widget, JalaliDateTimeInput)
+        ctx = form.base_fields["starts_at"].widget.get_context("starts_at", None, {})
+        self.assertEqual(ctx["widget"]["attrs"].get("data-jalali-with-time"), "true")
+
+        banner_admin = admin.site._registry[Banner]
+        b_form = banner_admin.get_form(type("Request", (), {"user": user})())
+        self.assertIsInstance(b_form.base_fields["start_date"].widget, JalaliDateTimeInput)
+        self.assertIsInstance(b_form.base_fields["end_date"].widget, JalaliDateTimeInput)
+
+    def test_jalali_datepicker_assets_cover_all_requirements(self):
+        import os
+        from django.conf import settings
+
+        js_path = os.path.join(settings.BASE_DIR, "static/admin_theme/js/jalali_datepicker.js")
+        with open(js_path, "r", encoding="utf-8") as f:
+            js = f.read()
+
+        # Weekday headers
+        for letter in ["ش", "ی", "د", "س", "چ", "پ", "ج"]:
+            self.assertIn(letter, js)
+        # Persian year digits
+        self.assertIn("jalali-date-picker__year", js)
+        # Weekday alignment
+        self.assertIn("jalaliFirstDayWeekday", js)
+        # Today highlighted
+        self.assertIn("jalali-date-picker__day--today", js)
+        # Time selects in popup
+        self.assertIn("jalali-date-picker__time", js)
+        self.assertIn("hourSelect", js)
+        self.assertIn("minSelect", js)
+        # Reposition / flip
+        self.assertIn("repositionPopup", js)
+        self.assertIn("placeBelow", js)
+
+        css_path = os.path.join(settings.BASE_DIR, "static/admin_theme/css/jalali_datepicker.css")
+        with open(css_path, "r", encoding="utf-8") as f:
+            css = f.read()
+        self.assertIn(".jalali-date-picker__weekdays", css)
+        self.assertIn(".jalali-date-picker__day--today", css)
+        self.assertIn(".jalali-date-picker__time", css)
+        self.assertIn(".datetimeshortcuts", css)
+
 
 class JalaliRangeTests(TestCase):
     def test_a_two_day_window_prints_both_ends(self):

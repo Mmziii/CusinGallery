@@ -23,7 +23,7 @@
 .jalali-date-picker {
   position: fixed;
   z-index: 1200;
-  width: 280px;
+  width: 290px;
   box-sizing: border-box;
   padding: 10px;
   border: 1px solid #c9c5b5;
@@ -42,11 +42,109 @@
   border-radius: 5px;
   background: #faf9f5;
   cursor: pointer;
+  font-family: inherit;
+  font-size: 0.88rem;
 }
-.jalali-date-picker__head select { min-width: 88px; }
-.jalali-date-picker__head input { width: 58px; }
+.jalali-date-picker__head select { min-width: 88px; padding: 4px; font-family: inherit; }
+.jalali-date-picker__head input.jalali-date-picker__year {
+  width: 68px;
+  text-align: center;
+  padding: 4px;
+  border: 1px solid #c9c5b5;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 0.9rem;
+}
+
+.jalali-date-picker__weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-bottom: 6px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #737865;
+  text-align: center;
+}
+.jalali-date-picker__weekday {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+}
+
 .jalali-date-picker__days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
-.jalali-date-picker__days button:hover, .jalali-date-picker__days button:focus-visible { background: #eaf0e2; border-color: #52602d; }
+.jalali-date-picker__empty { min-width: 30px; min-height: 30px; }
+
+.jalali-date-picker__days button:hover, .jalali-date-picker__days button:focus-visible {
+  background: #eaf0e2;
+  border-color: #52602d;
+}
+
+/* Today highlighted */
+.jalali-date-picker__days button.jalali-date-picker__day--today {
+  border-color: #52602d;
+  font-weight: 800;
+  color: #2b3b0d;
+  background: #f0f4ea;
+  box-shadow: inset 0 0 0 1px #52602d;
+}
+
+/* Selected day */
+.jalali-date-picker__days button.jalali-date-picker__day--selected {
+  background: #52602d;
+  color: #fff;
+  border-color: #52602d;
+  font-weight: 800;
+}
+
+/* Time component */
+.jalali-date-picker__time {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #e1dfd5;
+  font-size: 0.85rem;
+}
+.jalali-date-picker__time-label {
+  font-weight: 700;
+  color: #52602d;
+}
+.jalali-date-picker__time-select {
+  padding: 3px 6px;
+  border: 1px solid #c9c5b5;
+  border-radius: 4px;
+  background: #faf9f5;
+  font-family: inherit;
+  font-size: 0.85rem;
+}
+.jalali-date-picker__time-sep {
+  font-weight: 800;
+}
+.jalali-date-picker__confirm {
+  padding: 4px 10px;
+  border: 1px solid #52602d;
+  border-radius: 5px;
+  background: #52602d;
+  color: #fff;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+.jalali-date-picker__confirm:hover {
+  background: #3e4a20;
+}
+
+/* Completely suppress any leftover Django default DateTimeShortcuts */
+.datetimeshortcuts,
+.calendar-shortcuts,
+.time-shortcuts {
+  display: none !important;
+}
 
 @media (max-width: 600px) {
   .jalali-date-picker.jalali-date-picker--mobile {

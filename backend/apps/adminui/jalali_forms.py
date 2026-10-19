@@ -58,9 +58,19 @@ class _JalaliWidgetMixin:
 class JalaliDateInput(_JalaliWidgetMixin, forms.TextInput):
     input_type = "text"
 
+    def get_context(self, name, value, attrs):
+        context = super().get_context(name, value, attrs)
+        context["widget"]["attrs"]["data-jalali-with-time"] = "false"
+        return context
+
 
 class JalaliDateTimeInput(_JalaliWidgetMixin, forms.TextInput):
     input_type = "text"
+
+    def get_context(self, name, value, attrs):
+        context = super().get_context(name, value, attrs)
+        context["widget"]["attrs"]["data-jalali-with-time"] = "true"
+        return context
 
 
 class JalaliDateField(forms.DateField):
@@ -96,20 +106,23 @@ class JalaliDateTimeField(forms.DateTimeField):
 
 def install_jalali_admin_fields():
     """Make Jalali fields the default for all editable admin date fields."""
-    from django.contrib.admin.options import ModelAdmin
+    from django.contrib.admin.options import BaseModelAdmin, ModelAdmin
 
-    if getattr(ModelAdmin.formfield_for_dbfield, "_jalali_wrapped", False):
+    if getattr(BaseModelAdmin.formfield_for_dbfield, "_jalali_wrapped", False):
         return
-    original = ModelAdmin.formfield_for_dbfield
 
-    def formfield_for_dbfield(self, db_field, request, **kwargs):
-        if isinstance(db_field, models.DateTimeField):
-            kwargs.setdefault("form_class", JalaliDateTimeField)
-            kwargs.setdefault("widget", JalaliDateTimeInput())
-        elif isinstance(db_field, models.DateField):
-            kwargs.setdefault("form_class", JalaliDateField)
-            kwargs.setdefault("widget", JalaliDateInput())
-        return original(self, db_field, request, **kwargs)
+    def wrap_formfield(original):
+        def formfield_for_dbfield(self, db_field, request, **kwargs):
+            if isinstance(db_field, models.DateTimeField):
+                kwargs.setdefault("form_class", JalaliDateTimeField)
+                kwargs.setdefault("widget", JalaliDateTimeInput())
+            elif isinstance(db_field, models.DateField):
+                kwargs.setdefault("form_class", JalaliDateField)
+                kwargs.setdefault("widget", JalaliDateInput())
+            return original(self, db_field, request, **kwargs)
 
-    formfield_for_dbfield._jalali_wrapped = True
-    ModelAdmin.formfield_for_dbfield = formfield_for_dbfield
+        formfield_for_dbfield._jalali_wrapped = True
+        return formfield_for_dbfield
+
+    BaseModelAdmin.formfield_for_dbfield = wrap_formfield(BaseModelAdmin.formfield_for_dbfield)
+    ModelAdmin.formfield_for_dbfield = wrap_formfield(ModelAdmin.formfield_for_dbfield)
