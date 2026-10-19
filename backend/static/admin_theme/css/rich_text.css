@@ -1,0 +1,37 @@
+/* نوار ابزار کوچک ویرایشگر متن «صفحات اطلاعاتی» (همان تم روشن پنل). */
+
+.cusin-rich-text-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  background: var(--cusin-surface-2, #f5f6f8);
+  border: 1px solid var(--cusin-border, #d6d9de);
+  border-radius: var(--cusin-radius-sm, 8px);
+}
+
+.cusin-rich-text-btn {
+  min-width: 34px;
+  padding: 6px 10px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  color: var(--cusin-text, #111827);
+  background: #fff;
+  border: 1px solid var(--cusin-border, #d6d9de);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.cusin-rich-text-btn:hover,
+.cusin-rich-text-btn:focus-visible {
+  border-color: var(--cusin-link, #637037);
+  color: var(--cusin-link, #637037);
+}
+
+.cusin-rich-text-hint {
+  margin-inline-start: auto;
+  font-size: 0.78rem;
+  color: var(--cusin-muted, #4b5563);
+}

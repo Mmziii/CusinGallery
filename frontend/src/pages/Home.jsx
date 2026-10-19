@@ -12,6 +12,7 @@ import SmartImage from "../components/SmartImage";
 import { CardRowSkeleton, HeroSkeleton } from "../components/Skeletons";
 import { ErrorState } from "../components/ui";
 import { usePageMeta } from "../hooks/usePageMeta";
+import useSiteContent from "../hooks/useSiteContent";
 import useReveal from "../hooks/useReveal";
 import { useAsync } from "../hooks/useAsync";
 import { bannerShape } from "../utils/shapes";
@@ -28,7 +29,24 @@ import { fetchProductReviews } from "../services/reviewsApi";
  * countdown, curated rows, a short brand story and review highlights.
  * Everything stays API-driven and silently skips absent sections.
  */
-function HeroSlider({ banners, isLoading }) {
+function HeroCopy({ hero }) {
+  if (!hero?.title && !hero?.subtitle) return null;
+  return (
+    <section className="hero hero--copy" aria-label="معرفی فروشگاه">
+      <div className="hero__copy container">
+        {hero.title ? <h2>{hero.title}</h2> : null}
+        {hero.subtitle ? <p>{hero.subtitle}</p> : null}
+        {hero.button_text ? (
+          <Link className="btn btn--gold" to={hero.button_link || "/shop/"}>
+            {hero.button_text}
+          </Link>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function HeroSlider({ banners, isLoading, hero }) {
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const touchX = useRef(null);
@@ -40,7 +58,9 @@ function HeroSlider({ banners, isLoading }) {
   }, [paused, banners.length]);
 
   if (isLoading) return <HeroSkeleton />;
-  if (banners.length === 0) return null;
+  // Owner-written hero copy (Task 3) is the homepage hero until at least
+  // one banner exists; the banner admin then owns the slider copy.
+  if (banners.length === 0) return <HeroCopy hero={hero} />;
 
   const go = (delta) => setIndex((i) => (i + delta + banners.length) % banners.length);
 
@@ -128,12 +148,12 @@ const TRUST_ITEMS = [
   { icon: "bolt-fast", label: "امکان تحویل اکسپرس" },
 ];
 
-function TrustStrip() {
+function TrustStrip({ items }) {
   const ref = useReveal();
   return (
-    <section className="trust-strip reveal" ref={ref} aria-label="مزایای خرید از کازین گالری">
+    <section className="trust-strip reveal" ref={ref} aria-label="مزایای خرید">
       <div className="container trust-strip__inner">
-        {TRUST_ITEMS.map(({ icon, label }) => (
+        {items.map(({ icon, label }) => (
           <div key={label} className="trust-strip__item">
             <Icon name={icon} size={20} />
             <span>{label}</span>
@@ -178,7 +198,7 @@ function Countdown({ endsAt, serverNow }) {
   );
 }
 
-function DailyDealsSection() {
+function DailyDealsSection({ title }) {
   const ref = useReveal();
   const { data, isLoading, error } = useAsync(() => fetchDailyDeals(), []);
 
@@ -186,10 +206,10 @@ function DailyDealsSection() {
   if (error || !data?.results?.length) return null;
 
   return (
-    <section className="section section--dark reveal" ref={ref} aria-label="پیشنهاد امروز">
+    <section className="section section--dark reveal" ref={ref} aria-label={title}>
       <div className="container">
         <div className="section__head">
-          <h2>پیشنهاد امروز</h2>
+          <h2>{title}</h2>
           <span className="section__rule" aria-hidden="true" />
         </div>
         <div className="deals-grid">
@@ -257,7 +277,7 @@ function ProductRow({ title, params }) {
   );
 }
 
-function ReviewHighlights({ products }) {
+function ReviewHighlights({ products, title }) {
   const ref = useReveal();
   const { data } = useAsync(async () => {
     const lists = await Promise.all(
@@ -275,7 +295,7 @@ function ReviewHighlights({ products }) {
   return (
     <section className="section container reveal" ref={ref}>
       <div className="section__head">
-        <h2>از زبان خریداران</h2>
+        <h2>{title}</h2>
         <span className="section__rule" aria-hidden="true" />
       </div>
       <div className="review-highlights">
@@ -293,18 +313,14 @@ function ReviewHighlights({ products }) {
   );
 }
 
-function BrandStory() {
+function BrandStory({ story }) {
   const ref = useReveal();
   return (
     <section className="section section--story reveal" ref={ref}>
       <div className="container section--story__inner">
         <img src="/brand/lockup.svg" alt="CusinGallery" className="section--story__logo" loading="lazy" />
-        <h2>کازین گالری؛ خانهٔ ظروف دوست‌داشتنی</h2>
-        <p>
-          ما در کازین گالری باور داریم آشپزخانه قلب هر خانه است؛ به همین دلیل هر ظرف، قابلمه و
-          بلوری را خودمان پیش از عرضه بررسی می‌کنیم و با بسته‌بندی ضدضربه و پشتیبانی پاسخگو به
-          دست شما می‌رسانیم. انتخابی مطمئن، برای خانه‌ای زیباتر.
-        </p>
+        {story.title ? <h2>{story.title}</h2> : null}
+        {story.text ? <p>{story.text}</p> : null}
       </div>
     </section>
   );
@@ -312,6 +328,13 @@ function BrandStory() {
 
 function Home() {
   usePageMeta({ path: "/" });
+  const content = useSiteContent();
+  const homeCopy = content.home || {};
+  const sections = homeCopy.sections || {};
+  const hero = homeCopy.hero || {};
+  // An empty owner list means "hide the strip" (a real payload is the only
+  // way to get []); a failed request yields the default payload instead.
+  const trustItems = content.trust_strip || TRUST_ITEMS;
   const bannersState = useAsync(() => fetchBanners(), []);
   const categoriesState = useAsync(() => getCategoryTree(), []);
   const bestSellersState = useAsync(() => listProducts({ is_best_seller: true, page_size: 4 }), []);
@@ -322,14 +345,18 @@ function Home() {
 
   return (
     <div className="home">
-      <h1 className="sr-only">کازین گالری؛ فروشگاه لوازم خانه و آشپزخانه</h1>
-      <HeroSlider banners={bannersState.data || []} isLoading={bannersState.isLoading} />
-      <TrustStrip />
+      <h1 className="sr-only">{homeCopy.heading || "کازین گالری؛ فروشگاه لوازم خانه و آشپزخانه"}</h1>
+      <HeroSlider
+        banners={bannersState.data || []}
+        isLoading={bannersState.isLoading}
+        hero={hero}
+      />
+      <TrustStrip items={trustItems} />
 
       {categoryGroups.length ? (
         <section className="section container reveal" ref={categoriesRef}>
           <div className="section__head">
-            <h2>دسته‌بندی‌ها</h2>
+            <h2>{sections.categories || "دسته‌بندی‌ها"}</h2>
             <span className="section__rule" aria-hidden="true" />
           </div>
           <div className="category-grid">
@@ -351,28 +378,36 @@ function Home() {
         </section>
       ) : null}
 
-      <DailyDealsSection />
+      <DailyDealsSection title={sections.deals || "پیشنهاد امروز"} />
 
       <BrandTiles />
 
-      <ProductRow title="محصولات منتخب" params={{ is_featured: true }} />
-      <ProductRow title="جدیدترین محصولات" params={{ is_new: true }} />
-      <ProductRow title="پرفروش‌ترین‌ها" params={{ is_best_seller: true }} />
+      <ProductRow title={sections.featured || "محصولات منتخب"} params={{ is_featured: true }} />
+      <ProductRow title={sections.new || "جدیدترین محصولات"} params={{ is_new: true }} />
+      <ProductRow title={sections.best_sellers || "پرفروش‌ترین‌ها"} params={{ is_best_seller: true }} />
       {bestSellersState.data?.results?.length ? (
-        <ReviewHighlights products={bestSellersState.data.results} />
+        <ReviewHighlights
+          products={bestSellersState.data.results}
+          title={sections.reviews || "از زبان خریداران"}
+        />
       ) : null}
       <RecentlyViewed />
-      <BrandStory />
+      <BrandStory story={homeCopy.story || {}} />
     </div>
   );
 }
 
-HeroSlider.propTypes = { banners: PropTypes.arrayOf(bannerShape).isRequired, isLoading: PropTypes.bool };
-TrustStrip.propTypes = {};
+HeroSlider.propTypes = {
+  banners: PropTypes.arrayOf(bannerShape).isRequired,
+  isLoading: PropTypes.bool,
+  hero: PropTypes.object,
+};
+HeroCopy.propTypes = { hero: PropTypes.object };
+TrustStrip.propTypes = { items: PropTypes.arrayOf(PropTypes.object).isRequired };
 Countdown.propTypes = { endsAt: PropTypes.string.isRequired, serverNow: PropTypes.string.isRequired };
-DailyDealsSection.propTypes = {};
+DailyDealsSection.propTypes = { title: PropTypes.string.isRequired };
 ProductRow.propTypes = { title: PropTypes.string.isRequired, params: PropTypes.object.isRequired };
-ReviewHighlights.propTypes = { products: PropTypes.array.isRequired };
-BrandStory.propTypes = {};
+ReviewHighlights.propTypes = { products: PropTypes.array.isRequired, title: PropTypes.string.isRequired };
+BrandStory.propTypes = { story: PropTypes.object.isRequired };
 
 export default Home;

@@ -672,16 +672,9 @@ OWNER_GUIDE_URL = env("OWNER_GUIDE_URL", default="")
 # Those must read as MISSING everywhere (readiness card, storefront,
 # invoices, SMS) instead of being shown to customers.
 #
-# The legal pages live in the frontend sources, which a deployed backend
-# container does not ship. Set LEGAL_PAGES_PLACEHOLDER to a comma-separated
-# list of still-unedited page slugs to drive that check from the
-# deployment instead of the repository:
-#   LEGAL_PAGES_PLACEHOLDER=about,terms,privacy,shipping-returns,contact
-LEGAL_PAGES_PLACEHOLDER = [
-    slug.strip()
-    for slug in env("LEGAL_PAGES_PLACEHOLDER", default="").split(",")
-    if slug.strip()
-]
+# The legal pages themselves are InfoPage rows (apps/core/models.py), so the
+# readiness card reads their real text from the database; there is no
+# separate deployment-time list to keep in sync.
 
 # ---------------------------------------------------------------------------
 # Error monitoring (Phase E) -- optional, env-driven Sentry

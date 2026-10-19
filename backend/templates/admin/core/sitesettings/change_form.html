@@ -1,0 +1,64 @@
+{% extends "admin/change_form.html" %}
+{% load i18n static %}
+
+{% comment %}
+«محتوا و ظاهر سایت»: the stock change form plus a live theme preview.
+
+The preview is deliberately a small mock (header + one product card +
+button) and is driven by the SAME preset data the backend validates, so the
+owner sees the effect of a color/radius/font choice before saving. The reset
+button posts to a dedicated admin URL (confirmed first) and applies the
+default «زیتونی و طلایی» look immediately.
+{% endcomment %}
+
+{% block after_field_sets %}
+  {{ block.super }}
+
+  <div class="cusin-theme-preview" id="cusin-theme-preview">
+    <div class="cusin-theme-preview__head">
+      <h2>پیش‌نمایش زندهٔ ظاهر فروشگاه</h2>
+      <p>
+        تغییر رنگ‌ها و گزینه‌ها همان لحظه در این کادر دیده می‌شود؛ برای اعمال
+        روی فروشگاه، دکمهٔ «ذخیره» را بزنید.
+      </p>
+    </div>
+
+    <div class="cusin-theme-preview__frame" id="cusin-theme-preview-frame" aria-label="پیش‌نمایش ظاهر فروشگاه">
+      <div class="cusin-tp-header">
+        <span class="cusin-tp-logo">{{ original.site_name|default:"کازین گالری" }}</span>
+        <nav class="cusin-tp-nav" aria-hidden="true">
+          <span>خانه</span>
+          <span>فروشگاه</span>
+          <span>تماس با ما</span>
+        </nav>
+      </div>
+      <div class="cusin-tp-body">
+        <div class="cusin-tp-card">
+          <div class="cusin-tp-media" aria-hidden="true"></div>
+          <strong class="cusin-tp-name">قابلمهٔ سرامیکی</strong>
+          <span class="cusin-tp-price">۱٬۲۵۰٬۰۰۰ تومان</span>
+          <button type="button" class="cusin-tp-btn" tabindex="-1">افزودن به سبد خرید</button>
+        </div>
+        <p class="cusin-tp-text">
+          نمونهٔ متن توضیحات محصول. خوانایی متن روی پس‌زمینه پیش از ذخیره
+          بررسی می‌شود.
+        </p>
+        <span class="cusin-tp-link">مشاهدهٔ همهٔ محصولات</span>
+      </div>
+    </div>
+
+    <div class="cusin-theme-preview__actions">
+      <button
+        type="button"
+        class="button cusin-theme-reset"
+        id="cusin-theme-reset"
+        data-reset-url="{{ cusin_theme_reset_url }}"
+        data-confirm="آیا از بازگشت ظاهر سایت به تنظیمات پیش‌فرض مطمئن هستید؟ رنگ‌ها و گزینه‌های فعلی بازنویسی می‌شوند."
+      >
+        بازگشت به تنظیمات پیش‌فرض
+      </button>
+    </div>
+  </div>
+
+  {{ cusin_theme_presets|json_script:"cusin-theme-presets" }}
+{% endblock %}

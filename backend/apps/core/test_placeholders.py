@@ -9,10 +9,6 @@ fields, so a freshly installed store reported «تلفن و نشانی در «ت
 سایت» تکمیل شده» while the storefront was happily showing a fake phone
 number and the legal pages were still marked «نمونه (placeholder)».
 """
-import tempfile
-from pathlib import Path
-from unittest import mock
-
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 from rest_framework import status
@@ -204,90 +200,55 @@ class PublicApiPlaceholderTests(CacheIsolatedAPITestCase):
         self.assertEqual(self.client.get(self.url).data["whatsapp"], "+98912000567")
 
 
-class LegalPagePlaceholderTests(SimpleTestCase):
-    """Trust pages marked «نمونه (placeholder)» are launch blockers."""
+class LegalPagePlaceholderTests(TestCase):
+    """The five trust pages are InfoPage rows now (Task 1): empty text, a
+    «نمونه» marker or an unpublished page is a launch blocker."""
 
-    def _write_pages(self, directory, sources):
-        for filename, source in sources.items():
-            (directory / filename).write_text(source, encoding="utf-8")
+    def _page(self, slug):
+        from apps.core.models import InfoPage
 
-    def test_current_repo_pages_are_flagged(self):
-        found = placeholder_legal_pages()
-        slugs = {page["slug"] for page in found}
-        # The pages ship as sample copy today; when the owner replaces one
-        # this shrinks, which is the intended signal -- not a failure.
-        self.assertTrue(slugs)
-        self.assertTrue(slugs <= {slug for slug, _l, _p, _f in LEGAL_PAGES})
-        for page in found:
-            self.assertTrue(page["label"].strip())
-            self.assertTrue(page["path"].startswith("/"))
-            self.assertIn("نمونه", page["reason"])
+        return InfoPage.objects.get(slug=slug)
 
-    def test_page_that_turned_the_flag_off_is_not_flagged(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            directory = Path(tmp)
-            self._write_pages(directory, {
-                "TermsPage.jsx": (
-                    "export default function TermsPage() {\n"
-                    "  return <InfoPageLayout placeholder={false}>متن حقوقی واقعی"
-                    "</InfoPageLayout>;\n"
-                    "}\n"
-                ),
-            })
-            with mock.patch("apps.core.placeholders.LEGAL_PAGES_DIR", directory):
-                slugs = {p["slug"] for p in placeholder_legal_pages()}
-        self.assertNotIn("terms", slugs)
+    def test_seeded_pages_are_complete(self):
+        # The data migration copied the CURRENT texts, so a fresh install
+        # is not "missing" -- the owner may still review and rewrite them.
+        self.assertEqual(placeholder_legal_pages(), [])
 
-    def test_page_that_only_removed_the_notice_is_still_flagged(self):
-        """Turning off the banner without rewriting «[متن نمونه …]»."""
-        with tempfile.TemporaryDirectory() as tmp:
-            directory = Path(tmp)
-            self._write_pages(directory, {
-                "TermsPage.jsx": (
-                    "export default function TermsPage() {\n"
-                    "  return <InfoPageLayout placeholder={false}>"
-                    "[متن نمونه — بعداً جایگزین شود]</InfoPageLayout>;\n"
-                    "}\n"
-                ),
-            })
-            with mock.patch("apps.core.placeholders.LEGAL_PAGES_DIR", directory):
-                slugs = {p["slug"] for p in placeholder_legal_pages()}
-        self.assertIn("terms", slugs)
+    def test_unpublished_page_is_flagged(self):
+        page = self._page("terms")
+        page.is_published = False
+        page.save()
+        found = {item["slug"]: item for item in placeholder_legal_pages()}
+        self.assertEqual(set(found), {"terms"})
+        self.assertEqual(found["terms"]["label"], "قوانین و مقررات")
+        self.assertEqual(found["terms"]["path"], "/terms/")
+        self.assertIn("منتشر", found["terms"]["reason"])
 
-    def test_instructions_in_a_comment_do_not_count_as_done(self):
-        """Every header comment mentions `placeholder={false}` as the
-        step to take -- reading comments would call all of them done."""
-        with tempfile.TemporaryDirectory() as tmp:
-            directory = Path(tmp)
-            self._write_pages(directory, {
-                "TermsPage.jsx": (
-                    "/* OWNER: replace this sample text, then set "
-                    "placeholder={false} */\n"
-                    "// see docs: placeholder={false}\n"
-                    "export default function TermsPage() {\n"
-                    "  return <InfoPageLayout>متن نمونه</InfoPageLayout>;\n"
-                    "}\n"
-                ),
-            })
-            with mock.patch("apps.core.placeholders.LEGAL_PAGES_DIR", directory):
-                slugs = {p["slug"] for p in placeholder_legal_pages()}
-        self.assertIn("terms", slugs)
+    def test_empty_body_is_flagged(self):
+        page = self._page("privacy")
+        page.body = ""
+        page.save()
+        self.assertIn("privacy", {item["slug"] for item in placeholder_legal_pages()})
 
-    def test_falls_back_to_settings_when_sources_are_absent(self):
-        # A backend-only production image has no frontend/ directory; a
-        # missing source must never read as "everything is fine".
-        missing = Path(tempfile.gettempdir()) / "no-frontend-here"
-        with mock.patch("apps.core.placeholders.LEGAL_PAGES_DIR", missing):
-            with override_settings(LEGAL_PAGES_PLACEHOLDER=["terms", "privacy"]):
-                slugs = {p["slug"] for p in placeholder_legal_pages()}
-        self.assertEqual(slugs, {"terms", "privacy"})
+    def test_sample_marker_is_flagged(self):
+        page = self._page("about")
+        page.body = "<p>[متن نمونه — بعداً جایگزین شود]</p>"
+        page.save()
+        self.assertIn("about", {item["slug"] for item in placeholder_legal_pages()})
 
-    def test_fallback_defaults_to_all_pages(self):
-        missing = Path(tempfile.gettempdir()) / "no-frontend-here"
-        with mock.patch("apps.core.placeholders.LEGAL_PAGES_DIR", missing):
-            with override_settings(LEGAL_PAGES_PLACEHOLDER=[]):
-                slugs = {p["slug"] for p in placeholder_legal_pages()}
-        self.assertEqual(slugs, {slug for slug, _l, _p, _f in LEGAL_PAGES})
+    def test_owner_rewrite_clears_the_flag(self):
+        page = self._page("about")
+        page.body = "<p>متن واقعی و کامل دربارهٔ فروشگاه.</p>"
+        page.is_published = True
+        page.save()
+        self.assertEqual(placeholder_legal_pages(), [])
+
+    def test_missing_row_is_never_read_as_done(self):
+        page = self._page("contact")
+        page.delete()
+        slugs = {item["slug"] for item in placeholder_legal_pages()}
+        self.assertEqual(slugs, {"contact"})
+        self.assertTrue(slugs <= {slug for slug, _l, _p in LEGAL_PAGES})
 
 
 class NoPlaceholderFilterTests(SimpleTestCase):
@@ -302,38 +263,23 @@ class NoPlaceholderFilterTests(SimpleTestCase):
         self.assertEqual(no_placeholder(REAL_PHONE), REAL_PHONE)
 
 
-class StorefrontSourcePlaceholderTests(SimpleTestCase):
+class InfoPageSampleMarkerTests(TestCase):
     """No bracketed editor's note may reach the rendered storefront.
 
-    The trust pages used to ship sentences like «[متن نمونه — دربارهٔ
-    فروشگاه خودتان بنویسید]» inside the JSX body. Those are notes to the
-    OWNER; customers saw them verbatim between real sentences. The owner
-    notice banner already says the page is sample copy, so the inline
-    markers are simply noise in the rendered output.
+    The trust pages are database rows now (Task 1), so a seeded or pasted
+    sentence such as «[متن نمونه — دربارهٔ فروشگاه خودتان بنویسید]» is
+    checked directly on the published body. Those are notes to the OWNER;
+    customers must never read them.
     """
 
-    SOURCE_DIR = (
-        Path(__file__).resolve().parents[3]
-        / "frontend" / "src" / "pages" / "info"
-    )
-
-    def test_no_bracketed_sample_marker_is_rendered(self):
+    def test_no_bracketed_sample_marker_is_published(self):
         import re
 
-        if not self.SOURCE_DIR.is_dir():
-            self.skipTest("frontend sources not available in this checkout")
-        offenders = []
-        for path in sorted(self.SOURCE_DIR.glob("*.jsx")):
-            source = path.read_text(encoding="utf-8")
-            # Drop /* … */ and // … comments: a note in a comment is fine,
-            # the same text inside JSX is what customers read.
-            code = re.sub(r"/\*[\s\S]*?\*/", "", source)
-            code = "\n".join(
-                re.sub(r"(^|\s)//.*$", "", line) for line in code.splitlines()
-            )
-            for match in re.finditer(r"\[[^\]\n]{0,80}\]", code):
-                offenders.append(f"{path.name}: {match.group(0)}")
-        self.assertEqual(
-            offenders, [], "sample markers rendered to customers: "
-            + "; ".join(offenders)
-        )
+        from apps.core.models import InfoPage
+
+        offenders = [
+            page.slug
+            for page in InfoPage.objects.filter(is_published=True)
+            if re.search(r"\[[^\]\n]{0,80}\]", page.body or "")
+        ]
+        self.assertEqual(offenders, [], "sample markers published: " + ", ".join(offenders))

@@ -636,7 +636,7 @@ def readiness_checks() -> list[dict]:
             "detail": (
                 "همهٔ صفحه‌ها متن واقعی دارند."
                 if pages_ok
-                else "متن این صفحه‌ها هنوز نمونه (placeholder) است."
+                else "متن یا انتشار این صفحه‌ها هنوز کامل نشده است."
             ),
             "missing": placeholder_pages,
         },

@@ -5,6 +5,7 @@ import { createRoot } from "react-dom/client";
 import Analytics from "./components/Analytics.jsx";
 import App from "./App.jsx";
 import { ensureCsrfCookie } from "./services/apiClient.js";
+import { applyInitialTheme } from "./utils/theme.js";
 
 // SELF-HOSTED FONTS (Part R2): one family -- Vazirmatn Variable (SIL OFL
 // 1.1) -- for UI, headings and prices; weight contrast 400/500/700/800
@@ -15,6 +16,12 @@ import "./styles/fonts.css";
 import "./styles/variables.css";
 import "./styles/globals.css";
 import "./styles/storefront.css";
+
+// Apply the owner-selected theme BEFORE React mounts. In production the
+// Django SPA shell has already inlined the same variables into <head>
+// (apps/core/spa.py), so this is a no-op there; in Vite dev / an older
+// cached shell it removes the flash of the default palette.
+applyInitialTheme();
 
 // The Django session flow requires the csrftoken cookie to exist before
 // the first write request; a same-origin GET to /accounts/csrf-token/

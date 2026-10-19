@@ -98,13 +98,16 @@ describe("item 1: the changelist header is a normal first row (no sticky offset)
   }
 });
 
-describe("item 2: the delete link keeps the danger text colour", () => {
-  it("is the danger text token, not the stock white or #CC3434", () => {
+describe("item 2: the delete link is solid danger like the confirmation page", () => {
+  it("keeps white text on the solid danger background, not the stock tint", () => {
     const { style } = mountWith(
       `<div class="submit-row"><a class="deletelink" href="#">حذف</a></div>`,
       1280,
     );
-    expect(style(".submit-row a.deletelink", "color")).toBe("var(--cg-danger-text)");
+    expect(style(".submit-row a.deletelink", "color")).toBe("#ffffff");
+    expect(style(".submit-row a.deletelink", "background")).toBe(
+      "var(--delete-button-bg)",
+    );
   });
 });
 

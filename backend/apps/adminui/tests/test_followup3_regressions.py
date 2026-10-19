@@ -85,20 +85,23 @@ class ResultHeaderRowTests(SimpleTestCase):
 
 
 class DeleteLinkContrastTests(SimpleTestCase):
-    """Item 2: `a.deletelink` in `.submit-row` rendered white on the danger tint.
-    Stock forms.css `.submit-row a.deletelink` (0,2,1) sets `color: var(--button-fg)`
-    (white); stock base.css `a.deletelink:link/:visited` (0,2,2) and
-    `:hover/:focus` set #CC3434 / #993333. The theme repeats each state with the
-    danger text token at a higher specificity."""
+    """Item 2 (owner review): every «حذف» control must use the SAME solid
+    danger style as the delete confirmation page.
+
+    The old tint (#f9e7e3) was a pale pink with the danger text on top; the
+    confirmation page was already solid #b42318 with white text. Now the
+    `.deletelink` rules (and the `--delete-button-bg` token that stock
+    base.css/forms.css use) resolve to that solid colour everywhere.
+    """
 
     STATES = ("", ":link", ":visited", ":hover", ":focus", ":active")
 
-    def test_every_state_uses_the_danger_text_token(self):
+    def test_every_state_has_white_text(self):
         rules = _base_rules()
         for state in self.STATES:
             selector = f".submit-row a.deletelink{state}"
             with self.subTest(selector=selector):
-                self.assertEqual(rules[selector]["color"], "var(--cg-danger-text)")
+                self.assertEqual(rules[selector]["color"], "#ffffff")
 
     def test_every_state_beats_the_stock_link_rules(self):
         # The plain selector only has to match forms.css `.submit-row a.deletelink`
@@ -110,14 +113,25 @@ class DeleteLinkContrastTests(SimpleTestCase):
             with self.subTest(selector=selector):
                 self.assertGreaterEqual(_specificity(selector), STOCK_DELETE_LINK)
 
+    def test_normal_and_hover_are_the_solid_danger_colours(self):
+        tokens = _tokens()
+        rules = _base_rules()
+        self.assertEqual(
+            _colour(tokens, rules[".submit-row a.deletelink"]["background"]),
+            tokens["--cg-danger"],
+        )
+        self.assertEqual(
+            _colour(tokens, rules[".submit-row a.deletelink:hover"]["background"]),
+            tokens["--cg-danger-hover"],
+        )
+
     def test_every_state_meets_4_5_to_1(self):
         tokens = _tokens()
         rules = _base_rules()
         normal_bg = _colour(tokens, rules[".submit-row a.deletelink"]["background"])
         hover_bg = _colour(tokens, rules[".submit-row a.deletelink:hover"]["background"])
-        focus_bg = _colour(tokens, rules[".submit-row a.deletelink:focus"]["background"])
         fg = _colour(tokens, rules[".submit-row a.deletelink:hover"]["color"])
-        for label, bg in (("normal", normal_bg), ("hover", hover_bg), ("focus", focus_bg)):
+        for label, bg in (("normal", normal_bg), ("hover", hover_bg)):
             with self.subTest(state=label):
                 self.assertGreaterEqual(contrast(fg, bg), 4.5, f"{fg} on {bg}")
 

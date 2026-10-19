@@ -36,6 +36,7 @@ Where the shell comes from, in order:
 """
 from __future__ import annotations
 
+import json
 import logging
 import re
 import time
@@ -47,6 +48,11 @@ from django.http import Http404, HttpResponse
 from django.views.decorators.http import require_GET
 
 logger = logging.getLogger("django")
+
+#: Marker in frontend/index.html where the server injects the owner's theme.
+#: It sits in <head>, BEFORE the stylesheet/JS, so the very first paint uses
+#: the saved colors -- no flash of the default theme.
+THEME_MARKER = "<!-- CUSIN_THEME_VARS -->"
 
 #: ``noindex`` marker added to the 404 document. The SPA sets its own
 #: per-page robots meta at runtime; this one is what a crawler sees BEFORE
@@ -82,6 +88,18 @@ _ROUTE_PATTERNS = [
 
 _BRAND_RE = re.compile(r"^/brands/(?P<slug>[^/]+)/?$")
 _PRODUCT_RE = re.compile(r"^/products/(?P<slug>[^/]+)/?$")
+
+#: Info pages are editable rows now: their URL is only a real 200 while the
+#: row exists AND is published. An unpublished/never-seeded page answers
+#: exactly like any other unknown URL (404 + noindex), which is what makes
+#: the storefront's own 404 view honest for crawlers too.
+_INFO_PAGE_ROUTES = {
+    "/about": "about",
+    "/contact": "contact",
+    "/shipping-returns": "shipping-returns",
+    "/terms": "terms",
+    "/privacy": "privacy",
+}
 
 #: Path prefixes that are NOT pages: never answered with the storefront
 #: shell, whatever their content (they reach Django only by mistake -- nginx
@@ -123,6 +141,19 @@ def is_known_page(path, query=""):
 
     if not any(pattern.match(path) for pattern in _ROUTE_PATTERNS):
         return False
+
+    page_slug = _INFO_PAGE_ROUTES.get(path.rstrip("/") or "/")
+    if page_slug:
+        from django.db import DatabaseError
+
+        from apps.core.models import InfoPage
+
+        try:
+            return InfoPage.objects.filter(slug=page_slug, is_published=True).exists()
+        except DatabaseError:  # pragma: no cover - pre-migrate deployment
+            # The table does not exist yet (first deploy, before `migrate`):
+            # keep the old route-table behaviour instead of 500ing the site.
+            return True
 
     # /shop/?category=<slug> is the storefront's only query-string route: an
     # unknown category is a dead end, not an empty listing.
@@ -198,6 +229,59 @@ def shell_html():
     if html:
         _shell_cache.update({"html": html, "source": source, "at": now})
     return html
+
+
+def theme_head_fragment():
+    """The inline <style> + bootstrap script for the owner-selected theme.
+
+    Read from the same cached public payload as /api/v1/site/content/, so a
+    save in the admin is reflected on the next page request (the signals in
+    apps/core/signals.py delete the cache entry). Never raises: a broken
+    theme row must not turn every storefront page into a 500.
+    """
+    try:
+        from .content import get_content_payload
+
+        theme = get_content_payload().get("theme") or {}
+        variables = theme.get("css_variables") or {}
+    except Exception:  # noqa: BLE001 - a page must never die over a theme
+        logger.warning("spa: theme variables unavailable", exc_info=True)
+        return ""
+    if not variables:
+        return ""
+    css = ":root{" + "".join(
+        f"{str(name).strip()}:{str(value).strip()};" for name, value in variables.items()
+    ) + "}"
+    bootstrap = json.dumps(
+        {
+            "theme": {
+                "preset": theme.get("preset", ""),
+                "css_variables": variables,
+                "button_radius": theme.get("button_radius", ""),
+                "base_font_size": theme.get("base_font_size", ""),
+                "card_shadow": theme.get("card_shadow", ""),
+            }
+        },
+        ensure_ascii=False,
+    ).replace("</", "<\\/")
+    return (
+        f'<style id="cusin-theme-vars">{css}</style>\n'
+        f"<script>window.__CUSIN_THEME__={bootstrap};</script>"
+    )
+
+
+def _with_theme(html):
+    """Inject the theme into the shell's <head> (marker or, for an older
+    build without the marker, right before </head>)."""
+    fragment = theme_head_fragment()
+    if not fragment:
+        return html
+    if THEME_MARKER in html:
+        return html.replace(THEME_MARKER, fragment, 1)
+    index = html.lower().find("</head>")
+    if index == -1:
+        return fragment + html
+    return f"{html[:index]}{fragment}\n{html[index:]}"
 
 
 def _fallback_document(title, heading, body):
@@ -287,5 +371,5 @@ def spa_page(request, spa_path=""):
         return _page_response(html, 200 if known else 404)
 
     if known:
-        return _page_response(html, 200)
-    return _page_response(_with_noindex(html), 404)
+        return _page_response(_with_theme(html), 200)
+    return _page_response(_with_theme(_with_noindex(html)), 404)

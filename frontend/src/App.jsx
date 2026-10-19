@@ -22,11 +22,7 @@ import ProductDetailPage from "./pages/ProductDetailPage.jsx";
 import RegisterPage from "./pages/RegisterPage.jsx";
 import ShopPage from "./pages/ShopPage.jsx";
 import WishlistPage from "./pages/WishlistPage.jsx";
-import AboutPage from "./pages/info/AboutPage.jsx";
-import ContactPage from "./pages/info/ContactPage.jsx";
-import PrivacyPage from "./pages/info/PrivacyPage.jsx";
-import ShippingReturnsPage from "./pages/info/ShippingReturnsPage.jsx";
-import TermsPage from "./pages/info/TermsPage.jsx";
+import InfoPage from "./pages/info/InfoPage.jsx";
 
 /**
  * Full storefront route tree. Everything lives under MainLayout;
@@ -51,11 +47,17 @@ function App() {
           <Route path="/checkout/" element={<ProtectedRoute><CheckoutPage /></ProtectedRoute>} />
           <Route path="/payment/result/:paymentId?/" element={<PaymentResultPage />} />
           {/* Trust pages (Phase E) -- public, listed in the footer and sitemap */}
-          <Route path="/about/" element={<AboutPage />} />
-          <Route path="/contact/" element={<ContactPage />} />
-          <Route path="/shipping-returns/" element={<ShippingReturnsPage />} />
-          <Route path="/terms/" element={<TermsPage />} />
-          <Route path="/privacy/" element={<PrivacyPage />} />
+          {/* Owner-editable info pages (Task 3): one component, the text
+              comes from /site/pages/<slug>/; an unpublished page renders
+              the 404 view (Django already answered the URL with 404). */}
+          <Route path="/about/" element={<InfoPage slug="about" path="/about/" />} />
+          <Route path="/contact/" element={<InfoPage slug="contact" path="/contact/" />} />
+          <Route
+            path="/shipping-returns/"
+            element={<InfoPage slug="shipping-returns" path="/shipping-returns/" />}
+          />
+          <Route path="/terms/" element={<InfoPage slug="terms" path="/terms/" />} />
+          <Route path="/privacy/" element={<InfoPage slug="privacy" path="/privacy/" />} />
           <Route path="/login/" element={<LoginPage />} />
           <Route path="/register/" element={<RegisterPage />} />
           <Route path="/password-reset/" element={<PasswordResetRequestPage />} />

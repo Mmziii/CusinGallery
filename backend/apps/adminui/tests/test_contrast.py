@@ -182,9 +182,11 @@ class CssContrastTests(SimpleTestCase):
             "confirm button text on solid red must meet AA",
         )
         hover = rules[".delete-confirmation form input[type=\"submit\"]:hover"]
-        self.assertEqual(hover["background"], "#962816")
+        self.assertEqual(hover["background"], "var(--cg-danger-hover)")
         self.assertEqual(hover["color"], WHITE)
-        self.assertGreaterEqual(contrast(WHITE, "#962816"), 4.5, "confirm hover")
+        self.assertGreaterEqual(
+            contrast(WHITE, self.token("--cg-danger-hover")), 4.5, "confirm hover"
+        )
 
         cancel = rules[".delete-confirmation form .cancel-link"]
         self.assertEqual(cancel["background"], "var(--cusin-surface)")

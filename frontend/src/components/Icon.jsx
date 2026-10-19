@@ -103,6 +103,16 @@ const PATHS = {
     </>
   ),
   "bolt-fast": <path d="M13 2 4.5 13.5H11l-1 8.5L19 10.5h-6.5z" />,
+  // Social channels (footer + floating contact, Task 3). Instagram is a
+  // rounded square with the camera lens and flash; the others reuse the
+  // existing send/chat/phone glyphs.
+  instagram: (
+    <>
+      <rect x="3.5" y="3.5" width="17" height="17" rx="5" />
+      <circle cx="12" cy="12" r="4" />
+      <circle cx="17.2" cy="6.8" r="0.6" />
+    </>
+  ),
   // Stage 2/3: hamburger menu, category tiles, account surfaces.
   menu: <path d="M4 7h16M4 12h16M4 17h16" />,
   home: (

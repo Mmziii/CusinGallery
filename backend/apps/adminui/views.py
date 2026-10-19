@@ -51,7 +51,8 @@ SECTIONS = (
     ("نظرات", "admin:reviews_review_changelist", "reviews.view_review"),
     ("اعلان‌ها", "admin:notifications_notificationlog_changelist",
      "notifications.view_notificationlog"),
-    ("تنظیمات سایت", "admin:core_sitesettings_changelist", "core.view_sitesettings"),
+    ("محتوا و ظاهر سایت", "admin:core_sitesettings_changelist", "core.view_sitesettings"),
+    ("صفحات اطلاعاتی", "admin:core_infopage_changelist", "core.view_infopage"),
 )
 
 

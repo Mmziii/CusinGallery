@@ -9,6 +9,7 @@ import Portal from "./Portal";
 import PriceTag from "./PriceTag";
 import SmartImage from "./SmartImage";
 import useFocusTrap from "../hooks/useFocusTrap";
+import useSiteContent from "../hooks/useSiteContent";
 import useAuthStore from "../store/useAuthStore";
 import useCartStore from "../store/useCartStore";
 import { getCategoryTree, listProducts } from "../services/catalogApi";
@@ -56,6 +57,12 @@ function Header() {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [compact, setCompact] = useState(false);
   const [categories, setCategories] = useState([]);
+  // Owner-editable brand (Task 3): name + logo come from the admin page,
+  // falling back to the bundled mark until the API answers.
+  const { brand } = useSiteContent();
+  const brandName = brand?.name || "کازین گالری";
+  const brandLogo = brand?.logo_light || brand?.logo_dark || "/brand/logo-gold.svg";
+  const brandHomeLabel = `${brandName} — صفحه اصلی`;
   // The mega menu's mobile sheet is a full-viewport
   // dialog (<1024px, per CSS) -- it joins the drawers
   // that lock the document while open. (Lazy viewport
@@ -332,11 +339,14 @@ function Header() {
         <Link
           to="/"
           className="site-header__brand"
-          aria-label="کازین گالری — صفحه اصلی"
+          aria-label={brandHomeLabel}
           onClick={handleHomeNavigation}
         >
-          <img src="/brand/logo-gold.svg" alt="" className="site-header__logo" />
-          <span className="site-header__brand-name">کازین گالری</span>
+          {/* @catalog-img-allowed: the owner-uploaded brand MARK is site
+              chrome, not a product/category image; it intentionally
+              renders as a raw <img> (SVG-first, no catalog placeholder). */}
+          <img src={brandLogo} alt="" className="site-header__logo" />
+          <span className="site-header__brand-name">{brandName}</span>
         </Link>
 
         <div className="site-header__search" ref={searchRef} role="search">
@@ -557,11 +567,12 @@ function Header() {
                 <Link
                   to="/"
                   className="minicart__brand"
-                  aria-label="کازین گالری — صفحه اصلی"
+                  aria-label={brandHomeLabel}
                   onClick={handleHomeNavigation}
                 >
-                  <img src="/brand/logo-gold.svg" alt="" />
-                  <span>کازین گالری</span>
+                  {/* @catalog-img-allowed: same owner brand mark in the drawer. */}
+                  <img src={brandLogo} alt="" />
+                  <span>{brandName}</span>
                 </Link>
                 <strong>سبد خرید</strong>
                 <button type="button" aria-label="بستن سبد" onClick={() => setCartOpen(false)}>

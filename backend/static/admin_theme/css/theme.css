@@ -49,6 +49,7 @@
   --cg-success: #2f7a4f;
   --cg-success-text: #166534;
   --cg-danger: #b42318;
+  --cg-danger-hover: #962816;
   --cg-danger-text: #8f1d14;
   --cg-warning-text: #7a4b00;
   --cg-info-text: #1d4e89;
@@ -108,8 +109,12 @@
   --default-button-hover-bg: var(--cusin-surface-2);
   --close-button-bg: var(--cusin-surface-2);
   --close-button-hover-bg: var(--cusin-border);
-  --delete-button-bg: #f9e7e3;
-  --delete-button-hover-bg: #f2d5cd;
+  /* Delete controls are SOLID danger everywhere (same look as the delete
+     confirmation page): white on #b42318 is ~6.8:1, while the old pale
+     #f9e7e3 tint put the small «حذف» label at 4.3:1. Stock base.css uses
+     these two variables for the confirmation button too. */
+  --delete-button-bg: var(--cg-danger);
+  --delete-button-hover-bg: var(--cg-danger-hover);
   --object-tools-bg: var(--cg-olive);
   --object-tools-hover-bg: var(--cg-olive-hover);
 }
@@ -547,9 +552,9 @@ kbd.cusin-kbd {
   background: var(--cg-olive);
 }
 .button.default:hover, input[type="submit"].default:hover { background: var(--cg-olive-hover); }
-.deletelink, .button.cancel-link, input.cancel-link {
-  color: var(--cg-danger-text);
-}
+/* Solid danger background -> white label; the outlined «انصراف» keeps ink. */
+.deletelink { color: #ffffff; }
+.button.cancel-link, input.cancel-link { color: var(--cusin-text); }
 
 input[type="text"], input[type="password"], input[type="email"], input[type="url"],
 input[type="number"], input[type="tel"], input[type="search"], input[type="date"],
@@ -691,21 +696,27 @@ fieldset.module > h2, .module h2 {
 .inline-group .add-row a { color: var(--cg-olive); font-weight: 700; }
 .inline-group .delete { color: var(--cg-danger-text); }
 a.deletelink, .inline-deletelink {
-  color: var(--cg-danger-text);
+  color: #ffffff;
   background: var(--delete-button-bg);
+  border: 1px solid var(--delete-button-bg);
   border-radius: var(--cusin-radius-sm);
 }
-a.deletelink:hover { background: var(--delete-button-hover-bg); }
+a.deletelink:hover, a.deletelink:focus {
+  background: var(--delete-button-hover-bg);
+  border-color: var(--delete-button-hover-bg);
+  color: #ffffff;
+}
 /* stock forms.css/base.css set white (0,2,1) and #CC3434 / #993333 (0,2,2) on
-   these links. Each state is repeated at a higher specificity, with the
-   danger text token (7.2:1 on the normal tint, 6.2:1 on the hover tint). */
+   these links. Each state is repeated at a higher specificity, with white
+   text on the solid danger background (6.8:1 normal, 7.4:1 hover) -- the
+   same treatment as the delete confirmation page. */
 .submit-row a.deletelink,
 .submit-row a.deletelink:link,
 .submit-row a.deletelink:visited,
 .submit-row a.deletelink:hover,
 .submit-row a.deletelink:focus,
 .submit-row a.deletelink:active {
-  color: var(--cg-danger-text);
+  color: #ffffff;
   background: var(--delete-button-bg);
 }
 .submit-row a.deletelink:hover,
@@ -733,8 +744,8 @@ a.deletelink:hover { background: var(--delete-button-hover-bg); }
 .delete-confirmation form input[type="submit"]:hover,
 .delete-confirmation form input[type="submit"]:focus,
 .delete-confirmation form input[type="submit"]:active {
-  background: #962816;
-  border-color: #962816;
+  background: var(--cg-danger-hover);
+  border-color: var(--cg-danger-hover);
   color: #ffffff;
 }
 .delete-confirmation form .cancel-link,
@@ -1848,7 +1859,7 @@ body.login #footer { display: none; }
 .cusin-btn--dark { background: var(--cusin-text); color: var(--cusin-text); }
 .cusin-btn--dark:hover { background: var(--cusin-surface); color: var(--cusin-text); }
 .cusin-btn--danger { background: var(--cg-danger); }
-.cusin-btn--danger:hover { background: #96281a; }
+.cusin-btn--danger:hover { background: var(--cg-danger-hover); }
 .cusin-btn--ghost {
   background: var(--cusin-surface);
   border-color: var(--cusin-border-strong);
@@ -3468,9 +3479,20 @@ a.cusin-btn--ghost:active {
 .submit-row a.deletelink:active,
 a.deletelink,
 .inline-deletelink {
-  background: #f9e7e3;
-  color: var(--cg-danger-text);
-  border: 1px solid #efc9bf;
+  background: var(--delete-button-bg);
+  color: #ffffff;
+  border: 1px solid var(--delete-button-bg);
+}
+/* Keep the hover/focus feedback of the solid button (the block above repeats
+   every state for specificity, so the hover tint is re-applied here). */
+.submit-row a.deletelink:hover,
+.submit-row a.deletelink:focus,
+.submit-row a.deletelink:active,
+a.deletelink:hover,
+a.deletelink:focus {
+  background: var(--delete-button-hover-bg);
+  border-color: var(--delete-button-hover-bg);
+  color: #ffffff;
 }
 
 /* Related-object controls use clear outline symbols and Persian tooltips. */
@@ -4812,3 +4834,224 @@ body.cusin-admin.app-payments.model-payment #result_list .cusin-badge {
   body.cusin-admin.app-payments.model-payment #result_list th.column-created_at_jalali { width: 11%; }
   body.cusin-admin.app-payments.model-payment #result_list th.column-cusin-row-actions { width: 4%; }
 }
+
+/* --------------------------------------------------------------------------
+   «محتوا و ظاهر سایت» — live theme preview (Task 2)
+
+   A deliberately small mock: header + one product card + one button. It
+   uses its OWN --cusin-tp-* variables (set by theme_preview.js) so the
+   values being edited can never leak into the admin chrome itself.
+   -------------------------------------------------------------------------- */
+.cusin-theme-preview {
+  margin: 26px 0 8px;
+  padding: 18px 20px 20px;
+  background: var(--cusin-surface, #fff);
+  border: 1px solid var(--cusin-border, #d6d9de);
+  border-radius: var(--cusin-radius, 12px);
+  box-shadow: 0 1px 2px rgba(17, 24, 39, 0.04);
+}
+
+.cusin-theme-preview__head h2 {
+  margin: 0 0 4px;
+  font-size: 1.05rem;
+  color: var(--cusin-text, #111827);
+}
+
+.cusin-theme-preview__head p {
+  margin: 0 0 14px;
+  font-size: 0.82rem;
+  color: var(--cusin-muted, #4b5563);
+  line-height: 1.9;
+}
+
+.cusin-theme-preview__frame {
+  overflow: hidden;
+  border: 1px solid var(--cusin-border, #d6d9de);
+  border-radius: var(--cusin-radius-sm, 8px);
+  direction: rtl;
+  font-size: var(--cusin-tp-font-size, 1rem);
+  color: var(--cusin-tp-text, #111827);
+  background: var(--cusin-tp-bg, #ffffff);
+}
+
+.cusin-tp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--cusin-tp-header-bg, #fff);
+  color: var(--cusin-tp-header-text, #111827);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.cusin-tp-logo {
+  font-weight: 800;
+  color: var(--cusin-tp-header-text, #111827);
+}
+
+.cusin-tp-nav {
+  display: flex;
+  gap: 14px;
+  font-size: 0.8em;
+  opacity: 0.9;
+}
+
+.cusin-tp-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 18px;
+  padding: 18px 16px;
+}
+
+.cusin-tp-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 220px;
+  padding: 12px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  box-shadow: var(--cusin-tp-shadow, 0 6px 24px rgba(17, 24, 39, 0.1));
+}
+
+.cusin-tp-media {
+  height: 78px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--cusin-tp-primary, #637037), var(--cusin-tp-accent, #ceb464));
+  opacity: 0.55;
+}
+
+.cusin-tp-name {
+  font-size: 0.92em;
+  color: var(--cusin-tp-text, #111827);
+}
+
+.cusin-tp-price {
+  font-size: 0.82em;
+  font-weight: 700;
+  color: var(--cusin-tp-primary, #637037);
+}
+
+.cusin-tp-btn {
+  padding: 8px 12px;
+  font-family: inherit;
+  font-size: 0.85em;
+  font-weight: 700;
+  color: var(--cusin-tp-button-text, #fff);
+  background: var(--cusin-tp-primary, #637037);
+  border: 0;
+  border-radius: var(--cusin-tp-radius, 12px);
+  cursor: default;
+}
+
+.cusin-tp-text {
+  flex: 1;
+  min-width: 180px;
+  margin: 0;
+  font-size: 0.85em;
+  line-height: 2;
+  color: var(--cusin-tp-text, #111827);
+}
+
+.cusin-tp-link {
+  font-size: 0.85em;
+  font-weight: 700;
+  color: var(--cusin-tp-primary, #637037);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.cusin-theme-preview__actions {
+  margin-top: 14px;
+}
+
+.cusin-theme-reset {
+  min-height: 36px;
+  padding: 7px 16px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  color: #8f1d14;
+  background: #fff;
+  border: 1px solid #e6b3ad;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.cusin-theme-reset:hover,
+.cusin-theme-reset:focus-visible {
+  background: #fdf1ef;
+  border-color: #b42318;
+}
+
+@media (max-width: 700px) {
+  .cusin-theme-preview { padding: 14px; }
+  .cusin-tp-card { width: 100%; }
+}
+
+/* --------------------------------------------------------------------------
+   Persian file picker (admin_theme/js/file_picker.js)
+
+   Browsers paint <input type="file"> with their own UI language:
+   «Choose File / No file chosen» even on a Persian page. The script hides the
+   native control and renders this picker instead, keeping the real input in
+   the form (so the upload works exactly as before) and showing the current
+   image as a thumbnail.
+   -------------------------------------------------------------------------- */
+.cusin-file-picker {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+/* The import pages set `#content input[type="file"] { display: block }`; this
+   selector has the same weight, is declared later, and wins. */
+body.cusin-admin #content .cusin-file-picker .cusin-file-picker__input,
+.cusin-file-picker__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+.cusin-file-picker__button,
+.cusin-file-picker__button:link,
+.cusin-file-picker__button:visited {
+  background: var(--cusin-surface);
+  border: 1px solid var(--cusin-border-strong);
+  color: var(--cusin-text);
+  border-radius: var(--cusin-radius-sm);
+  font-weight: 600;
+  min-height: 42px;
+  padding: 8px 16px;
+  cursor: pointer;
+}
+.cusin-file-picker__button:hover,
+.cusin-file-picker__button:focus {
+  background: var(--cusin-surface-2);
+  border-color: var(--cg-olive);
+  color: var(--cg-olive-hover);
+}
+.cusin-file-picker__name {
+  font-size: 0.9375rem;
+  color: var(--cusin-muted);
+  overflow-wrap: anywhere;
+}
+.cusin-file-picker__thumb {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  padding: 3px;
+  background: #ffffff;
+  border: 1px solid var(--cusin-border);
+  border-radius: var(--cusin-radius-sm);
+}
+.cusin-file-picker__thumb[hidden] { display: none; }

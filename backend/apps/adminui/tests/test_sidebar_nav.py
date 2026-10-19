@@ -33,7 +33,8 @@ EXPECTED_ORDER = (
     "بنرها و پیشنهاد روزانه",
     "اطلاع‌رسانی موجودی",
     "کاربران",
-    "تنظیمات فروشگاه",
+    "محتوا و ظاهر سایت",
+    "صفحات اطلاعاتی",
 )
 
 # Things that must NOT be on the daily path any more.
@@ -55,6 +56,8 @@ ROUTE_FOR_LABEL = {
     "بنرها و پیشنهاد روزانه": "admin:banners_banner_changelist",
     "اطلاع‌رسانی موجودی": "admin:products_backinstocksubscription_changelist",
     "کاربران": "admin:accounts_user_changelist",
+    "محتوا و ظاهر سایت": "admin:core_sitesettings_changelist",
+    "صفحات اطلاعاتی": "admin:core_infopage_changelist",
 }
 
 
@@ -114,7 +117,7 @@ class SidebarOrderTests(TestCase):
                 self.assertIn(f'href="{reverse(route)}"', html)
 
     def test_settings_link_points_at_site_settings_not_the_auth_app(self):
-        """«تنظیمات فروشگاه» is the store profile, not Django's auth app."""
+        """«محتوا و ظاهر سایت» is the store profile, not Django's auth app."""
         html = drawer(self.client.get(reverse("admin:index")))
         self.assertIn('href="' + reverse("admin:core_sitesettings_changelist") + '"', html)
         # The auth/django_otp leftovers are parked in «سایر / پیشرفته».

@@ -17,7 +17,6 @@ never diverge again.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 from django.conf import settings
 
@@ -155,91 +154,60 @@ def missing_site_labels(site) -> list[str]:
 # Legal / trust pages
 # --------------------------------------------------------------------------
 
-#: The static trust pages (routes live in the React app; mirrored here so
-#: the backend's readiness card can point the owner at each one).
+#: The five fixed info pages: slug, Persian label, public path. Their TEXT
+#: lives in the InfoPage rows now (Task 1), so the readiness check reads the
+#: database -- a deleted React file can no longer make a page look "done".
 LEGAL_PAGES = (
-    ("about", "دربارهٔ ما", "/about/", "AboutPage.jsx"),
-    ("contact", "تماس با ما", "/contact/", "ContactPage.jsx"),
-    ("shipping-returns", "ارسال و مرجوعی", "/shipping-returns/", "ShippingReturnsPage.jsx"),
-    ("terms", "شرایط استفاده", "/terms/", "TermsPage.jsx"),
-    ("privacy", "حریم خصوصی", "/privacy/", "PrivacyPage.jsx"),
+    ("about", "دربارهٔ ما", "/about/"),
+    ("contact", "تماس با ما", "/contact/"),
+    ("shipping-returns", "ارسال و مرجوعی", "/shipping-returns/"),
+    ("terms", "قوانین و مقررات", "/terms/"),
+    ("privacy", "حریم خصوصی", "/privacy/"),
 )
 
-#: Where the page sources live in a checkout. Absent in a backend-only
-#: production image -- see ``placeholder_legal_pages`` for the fallback.
-LEGAL_PAGES_DIR = Path(settings.BASE_DIR).parent / "frontend" / "src" / "pages" / "info"
 
-
-def _strip_js_comments(source: str) -> str:
-    """Drop /* … */ and // … comments.
-
-    Necessary because every page's header comment explains how to turn
-    the flag off -- reading comments would report all of them as done.
-    """
-    without_blocks = re.sub(r"/\*[\s\S]*?\*/", "", source)
-    return "\n".join(
-        re.sub(r"(^|\s)//.*$", "", line) for line in without_blocks.splitlines()
-    )
-
-
-def _page_is_placeholder(source: str) -> bool:
-    """A page is still a placeholder when it renders the owner notice.
-
-    InfoPageLayout defaults ``placeholder`` to true, so the notice shows
-    unless the page explicitly passes ``placeholder={false}`` -- that is
-    exactly the signal (it is the step the docs tell the owner to take
-    once the real text is in). A still-bracketed sample sentence
-    («[متن نمونه …]») also counts, for the page that turned the flag off
-    but never rewrote the copy.
-    """
-    code = _strip_js_comments(source)
-    if re.search(r"placeholder\s*=\s*\{\s*false\s*\}", code):
-        return any(marker in code for marker in ("[متن نمونه", "متن نمونه"))
-    return True
+def _page_body_is_placeholder(body) -> bool:
+    """Empty text, or text still carrying a «نمونه» marker."""
+    text = (body or "").strip()
+    if not text:
+        return True
+    lowered = text.lower()
+    return any(marker.lower() in lowered for marker in PLACEHOLDER_MARKERS)
 
 
 def placeholder_legal_pages() -> list[dict]:
-    """The trust pages that are still marked as sample content.
+    """The trust pages that are empty, unpublished or still sample copy.
 
-    Source of truth is the page source itself when it is available (a dev
-    checkout, CI, tests). A deployed backend image does not carry the
-    frontend sources, so it falls back to ``LEGAL_PAGES_PLACEHOLDER``
-    (env, default: all of them) -- a missing source must never be read as
-    "everything is fine".
+    The pages are database rows since Task 1; reading them here (instead of
+    the old React sources) means the admin card keeps telling the truth
+    after the page files were replaced by the owner-editable model.
     """
-    if LEGAL_PAGES_DIR.is_dir():
-        found = []
-        for slug, label, path, filename in LEGAL_PAGES:
-            target = LEGAL_PAGES_DIR / filename
-            try:
-                source = target.read_text(encoding="utf-8")
-            except OSError:
-                continue
-            if _page_is_placeholder(source):
-                found.append(
-                    {
-                        "slug": slug,
-                        "label": label,
-                        "path": path,
-                        "file": f"frontend/src/pages/info/{filename}",
-                        "reason": "متن این صفحه هنوز نمونه (placeholder) است.",
-                    }
-                )
-        return found
+    from django.db import DatabaseError
 
-    marked = {
-        slug.strip()
-        for slug in getattr(settings, "LEGAL_PAGES_PLACEHOLDER", []) or []
-        if slug.strip()
-    } or {slug for slug, _label, _path, _file in LEGAL_PAGES}
-    return [
-        {
-            "slug": slug,
-            "label": label,
-            "path": path,
-            "file": f"frontend/src/pages/info/{filename}",
-            "reason": "متن این صفحه هنوز نمونه (placeholder) است.",
-        }
-        for slug, label, path, filename in LEGAL_PAGES
-        if slug in marked
-    ]
+    from apps.core.models import InfoPage
+
+    try:
+        rows = {page.slug: page for page in InfoPage.objects.all()}
+    except DatabaseError:  # pragma: no cover - pre-migrate deployment
+        rows = {}
+
+    found = []
+    for slug, label, path in LEGAL_PAGES:
+        page = rows.get(slug)
+        if (
+            page is None
+            or not page.is_published
+            or _page_body_is_placeholder(page.body)
+        ):
+            found.append(
+                {
+                    "slug": slug,
+                    "label": label,
+                    "path": path,
+                    "reason": (
+                        "متن این صفحه هنوز کامل یا منتشر نشده است؛ در "
+                        "«صفحات اطلاعاتی» تکمیل و منتشر کنید."
+                    ),
+                }
+            )
+    return found

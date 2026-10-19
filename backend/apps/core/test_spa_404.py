@@ -228,7 +228,7 @@ class ShellSourceTests(SpawnShellMixin, TestCase):
         self.assertIn("noindex", unknown.content.decode())
 
 
-class RouteTableGuardTests(SimpleTestCase):
+class RouteTableGuardTests(TestCase):
     """
     The route table lives in TWO places (frontend/src/App.jsx and spa.py).
     A route added to the SPA and forgotten here would become a 404 on a real

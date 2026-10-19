@@ -37,6 +37,17 @@ urlpatterns = [
     # Public store contact/branding settings (Part 1): footer, contact
     # page, pickup info, floating contact button.
     path("site/settings/", apps_core_views.SiteSettingsView.as_view(), name="site-settings"),
+    # Owner-editable content + theme (cached; invalidated on save). This is
+    # the ONE endpoint the storefront reads for brand/home/trust/footer/
+    # floating text and the CSS variables of the selected theme.
+    path("site/content/", apps_core_views.SiteContentView.as_view(), name="site-content"),
+    # The five info pages. Unpublished pages answer 404 (same as their URL),
+    # so the storefront can render its real not-found view.
+    path(
+        "site/pages/<slug:slug>/",
+        apps_core_views.InfoPageView.as_view(),
+        name="site-info-page",
+    ),
     # Part S3 item 9: storefront error reports land here and are forwarded
     # to the existing Sentry setup (only when SENTRY_DSN is configured).
     path(
