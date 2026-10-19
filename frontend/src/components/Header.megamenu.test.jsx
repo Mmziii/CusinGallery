@@ -336,6 +336,62 @@ describe("mega menu mobile sheet", () => {
     });
   });
 
+  it("handles touch tap to drill down into subcategories without closing, ignoring scroll gestures", async () => {
+    let openState = true;
+    const groups = [
+      {
+        id: 1,
+        name: "ظروف پخت",
+        slug: "cookware",
+        image: null,
+        product_count: 2,
+        children: [
+          { id: 2, name: "قابلمه", slug: "pot", image: null, product_count: 1, children: [] },
+        ],
+      },
+    ];
+
+    const view = render(
+      <MemoryRouter initialEntries={["/"]}>
+        <MegaMenu
+          groups={groups}
+          open={openState}
+          onOpen={() => { openState = true; }}
+          onClose={() => { openState = false; }}
+        />
+      </MemoryRouter>
+    );
+
+    const sheet = await screen.findByRole("dialog", { name: "دسته‌بندی کالاها" });
+    const drill = within(sheet).getByRole("button", { name: /ظروف پخت/ });
+
+    // 1. A scroll gesture (dy > 12) should NOT drill down
+    fireEvent.touchStart(drill, { touches: [{ clientX: 100, clientY: 100 }] });
+    fireEvent.touchEnd(drill, { changedTouches: [{ clientX: 100, clientY: 150 }] });
+    expect(within(sheet).queryByRole("button", { name: /بازگشت/ })).toBeNull();
+    expect(openState).toBe(true);
+
+    // 2. A genuine tap (dx < 12, dy < 12) drills down and remains open
+    fireEvent.touchStart(drill, { touches: [{ clientX: 100, clientY: 100 }] });
+    fireEvent.touchEnd(drill, { changedTouches: [{ clientX: 102, clientY: 101 }] });
+
+    await waitFor(() => {
+      expect(within(sheet).getByRole("button", { name: /بازگشت/ })).toBeTruthy();
+    });
+    expect(within(sheet).getByRole("heading", { name: "ظروف پخت" })).toBeTruthy();
+    expect(openState).toBe(true);
+
+    // 3. Tapping back returns to parent level and remains open
+    const back = within(sheet).getByRole("button", { name: /بازگشت/ });
+    fireEvent.touchStart(back, { touches: [{ clientX: 50, clientY: 50 }] });
+    fireEvent.touchEnd(back, { changedTouches: [{ clientX: 51, clientY: 51 }] });
+
+    await waitFor(() => {
+      expect(within(sheet).queryByRole("button", { name: /بازگشت/ })).toBeNull();
+    });
+    expect(openState).toBe(true);
+  });
+
   it("locks the body scroll while open (through the header)", async () => {
     // The document lock is owned by the header (it is
     // shared by all full-viewport surfaces), so this
