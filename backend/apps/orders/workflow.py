@@ -242,8 +242,28 @@ def set_status(order, new_status):
                 note=f"{action} سفارش پرداخت‌شده — کل مبلغ باید به مشتری بازگردانده شود.",
             )
 
+        expired_pending_payment = False
+        if new_status == Order.Status.CANCELLED:
+            # Stop showing an in-flight gateway attempt after its order has
+            # been cancelled. The callback still recognizes this marker so
+            # a genuinely late capture can be recorded and refunded.
+            from apps.payments.models import Payment
+
+            expired_pending_payment = Payment.objects.filter(
+                order=locked, status=Payment.Status.PENDING
+            ).update(
+                status=Payment.Status.FAILED,
+                failure_reason="Order cancelled before payment completed",
+                updated_at=timezone.now(),
+            ) > 0
+            if locked.payment_status == Order.PaymentStatus.PENDING:
+                locked.payment_status = Order.PaymentStatus.FAILED
+
         locked.status = new_status
-        locked.save(update_fields=["status", "stock_restored_at", "updated_at"])
+        fields = ["status", "stock_restored_at", "updated_at"]
+        if expired_pending_payment or locked.payment_status == Order.PaymentStatus.FAILED:
+            fields.append("payment_status")
+        locked.save(update_fields=fields)
 
         if new_status == Order.Status.CONFIRMED:
             # The shop has accepted the order -- only NOW is it fair to

@@ -32,10 +32,10 @@ The one race that cannot be locked away -- a customer sitting on the
 gateway page who completes payment for an order a microsecond after
 this command cancelled it -- is handled by the payment callback, not
 here: apps/payments/services.py records the verified capture and flags
-the order refund-required, so the money is never lost. Stale PENDING
-payment attempts are deliberately left PENDING for exactly that reason:
-pre-marking them cancelled would blind the callback's verified-capture
-path to real money.
+the order refund-required, so the money is never lost. Stale pending payment attempts are marked failed when the order is
+cancelled so customer-facing statuses agree. The payment service retains a
+special late-capture verification path for these expired attempts, so a
+verified charge is still recorded and flagged for refund.
 """
 import logging
 from datetime import timedelta

@@ -54,6 +54,8 @@ from .models import Payment
 
 logger = logging.getLogger("payments")
 
+EXPIRED_ORDER_PAYMENT_REASON = "Order cancelled before payment completed"
+
 #: Query-string keys that may carry the gateway's own transaction
 #: reference, in priority order. ZarinPal sends "Authority" (PascalCase,
 #: per its docs), the mock gateway sends "authority"; "token"/"Token"
@@ -192,7 +194,11 @@ def handle_callback(callback_data: dict) -> Payment:
     # flipped to SUCCESS afterwards either -- real gateways void an
     # authority once it fails or is cancelled, and a retry always gets a
     # fresh attempt with its own authority (see initiate_payment).
-    if payment.status != Payment.Status.PENDING:
+    expired_order_attempt = (
+        payment.status == Payment.Status.FAILED
+        and payment.failure_reason == EXPIRED_ORDER_PAYMENT_REASON
+    )
+    if payment.status != Payment.Status.PENDING and not expired_order_attempt:
         return payment
 
     # Ask the gateway itself whether this callback is genuine and what it
@@ -220,7 +226,11 @@ def handle_callback(callback_data: dict) -> Payment:
         # Re-read under the lock: another callback may have completed the
         # transition between our fast-path check and here.
         locked = Payment.objects.select_for_update().get(pk=payment.pk)
-        if locked.status != Payment.Status.PENDING:
+        locked_expired_order_attempt = (
+            locked.status == Payment.Status.FAILED
+            and locked.failure_reason == EXPIRED_ORDER_PAYMENT_REASON
+        )
+        if locked.status != Payment.Status.PENDING and not locked_expired_order_attempt:
             return locked
 
         # Lock the ORDER row too, for every outcome: two DIFFERENT
