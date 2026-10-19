@@ -8,6 +8,8 @@ from django.http import HttpResponseNotAllowed, HttpResponseRedirect
 from django.urls import path, reverse
 from django.utils.translation import gettext_lazy as _
 
+from apps.adminui.admin_dates import jalali_column
+
 from .forms import InfoPageAdminForm, SiteSettingsAdminForm
 from .models import INFO_PAGE_SLUGS, InfoPage, SiteSettings, TrustStripItem
 from .theme import COLOR_FIELDS, THEME_PRESETS, theme_defaults
@@ -121,12 +123,25 @@ class SiteSettingsAdmin(admin.ModelAdmin):
 
     @property
     def media(self):
+        """The stock admin media (jQuery, core.js, …) PLUS the preview.
+
+        Replacing ModelAdmin.media dropped `admin/js/vendor/jquery/jquery.js`
+        and `admin/js/jquery.init.js`, which left `django.jQuery` undefined
+        for the prepopulate script the change form always renders (and for
+        every stock widget). `super().media + …` keeps the stock order.
+        """
         from django import forms
 
-        return forms.Media(js=("admin_theme/js/theme_preview.js",))
+        return super().media + forms.Media(js=("admin_theme/js/theme_preview.js",))
 
     def has_add_permission(self, request):
         return not SiteSettings.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        # The row is the singleton every page reads: deleting it would wipe
+        # the whole storefront content/theme. Trust-strip items are removed
+        # inside the inline, never by deleting the settings row.
+        return False
 
     def changelist_view(self, request, extra_context=None):
         from django.shortcuts import redirect
@@ -195,7 +210,13 @@ class InfoPageAdmin(admin.ModelAdmin):
     """«صفحات اطلاعاتی»: the owner edits the five trust/legal pages."""
 
     form = InfoPageAdminForm
-    list_display = ("title", "slug_label", "is_published", "ordering", "updated_at")
+    list_display = (
+        "title",
+        "slug_label",
+        "is_published",
+        "ordering",
+        jalali_column("updated_at", "آخرین به‌روزرسانی", with_time=True),
+    )
     list_editable = ("is_published", "ordering")
     list_filter = ("is_published",)
     search_fields = ("title", "body", "seo_title", "seo_description")
@@ -227,9 +248,16 @@ class InfoPageAdmin(admin.ModelAdmin):
 
     @property
     def media(self):
+        """Stock admin media (jQuery and friends) plus the toolbar.
+
+        The base change form always renders `prepopulate_init.js`, which
+        reads `django.jQuery`; overriding `media` without `super()` used to
+        remove the jQuery bundle and threw «$ is not a function» on every
+        info-page change form.
+        """
         from django import forms
 
-        return forms.Media(
+        return super().media + forms.Media(
             js=("admin_theme/js/rich_text.js",),
             css={"all": ("admin_theme/css/rich_text.css",)},
         )
