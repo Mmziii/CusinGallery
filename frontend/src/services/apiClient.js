@@ -1,5 +1,7 @@
 import axios from "axios";
 
+import { getSessionKey } from "../utils/behaviour";
+
 /**
  * Single axios instance every feature-specific service module (products,
  * cart, orders, ...) imports instead of creating its own client.
@@ -39,6 +41,14 @@ apiClient.interceptors.request.use((config) => {
     const token = getCookie("csrftoken");
     if (token) {
       config.headers["X-CSRFToken"] = token;
+    }
+    // Anonymous behaviour session (Task 1): lets the backend attach
+    // server-side events (add-to-cart, order placed) to the same
+    // privacy-friendly session as the batched browser events. It is a
+    // random id from localStorage -- never an IP or a fingerprint.
+    const sessionKey = getSessionKey();
+    if (sessionKey) {
+      config.headers["X-Cusin-Session"] = sessionKey;
     }
   }
   return config;

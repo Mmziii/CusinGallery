@@ -15,6 +15,8 @@ from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.analytics.tracking import session_key_from_request
+
 from .models import Order, OrderItem
 from .serializers import CheckoutSerializer, OrderSerializer
 from .services import CheckoutError, checkout
@@ -116,7 +118,11 @@ class CheckoutView(APIView):
         serializer.is_valid(raise_exception=True)
 
         try:
-            order = checkout(request.user, serializer.validated_data)
+            order = checkout(
+                request.user,
+                serializer.validated_data,
+                analytics_session_key=session_key_from_request(request),
+            )
         except CheckoutError as exc:
             return Response(exc.errors, status=status.HTTP_400_BAD_REQUEST)
 

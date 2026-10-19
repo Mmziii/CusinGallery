@@ -1,0 +1,525 @@
+{% extends "admin/base_site.html" %}
+{% load static adminui_extras %}
+{% comment %}
+«گزارش‌ها و تحلیل» (Task 2) -- read-only aggregates from
+apps.analytics.reports, rendered in the branded admin shell.
+
+Every number is Persian-digit formatted by the shared adminui_extras
+filters; every section has its own empty state and its own xlsx/CSV
+download; the page-wide «نسخهٔ چاپی / PDF» opens a clean print view.
+{% endcomment %}
+
+{% block extrastyle %}{{ block.super }}<link rel="stylesheet" href="{% static "admin_theme/css/reports.css" %}">{% endblock %}
+{% block bodyclass %}{{ block.super }} cusin-reports{% endblock %}
+
+{% block content_title %}<h1>گزارش‌ها و تحلیل</h1>{% endblock %}
+
+{% block content %}
+<div class="cusin-report">
+
+  <section class="cusin-card cusin-report-head" aria-label="بازهٔ گزارش">
+    <div class="cusin-report-range">
+      <p class="cusin-report-range-line">
+        {% cusin_icon "calendar" %}
+        بازهٔ گزارش: <strong>{{ range.start_input|fanum }} تا {{ range.end_input|fanum }}</strong>
+        <span class="cusin-muted">({{ range.days|numfa }} روز)</span>
+      </p>
+      <div class="cusin-days-toggle" role="group" aria-label="بازهٔ زمانی گزارش">
+        {% for preset in report.presets %}
+        <a class="cusin-chip{% if preset.active %} is-active{% endif %}"
+           {% if preset.active %}aria-current="true"{% endif %}
+           href="?range={{ preset.key }}">{{ preset.label }}</a>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="cusin-report-tools">
+      <a class="cusin-report-print" href="{{ print_url }}?{{ export_query }}">
+        {% cusin_icon "printer" %} نسخهٔ چاپی / PDF
+      </a>
+    </div>
+    <form class="cusin-report-custom" method="get" action="{{ reports_url }}">
+      <input type="hidden" name="range" value="custom">
+      <label>از
+        <input type="text" name="start" value="{{ range.start_input|fanum }}" placeholder="۱۴۰۵/۰۷/۰۱"
+               dir="ltr" inputmode="numeric" autocomplete="off">
+      </label>
+      <label>تا
+        <input type="text" name="end" value="{{ range.end_input|fanum }}" placeholder="۱۴۰۵/۰۷/۲۹"
+               dir="ltr" inputmode="numeric" autocomplete="off">
+      </label>
+      <button type="submit" class="cusin-report-apply">نمایش بازهٔ دلخواه</button>
+      <span class="cusin-muted">تاریخ‌ها شمسی و به شکل ۱۴۰۵/۰۷/۰۱ هستند.</span>
+    </form>
+    {% if report.message %}
+    <p class="cusin-report-note" role="status">{% cusin_icon "info" %} {{ report.message }}</p>
+    {% endif %}
+  </section>
+
+  {% if can.orders %}
+  <section class="cusin-card" aria-label="خلاصهٔ فروش">
+    <header class="cusin-card-head">
+      <h2>{% cusin_icon "chart-bar" %} خلاصه</h2>
+      {% include "analytics/_export_buttons.html" with section="summary" %}
+    </header>
+    {% if report.summary.orders or report.summary.sessions %}
+    <div class="cusin-kpi-grid cusin-report-kpis">
+      <div class="cusin-kpi">
+        <span class="cusin-kpi-label">درآمد (سفارش‌های پرداخت‌شده)</span>
+        <strong class="cusin-kpi-value">{{ report.summary.revenue|toman }}</strong>
+      </div>
+      <div class="cusin-kpi">
+        <span class="cusin-kpi-label">تعداد سفارش‌ها</span>
+        <strong class="cusin-kpi-value">{{ report.summary.orders|numfa }}</strong>
+        <span class="cusin-kpi-sub">{{ report.summary.paid_orders|numfa }} سفارش پرداخت‌شده</span>
+      </div>
+      <div class="cusin-kpi">
+        <span class="cusin-kpi-label">میانگین سبد</span>
+        <strong class="cusin-kpi-value">{{ report.summary.aov|toman }}</strong>
+      </div>
+      <div class="cusin-kpi">
+        <span class="cusin-kpi-label">نرخ تبدیل</span>
+        <strong class="cusin-kpi-value">{{ report.summary.conversion|fanum }}٪</strong>
+        <span class="cusin-kpi-sub">{{ report.summary.paid_sessions|numfa }} از {{ report.summary.sessions|numfa }} نشست</span>
+      </div>
+      <div class="cusin-kpi">
+        <span class="cusin-kpi-label">مشتریان جدید</span>
+        <strong class="cusin-kpi-value">{{ report.summary.new_customers|numfa }}</strong>
+        <span class="cusin-kpi-sub">اولین خرید در این بازه</span>
+      </div>
+      <div class="cusin-kpi">
+        <span class="cusin-kpi-label">مشتریان بازگشتی</span>
+        <strong class="cusin-kpi-value">{{ report.summary.returning_customers|numfa }}</strong>
+        <span class="cusin-kpi-sub">خرید قبلی داشتند</span>
+      </div>
+    </div>
+    <p class="cusin-card-note">
+      درآمد = جمع مبلغ سفارش‌های پرداخت‌شده‌ای که لغو یا مرجوع نشده‌اند.
+      نرخ تبدیل = نشست‌هایی که به پرداخت رسیده‌اند تقسیم بر همهٔ نشست‌هایی که رویدادی داشته‌اند.
+    </p>
+    {% else %}
+    <p class="cusin-empty">{% cusin_icon "chart-bar" %} در این بازه هیچ سفارش یا رویدادی ثبت نشده است.</p>
+    {% endif %}
+  </section>
+
+  <section class="cusin-card" aria-label="قیف فروش">
+    <header class="cusin-card-head">
+      <h2>{% cusin_icon "filter" %} قیف فروش</h2>
+      {% include "analytics/_export_buttons.html" with section="funnel" %}
+    </header>
+    {% if report.funnel.0.count %}
+    <ol class="cusin-funnel">
+      {% for step in report.funnel %}
+      <li class="cusin-funnel-step" data-step="{{ step.key }}">
+        <span class="cusin-funnel-label">{{ step.label }}</span>
+        <span class="cusin-funnel-bar"><i style="width: {{ step.of_first }}%"></i></span>
+        <span class="cusin-funnel-count">{{ step.count|numfa }} نشست</span>
+        {% if step.drop is not None %}
+        <span class="cusin-funnel-drop">افت: {{ step.drop|fanum }}٪</span>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ol>
+    <p class="cusin-card-note">تعدادها بر پایهٔ «نشست» (کلید ناشناس مرورگر) است، نه تعداد رویداد.</p>
+    {% else %}
+    <p class="cusin-empty">{% cusin_icon "filter" %} هنوز رویدادی برای ساخت قیف ثبت نشده است.</p>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  {% if can.orders %}
+  <section class="cusin-card" aria-label="نمودار فروش روزانه">
+    <header class="cusin-card-head">
+      <h2>{% cusin_icon "chart-bar" %} فروش روزانه</h2>
+      {% include "analytics/_export_buttons.html" with section="chart" %}
+    </header>
+    {% if report.chart.has_data %}
+    <div class="cusin-report-charts">
+      <div class="cusin-report-chart">
+        <h3 class="cusin-report-chart-title">درآمد روزانه (تومان)</h3>
+        <div class="cusin-chart-scroll" dir="ltr">
+          <svg class="cusin-chart" viewBox="0 0 {{ report.chart.width }} 170" role="img"
+               aria-label="نمودار ستونی درآمد روزانه؛ جدول اعداد زیر نمودار آمده است.">
+            {% for point in report.chart.points %}
+            <g class="cusin-chart-col">
+              <rect x="{{ point.x }}" y="{{ point.rev_y }}" width="{{ report.chart.bar_w }}"
+                    height="{{ point.rev_h }}" rx="4" data-cusin-chart-bar>
+                <title>{{ point.jfull }} — {{ point.revenue|toman }}</title>
+              </rect>
+            </g>
+            {% endfor %}
+            {% for tick in report.chart.ticks %}
+            <text class="cusin-chart-tick" x="{{ tick.x }}" y="162" text-anchor="middle">{{ tick.label|fanum }}</text>
+            {% endfor %}
+          </svg>
+        </div>
+      </div>
+      <div class="cusin-report-chart">
+        <h3 class="cusin-report-chart-title">تعداد سفارش روزانه</h3>
+        <div class="cusin-chart-scroll" dir="ltr">
+          <svg class="cusin-chart" viewBox="0 0 {{ report.chart.width }} 170" role="img"
+               aria-label="نمودار ستونی تعداد سفارش روزانه؛ جدول اعداد زیر نمودار آمده است.">
+            {% for point in report.chart.points %}
+            <g class="cusin-chart-col">
+              <rect x="{{ point.x }}" y="{{ point.ord_y }}" width="{{ report.chart.bar_w }}"
+                    height="{{ point.ord_h }}" rx="4" data-cusin-chart-bar>
+                <title>{{ point.jfull }} — {{ point.orders|numfa }} سفارش</title>
+              </rect>
+            </g>
+            {% endfor %}
+            {% for tick in report.chart.ticks %}
+            <text class="cusin-chart-tick" x="{{ tick.x }}" y="162" text-anchor="middle">{{ tick.label|fanum }}</text>
+            {% endfor %}
+          </svg>
+        </div>
+      </div>
+    </div>
+    <details class="cusin-chart-table-wrap">
+      <summary>جدول اعداد نمودار</summary>
+      <div class="cusin-table-scroll">
+        <table class="cusin-mini-table">
+          <caption class="cusin-report-caption">فروش و سفارش روزانه</caption>
+          <thead><tr><th scope="col">روز</th><th scope="col">سفارش‌ها</th><th scope="col">درآمد (تومان)</th></tr></thead>
+          <tbody>
+            {% for point in report.chart.points %}
+            <tr><th scope="row">{{ point.jfull|fanum }}</th><td>{{ point.orders|numfa }}</td><td>{{ point.revenue|toman }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </details>
+    {% else %}
+    <p class="cusin-empty">{% cusin_icon "chart-bar" %} در این بازه سفارشی ثبت نشده است.</p>
+    {% endif %}
+  </section>
+
+  <section class="cusin-card" aria-label="سبدهای رها‌شده">
+    <header class="cusin-card-head">
+      <h2>{% cusin_icon "cart" %} سبدهای رها‌شده</h2>
+      {% include "analytics/_export_buttons.html" with section="abandoned" %}
+    </header>
+    <p class="cusin-card-note">
+      سبدهایی که در این بازه کالا داشته‌اند ولی به سفارش پرداخت‌شده تبدیل نشده‌اند.
+      سبد مهمان در مرورگر است و اینجا نمی‌آید؛ برای مهمان‌ها «افزودن به سبد» در قیف دیده می‌شود.
+    </p>
+    {% if report.abandoned %}
+    <div class="cusin-table-scroll">
+      <table class="cusin-mini-table cusin-report-table">
+        <thead>
+          <tr>
+            <th scope="col">مشتری</th>
+            <th scope="col">تلفن</th>
+            <th scope="col">اقلام</th>
+            <th scope="col">مبلغ سبد</th>
+            <th scope="col">آخرین فعالیت</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in report.abandoned %}
+          <tr>
+            <td>
+              <a href="{{ row.user_url }}">{{ row.name|fanum }}</a>
+              <span class="cusin-report-sub">{{ row.item_count|numfa }} قلم</span>
+            </td>
+            <td>
+              {% if row.phone %}
+              <bdi dir="ltr" class="cusin-report-phone">{{ row.phone|fanum }}</bdi>
+              <button type="button" class="cusin-copy-phone" data-cusin-copy="{{ row.phone }}"
+                      aria-label="کپی شمارهٔ {{ row.name|fanum }}">کپی</button>
+              {% else %}—{% endif %}
+            </td>
+            <td>
+              <ul class="cusin-report-items">
+                {% for item in row.items %}
+                <li>{{ item.name|fanum }} × {{ item.quantity|numfa }} — {{ item.line_total|toman }}</li>
+                {% endfor %}
+              </ul>
+            </td>
+            <td class="cusin-nowrap">{{ row.total|toman }}</td>
+            <td class="cusin-nowrap">{{ row.last_activity|jdatetime }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="cusin-empty">{% cusin_icon "cart" %} سبد رها‌شده‌ای در این بازه نیست.</p>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  {% if can.products %}
+  <h2 class="cusin-section-title">{% cusin_icon "box" %} محصولات</h2>
+  <div class="cusin-report-grid">
+    <section class="cusin-card" aria-label="پرفروش‌ترین محصولات">
+      <header class="cusin-card-head">
+        <h2>پرفروش‌ترین‌ها</h2>
+        {% include "analytics/_export_buttons.html" with section="products_best" %}
+      </header>
+      {% if report.products.best_sellers %}
+      <div class="cusin-table-scroll">
+        <table class="cusin-mini-table">
+          <thead><tr><th scope="col">محصول</th><th scope="col">تعداد</th><th scope="col">درآمد</th></tr></thead>
+          <tbody>
+            {% for row in report.products.best_sellers %}
+            <tr>
+              <td>{% if row.url %}<a href="{{ row.url }}">{{ row.name|fanum }}</a>{% else %}{{ row.name|fanum }}{% endif %}</td>
+              <td class="cusin-nowrap">{{ row.qty|numfa }}</td>
+              <td class="cusin-nowrap">{{ row.revenue|toman }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}<p class="cusin-empty">{% cusin_icon "box" %} در این بازه فروشی ثبت نشده است.</p>{% endif %}
+    </section>
+
+    <section class="cusin-card" aria-label="پربازدیدترین محصولات">
+      <header class="cusin-card-head">
+        <h2>پربازدیدترین‌ها</h2>
+        {% include "analytics/_export_buttons.html" with section="products_viewed" %}
+      </header>
+      {% if report.products.most_viewed %}
+      <div class="cusin-table-scroll">
+        <table class="cusin-mini-table">
+          <thead><tr><th scope="col">محصول</th><th scope="col">بازدید</th></tr></thead>
+          <tbody>
+            {% for row in report.products.most_viewed %}
+            <tr>
+              <td>{% if row.url %}<a href="{{ row.url }}">{{ row.name|fanum }}</a>{% else %}{{ row.name|fanum }}{% endif %}</td>
+              <td class="cusin-nowrap">{{ row.count|numfa }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}<p class="cusin-empty">{% cusin_icon "eye" %} بازدیدی ثبت نشده است.</p>{% endif %}
+    </section>
+
+    <section class="cusin-card" aria-label="پربازدید ولی کم‌فروش">
+      <header class="cusin-card-head">
+        <h2>پربازدید ولی کم‌فروش</h2>
+        {% include "analytics/_export_buttons.html" with section="products_lowconv" %}
+      </header>
+      {% if report.products.low_conversion %}
+      <div class="cusin-table-scroll">
+        <table class="cusin-mini-table">
+          <thead><tr><th scope="col">محصول</th><th scope="col">بازدید</th><th scope="col">فروش</th><th scope="col">تبدیل</th></tr></thead>
+          <tbody>
+            {% for row in report.products.low_conversion %}
+            <tr>
+              <td>{% if row.url %}<a href="{{ row.url }}">{{ row.name|fanum }}</a>{% else %}{{ row.name|fanum }}{% endif %}</td>
+              <td class="cusin-nowrap">{{ row.views|numfa }}</td>
+              <td class="cusin-nowrap">{{ row.sold|numfa }}</td>
+              <td class="cusin-nowrap">{{ row.conversion|fanum }}٪</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}<p class="cusin-empty">{% cusin_icon "eye" %} کالای پربازدیدِ کم‌فروش پیدا نشد.</p>{% endif %}
+    </section>
+
+    <section class="cusin-card" aria-label="به سبد رفته ولی خریده نشده">
+      <header class="cusin-card-head">
+        <h2>به سبد رفته، خریده نشده</h2>
+        {% include "analytics/_export_buttons.html" with section="products_cart" %}
+      </header>
+      {% if report.products.cart_not_bought %}
+      <div class="cusin-table-scroll">
+        <table class="cusin-mini-table">
+          <thead><tr><th scope="col">محصول</th><th scope="col">افزودن به سبد</th><th scope="col">فروش</th></tr></thead>
+          <tbody>
+            {% for row in report.products.cart_not_bought %}
+            <tr>
+              <td>{% if row.url %}<a href="{{ row.url }}">{{ row.name|fanum }}</a>{% else %}{{ row.name|fanum }}{% endif %}</td>
+              <td class="cusin-nowrap">{{ row.cart_adds|numfa }}</td>
+              <td class="cusin-nowrap">{{ row.sold|numfa }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}<p class="cusin-empty">{% cusin_icon "cart" %} همهٔ اقلام سبد به خرید رسیده‌اند.</p>{% endif %}
+    </section>
+
+    <section class="cusin-card" aria-label="پربازدیدترین علاقه‌مندی‌ها">
+      <header class="cusin-card-head">
+        <h2>بیشترین افزودن به علاقه‌مندی</h2>
+        {% include "analytics/_export_buttons.html" with section="products_wishlist" %}
+      </header>
+      {% if report.products.most_wishlisted %}
+      <div class="cusin-table-scroll">
+        <table class="cusin-mini-table">
+          <thead><tr><th scope="col">محصول</th><th scope="col">تعداد</th></tr></thead>
+          <tbody>
+            {% for row in report.products.most_wishlisted %}
+            <tr>
+              <td>{% if row.url %}<a href="{{ row.url }}">{{ row.name|fanum }}</a>{% else %}{{ row.name|fanum }}{% endif %}</td>
+              <td class="cusin-nowrap">{{ row.count|numfa }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}<p class="cusin-empty">{% cusin_icon "heart" %} در این بازه کالایی به علاقه‌مندی اضافه نشده است.</p>{% endif %}
+    </section>
+  </div>
+  {% endif %}
+
+  <h2 class="cusin-section-title">{% cusin_icon "search" %} جستجوها</h2>
+  <div class="cusin-report-grid">
+    <section class="cusin-card" aria-label="پرجستجوترین عبارت‌ها">
+      <header class="cusin-card-head">
+        <h2>پرجستجوترین عبارت‌ها</h2>
+        {% include "analytics/_export_buttons.html" with section="searches_top" %}
+      </header>
+      {% if report.searches.top %}
+      <p class="cusin-card-note">{{ report.searches.total|numfa }} جستجو در این بازه</p>
+      <div class="cusin-table-scroll">
+        <table class="cusin-mini-table">
+          <thead><tr><th scope="col">عبارت</th><th scope="col">تعداد</th></tr></thead>
+          <tbody>
+            {% for row in report.searches.top %}
+            <tr><td>{{ row.query|fanum }}</td><td class="cusin-nowrap">{{ row.count|numfa }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}<p class="cusin-empty">{% cusin_icon "search" %} جستجویی ثبت نشده است.</p>{% endif %}
+    </section>
+
+    <section class="cusin-card cusin-report-zero" aria-label="جستجوهای بی‌نتیجه">
+      <header class="cusin-card-head">
+        <h2>جستجوهای بی‌نتیجه</h2>
+        {% include "analytics/_export_buttons.html" with section="searches_zero" %}
+      </header>
+      {% if report.searches.zero %}
+      <p class="cusin-card-note">
+        {{ report.searches.zero_total|numfa }} جستجو بدون هیچ نتیجه‌ای —
+        یعنی مشتری دنبال چیزی بوده که نداریم.
+      </p>
+      <div class="cusin-table-scroll">
+        <table class="cusin-mini-table">
+          <thead><tr><th scope="col">عبارت</th><th scope="col">تعداد</th></tr></thead>
+          <tbody>
+            {% for row in report.searches.zero %}
+            <tr><td>{{ row.query|fanum }}</td><td class="cusin-nowrap">{{ row.count|numfa }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}<p class="cusin-empty">{% cusin_icon "check" %} هیچ جستجوی بی‌نتیجه‌ای ثبت نشده است.</p>{% endif %}
+    </section>
+  </div>
+
+  {% if can.customers %}
+  <h2 class="cusin-section-title">{% cusin_icon "users" %} مشتریان</h2>
+  <div class="cusin-report-grid">
+    <section class="cusin-card" aria-label="مشتریان برتر">
+      <header class="cusin-card-head">
+        <h2>مشتریان برتر (بر اساس خرید)</h2>
+        {% include "analytics/_export_buttons.html" with section="customers_top" %}
+      </header>
+      {% if report.customers.top %}
+      <div class="cusin-table-scroll">
+        <table class="cusin-mini-table">
+          <thead><tr><th scope="col">مشتری</th><th scope="col">سفارش</th><th scope="col">مجموع خرید</th></tr></thead>
+          <tbody>
+            {% for row in report.customers.top %}
+            <tr>
+              <td>
+                <a href="{{ row.url }}">{{ row.name|fanum }}</a>
+                {% if row.phone %}<span class="cusin-report-sub" dir="ltr">{{ row.phone|fanum }}</span>{% endif %}
+              </td>
+              <td class="cusin-nowrap">{{ row.orders|numfa }}</td>
+              <td class="cusin-nowrap">{{ row.spend|toman }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}<p class="cusin-empty">{% cusin_icon "users" %} در این بازه مشتری خریدی نکرده است.</p>{% endif %}
+    </section>
+
+    <section class="cusin-card" aria-label="نرخ خرید دوباره">
+      <header class="cusin-card-head">
+        <h2>خرید دوباره</h2>
+      </header>
+      {% if report.customers.buyers %}
+      <div class="cusin-report-metric">
+        <strong>{{ report.customers.repeat_rate|fanum }}٪</strong>
+        <span>{{ report.customers.repeat_customers|numfa }} مشتری از {{ report.customers.buyers|numfa }} مشتری خریدار، بیش از یک سفارش پرداخت‌شده داشتند.</span>
+      </div>
+      {% else %}
+      <p class="cusin-empty">{% cusin_icon "users" %} هنوز مشتری خریداری در این بازه نیست.</p>
+      {% endif %}
+    </section>
+
+    <section class="cusin-card cusin-report-places" aria-label="سفارش‌ها بر اساس استان و شهر">
+      <header class="cusin-card-head">
+        <h2>سفارش‌ها بر اساس استان و شهر</h2>
+        {% include "analytics/_export_buttons.html" with section="customers_places" %}
+      </header>
+      {% if report.customers.places %}
+      <div class="cusin-report-bars">
+        {% for row in report.customers.places %}
+        <div class="cusin-report-bar-row">
+          <span class="cusin-report-bar-label">{{ row.province }} / {{ row.city }}</span>
+          <span class="cusin-report-bar"><i style="width: {{ row.width }}%"></i></span>
+          <span class="cusin-report-bar-value">{{ row.orders|numfa }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      <div class="cusin-table-scroll">
+        <table class="cusin-mini-table">
+          <thead><tr><th scope="col">استان</th><th scope="col">شهر</th><th scope="col">سفارش</th><th scope="col">فروش</th></tr></thead>
+          <tbody>
+            {% for row in report.customers.places %}
+            <tr>
+              <td>{{ row.province }}</td>
+              <td>{{ row.city }}</td>
+              <td class="cusin-nowrap">{{ row.orders|numfa }}</td>
+              <td class="cusin-nowrap">{{ row.revenue|toman }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="cusin-empty">{% cusin_icon "map-pin" %} سفارشی با استان و شهر ثبت نشده است.</p>
+      {% endif %}
+    </section>
+  </div>
+  {% endif %}
+
+  {% if can.coupons %}
+  <section class="cusin-card" aria-label="کوپن‌ها">
+    <header class="cusin-card-head">
+      <h2>{% cusin_icon "ticket" %} کوپن‌ها</h2>
+      {% include "analytics/_export_buttons.html" with section="coupons" %}
+    </header>
+    {% if report.coupons %}
+    <div class="cusin-table-scroll">
+      <table class="cusin-mini-table">
+        <thead><tr><th scope="col">کد کوپن</th><th scope="col">تعداد استفاده</th><th scope="col">مجموع تخفیف</th></tr></thead>
+        <tbody>
+          {% for row in report.coupons %}
+          <tr>
+            <td dir="ltr" class="cusin-report-code">{{ row.code }}</td>
+            <td class="cusin-nowrap">{{ row.uses|numfa }}</td>
+            <td class="cusin-nowrap">{{ row.discount|toman }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="cusin-empty">{% cusin_icon "ticket" %} در این بازه از کوپنی استفاده نشده است.</p>
+    {% endif %}
+  </section>
+  {% endif %}
+
+</div>
+{% endblock %}
+
+{% block extrabody %}{{ block.super }}<script src="{% static "admin_theme/js/reports.js" %}" defer></script>{% endblock %}

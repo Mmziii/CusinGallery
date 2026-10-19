@@ -387,6 +387,30 @@ def _complete_successful_payment(payment: Payment, verification) -> Payment:
 
     _record_coupon_usage(order)
 
+    # Behaviour analytics: the order_paid event is written on the SAME
+    # server-side path that records real money, so it can never be lost.
+    # The anonymous session key comes from the order's own order_placed
+    # event (the browser key is not available on a gateway callback);
+    # province/city come from the order snapshot. No IP is stored.
+    from apps.analytics.models import Event
+    from apps.analytics.tracking import record_event
+
+    paid_session_key = (
+        Event.objects.filter(
+            order=order, event_type=Event.Type.ORDER_PLACED,
+        )
+        .order_by("-created_at")
+        .values_list("session_key", flat=True)
+        .first()
+        or ""
+    )
+    record_event(
+        "order_paid",
+        order=order,
+        user=order.user,
+        session_key=paid_session_key,
+    )
+
     # Customer notification (Phase D): order confirmation over SMS and/or
     # email. Registered via transaction.on_commit inside apps/notifications
     # -- nothing is sent unless this whole transition actually commits,

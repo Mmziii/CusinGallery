@@ -47,6 +47,14 @@ PRIMARY_ITEMS: tuple[tuple[str, tuple[str, ...], str, str], ...] = (
     ("core", ("infopage",), "صفحات اطلاعاتی", "info"),
 )
 
+#: Admin-panel pages that are not a model changelist, in the owner's
+#: order (shown right after the dashboard link). Each carries the
+#: permission that makes it visible; the page enforces the same check.
+# (label, url name, icon, required permission)
+PRIMARY_EXTRAS: tuple[tuple[str, str, str, str], ...] = (
+    ("گزارش‌ها و تحلیل", "admin_reports", "chart-bar", "analytics.view_event"),
+)
+
 #: The collapsed bucket at the bottom for everything not listed above.
 ADVANCED_GROUP_ID = "advanced"
 ADVANCED_GROUP_TITLE = "سایر / پیشرفته"
@@ -158,6 +166,28 @@ def build_sidebar(available_apps, request) -> dict:
 
     primary: list[dict] = []
     taken: set[tuple[str, str]] = set()
+
+    # Non-model admin pages (the reports page) come first, right after the
+    # dashboard link. Permission is checked here as well as in the view.
+    user = getattr(request, "user", None)
+    for label, url_name, icon, perm in PRIMARY_EXTRAS:
+        if user is None or not getattr(user, "is_authenticated", False):
+            continue
+        if perm and not user.has_perm(perm):
+            continue
+        try:
+            url = reverse(url_name)
+        except NoReverseMatch:  # pragma: no cover - defensive
+            continue
+        primary.append({
+            "id": url_name,
+            "label": label,
+            "name": label,
+            "url": url,
+            "add_url": None,
+            "icon": icon,
+            "active": bool(url) and current_path.startswith(url),
+        })
 
     for app_label, model_names, label, icon in PRIMARY_ITEMS:
         found = [

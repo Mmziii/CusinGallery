@@ -138,7 +138,7 @@ def _resolve_shipping_fields(user, validated_data):
     }
 
 
-def checkout(user, validated_data) -> Order:
+def checkout(user, validated_data, analytics_session_key="") -> Order:
     """
     Converts the user's current cart into a real Order + OrderItems.
 
@@ -149,6 +149,11 @@ def checkout(user, validated_data) -> Order:
     computed here, fresh, from apps.cart.services.build_cart_view()
     (which itself reuses apps.products.pricing -- the same mechanism the
     public catalog API uses), never trusted from anywhere else.
+
+    ``analytics_session_key`` is the caller's ANONYMOUS behaviour key
+    (header, never an IP). The order_placed event is written inside this
+    transaction -- so it can never be "lost" by a fire-and-forget browser
+    request, and can never survive a rolled-back checkout.
     """
     # Address resolution doesn't need the cart lock below -- kept outside
     # the atomic block to keep the lock's hold time minimal.
@@ -262,5 +267,19 @@ def checkout(user, validated_data) -> Order:
         # store. Reuses apps.cart.services.clear_cart rather than a
         # second `cart.items.all().delete()` written here.
         cart_services.clear_cart(cart)
+
+        # Behaviour analytics (Task 1): server-side, inside the same
+        # transaction. The event carries the order's province/city from
+        # the snapshot and the caller's anonymous session key, never an
+        # IP address. record_event() never raises, so a tracking problem
+        # cannot undo a real order.
+        from apps.analytics.tracking import record_event
+
+        record_event(
+            "order_placed",
+            order=order,
+            user=user,
+            session_key=analytics_session_key,
+        )
 
     return order

@@ -11,6 +11,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.generics import get_object_or_404
 
+from apps.analytics.tracking import record_event, session_key_from_request
+
 from . import services
 from .models import CartItem
 from .permissions import IsCartItemOwner
@@ -48,7 +50,7 @@ class CartItemCreateView(APIView):
         serializer.is_valid(raise_exception=True)
 
         try:
-            services.add_item(
+            item = services.add_item(
                 user=request.user,
                 product_id=serializer.validated_data["product_id"],
                 variant_id=serializer.validated_data.get("variant_id"),
@@ -56,6 +58,17 @@ class CartItemCreateView(APIView):
             )
         except services.CartError as exc:
             return Response(exc.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        # Server-side behaviour event (Task 1): an authenticated add is
+        # recorded here, on the backend, so it can never be lost by a
+        # blocked/failed browser beacon. Guests have no server cart and
+        # are tracked client-side instead.
+        record_event(
+            "add_to_cart",
+            product=item.product,
+            user=request.user,
+            session_key=session_key_from_request(request),
+        )
 
         cart = services.get_or_create_cart(request.user)
         view = services.build_cart_view(cart)
@@ -95,13 +108,29 @@ class CartItemDetailView(APIView):
         except services.CartError as exc:
             return Response(exc.errors, status=status.HTTP_400_BAD_REQUEST)
 
+        # quantity 0 means "remove this line" (services contract).
+        if serializer.validated_data["quantity"] == 0:
+            record_event(
+                "remove_from_cart",
+                product=item.product,
+                user=request.user,
+                session_key=session_key_from_request(request),
+            )
+
         cart = services.get_or_create_cart(request.user)
         view = services.build_cart_view(cart)
         return Response(CartSerializer(view, context={"request": request}).data)
 
     def delete(self, request, pk):
         item = self.get_object(request, pk)
+        product = item.product
         item.delete()
+        record_event(
+            "remove_from_cart",
+            product=product,
+            user=request.user,
+            session_key=session_key_from_request(request),
+        )
         cart = services.get_or_create_cart(request.user)
         view = services.build_cart_view(cart)
         return Response(CartSerializer(view, context={"request": request}).data)

@@ -19,6 +19,7 @@ import { useMediaQuery } from "../hooks/useMediaQuery";
 import { listBrands, listCategories, listFacets, listProducts } from "../services/catalogApi";
 import { errorMessage } from "../components/ui";
 import { normalizeApiError } from "../utils/apiError";
+import { trackEvent } from "../utils/behaviour";
 import { formatPrice } from "../utils/formatPrice";
 import { shareImageUrl } from "../utils/shareImage";
 import { brandShape } from "../utils/shapes";
@@ -201,6 +202,20 @@ function ShopPage({ brand: fixedBrand = null }) {
   };
 
   const products = productsState.data;
+
+  // Behaviour analytics: report each search query WITH its result count,
+  // once the first page has loaded (the owner's «جستجوهای بی‌نتیجه»
+  // report is built from exactly this pair). Fires once per query+count,
+  // so paging or a re-render never inflates the numbers.
+  const trackedSearch = useRef("");
+  useEffect(() => {
+    const query = (searchParams.get("search") || "").trim();
+    if (!query || !products || typeof products.count !== "number") return;
+    const stamp = `${query}|${products.count}`;
+    if (trackedSearch.current === stamp) return;
+    trackedSearch.current = stamp;
+    trackEvent("search", { query, results: products.count });
+  }, [searchParams, products]);
   const totalPages = products ? Math.ceil(products.count / 20) : 0;
 
   // Audit 19 item 1: how many filters are active right now -- shown on the

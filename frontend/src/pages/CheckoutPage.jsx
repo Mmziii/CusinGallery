@@ -11,6 +11,7 @@ import { isValidIranianPhone, normalizePhone, validateAddressPayload } from "../
 import { Alert, Spinner, errorMessage } from "../components/ui";
 import * as authApi from "../services/authApi";
 import { checkout, fetchShippingMethods } from "../services/orderApi";
+import { trackEvent } from "../utils/behaviour";
 import { validateCoupon } from "../services/couponsApi";
 import { initiatePayment } from "../services/paymentsApi";
 import useCartStore from "../store/useCartStore";
@@ -240,6 +241,12 @@ function CheckoutPage() {
           setAddressMode("inline");
         }
       });
+  }, []);
+
+  // Behaviour analytics: one checkout_started per checkout page visit.
+  // Server-side order_placed/order_paid events continue the funnel.
+  useEffect(() => {
+    trackEvent("checkout_started");
   }, []);
 
   useEffect(() => {

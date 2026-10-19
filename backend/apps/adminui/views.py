@@ -41,6 +41,7 @@ _DIGIT_RUNS = re.compile(r"\d{4,}")
 # label, url name, required permission (None = any staff)
 SECTIONS = (
     ("داشبورد", "admin:index", None),
+    ("گزارش‌ها و تحلیل", "admin_reports", "analytics.view_event"),
     ("سفارش‌ها", "admin:orders_order_changelist", "orders.view_order"),
     ("محصولات", "admin:products_product_changelist", "products.view_product"),
     ("دسته‌بندی‌ها", "admin:categories_category_changelist", "categories.view_category"),

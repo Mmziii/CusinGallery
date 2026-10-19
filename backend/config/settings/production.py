@@ -102,6 +102,14 @@ SECURE_SSL_REDIRECT = HTTPS_ENABLED
 # False either way -- this line only matters once the HTTPS block is live.
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
+# Same proxy, same reasoning: nginx/conf.d/cusin.conf forwards
+# X-Real-IP/X-Forwarded-For for /api/ and appends the peer it saw, so the
+# LAST X-Forwarded-For entry is the only trustworthy one. The analytics
+# rate limiter uses it (hashed, cache-only) to keep per-address budgets
+# meaningful; see apps/analytics/ratelimit.py. Set this to 0 only if the
+# app is ever exposed without a proxy.
+ANALYTICS_TRUSTED_PROXY_COUNT = env.int("ANALYTICS_TRUSTED_PROXY_COUNT", default=1)
+
 # HSTS tells browsers to refuse HTTP entirely for this domain, for
 # SECURE_HSTS_SECONDS going forward -- genuinely dangerous to send before
 # HTTPS is confirmed working, since a mistake would lock out real users

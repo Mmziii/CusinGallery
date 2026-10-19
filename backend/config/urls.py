@@ -17,6 +17,11 @@ from django.contrib import admin
 from django.urls import include, path, re_path
 
 from apps.adminui.views import quick_search
+from apps.analytics.admin_views import (
+    reports_export,
+    reports_print,
+    reports_view,
+)
 from apps.core.seo import brand_meta, product_meta, shop_meta
 from apps.core.spa import spa_page
 from apps.core.views import healthz, robots_txt, sitemap_xml
@@ -43,6 +48,12 @@ urlpatterns = [
         quick_search,
         name="admin_quick_search",
     ),
+    # «گزارش‌ها و تحلیل» (analytics): the report page, its exports and
+    # the print view all live under the admin prefix and enforce their
+    # own staff/permission checks (apps/analytics/admin_views.py).
+    path(f"{_admin_path}reports/", reports_view, name="admin_reports"),
+    path(f"{_admin_path}reports/export/", reports_export, name="admin_reports_export"),
+    path(f"{_admin_path}reports/print/", reports_print, name="admin_reports_print"),
     path(_admin_path, admin.site.urls),
     path("api/v1/", include("config.api_urls")),
     # Site-level infrastructure (Phase E): monitoring probe + SEO files.

@@ -24,6 +24,7 @@ CSS_PATH = Path(settings.BASE_DIR) / "static" / "admin_theme" / "css" / "theme.c
 
 # The order the owner asked for, after the dashboard link.
 EXPECTED_ORDER = (
+    "گزارش‌ها و تحلیل",
     "سفارش‌ها",
     "محصولات",
     "دسته‌بندی‌ها",
@@ -47,6 +48,7 @@ ADVANCED_ONLY = (
 )
 
 ROUTE_FOR_LABEL = {
+    "گزارش‌ها و تحلیل": "admin_reports",
     "سفارش‌ها": "admin:orders_order_changelist",
     "محصولات": "admin:products_product_changelist",
     "دسته‌بندی‌ها": "admin:categories_category_changelist",
