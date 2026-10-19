@@ -1,5 +1,5 @@
 import ProductCard from "../components/ProductCard";
-import { faDigits } from "../utils/faDigits";
+import { faDigits, faDate } from "../utils/faDigits";
 import useWishlistStore from "../store/useWishlistStore";
 import { ContentSkeleton } from "../components/Skeletons";
 import NotFound from "./NotFound";
@@ -140,7 +140,7 @@ function ReviewSection({ product }) {
             </header>
             {review.title ? <h4>{review.title}</h4> : null}
             {review.body ? <p>{review.body}</p> : null}
-            <time>{new Date(review.created_at).toLocaleDateString("fa-IR")}</time>
+            <time>{faDate(review.created_at)}</time>
           </article>
         ))}
       </div>
@@ -501,7 +501,8 @@ function ProductDetailPage() {
               onClick={handleWishlist}
               aria-pressed={wishlisted}
               disabled={!isAuthenticated || wishlistBusy}
-              title="علاقه‌مندی"
+              title={wishlisted ? "حذف از علاقه‌مندی‌ها" : "افزودن به علاقه‌مندی‌ها"}
+              aria-label={wishlisted ? "حذف از علاقه‌مندی‌ها" : "افزودن به علاقه‌مندی‌ها"}
             >
               <Icon name="heart" filled={wishlisted} size={20} />
             </button>
