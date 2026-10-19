@@ -22,12 +22,12 @@ def _parse_components(value):
         raise ValueError("invalid date format")
     year, month, day = map(int, match.group(1, 2, 3))
     hour, minute, second = match.group(4, 5, 6)
-    if year < 1300:
-        # Keep the admin compatible with ISO/Gregorian values posted by
-        # browser autofill or a bookmarked form; new Jalali years are 13xx+.
+    if 1300 <= year <= 1599:
+        date_value = jalali_to_gregorian(year, month, day)
+    elif year >= 1700:
         date_value = dt.date(year, month, day)
     else:
-        date_value = jalali_to_gregorian(year, month, day)
+        raise ValueError("تاریخ نامعتبر است")
     return date_value, int(hour or 0), int(minute or 0), int(second or 0), bool(match.group(4))
 
 
@@ -39,6 +39,8 @@ class _JalaliWidgetMixin:
     def format_value(self, value):
         if not value:
             return ""
+        if isinstance(value, str):
+            return value
         if isinstance(value, dt.datetime) and timezone.is_aware(value):
             value = timezone.localtime(value)
         date_text = format_jalali(value, persian_digits=True)
@@ -70,8 +72,9 @@ class JalaliDateField(forms.DateField):
         try:
             date_value, _hour, _minute, _second, _has_time = _parse_components(value)
             return date_value
-        except (ValueError, TypeError, OverflowError):
-            raise ValidationError(self.error_messages["invalid"], code="invalid")
+        except (ValueError, TypeError, OverflowError) as exc:
+            message = "تاریخ نامعتبر است" if str(exc) == "تاریخ نامعتبر است" else self.error_messages["invalid"]
+            raise ValidationError(message, code="invalid")
 
 
 class JalaliDateTimeField(forms.DateTimeField):
@@ -86,8 +89,9 @@ class JalaliDateTimeField(forms.DateTimeField):
             if timezone.is_naive(result):
                 result = timezone.make_aware(result, timezone.get_current_timezone())
             return result
-        except (ValueError, TypeError, OverflowError):
-            raise ValidationError(self.error_messages["invalid"], code="invalid")
+        except (ValueError, TypeError, OverflowError) as exc:
+            message = "تاریخ نامعتبر است" if str(exc) == "تاریخ نامعتبر است" else self.error_messages["invalid"]
+            raise ValidationError(message, code="invalid")
 
 
 def install_jalali_admin_fields():

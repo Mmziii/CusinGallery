@@ -604,7 +604,16 @@ class RollbackTests(ImageImportTestCase):
 
         @contextmanager
         def _cm():
-            with mock.patch.object(image_import_module, "ProductImage", Patched):
-                yield
+            try:
+                with mock.patch.object(image_import_module, "ProductImage", Patched):
+                    yield
+            finally:
+                # Proxy model classes register with the global app registry
+                # at definition time; remove this test-only class afterward
+                # so later makemigrations checks see the real model state.
+                Patched._meta.apps.all_models[Patched._meta.app_label].pop(
+                    Patched._meta.model_name, None
+                )
+                Patched._meta.apps.clear_cache()
 
         return _cm()

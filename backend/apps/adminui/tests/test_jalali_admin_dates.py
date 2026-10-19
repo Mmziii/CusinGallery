@@ -81,6 +81,15 @@ class JalaliAdminInputTests(TestCase):
         self.assertEqual(JalaliDateField().clean("1405/07/27"), expected)
         self.assertEqual(JalaliDateField().clean("۱۴۰۵-۰۷-۲۷"), expected)
 
+    def test_gregorian_years_are_parsed_as_gregorian(self):
+        self.assertEqual(JalaliDateField().clean("2026-10-19"), dt.date(2026, 10, 19))
+
+    def test_unsupported_years_are_rejected_with_persian_error(self):
+        for value in ("1299/01/01", "1600/01/01", "1699/12/31"):
+            with self.subTest(value=value), self.assertRaises(ValidationError) as caught:
+                JalaliDateField().clean(value)
+            self.assertIn("تاریخ نامعتبر است", str(caught.exception))
+
     def test_datetime_field_converts_to_local_aware_datetime(self):
         with timezone.override("Asia/Tehran"):
             value = JalaliDateTimeField().clean("1405-07-27 10:35")

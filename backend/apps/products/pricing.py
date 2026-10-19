@@ -24,6 +24,7 @@ use discount_percentage alone).
 from dataclasses import dataclass
 from typing import Optional
 
+from django.db.models import Prefetch
 from django.utils import timezone
 
 
@@ -34,6 +35,20 @@ class PriceInfo:
     discount_percentage: int
     is_on_sale: bool
     discount_amount: int
+
+
+def active_daily_deals_prefetch(lookup="daily_deals", *, now=None):
+    """Prefetch effective deals onto products so price serialization stays O(1)."""
+    from apps.banners.models import DailyDeal
+
+    now = now or timezone.now()
+    return Prefetch(
+        lookup,
+        queryset=DailyDeal.objects.filter(
+            is_active=True, starts_at__lte=now, ends_at__gt=now
+        ).order_by("-starts_at", "-pk"),
+        to_attr="_active_daily_deals",
+    )
 
 
 def _active_daily_deal(product):
@@ -62,16 +77,17 @@ def _active_daily_deal(product):
 def _price_info(product, base_price, existing_compare=None, existing_discount=0):
     deal = _active_daily_deal(product)
     if deal is not None:
+        price = min(base_price, deal.sale_price)
+        if deal.sale_price >= base_price:
+            return PriceInfo(price, None, 0, False, 0)
         compare_at = max(base_price, existing_compare or 0)
-        price = deal.sale_price
-        is_on_sale = compare_at > price
-        percentage = ((compare_at - price) * 100 // compare_at) if is_on_sale else 0
+        percentage = (compare_at - price) * 100 // compare_at
         return PriceInfo(
             price=price,
-            compare_at_price=compare_at if is_on_sale else None,
+            compare_at_price=compare_at,
             discount_percentage=percentage,
-            is_on_sale=is_on_sale,
-            discount_amount=(compare_at - price) if is_on_sale else 0,
+            is_on_sale=True,
+            discount_amount=compare_at - price,
         )
 
     is_on_sale = bool(existing_compare and existing_compare > base_price)

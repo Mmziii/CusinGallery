@@ -7,8 +7,6 @@ ever modified through Django Admin (staff-only, unaffected by anything
 here).
 """
 from django.db.models import Count, Max, Min, Prefetch
-from django.utils import timezone
-from apps.banners.models import DailyDeal
 from django_filters.rest_framework import DjangoFilterBackend
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import permissions, status, viewsets
@@ -17,6 +15,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from . import pricing
 from .filters import ProductFilter
 from .models import Brand, Product, ProductAttributeValue, ProductImage
 from .serializers import BrandSerializer, ProductDetailSerializer, ProductListSerializer
@@ -79,13 +78,7 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
                     "images",
                     queryset=ProductImage.objects.order_by("-is_primary", "ordering"),
                 ),
-                Prefetch(
-                    "daily_deals",
-                    queryset=DailyDeal.objects.filter(
-                        is_active=True, starts_at__lte=timezone.now(), ends_at__gt=timezone.now()
-                    ).order_by("-starts_at", "-pk"),
-                    to_attr="_active_daily_deals",
-                )
+                pricing.active_daily_deals_prefetch(),
             )
         )
         # Part R5 item 7: normalized Persian search (also powers the

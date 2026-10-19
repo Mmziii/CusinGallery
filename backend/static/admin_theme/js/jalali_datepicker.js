@@ -24,9 +24,22 @@
     return (jalaliNewYear(year + 1) - jalaliNewYear(year)) / 86400000 === 366 ? 30 : 29;
   }; 
 
-  document.querySelectorAll('input[data-jalali-date="true"]').forEach(input => {
-    if (input.dataset.jalaliPickerReady) return;
-    input.dataset.jalaliPickerReady = "true";
+  const initialized = new WeakSet();
+  const initialize = (root = document) => {
+    const fields = [];
+    if (root.matches?.('input[data-jalali-date="true"]')) fields.push(root);
+    fields.push(...root.querySelectorAll('input[data-jalali-date="true"]'));
+    fields.forEach(input => {
+    if (initialized.has(input) || !input.parentNode) return;
+    initialized.add(input);
+    // Django inline formsets clone the already-rendered empty form. If the
+    // source input was decorated, cloned controls have no listeners; unwrap
+    // them and rebuild the widget for this new input node.
+    const oldWrap = input.closest(".jalali-date-wrap");
+    if (oldWrap) {
+      oldWrap.parentNode.insertBefore(input, oldWrap);
+      oldWrap.remove();
+    }
     const wrap = document.createElement("span");
     wrap.className = "jalali-date-wrap";
     input.parentNode.insertBefore(wrap, input);
@@ -63,8 +76,8 @@
       });
       select.addEventListener("change", () => { month = Number(select.value); render(); });
       const yearInput = document.createElement("input");
-      yearInput.type = "number"; yearInput.min = "1200"; yearInput.max = "1600"; yearInput.value = String(year); yearInput.setAttribute("aria-label", "سال جلالی");
-      yearInput.addEventListener("change", () => { year = Math.min(1600, Math.max(1200, Number(yearInput.value) || initial.year)); render(); });
+      yearInput.type = "number"; yearInput.min = "1300"; yearInput.max = "1599"; yearInput.value = String(year); yearInput.setAttribute("aria-label", "سال جلالی");
+      yearInput.addEventListener("change", () => { year = Math.min(1599, Math.max(1300, Number(yearInput.value) || initial.year)); render(); });
       const next = document.createElement("button");
       next.type = "button"; next.textContent = "›"; next.setAttribute("aria-label", "ماه بعد");
       next.addEventListener("click", () => { month++; if (month > 12) { month = 1; year++; } render(); });
@@ -75,7 +88,7 @@
         choice.type = "button"; choice.textContent = fa(day); choice.setAttribute("aria-label", `${fa(year)}/${fa(String(month).padStart(2, "0"))}/${fa(String(day).padStart(2, "0"))}`);
         choice.addEventListener("click", () => {
           const time = latin(input.value).match(/\s+(\d{1,2}:\d{2}(?::\d{2})?)/)?.[1];
-          input.value = `${fa(year)}/${fa(String(month).padStart(2, "0"))}/${fa(String(day).padStart(2, "0"))}${time ? ` ${time}` : ""}`;
+          input.value = `${fa(year)}/${fa(String(month).padStart(2, "0"))}/${fa(String(day).padStart(2, "0"))}${time ? ` ${fa(time)}` : ""}`;
           input.dispatchEvent(new Event("input", { bubbles: true }));
           input.dispatchEvent(new Event("change", { bubbles: true }));
           popup.hidden = true;
@@ -88,5 +101,17 @@
     render();
     button.addEventListener("click", () => { popup.hidden = !popup.hidden; if (!popup.hidden) render(); });
     document.addEventListener("click", event => { if (!wrap.contains(event.target)) popup.hidden = true; });
-  });
+    });
+  };
+
+  const start = () => {
+    initialize();
+    new MutationObserver(records => {
+      records.forEach(record => record.addedNodes.forEach(node => {
+        if (node.nodeType === 1) initialize(node);
+      }));
+    }).observe(document.documentElement, { childList: true, subtree: true });
+  };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, { once: true });
+  else start();
 })();

@@ -109,6 +109,19 @@ class ProductPricingTests(CacheIsolatedAPITestCase):
             self.assertEqual(info["compare_at_price"], 240000)
             self.assertEqual(info["discount_percentage"], 17)
 
+    def test_active_deal_above_base_price_does_not_raise_price_or_show_discount(self):
+        product = make_product(name="No Deal Discount", slug="deal-not-lower", price=100000, compare_at_price=120000)
+        now = timezone.now()
+        DailyDeal.objects.create(
+            product=product, sale_price=110000,
+            starts_at=now - timedelta(hours=1), ends_at=now + timedelta(hours=1),
+        )
+        info = self.client.get(reverse("product-detail", args=[product.slug])).data["price_info"]
+        self.assertEqual(info["price"], 100000)
+        self.assertIsNone(info["compare_at_price"])
+        self.assertFalse(info["is_on_sale"])
+        self.assertEqual(info["discount_percentage"], 0)
+
     def test_variant_with_own_price_shows_no_inherited_discount(self):
         product = make_product(
             name="Has Variants", slug="has-variants", price=100000, compare_at_price=120000,

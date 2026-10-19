@@ -255,7 +255,7 @@ class ProductDetailSerializer(ProductListSerializer):
             Product.objects.filter(category=obj.category, is_active=True)
             .exclude(pk=obj.pk)
             .select_related("category", "brand")
-            .prefetch_related("images")
+            .prefetch_related("images", pricing.active_daily_deals_prefetch())
             .order_by("-is_best_seller", "-is_featured", "-created_at")[:6]
         )
         return ProductListSerializer(related, many=True, context=self.context).data
@@ -286,8 +286,14 @@ class ProductDetailSerializer(ProductListSerializer):
                 row.complement for row in fbt if row.complement_id in purchasable_ids
             ]
         candidates = candidates[:8]
-        # Same lean payload shape as the product list so the storefront
-        # can reuse ProductCard directly.
-        return ProductListSerializer(
-            candidates, many=True, context=self.context
-        ).data
+        # Re-fetch the bounded set in one query so active deals are prefetched
+        # even when candidates came from the through table's select_related.
+        candidate_ids = [product.pk for product in candidates]
+        candidates = list(
+            Product.objects.filter(pk__in=candidate_ids)
+            .select_related("category", "brand")
+            .prefetch_related("images", pricing.active_daily_deals_prefetch())
+        )
+        by_id = {product.pk: product for product in candidates}
+        candidates = [by_id[pk] for pk in candidate_ids if pk in by_id]
+        return ProductListSerializer(candidates, many=True, context=self.context).data

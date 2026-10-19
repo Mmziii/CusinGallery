@@ -12,6 +12,7 @@ from django.db.models import Prefetch, Q
 from django.utils import timezone
 from rest_framework import generics, permissions, viewsets
 
+from apps.products import pricing
 from apps.products.models import ProductImage
 
 from .models import Banner, DailyDeal
@@ -66,7 +67,8 @@ class DailyDealListView(generics.ListAPIView):
                 Prefetch(
                     "product__images",
                     queryset=ProductImage.objects.order_by("-is_primary", "ordering"),
-                )
+                ),
+                pricing.active_daily_deals_prefetch("product__daily_deals"),
             )
             .order_by("ends_at")
         )

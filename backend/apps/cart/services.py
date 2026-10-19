@@ -212,6 +212,8 @@ def build_cart_view(cart):
         )
         .prefetch_related(
             Prefetch("product__images", queryset=ProductImage.objects.order_by("-is_primary", "ordering")),
+            pricing.active_daily_deals_prefetch("product__daily_deals"),
+            pricing.active_daily_deals_prefetch("variant__product__daily_deals"),
             "variant__attribute_values__attribute",
         )
         .order_by("-created_at")
