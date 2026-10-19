@@ -35,7 +35,7 @@
   }
 
   function showCurrent(picker) {
-    var thumb = picker.querySelector(".cusin-file-picker__thumb");
+    var thumb = picker.querySelector("[data-cusin-file-picker-thumb]");
     var name = picker.querySelector(".cusin-file-picker__name");
     var link = currentFileLink(picker);
     if (!thumb || !name) return;
@@ -51,7 +51,7 @@
   }
 
   function showChosen(picker, file) {
-    var thumb = picker.querySelector(".cusin-file-picker__thumb");
+    var thumb = picker.querySelector("[data-cusin-file-picker-thumb]");
     var name = picker.querySelector(".cusin-file-picker__name");
     if (!name) return;
     if (!file) {
@@ -88,6 +88,7 @@
 
     var thumbnail = document.createElement("img");
     thumbnail.className = "cusin-file-picker__thumb";
+    thumbnail.setAttribute("data-cusin-file-picker-thumb", "1");
     thumbnail.alt = "";
     thumbnail.hidden = true;
 
@@ -154,7 +155,7 @@
       var sibling = target.parentElement.querySelector(".cusin-file-picker");
       if (!sibling) return;
       if (target.checked) {
-        var thumb = sibling.querySelector(".cusin-file-picker__thumb");
+        var thumb = sibling.querySelector("[data-cusin-file-picker-thumb]");
         var name = sibling.querySelector(".cusin-file-picker__name");
         if (thumb) {
           thumb.hidden = true;
