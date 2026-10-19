@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -76,6 +76,31 @@ describe("floating contact buttons (Task 3)", () => {
       expect(link.getAttribute("target")).toBe("_blank");
       expect(link.getAttribute("rel")).toBe("noopener noreferrer");
     });
+    expect(container.querySelectorAll(".floating-contact > a")).toHaveLength(2);
+  });
+
+  it("hides contact buttons on cart and checkout and exposes a mobile expander elsewhere", async () => {
+    apiClient.defaults.adapter = async (config) =>
+      serve({
+        content: withContent({ enabled: true, links: [
+          { key: "phone", href: "tel:09120000000", icon: "phone", label: "تماس تلفنی" },
+          { key: "telegram", href: "https://t.me/cusin", icon: "send", label: "پیام در تلگرام" },
+        ] }),
+      }, config);
+    const cartView = renderAt("/cart/");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(cartView.container.querySelector(".floating-contact")).toBeNull();
+    cartView.unmount();
+    const checkoutView = renderAt("/checkout/");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(checkoutView.container.querySelector(".floating-contact")).toBeNull();
+    checkoutView.unmount();
+
+    const { container } = renderAt("/shop/");
+    const toggle = await screen.findByRole("button", { name: "نمایش راه‌های تماس" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(toggle);
+    expect(screen.getByRole("button", { name: "بستن راه‌های تماس" }).getAttribute("aria-expanded")).toBe("true");
     expect(container.querySelectorAll(".floating-contact > a")).toHaveLength(2);
   });
 

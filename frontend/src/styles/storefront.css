@@ -1516,6 +1516,16 @@ html.js-reveal .reveal.is-revealed, .reveal.is-revealed { opacity: 1; transform:
   border: 1px solid rgba(206,180,100,.6); box-shadow: var(--shadow-md); font-size: 1.2rem;
 }
 .floating-contact a:hover { transform: translateY(-2px); }
+.floating-contact__toggle { display: none; }
+@media (max-width: 767px) {
+  .floating-contact { bottom: calc(18px + env(safe-area-inset-bottom, 0px)); inset-inline-end: 14px; inset-inline-start: auto; gap: 8px; }
+  .floating-contact a,
+  .floating-contact__toggle,
+  .floating-contact .back-to-top { width: 44px; height: 44px; }
+  .floating-contact__toggle { display: grid; place-items: center; border-radius: 50%; background: var(--brand-green-dark); color: var(--brand-gold); border: 1px solid rgba(206,180,100,.6); box-shadow: var(--shadow-md); }
+  .floating-contact:not(.floating-contact--expanded) > a { display: none; }
+  .floating-contact--expanded > a { display: grid; }
+}
 
 /* --- 404 restyle --- */
 .notfound { text-align: center; padding: var(--space-7) 0; }
@@ -2350,6 +2360,22 @@ input, select, textarea { min-width: 0; max-width: 100%; }
   .shipping-method__body strong { font-size: var(--font-size-base); }
   .shipping-method__cost { font-size: var(--font-size-base); }
   .shipping-method--active .shipping-method__icon { background: #fff; }
+}
+
+@media (max-width: 480px) {
+  .shipping-method {
+    display: grid;
+    grid-template-columns: 18px 30px minmax(0, 1fr);
+    column-gap: 8px;
+    row-gap: 4px;
+    padding: 10px;
+  }
+  .shipping-method input[type="radio"] { grid-column: 1; grid-row: 1; margin: 4px 0 0; }
+  .shipping-method__icon { grid-column: 2; grid-row: 1; width: 30px; height: 30px; border-radius: 9px; }
+  .shipping-method__icon .icon { width: 16px; height: 16px; }
+  .shipping-method__body { grid-column: 3; grid-row: 1; width: 100%; }
+  .shipping-method__cost { grid-column: 3; grid-row: 2; white-space: normal; font-size: var(--font-size-sm); }
+  .shipping-method__body > .muted { display: block; }
 }
 
 /* The delivery section must follow the address directly on desktop too, and

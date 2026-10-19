@@ -1,4 +1,4 @@
-import { faDigits } from "../../utils/faDigits";
+import { faDigits, faDate } from "../../utils/faDigits";
 import { ContentSkeleton } from "../../components/Skeletons";
 import { Link } from "react-router-dom";
 
@@ -49,7 +49,7 @@ function ReviewsPage() {
             {review.title ? <h4>{review.title}</h4> : null}
             {review.body ? <p>{review.body}</p> : null}
             <div className="review__actions">
-              <time className="muted">{new Date(review.created_at).toLocaleDateString("fa-IR")}</time>
+              <time className="muted">{faDate(review.created_at)}</time>
               <button type="button" className="link-danger" onClick={() => handleDelete(review.id)}>
                 حذف
               </button>

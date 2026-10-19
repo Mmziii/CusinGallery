@@ -193,6 +193,15 @@ describe("mobile checkout steps", () => {
     expect(document.querySelectorAll(".shipping-method--active").length).toBe(1);
   });
 
+  it("shows owner pickup contact details with Persian digits on the delivery card", async () => {
+    fetchSiteSettings.mockResolvedValue({ pickup_address: "خیابان، پلاک 46", pickup_hours: "10:00-21:00" });
+    await readyAtAddressStep();
+    fireEvent.click(barButton());
+    await waitFor(() => expect(step("checkout-section-shipping").hidden).toBe(false));
+    expect(screen.getByText("نشانی دریافت: خیابان، پلاک ۴۶")).toBeTruthy();
+    expect(screen.getByText("ساعات دریافت: ۱۰:۰۰-۲۱:۰۰")).toBeTruthy();
+  });
+
   it("summarises address, delivery method (with «تغییر») and the items on the review step", async () => {
     await readyAtAddressStep();
     fireEvent.click(barButton());

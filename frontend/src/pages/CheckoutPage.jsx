@@ -661,11 +661,11 @@ function CheckoutPage() {
               </label>
               {siteSettings.pickup_address ? (
                 <p className="checkout__pickup-info">
-                  <strong>نشانی دریافت:</strong> {siteSettings.pickup_address}
+                  <strong>نشانی دریافت:</strong> {faDigits(siteSettings.pickup_address)}
                   {siteSettings.pickup_hours ? (
                     <>
                       <br />
-                      <strong>ساعات دریافت:</strong> {siteSettings.pickup_hours}
+                      <strong>ساعات دریافت:</strong> {faDigits(siteSettings.pickup_hours)}
                     </>
                   ) : null}
                 </p>
@@ -842,8 +842,8 @@ function CheckoutPage() {
                       <span className="shipping-method__body">
                         <strong>{method.label || methodLabel(method.id)}</strong>
                         {unavailable ? <span id="checkout-express-note" className="muted">{EXPRESS_UNAVAILABLE_MESSAGE}</span> : null}
-                        {method.id === "pickup" && siteSettings.pickup_address ? <span>نشانی دریافت: {siteSettings.pickup_address}</span> : null}
-                        {method.id === "pickup" && siteSettings.pickup_hours ? <span>ساعات دریافت: {siteSettings.pickup_hours}</span> : null}
+                        {method.id === "pickup" && siteSettings.pickup_address ? <span>نشانی دریافت: {faDigits(siteSettings.pickup_address)}</span> : null}
+                        {method.id === "pickup" && siteSettings.pickup_hours ? <span>ساعات دریافت: {faDigits(siteSettings.pickup_hours)}</span> : null}
                         <span className="muted">
                           {method.requires_address === false
                             ? "آمادهٔ تحویل حضوری پس از پرداخت"
@@ -883,6 +883,7 @@ function CheckoutPage() {
                 dir="ltr"
                 value={couponCode}
                 id="checkout-coupon"
+                placeholder="کد تخفیف را وارد کنید"
                 onChange={(e) => {
                   setCouponCode(e.target.value);
                   setCouponError(null);
