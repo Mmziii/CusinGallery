@@ -83,6 +83,18 @@ _ROUTE_PATTERNS = [
 _BRAND_RE = re.compile(r"^/brands/(?P<slug>[^/]+)/?$")
 _PRODUCT_RE = re.compile(r"^/products/(?P<slug>[^/]+)/?$")
 
+#: Info pages are editable rows now: their URL is only a real 200 while the
+#: row exists AND is published. An unpublished/never-seeded page answers
+#: exactly like any other unknown URL (404 + noindex), which is what makes
+#: the storefront's own 404 view honest for crawlers too.
+_INFO_PAGE_ROUTES = {
+    "/about": "about",
+    "/contact": "contact",
+    "/shipping-returns": "shipping-returns",
+    "/terms": "terms",
+    "/privacy": "privacy",
+}
+
 #: Path prefixes that are NOT pages: never answered with the storefront
 #: shell, whatever their content (they reach Django only by mistake -- nginx
 #: serves /static/, /media/ and /api/ itself -- and a JSON/404 answer is the
@@ -123,6 +135,19 @@ def is_known_page(path, query=""):
 
     if not any(pattern.match(path) for pattern in _ROUTE_PATTERNS):
         return False
+
+    page_slug = _INFO_PAGE_ROUTES.get(path.rstrip("/") or "/")
+    if page_slug:
+        from django.db import DatabaseError
+
+        from apps.core.models import InfoPage
+
+        try:
+            return InfoPage.objects.filter(slug=page_slug, is_published=True).exists()
+        except DatabaseError:  # pragma: no cover - pre-migrate deployment
+            # The table does not exist yet (first deploy, before `migrate`):
+            # keep the old route-table behaviour instead of 500ing the site.
+            return True
 
     # /shop/?category=<slug> is the storefront's only query-string route: an
     # unknown category is a dead end, not an empty listing.

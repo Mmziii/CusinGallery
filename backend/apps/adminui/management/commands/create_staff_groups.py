@@ -60,6 +60,8 @@ STAFF_GROUPS: dict[str, list[tuple[str, str]]] = {
         ("reviews", "view_review"),
         ("reviews", "change_review"),
         ("core", "view_sitesettings"),
+        ("core", "view_infopage"),
+        ("core", "change_infopage"),
     ],
 }
 

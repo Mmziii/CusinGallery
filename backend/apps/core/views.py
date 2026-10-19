@@ -40,6 +40,7 @@ from django.db import connection
 from django.http import HttpResponse, JsonResponse
 from django.utils.encoding import iri_to_uri
 from rest_framework import permissions
+from rest_framework.exceptions import NotFound
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -93,11 +94,27 @@ def robots_txt(request):
 
 
 def sitemap_xml(request):
+    from apps.core.models import InfoPage
     from apps.products.models import Brand, Product
 
     base = settings.FRONTEND_URL.rstrip("/")
     urls = []
+    # An unpublished info page must not be advertised to crawlers (its URL
+    # answers 404 -- see apps/core/spa.py), so it is skipped here too.
+    info_paths = {
+        "/about/": "about",
+        "/contact/": "contact",
+        "/shipping-returns/": "shipping-returns",
+        "/terms/": "terms",
+        "/privacy/": "privacy",
+    }
+    published = set(
+        InfoPage.objects.filter(is_published=True).values_list("slug", flat=True)
+    )
     for path, priority, changefreq in STATIC_SITEMAP_PAGES:
+        slug = info_paths.get(path)
+        if slug and slug not in published:
+            continue
         urls.append((f"{base}/{path.lstrip('/')}", None, changefreq, priority))
     for product in (
         Product.objects.filter(is_active=True)
@@ -142,6 +159,42 @@ class SiteSettingsView(APIView):
         from .models import SiteSettings
 
         return Response(SiteSettingsSerializer(SiteSettings.load()).data)
+
+
+class SiteContentView(APIView):
+    """The complete public content + theme payload the storefront reads.
+
+    Cached in apps/core/content.py and invalidated by post_save/post_delete
+    signals, so an admin save is visible on the next request. The payload is
+    an explicit allowlist (brand, home copy, trust strip, footer and floating
+    contact details, theme tokens, published page metadata) -- no model
+    field is ever dumped blindly.
+    """
+
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        from .content import get_content_payload
+
+        return Response(get_content_payload())
+
+
+class InfoPageView(APIView):
+    """One published info page (sanitised HTML), or a real 404.
+
+    An unpublished page is indistinguishable from a missing one here, which
+    is exactly what the storefront needs to render its 404 view.
+    """
+
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, slug):
+        from .content import get_info_page
+
+        page = get_info_page(slug)
+        if page is None:
+            raise NotFound("این صفحه وجود ندارد یا منتشر نشده است.")
+        return Response(page)
 
 
 class ReportFrontendErrorView(APIView):

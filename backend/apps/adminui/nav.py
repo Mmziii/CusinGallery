@@ -13,7 +13,8 @@ thing they came for. It is now a flat list in the order the owner actually
 works:
 
     داشبورد، سفارش‌ها، محصولات، دسته‌بندی‌ها، برندها، کوپن‌ها، نظرات،
-    بنرها و پیشنهاد روزانه، اطلاع‌رسانی موجودی، کاربران، تنظیمات فروشگاه
+    بنرها و پیشنهاد روزانه، اطلاع‌رسانی موجودی، کاربران، محتوا و ظاهر سایت،
+    صفحات اطلاعاتی
 
 Everything else (payments, addresses, carts, wishlist, OTP devices, groups,
 sessions, product variants/attributes, …) is collapsed into one
@@ -42,7 +43,8 @@ PRIMARY_ITEMS: tuple[tuple[str, tuple[str, ...], str, str], ...] = (
     ("banners", ("banner", "dailydeal"), "بنرها و پیشنهاد روزانه", "megaphone"),
     ("products", ("backinstocksubscription",), "اطلاع‌رسانی موجودی", "bell-ring"),
     ("accounts", ("user",), "کاربران", "users"),
-    ("core", ("sitesettings",), "تنظیمات فروشگاه", "sliders"),
+    ("core", ("sitesettings",), "محتوا و ظاهر سایت", "sliders"),
+    ("core", ("infopage",), "صفحات اطلاعاتی", "info"),
 )
 
 #: The collapsed bucket at the bottom for everything not listed above.
@@ -73,6 +75,7 @@ MODEL_ICONS: dict[tuple[str, str], str] = {
     ("reviews", "review"): "star",
     ("notifications", "notificationlog"): "mail",
     ("core", "sitesettings"): "sliders",
+    ("core", "infopage"): "info",
     ("auth", "group"): "shield",
     ("otp_totp", "totpdevice"): "shield",
     ("otp_static", "staticdevice"): "shield",
@@ -94,6 +97,7 @@ MODEL_LABELS: dict[tuple[str, str], str] = {
     ("products", "productattributevalue"): "مقدارهای ویژگی",
     ("products", "frequentlyboughttogether"): "خریدهای مکمل",
     ("notifications", "notificationlog"): "گزارش اعلان‌ها",
+    ("core", "infopage"): "صفحات اطلاعاتی",
     ("auth", "group"): "گروه‌های دسترسی",
     ("otp_totp", "totpdevice"): "دستگاه‌های تأیید دو مرحله‌ای",
     ("otp_static", "staticdevice"): "کدهای پشتیبان",

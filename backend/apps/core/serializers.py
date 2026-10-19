@@ -3,6 +3,7 @@ from rest_framework import serializers
 
 from .models import SiteSettings
 from .placeholders import clean_value
+from .sanitize import sanitize_embed
 
 
 class NullToBlankTextMixin:
@@ -58,7 +59,7 @@ class SiteSettingsSerializer(serializers.ModelSerializer):
         fields = [
             "phone", "whatsapp", "telegram", "instagram",
             "address", "working_hours", "pickup_address", "pickup_hours",
-            "enamad_html",
+            "enamad_html", "email", "eitaa", "bale",
         ]
         read_only_fields = fields
 
@@ -66,9 +67,11 @@ class SiteSettingsSerializer(serializers.ModelSerializer):
         data = super().to_representation(instance)
         for name in self.Meta.fields:
             if name == "enamad_html":
-                # Raw HTML snippet from the e-namad panel: emptiness is the
-                # only test that applies, and blanking it is already the
-                # documented "show the marked placeholder slot" behaviour.
+                # Trust-seal embed from the e-namad panel. The admin form
+                # sanitises it on save; this second pass protects rows
+                # written by a migration/management command from ever
+                # reaching the storefront with a <script> intact.
+                data[name] = sanitize_embed(data.get(name) or "")
                 continue
             data[name] = clean_value(data.get(name))
         return data

@@ -4812,3 +4812,159 @@ body.cusin-admin.app-payments.model-payment #result_list .cusin-badge {
   body.cusin-admin.app-payments.model-payment #result_list th.column-created_at_jalali { width: 11%; }
   body.cusin-admin.app-payments.model-payment #result_list th.column-cusin-row-actions { width: 4%; }
 }
+
+/* --------------------------------------------------------------------------
+   «محتوا و ظاهر سایت» — live theme preview (Task 2)
+
+   A deliberately small mock: header + one product card + one button. It
+   uses its OWN --cusin-tp-* variables (set by theme_preview.js) so the
+   values being edited can never leak into the admin chrome itself.
+   -------------------------------------------------------------------------- */
+.cusin-theme-preview {
+  margin: 26px 0 8px;
+  padding: 18px 20px 20px;
+  background: var(--cusin-surface, #fff);
+  border: 1px solid var(--cusin-border, #d6d9de);
+  border-radius: var(--cusin-radius, 12px);
+  box-shadow: 0 1px 2px rgba(17, 24, 39, 0.04);
+}
+
+.cusin-theme-preview__head h2 {
+  margin: 0 0 4px;
+  font-size: 1.05rem;
+  color: var(--cusin-text, #111827);
+}
+
+.cusin-theme-preview__head p {
+  margin: 0 0 14px;
+  font-size: 0.82rem;
+  color: var(--cusin-muted, #4b5563);
+  line-height: 1.9;
+}
+
+.cusin-theme-preview__frame {
+  overflow: hidden;
+  border: 1px solid var(--cusin-border, #d6d9de);
+  border-radius: var(--cusin-radius-sm, 8px);
+  direction: rtl;
+  font-size: var(--cusin-tp-font-size, 1rem);
+  color: var(--cusin-tp-text, #111827);
+  background: var(--cusin-tp-bg, #ffffff);
+}
+
+.cusin-tp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--cusin-tp-header-bg, #fff);
+  color: var(--cusin-tp-header-text, #111827);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.cusin-tp-logo {
+  font-weight: 800;
+  color: var(--cusin-tp-header-text, #111827);
+}
+
+.cusin-tp-nav {
+  display: flex;
+  gap: 14px;
+  font-size: 0.8em;
+  opacity: 0.9;
+}
+
+.cusin-tp-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 18px;
+  padding: 18px 16px;
+}
+
+.cusin-tp-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 220px;
+  padding: 12px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  box-shadow: var(--cusin-tp-shadow, 0 6px 24px rgba(17, 24, 39, 0.1));
+}
+
+.cusin-tp-media {
+  height: 78px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--cusin-tp-primary, #637037), var(--cusin-tp-accent, #ceb464));
+  opacity: 0.55;
+}
+
+.cusin-tp-name {
+  font-size: 0.92em;
+  color: var(--cusin-tp-text, #111827);
+}
+
+.cusin-tp-price {
+  font-size: 0.82em;
+  font-weight: 700;
+  color: var(--cusin-tp-primary, #637037);
+}
+
+.cusin-tp-btn {
+  padding: 8px 12px;
+  font-family: inherit;
+  font-size: 0.85em;
+  font-weight: 700;
+  color: var(--cusin-tp-button-text, #fff);
+  background: var(--cusin-tp-primary, #637037);
+  border: 0;
+  border-radius: var(--cusin-tp-radius, 12px);
+  cursor: default;
+}
+
+.cusin-tp-text {
+  flex: 1;
+  min-width: 180px;
+  margin: 0;
+  font-size: 0.85em;
+  line-height: 2;
+  color: var(--cusin-tp-text, #111827);
+}
+
+.cusin-tp-link {
+  font-size: 0.85em;
+  font-weight: 700;
+  color: var(--cusin-tp-primary, #637037);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.cusin-theme-preview__actions {
+  margin-top: 14px;
+}
+
+.cusin-theme-reset {
+  min-height: 36px;
+  padding: 7px 16px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  color: #8f1d14;
+  background: #fff;
+  border: 1px solid #e6b3ad;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.cusin-theme-reset:hover,
+.cusin-theme-reset:focus-visible {
+  background: #fdf1ef;
+  border-color: #b42318;
+}
+
+@media (max-width: 700px) {
+  .cusin-theme-preview { padding: 14px; }
+  .cusin-tp-card { width: 100%; }
+}
