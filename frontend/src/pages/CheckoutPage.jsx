@@ -1,6 +1,7 @@
 import { formatAddress } from "../utils/formatAddress";
 import { faDigits, deliveryRange, deliveryDays } from "../utils/faDigits";
 import { usePageMeta } from "../hooks/usePageMeta";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
@@ -60,6 +61,7 @@ export default function CheckoutPage() {
 
   const { cart, fetchCart } = useCartStore();
   const siteSettings = useSiteSettings();
+  const isMobile = useMediaQuery("(max-width: 767px)");
 
   // Step in URL: delivery | address | review
   const rawStep = searchParams.get("step") || "delivery";
@@ -973,7 +975,7 @@ export default function CheckoutPage() {
 
           {/* ================= INVOICE SUMMARY (VISIBLE ON EVERY STEP) ================= */}
           <aside className="checkout__summary card">
-            <h2>خلاصه صورت‌حساب</h2>
+            <h2>خلاصه سفارش</h2>
             <dl>
               <div>
                 <dt>جمع کالاها ({faDigits(cart.item_count)})</dt>
@@ -1013,22 +1015,24 @@ export default function CheckoutPage() {
       </div>
 
       {/* ================= MOBILE BOTTOM STICKY BAR ================= */}
-      <div className="checkout__mobile-bar">
-        <div className="checkout__mobile-bar-row">
-          <span className="checkout__mobile-total">
-            <small>مبلغ قابل پرداخت</small>
-            <b>{formatPrice(payableTotal)} تومان</b>
-          </span>
-          <button
-            type="button"
-            className="btn btn--primary"
-            disabled={placing}
-            onClick={stepActionHandler}
-          >
-            {stepActionLabel}
-          </button>
+      {isMobile ? (
+        <div className="checkout__mobile-bar">
+          <div className="checkout__mobile-bar-row">
+            <span className="checkout__mobile-total">
+              <small>مبلغ قابل پرداخت</small>
+              <b>{formatPrice(payableTotal)} تومان</b>
+            </span>
+            <button
+              type="button"
+              className="btn btn--primary"
+              disabled={placing}
+              onClick={stepActionHandler}
+            >
+              {stepActionLabel}
+            </button>
+          </div>
         </div>
-      </div>
+      ) : null}
     </div>
   );
 }
