@@ -7,6 +7,8 @@ ever modified through Django Admin (staff-only, unaffected by anything
 here).
 """
 from django.db.models import Count, Max, Min, Prefetch
+from django.utils import timezone
+from apps.banners.models import DailyDeal
 from django_filters.rest_framework import DjangoFilterBackend
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import permissions, status, viewsets
@@ -76,6 +78,13 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
                 Prefetch(
                     "images",
                     queryset=ProductImage.objects.order_by("-is_primary", "ordering"),
+                ),
+                Prefetch(
+                    "daily_deals",
+                    queryset=DailyDeal.objects.filter(
+                        is_active=True, starts_at__lte=timezone.now(), ends_at__gt=timezone.now()
+                    ).order_by("-starts_at", "-pk"),
+                    to_attr="_active_daily_deals",
                 )
             )
         )

@@ -24,6 +24,8 @@ use discount_percentage alone).
 from dataclasses import dataclass
 from typing import Optional
 
+from django.utils import timezone
+
 
 @dataclass(frozen=True)
 class PriceInfo:
@@ -34,16 +36,60 @@ class PriceInfo:
     discount_amount: int
 
 
-def price_info_for_product(product) -> PriceInfo:
-    price = product.price
-    compare_at = product.compare_at_price
-    is_on_sale = bool(compare_at and compare_at > price)
+def _active_daily_deal(product):
+    """Return the currently effective deal, using a serializer prefetch when available."""
+    now = timezone.now()
+    if hasattr(product, "_active_daily_deals"):
+        return next(
+            (
+                deal
+                for deal in product._active_daily_deals
+                if deal.is_active and deal.starts_at <= now < deal.ends_at
+            ),
+            None,
+        )
+    from apps.banners.models import DailyDeal
+
+    return (
+        DailyDeal.objects.filter(
+            product_id=product.pk, is_active=True, starts_at__lte=now, ends_at__gt=now
+        )
+        .order_by("-starts_at", "-pk")
+        .first()
+    )
+
+
+def _price_info(product, base_price, existing_compare=None, existing_discount=0):
+    deal = _active_daily_deal(product)
+    if deal is not None:
+        compare_at = max(base_price, existing_compare or 0)
+        price = deal.sale_price
+        is_on_sale = compare_at > price
+        percentage = ((compare_at - price) * 100 // compare_at) if is_on_sale else 0
+        return PriceInfo(
+            price=price,
+            compare_at_price=compare_at if is_on_sale else None,
+            discount_percentage=percentage,
+            is_on_sale=is_on_sale,
+            discount_amount=(compare_at - price) if is_on_sale else 0,
+        )
+
+    is_on_sale = bool(existing_compare and existing_compare > base_price)
     return PriceInfo(
-        price=price,
-        compare_at_price=compare_at if is_on_sale else None,
-        discount_percentage=product.discount_percentage,
+        price=base_price,
+        compare_at_price=existing_compare if is_on_sale else None,
+        discount_percentage=existing_discount,
         is_on_sale=is_on_sale,
-        discount_amount=(compare_at - price) if is_on_sale else 0,
+        discount_amount=(existing_compare - base_price) if is_on_sale else 0,
+    )
+
+
+def price_info_for_product(product) -> PriceInfo:
+    return _price_info(
+        product,
+        product.price,
+        product.compare_at_price,
+        product.discount_percentage,
     )
 
 
@@ -57,15 +103,10 @@ def price_info_for_variant(variant) -> PriceInfo:
     definition, sold at the product's own price, so it inherits that
     product's full sale/discount picture.
     """
+    product = variant.product
     if variant.price is not None:
-        return PriceInfo(
-            price=variant.price,
-            compare_at_price=None,
-            discount_percentage=0,
-            is_on_sale=False,
-            discount_amount=0,
-        )
-    return price_info_for_product(variant.product)
+        return _price_info(product, variant.price)
+    return price_info_for_product(product)
 
 
 def stock_status_for(instance) -> str:

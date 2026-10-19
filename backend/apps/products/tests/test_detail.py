@@ -1,6 +1,9 @@
 from django.urls import reverse
 from rest_framework import status
 from apps.core.testing import CacheIsolatedAPITestCase
+from django.utils import timezone
+from datetime import timedelta
+from apps.banners.models import DailyDeal
 
 from .helpers import (
     make_attribute,
@@ -89,6 +92,22 @@ class ProductPricingTests(CacheIsolatedAPITestCase):
         self.assertEqual(info["discount_percentage"], 15)
         self.assertFalse(info["is_on_sale"])
         self.assertIsNone(info["compare_at_price"])
+
+    def test_active_deal_price_is_used_by_product_list_and_detail(self):
+        product = make_product(name="Deal", slug="deal-api", price=240000)
+        now = timezone.now()
+        DailyDeal.objects.create(
+            product=product, sale_price=199000,
+            starts_at=now - timedelta(hours=1), ends_at=now + timedelta(hours=1),
+        )
+
+        list_response = self.client.get(reverse("product-list"))
+        listed = next(row for row in list_response.data["results"] if row["slug"] == product.slug)
+        detail = self.client.get(reverse("product-detail", args=[product.slug])).data
+        for info in (listed["price_info"], detail["price_info"]):
+            self.assertEqual(info["price"], 199000)
+            self.assertEqual(info["compare_at_price"], 240000)
+            self.assertEqual(info["discount_percentage"], 17)
 
     def test_variant_with_own_price_shows_no_inherited_discount(self):
         product = make_product(
