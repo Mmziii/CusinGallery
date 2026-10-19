@@ -1,0 +1,7 @@
+{% comment %}
+Per-section downloads. Expects: section, export_url, export_query.
+Both formats are real files generated on the server (openpyxl / CSV+BOM).
+{% endcomment %}<span class="cusin-report-actions">
+  <a class="cusin-report-export" href="{{ export_url }}?section={{ section }}&format=xlsx&{{ export_query }}">خروجی اکسل</a>
+  <a class="cusin-report-export" href="{{ export_url }}?section={{ section }}&format=csv&{{ export_query }}">خروجی CSV</a>
+</span>

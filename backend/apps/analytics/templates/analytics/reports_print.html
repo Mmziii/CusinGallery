@@ -1,0 +1,63 @@
+{% load static adminui_extras %}<!DOCTYPE html>
+{% comment %}
+Clean print / "Save as PDF" view of «گزارش‌ها و تحلیل» (Task 3).
+
+Deliberately standalone: no admin sidebar, no scripts beyond the print
+button, self-hosted Vazirmatn, RTL throughout. Every table is already
+Persian-digit formatted by the view (apps/analytics/admin_views.py).
+{% endcomment %}
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>{{ title }} — {{ range.start_input|fanum }} تا {{ range.end_input|fanum }}</title>
+  <link rel="stylesheet" href="{% static "admin_theme/css/reports_print.css" %}">
+</head>
+<body>
+<div class="print-page">
+
+  <header class="print-head">
+    <div>
+      <h1>گزارش‌ها و تحلیل — کازین گالری</h1>
+      <p class="print-range">بازهٔ گزارش: <span>{{ range.start_input|fanum }} تا {{ range.end_input|fanum }}</span></p>
+    </div>
+    <button type="button" class="print-button" onclick="window.print()">چاپ / ذخیرهٔ PDF</button>
+  </header>
+
+  {% for table in tables %}
+  <section class="print-section">
+    <h2>{{ table.title }}</h2>
+    {% if table.rows %}
+    <table>
+      <thead>
+        <tr>
+          {% for header in table.headers %}
+          <th{% if forloop.counter0 in table.numeric %} class="num"{% endif %}>{{ header }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in table.rows %}
+        <tr>
+          {% for cell in row %}
+          <td{% if forloop.counter0 in table.numeric %} class="num"{% endif %}>{{ cell }}</td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="print-empty">در این بازه داده‌ای ثبت نشده است.</p>
+    {% endif %}
+  </section>
+  {% empty %}
+  <p class="print-empty">بخشی برای نمایش در دسترس این حساب نیست.</p>
+  {% endfor %}
+
+  <footer class="print-foot">
+    گزارش خودکار از پنل مدیریت کازین گالری. اعداد به تومان و تاریخ‌ها شمسی هستند.
+  </footer>
+</div>
+</body>
+</html>
