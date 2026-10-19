@@ -82,6 +82,12 @@ class CheckoutQueryCountTests(CacheIsolatedAPITestCase):
     size, since a customer with a large cart shouldn't cost the server
     proportionally more work to check out."""
 
+    def setUp(self):
+        super().setUp()
+        from apps.orders import shipping
+
+        shipping.get_shipping_methods()
+
     def _checkout_query_count(self, client, user, product_count):
         for _ in range(product_count):
             add_to_cart(user, make_product(stock_quantity=5), quantity=1)
