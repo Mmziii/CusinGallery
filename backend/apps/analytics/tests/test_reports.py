@@ -394,6 +394,26 @@ class ReportPagePermissionTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("۱۴۰۵/۰۷/۰۱", response.content.decode())
 
+    def test_product_names_use_persian_digits(self):
+        owner = make_superuser(username="rep-digits", phone="+989171200008")
+        self.client.force_login(owner)
+        product = make_product(name="سایز 28 کد 9915")
+        make_event(Event.Type.PRODUCT_VIEW, product=product, session_key="digits-session-01")
+
+        html = self.client.get(self.url).content.decode()
+        self.assertIn("سایز ۲۸ کد ۹۹۱۵", html)
+        self.assertNotIn("سایز 28 کد 9915", html)
+
+    def test_product_names_use_persian_digits_on_the_print_page(self):
+        owner = make_superuser(username="rep-digits-print", phone="+989171200009")
+        self.client.force_login(owner)
+        product = make_product(name="سایز 28 کد 9915")
+        make_event(Event.Type.PRODUCT_VIEW, product=product, session_key="digits-session-02")
+
+        html = self.client.get(reverse("admin_reports_print")).content.decode()
+        self.assertIn("سایز ۲۸ کد ۹۹۱۵", html)
+        self.assertNotIn("سایز 28 کد 9915", html)
+
     def test_preset_chips_are_all_present(self):
         owner = make_superuser(username="rep-chips", phone="+989171200007")
         self.client.force_login(owner)

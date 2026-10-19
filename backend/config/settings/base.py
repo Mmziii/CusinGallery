@@ -673,9 +673,31 @@ OWNER_GUIDE_URL = env("OWNER_GUIDE_URL", default="")
 # daily by the production scheduler) deletes anything older; orders,
 # customers and carts are never touched.
 ANALYTICS_RETENTION_DAYS = env.int("ANALYTICS_RETENTION_DAYS", default=365)
-# Fixed-window limit for the batched storefront endpoint, per anonymous
-# session key (never per IP -- no IP is read or stored).
+# Fixed-window limits for the batched storefront endpoint. The session key
+# is chosen by the browser, so it is only the FIRST of four counters: an
+# attacker who rotates it still shares the per-address budget below.
 ANALYTICS_RATE_LIMIT_PER_MINUTE = env.int("ANALYTICS_RATE_LIMIT_PER_MINUTE", default=60)
+# Per client address, per minute (hashed with SECRET_KEY and used ONLY as a
+# cache key -- no IP is stored, logged or returned; see
+# apps/analytics/ratelimit.py).
+ANALYTICS_IP_RATE_LIMIT_PER_MINUTE = env.int(
+    "ANALYTICS_IP_RATE_LIMIT_PER_MINUTE", default=120
+)
+# How many DISTINCT anonymous session keys one address may create per hour.
+# This is what stops "a new key on every request" abuse that stays under the
+# per-minute ceiling.
+ANALYTICS_SESSION_KEYS_PER_IP_PER_HOUR = env.int(
+    "ANALYTICS_SESSION_KEYS_PER_IP_PER_HOUR", default=100
+)
+# Endpoint-wide safety cap per minute (all addresses together). A backstop
+# for a distributed flood that no per-address limit would catch.
+ANALYTICS_GLOBAL_RATE_LIMIT_PER_MINUTE = env.int(
+    "ANALYTICS_GLOBAL_RATE_LIMIT_PER_MINUTE", default=3000
+)
+# Number of trusted reverse proxies in front of Django, used to read the
+# real client from X-Forwarded-For (production: one nginx -> see
+# config/settings/production.py). 0 means REMOTE_ADDR is the client.
+ANALYTICS_TRUSTED_PROXY_COUNT = env.int("ANALYTICS_TRUSTED_PROXY_COUNT", default=0)
 # The `event` field's own limit: a single batched POST carries at most
 # this many entries (extra entries are ignored, never an error).
 ANALYTICS_MAX_BATCH = env.int("ANALYTICS_MAX_BATCH", default=25)

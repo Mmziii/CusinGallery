@@ -214,7 +214,58 @@
 }
 .cusin-report-bar-value { font-weight: 700; white-space: nowrap; }
 
+/* Phones and small tablets ------------------------------------------------
+   This page carries wide content of its own: a six-chip range row, a
+   two-input custom-date form, and 46rem report tables. At 390px the chips
+   (and the form) used to push the whole page sideways. Below 900px every
+   one of those stays inside the viewport: the chips wrap, the inputs share
+   a row (full width when they cannot), and only a table's own wrapper
+   scrolls -- never the page. */
 @media (max-width: 900px) {
+  .cusin-reports #content,
+  .cusin-reports .content { min-width: 0; max-width: 100%; }
+  .cusin-reports .cusin-report,
+  .cusin-reports .cusin-report > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .cusin-reports .cusin-report-head {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .cusin-reports .cusin-report-range { width: 100%; }
+  .cusin-reports .cusin-report-range-line { font-size: 0.8125rem; }
+  .cusin-reports .cusin-days-toggle {
+    display: flex;
+    flex-wrap: wrap;
+    width: 100%;
+    min-width: 0;
+  }
+  .cusin-reports .cusin-chip {
+    flex: 1 1 auto;
+    justify-content: center;
+    padding: 4px 10px;
+    white-space: nowrap;
+  }
+  .cusin-reports .cusin-report-tools { width: 100%; }
+  .cusin-reports .cusin-report-print { width: 100%; justify-content: center; }
+  .cusin-reports .cusin-report-custom { gap: 8px; }
+  .cusin-reports .cusin-report-custom label { flex: 1 1 8rem; min-width: 0; }
+  .cusin-reports .cusin-report-custom input[type="text"] {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+  .cusin-reports .cusin-report-apply { flex: 1 1 100%; width: 100%; }
+  .cusin-reports .cusin-report-grid,
+  .cusin-reports .cusin-report-charts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cusin-reports .cusin-table-scroll,
+  .cusin-reports .cusin-chart-scroll,
+  .cusin-reports .cusin-report-chart { max-width: 100%; min-width: 0; }
+  .cusin-reports .cusin-card { min-width: 0; }
   .cusin-funnel-step { grid-template-columns: minmax(0, 1fr) auto; }
   .cusin-funnel-bar { grid-column: 1 / -1; order: 3; }
 }

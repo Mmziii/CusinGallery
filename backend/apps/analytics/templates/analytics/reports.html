@@ -217,20 +217,20 @@ download; the page-wide «نسخهٔ چاپی / PDF» opens a clean print view.
           {% for row in report.abandoned %}
           <tr>
             <td>
-              <a href="{{ row.user_url }}">{{ row.name }}</a>
+              <a href="{{ row.user_url }}">{{ row.name|fanum }}</a>
               <span class="cusin-report-sub">{{ row.item_count|numfa }} قلم</span>
             </td>
             <td>
               {% if row.phone %}
               <bdi dir="ltr" class="cusin-report-phone">{{ row.phone|fanum }}</bdi>
               <button type="button" class="cusin-copy-phone" data-cusin-copy="{{ row.phone }}"
-                      aria-label="کپی شمارهٔ {{ row.name }}">کپی</button>
+                      aria-label="کپی شمارهٔ {{ row.name|fanum }}">کپی</button>
               {% else %}—{% endif %}
             </td>
             <td>
               <ul class="cusin-report-items">
                 {% for item in row.items %}
-                <li>{{ item.name }} × {{ item.quantity|numfa }} — {{ item.line_total|toman }}</li>
+                <li>{{ item.name|fanum }} × {{ item.quantity|numfa }} — {{ item.line_total|toman }}</li>
                 {% endfor %}
               </ul>
             </td>
@@ -262,7 +262,7 @@ download; the page-wide «نسخهٔ چاپی / PDF» opens a clean print view.
           <tbody>
             {% for row in report.products.best_sellers %}
             <tr>
-              <td>{% if row.url %}<a href="{{ row.url }}">{{ row.name }}</a>{% else %}{{ row.name }}{% endif %}</td>
+              <td>{% if row.url %}<a href="{{ row.url }}">{{ row.name|fanum }}</a>{% else %}{{ row.name|fanum }}{% endif %}</td>
               <td class="cusin-nowrap">{{ row.qty|numfa }}</td>
               <td class="cusin-nowrap">{{ row.revenue|toman }}</td>
             </tr>
@@ -285,7 +285,7 @@ download; the page-wide «نسخهٔ چاپی / PDF» opens a clean print view.
           <tbody>
             {% for row in report.products.most_viewed %}
             <tr>
-              <td>{% if row.url %}<a href="{{ row.url }}">{{ row.name }}</a>{% else %}{{ row.name }}{% endif %}</td>
+              <td>{% if row.url %}<a href="{{ row.url }}">{{ row.name|fanum }}</a>{% else %}{{ row.name|fanum }}{% endif %}</td>
               <td class="cusin-nowrap">{{ row.count|numfa }}</td>
             </tr>
             {% endfor %}
@@ -307,7 +307,7 @@ download; the page-wide «نسخهٔ چاپی / PDF» opens a clean print view.
           <tbody>
             {% for row in report.products.low_conversion %}
             <tr>
-              <td>{% if row.url %}<a href="{{ row.url }}">{{ row.name }}</a>{% else %}{{ row.name }}{% endif %}</td>
+              <td>{% if row.url %}<a href="{{ row.url }}">{{ row.name|fanum }}</a>{% else %}{{ row.name|fanum }}{% endif %}</td>
               <td class="cusin-nowrap">{{ row.views|numfa }}</td>
               <td class="cusin-nowrap">{{ row.sold|numfa }}</td>
               <td class="cusin-nowrap">{{ row.conversion|fanum }}٪</td>
@@ -331,7 +331,7 @@ download; the page-wide «نسخهٔ چاپی / PDF» opens a clean print view.
           <tbody>
             {% for row in report.products.cart_not_bought %}
             <tr>
-              <td>{% if row.url %}<a href="{{ row.url }}">{{ row.name }}</a>{% else %}{{ row.name }}{% endif %}</td>
+              <td>{% if row.url %}<a href="{{ row.url }}">{{ row.name|fanum }}</a>{% else %}{{ row.name|fanum }}{% endif %}</td>
               <td class="cusin-nowrap">{{ row.cart_adds|numfa }}</td>
               <td class="cusin-nowrap">{{ row.sold|numfa }}</td>
             </tr>
@@ -354,7 +354,7 @@ download; the page-wide «نسخهٔ چاپی / PDF» opens a clean print view.
           <tbody>
             {% for row in report.products.most_wishlisted %}
             <tr>
-              <td>{% if row.url %}<a href="{{ row.url }}">{{ row.name }}</a>{% else %}{{ row.name }}{% endif %}</td>
+              <td>{% if row.url %}<a href="{{ row.url }}">{{ row.name|fanum }}</a>{% else %}{{ row.name|fanum }}{% endif %}</td>
               <td class="cusin-nowrap">{{ row.count|numfa }}</td>
             </tr>
             {% endfor %}
@@ -428,7 +428,7 @@ download; the page-wide «نسخهٔ چاپی / PDF» opens a clean print view.
             {% for row in report.customers.top %}
             <tr>
               <td>
-                <a href="{{ row.url }}">{{ row.name }}</a>
+                <a href="{{ row.url }}">{{ row.name|fanum }}</a>
                 {% if row.phone %}<span class="cusin-report-sub" dir="ltr">{{ row.phone|fanum }}</span>{% endif %}
               </td>
               <td class="cusin-nowrap">{{ row.orders|numfa }}</td>

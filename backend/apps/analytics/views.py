@@ -20,17 +20,18 @@ Guarantees (see the tests):
   subclass whose ``enforce_csrf`` is a deliberate no-op -- the endpoint
   appends non-sensitive rows and never returns anything but a count;
 * bots are ignored (the User-Agent is tested, never stored);
-* a per-session fixed-window rate limit (default 60 batches/minute);
+* four independent fixed-window limits -- per session key, per (hashed)
+  client address, per endpoint and per new session key minted by one
+  address per hour -- so rotating the browser-chosen key cannot buy extra
+  quota. Over any limit the answer is still 202 with
+  ``{"accepted": 0, "ignored": "rate-limited"}`` and nothing is stored;
 * invalid/unknown entries are skipped, never a 400 that could surface in
   the UI;
 * the response is always tiny and the client never waits on it.
 """
 from __future__ import annotations
 
-import time
-
 from django.conf import settings
-from django.core.cache import cache
 from rest_framework import permissions, status
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.response import Response
@@ -39,6 +40,7 @@ from rest_framework.views import APIView
 from apps.products.models import Product
 
 from .models import Event
+from .ratelimit import RATE_LIMITED, check_batch, client_ip
 from .tracking import (
     MAX_BATCH_SIZE,
     MAX_SEARCH_QUERY,
@@ -47,26 +49,6 @@ from .tracking import (
     record_event,
     session_key_from_request,
 )
-
-RATE_WINDOW_SECONDS = 60
-DEFAULT_RATE_LIMIT = 60
-
-
-def _rate_limit() -> int:
-    return int(getattr(settings, "ANALYTICS_RATE_LIMIT_PER_MINUTE", DEFAULT_RATE_LIMIT) or DEFAULT_RATE_LIMIT)
-
-
-def _throttled(session_key: str) -> bool:
-    """Fixed-window counter per anonymous session (never per IP)."""
-    bucket = int(time.time()) // RATE_WINDOW_SECONDS
-    key = f"analytics:rl:{session_key or 'anonymous'}:{bucket}"
-    cache.add(key, 0, RATE_WINDOW_SECONDS * 2)
-    try:
-        count = cache.incr(key)
-    except ValueError:  # pragma: no cover - window rollover race
-        count = 0
-    return count > _rate_limit()
-
 
 def _product_for(raw_product_id):
     try:
@@ -112,16 +94,20 @@ class EventBatchView(APIView):
             session_key_from_request(request)
             or clean_session_key(payload.get("session_key"))
         )
+
+        # Every request is counted, keyless ones included: an empty (or
+        # rotated) key must not be a free pass. The address is hashed and
+        # used only in cache keys -- see apps/analytics/ratelimit.py.
+        if check_batch(session_key=session_key, ip=client_ip(plain)):
+            return Response(
+                {"accepted": 0, "ignored": RATE_LIMITED},
+                status=status.HTTP_202_ACCEPTED,
+            )
+
         if not session_key:
             # No anonymous key => nothing to attribute the batch to. Silently
             # accept (the storefront must never see an error) and store nothing.
             return Response({"accepted": 0, "ignored": "no-session"}, status=status.HTTP_202_ACCEPTED)
-
-        if _throttled(session_key):
-            return Response(
-                {"detail": "تعداد رویدادها بیش از حد مجاز است."},
-                status=status.HTTP_429_TOO_MANY_REQUESTS,
-            )
 
         raw_events = payload.get("events")
         if not isinstance(raw_events, list):

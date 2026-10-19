@@ -158,7 +158,7 @@ class EventEndpointTests(CacheIsolationMixin, TestCase):
 
 @override_settings(ANALYTICS_RATE_LIMIT_PER_MINUTE=3)
 class EventRateLimitTests(CacheIsolationMixin, TestCase):
-    def test_too_many_batches_get_a_429_and_the_last_one_stores_nothing(self):
+    def test_too_many_batches_are_silently_ignored_and_store_nothing(self):
         payload = {
             "session_key": "rate-limit-session-1",
             "events": [{"type": "product_view"}],
@@ -171,7 +171,9 @@ class EventRateLimitTests(CacheIsolationMixin, TestCase):
         response = self.client.post(
             ENDPOINT, data=json.dumps(payload), content_type="application/json",
         )
-        self.assertEqual(response.status_code, 429)
+        # Fire-and-forget: same 202 as always, just nothing stored.
+        self.assertEqual(response.status_code, 202)
+        self.assertEqual(response.json(), {"accepted": 0, "ignored": "rate-limited"})
         self.assertEqual(Event.objects.count(), 3)
 
     def test_one_sessions_limit_does_not_block_another(self):

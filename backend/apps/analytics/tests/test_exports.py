@@ -84,6 +84,18 @@ class ReportExportTests(TestCase):
                 self.assertEqual(self._export(section).status_code, 200)
                 self.assertEqual(self._export(section, "csv").status_code, 200)
 
+    def test_exports_keep_the_original_product_name(self):
+        """Display is Persian-digit; the download stays the source text."""
+        product = make_product(name="سایز 28 کد 9915")
+        make_event(Event.Type.PRODUCT_VIEW, product=product, session_key="export-digits-01")
+
+        sheet = workbook(self._export("products_viewed")).active
+        values = [cell.value for row in sheet.iter_rows() for cell in row]
+        self.assertIn("سایز 28 کد 9915", values)
+
+        csv_text = self._export("products_viewed", fmt="csv").content.decode("utf-8-sig")
+        self.assertIn("سایز 28 کد 9915", csv_text)
+
     def test_a_staff_member_needs_the_section_permission(self):
         staff = make_staff(username="exp-staff", phone="+989173000003")
         staff.user_permissions.add(Permission.objects.get(
