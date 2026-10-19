@@ -518,7 +518,7 @@ GIFT_WRAP_FEE = env.int("GIFT_WRAP_FEE", default=0)
 # snapshots and must never be renamed; new methods are added additively
 # (Order.shipping_method is a plain CharField, so no migration is needed
 # to add a key).
-SHIPPING_METHODS = {
+DEFAULT_SHIPPING_METHODS = {
     "standard": {
         "label": "عادی",
         "cost": STANDARD_SHIPPING_COST,
@@ -547,6 +547,7 @@ SHIPPING_METHODS = {
         "requires_address": False,
     },
 }
+SHIPPING_METHODS = DEFAULT_SHIPPING_METHODS
 
 # ---------------------------------------------------------------------------
 # Logging

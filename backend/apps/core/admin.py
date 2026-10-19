@@ -111,6 +111,28 @@ class SiteSettingsAdmin(admin.ModelAdmin):
             },
         ),
         (
+            _("ارسال و تحویل"),
+            {
+                "fields": (
+                    "shipping_standard_enabled",
+                    "shipping_standard_cost",
+                    "shipping_standard_min_days",
+                    "shipping_standard_max_days",
+                    "shipping_standard_description",
+                    "shipping_free_threshold",
+                    "shipping_express_enabled",
+                    "shipping_express_cost",
+                    "shipping_express_min_days",
+                    "shipping_express_max_days",
+                    "shipping_express_description",
+                    "shipping_express_cities",
+                    "shipping_pickup_enabled",
+                    "shipping_pickup_description",
+                ),
+                "description": "هزینه‌ها، زمان‌بندی و شهرهای مجاز برای روش‌های ارسال سفارش.",
+            },
+        ),
+        (
             _("دریافت حضوری"),
             {
                 "fields": ("pickup_address", "pickup_hours"),
