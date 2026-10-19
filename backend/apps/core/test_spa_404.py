@@ -25,6 +25,7 @@ tests pin the contract:
 from pathlib import Path
 
 from django.test import SimpleTestCase, TestCase, override_settings
+from unittest.mock import Mock, patch
 
 from apps.categories.models import Category
 from apps.products.tests.helpers import make_category, make_product
@@ -104,6 +105,19 @@ class KnownPageTests(SpawnShellMixin, TestCase):
         response = self.client.get("/shop/", {"category": category.slug})
 
         self.assertEqual(response.status_code, 200)
+
+    def test_shop_accepts_unrelated_and_repeated_query_parameters(self):
+        for query in (
+            "?q=x",
+            "?page=2",
+            "?brand=iris",
+            "?sort=price",
+            "?q=x&page=2&brand=iris&sort=price",
+            "?q=first&q=second&page=2&page=3",
+            "?q=%E0%A4%A&sort=%",
+        ):
+            with self.subTest(query=query):
+                self.assertEqual(self.client.get(f"/shop/{query}").status_code, 200)
 
     def test_shop_without_a_category_is_a_200(self):
         self.assertEqual(self.client.get("/shop/").status_code, 200)
@@ -212,6 +226,14 @@ class ShellSourceTests(SpawnShellMixin, TestCase):
                 # Falls through to the repository copy (or nothing), never the
                 # wrong document.
                 self.assertNotEqual(spa.shell_html(), "<html><body>not the SPA</body></html>")
+
+    @patch("requests.get")
+    def test_http_shell_is_decoded_as_utf8_when_charset_is_missing(self, get):
+        response = Mock(status_code=200, content=SHELL.encode("utf-8"))
+        get.return_value = response
+        spa._shell_cache.update({"html": "", "source": "", "at": 0.0})
+        with override_settings(SPA_INDEX_FILE="", SPA_SHELL_URL="http://frontend/index.html"):
+            self.assertEqual(spa._fetch_shell_url("http://frontend/index.html"), SHELL)
 
     def test_missing_shell_still_answers_persian_html_with_the_right_status(self):
         original = spa.shell_html

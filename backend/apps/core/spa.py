@@ -114,8 +114,11 @@ def _query_get(query, key):
         return ""
     from urllib.parse import parse_qs
 
-    values = parse_qs(query, keep_blank_values=True).get(key) or []
-    return (values[0] or "").strip()
+    try:
+        values = parse_qs(query, keep_blank_values=True, errors="replace").get(key) or []
+    except (TypeError, ValueError):
+        return ""
+    return (values[0] or "").strip() if values else ""
 
 
 def is_known_page(path, query=""):
@@ -189,7 +192,9 @@ def _fetch_shell_url(url):
         return ""
     if response.status_code != 200:
         return ""
-    return response.text or ""
+    # The frontend nginx may omit a charset; Requests otherwise guesses
+    # ISO-8859-1 and corrupts Persian metadata in the shell.
+    return response.content.decode("utf-8", errors="replace") if response.content else ""
 
 
 def _configured_index_file():
