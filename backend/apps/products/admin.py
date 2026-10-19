@@ -560,12 +560,99 @@ class ProductAdmin(
     actions = [
         "activate_products", "deactivate_products", "mark_featured",
         "unmark_featured", "duplicate_product", "change_price_percentage",
-        "move_to_category",
+        "move_to_category", "export_products_xlsx_action",
     ]
     change_list_template = "admin/products/product_change_list.html"
     # B4d: anchored sections + live preview + client-side formatting.
     # Extends admin/change_form.html, so the stock form is untouched.
     change_form_template = "admin/products/product_change_form.html"
+
+    # --- Excel export of the selected/filtered rows (Task 3) -------------------
+
+    @admin.action(
+        description="خروجی اکسل محصولات انتخاب‌شده",
+        permissions=("view",),
+    )
+    def export_products_xlsx_action(self, request, queryset):
+        """Real .xlsx with SKU, brand, category path, price, stock, views, sales.
+
+        Views/sales come from ONE correlated aggregate each (no N+1), the
+        export is row-capped with a Persian notice, and money is written as
+        a real number.
+        """
+        from django.db.models import OuterRef, Subquery, Sum
+
+        from apps.analytics.exports import row_limit, xlsx_bytes, xlsx_response
+        from apps.analytics.models import Event
+        from apps.orders.models import OrderItem
+
+        sales_subquery = (
+            OrderItem.objects.filter(
+                product=OuterRef("pk"),
+                order__payment_status="paid",
+            )
+            .exclude(order__status__in=["cancelled", "returned"])
+            .order_by()
+            .values("product")
+            .annotate(quantity_total=Sum("quantity"))
+            .values("quantity_total")[:1]
+        )
+        limit = row_limit()
+        rows_qs = (
+            queryset.select_related("brand", "category__parent__parent")
+            .annotate(
+                _views=Count(
+                    "analytics_events",
+                    filter=Q(analytics_events__event_type=Event.Type.PRODUCT_VIEW),
+                    distinct=True,
+                ),
+                _sales=Subquery(sales_subquery),
+            )
+            .order_by("pk")
+        )
+        selected = list(rows_qs[: limit + 1])
+        truncated = len(selected) > limit
+
+        def category_path(category):
+            names, seen, current = [], set(), category
+            while current is not None and current.pk not in seen and len(names) < 6:
+                names.append(current.name)
+                seen.add(current.pk)
+                current = current.parent
+            return " › ".join(reversed(names))
+
+        rows = [
+            [
+                product.name,
+                product.sku,
+                product.brand.name if product.brand_id else "",
+                category_path(product.category),
+                product.price,
+                product.stock_quantity,
+                product._views or 0,
+                product._sales or 0,
+            ]
+            for product in selected[:limit]
+        ]
+        if truncated:
+            self.message_user(
+                request,
+                f"خروجی به {limit:,} ردیف محدود شد؛ برای بقیهٔ ردیف‌ها فیلتر را محدودتر کنید.",
+                messages.WARNING,
+            )
+        data, _written = xlsx_bytes(
+            [
+                "نام محصول", "کد کالا (SKU)", "برند", "دسته‌بندی",
+                "قیمت (تومان)", "موجودی", "بازدید", "تعداد فروش",
+            ],
+            rows,
+            sheet_title="محصولات",
+            numeric_columns={4, 5, 6, 7},
+        )
+        from django.utils import timezone
+
+        stamp = timezone.now().strftime("%Y%m%d-%H%M%S")
+        return xlsx_response(data, f"products-{stamp}.xlsx")
 
     # --- Bulk import (CSV / Excel) --------------------------------------------
 

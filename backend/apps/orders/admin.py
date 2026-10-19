@@ -478,7 +478,7 @@ class OrderAdmin(NormalizedSearchMixin, admin.ModelAdmin):
         "shipping_method_label", "estimated_delivery_min_detail", "estimated_delivery_max_detail",
     )
     inlines = [OrderItemInline]
-    actions = ["export_orders_csv"]
+    actions = ["export_orders_csv", "export_orders_xlsx"]
     change_form_template = "admin/orders/order_change_form.html"
 
     fieldsets = (
@@ -954,6 +954,67 @@ class OrderAdmin(NormalizedSearchMixin, admin.ModelAdmin):
             )
         if refund_message:
             self.message_user(request, refund_message, messages.INFO)
+
+    @admin.action(
+        description="خروجی اکسل سفارش‌های انتخاب‌شده",
+        permissions=("view",),
+    )
+    def export_orders_xlsx(self, request, queryset):
+        """Real .xlsx of the selected/filtered rows (Task 3).
+
+        Row-capped so a huge filter can never time out the worker; the
+        owner gets a Persian notice when the cap was hit. Dates are Jalali
+        TEXT and money is a real number with a thousands format.
+        """
+        from apps.analytics.exports import row_limit, xlsx_bytes, xlsx_response
+        from apps.adminui.jalali import format_jalali
+
+        limit = row_limit()
+        rows_qs = (
+            queryset.select_related("user")
+            .annotate(_items_count=Count("items"))
+            .order_by("-created_at")
+        )
+        selected = list(rows_qs[: limit + 1])
+        truncated = len(selected) > limit
+        rows = []
+        for order in selected[:limit]:
+            customer = order.user
+            name = (
+                (customer.get_full_name() or "").strip()
+                if customer else order.shipping_recipient_name
+            ) or order.shipping_recipient_name
+            rows.append([
+                order.order_number,
+                format_jalali(order.created_at, persian_digits=False),
+                name,
+                order.shipping_phone,
+                order.shipping_city,
+                order.get_status_display(),
+                order.get_payment_status_display(),
+                order._items_count,
+                order.total,
+                order.discount_amount,
+                shipping_method_label(order.shipping_method),
+            ])
+        if truncated:
+            self.message_user(
+                request,
+                f"خروجی به {limit:,} ردیف محدود شد؛ برای بقیهٔ ردیف‌ها فیلتر را محدودتر کنید.",
+                messages.WARNING,
+            )
+        data, _written = xlsx_bytes(
+            [
+                "شمارهٔ سفارش", "تاریخ (شمسی)", "مشتری", "تلفن", "شهر",
+                "وضعیت سفارش", "وضعیت پرداخت", "تعداد اقلام", "مبلغ نهایی (تومان)",
+                "تخفیف (تومان)", "روش ارسال",
+            ],
+            rows,
+            sheet_title="سفارش‌ها",
+            numeric_columns={7, 8, 9},
+        )
+        stamp = timezone.now().strftime("%Y%m%d-%H%M%S")
+        return xlsx_response(data, f"orders-{stamp}.xlsx")
 
     @admin.action(description="خروجی CSV از سفارش‌های انتخاب‌شده")
     def export_orders_csv(self, request, queryset):

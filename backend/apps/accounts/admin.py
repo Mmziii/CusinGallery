@@ -14,9 +14,9 @@ Admin-panel work (B5) adds, purely additively:
   total paid, last order, default address, SMS consent) linking to the
   customer's orders in the orders changelist.
 """
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, Max, Q, Sum
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.html import format_html
@@ -40,6 +40,7 @@ class UserAdmin(NormalizedSearchMixin, DjangoUserAdmin):
     )
     search_fields = DjangoUserAdmin.search_fields + ("phone",)
     change_form_template = "admin/accounts/user_change_form.html"
+    actions = ("export_customers_xlsx",)
 
     def get_queryset(self, request):
         # One grouped COUNT for the whole page -- the orders column must
@@ -56,6 +57,62 @@ class UserAdmin(NormalizedSearchMixin, DjangoUserAdmin):
             f"{reverse('admin:orders_order_changelist')}?user__id__exact={obj.pk}",
             to_fa_digits(group_thousands(count)),
         )
+
+    @admin.action(
+        description="خروجی اکسل مشتریان انتخاب‌شده",
+        permissions=("view",),
+    )
+    def export_customers_xlsx(self, request, queryset):
+        """Real .xlsx of the selected/filtered customers (Task 3).
+
+        One annotate() provides orders count, total paid spend and the
+        last order date -- no per-row query. Jalali dates are text, money
+        is a number, and the export is capped with a Persian notice.
+        """
+        from apps.analytics.exports import row_limit, xlsx_bytes, xlsx_response
+        from apps.adminui.jalali import format_jalali
+
+        limit = row_limit()
+        rows_qs = (
+            queryset.annotate(
+                _orders=Count("orders", distinct=True),
+                _spend=Sum(
+                    "orders__total", filter=Q(orders__payment_status="paid"),
+                ),
+                _last_order=Max("orders__created_at"),
+            )
+            .order_by("pk")
+        )
+        selected = list(rows_qs[: limit + 1])
+        truncated = len(selected) > limit
+        rows = []
+        for customer in selected[:limit]:
+            name = (customer.get_full_name() or "").strip() or customer.username
+            rows.append([
+                name,
+                getattr(customer, "phone", "") or "",
+                format_jalali(customer.date_joined, persian_digits=False),
+                customer._orders,
+                customer._spend or 0,
+                format_jalali(customer._last_order, persian_digits=False) if customer._last_order else "",
+            ])
+        if truncated:
+            self.message_user(
+                request,
+                f"خروجی به {limit:,} ردیف محدود شد؛ برای بقیهٔ ردیف‌ها فیلتر را محدودتر کنید.",
+                messages.WARNING,
+            )
+        data, _written = xlsx_bytes(
+            [
+                "نام مشتری", "تلفن", "تاریخ عضویت (شمسی)", "تعداد سفارش",
+                "مجموع خرید (تومان)", "آخرین سفارش (شمسی)",
+            ],
+            rows,
+            sheet_title="مشتریان",
+            numeric_columns={3, 4},
+        )
+        stamp = timezone.now().strftime("%Y%m%d-%H%M%S")
+        return xlsx_response(data, f"customers-{stamp}.xlsx")
 
     @admin.display(description="تاریخ عضویت", ordering="date_joined")
     def date_joined_jalali(self, obj):
