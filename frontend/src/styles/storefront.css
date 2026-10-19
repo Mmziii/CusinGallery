@@ -1916,8 +1916,156 @@ input, select, textarea { min-width: 0; max-width: 100%; }
 @media (prefers-reduced-motion: reduce) {
   .wishlist-badge, .icon-btn[aria-pressed="true"] .icon { animation: none; }
 }
-.search-combobox { display: block; min-width: 0; }
-.search-combobox > input { width: 100%; cursor: text; }
+.search-combobox {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+.search-combobox > input {
+  width: 100%;
+  cursor: text;
+}
+
+/* Desktop attached dropdown */
+.combobox-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  inset-inline: 0;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  background: var(--color-surface);
+  color: var(--brand-ink);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+  max-height: 280px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+.combobox-dropdown::-webkit-scrollbar {
+  width: 6px;
+}
+.combobox-dropdown::-webkit-scrollbar-track {
+  background: transparent;
+}
+.combobox-dropdown::-webkit-scrollbar-thumb {
+  background-color: var(--color-border);
+  border-radius: 3px;
+}
+
+.combobox-dropdown--flipped {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+
+.combobox-option {
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  transition: background var(--transition-fast);
+}
+.combobox-option:hover,
+.combobox-option.is-active {
+  background: var(--brand-green-tint);
+}
+.combobox-option[aria-selected="true"] {
+  font-weight: 700;
+  color: var(--brand-green-dark);
+}
+.combobox-empty {
+  padding: 12px;
+  text-align: center;
+  font-size: var(--font-size-sm);
+}
+
+/* Mobile bottom sheet */
+.combobox-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(2px);
+  z-index: 300;
+  animation: fade-in 0.15s ease;
+}
+
+.combobox-sheet {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 301;
+  background: var(--color-surface);
+  color: var(--brand-ink);
+  border-radius: 18px 18px 0 0;
+  box-shadow: var(--shadow-xl);
+  display: flex;
+  flex-direction: column;
+  max-height: 75vh;
+  padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  animation: slide-up 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.combobox-sheet__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.combobox-sheet__title {
+  font-weight: 700;
+  font-size: var(--font-size-base);
+  color: var(--brand-ink);
+}
+
+.combobox-sheet__close {
+  padding: 4px 8px;
+  background: transparent;
+  border: 0;
+  font-size: 26px;
+  line-height: 1;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.combobox-sheet__search-box {
+  padding: 10px 16px 6px;
+}
+
+.combobox-sheet__search {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-size: var(--font-size-base);
+  background: var(--color-surface);
+}
+
+.combobox-sheet__options {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 6px 12px;
+  max-height: 50vh;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+.combobox-sheet__options::-webkit-scrollbar {
+  width: 6px;
+}
+.combobox-sheet__options::-webkit-scrollbar-track {
+  background: transparent;
+}
+.combobox-sheet__options::-webkit-scrollbar-thumb {
+  background-color: var(--color-border);
+  border-radius: 3px;
+}
+
+/* Backward compatibility for combobox-panel */
 .combobox-panel { position: fixed; z-index: 200; display: flex; flex-direction: column; padding: 12px; background: var(--color-surface); color: var(--brand-ink); border: 1px solid var(--color-border); border-radius: 12px; box-shadow: var(--shadow-lg); animation: audit-card-in .15s ease; max-height: min(400px, 60dvh); }
 .combobox-panel__head { display: flex; justify-content: space-between; align-items: center; font-weight: 700; }
 .combobox-panel__head button { padding: 4px 12px; background: transparent; border: 0; font-size: 24px; }
