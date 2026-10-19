@@ -2,6 +2,7 @@ import { useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 
 import Icon from "./Icon";
+import { latinDigits } from "../utils/faDigits";
 import useSiteContent from "../hooks/useSiteContent";
 import useSiteSettings from "../hooks/useSiteSettings";
 
@@ -21,6 +22,7 @@ function FloatingContact() {
   const settings = useSiteSettings();
   const { pathname } = useLocation();
   const [showTop, setShowTop] = useState(false);
+  const [mobileExpanded, setMobileExpanded] = useState(false);
 
   useEffect(() => {
     const onScroll = () => setShowTop(window.scrollY > 600);
@@ -56,7 +58,7 @@ function FloatingContact() {
     if (settings.phone) {
       links.push({
         key: "phone",
-        href: `tel:${settings.phone.replace(/\s/g, "")}`,
+        href: `tel:${latinDigits(settings.phone).replace(/\s/g, "")}`,
         icon: "phone",
         label: "تماس تلفنی",
       });
@@ -68,10 +70,11 @@ function FloatingContact() {
 
   if (!enabled) return null;
   if (pathname.startsWith("/products/")) return null;
+  if (pathname.startsWith("/cart/") || pathname === "/cart" || pathname.startsWith("/checkout")) return null;
   if (links.length === 0 && !showBackToTop) return null;
 
   return (
-    <div className="floating-contact">
+    <div className={`floating-contact${mobileExpanded ? " floating-contact--expanded" : ""}`}>
       {showBackToTop ? (
         <button
           type="button"
@@ -95,6 +98,17 @@ function FloatingContact() {
           <Icon name={icon} size={22} />
         </a>
       ))}
+      {links.length ? (
+        <button
+          type="button"
+          className="floating-contact__toggle"
+          aria-label={mobileExpanded ? "بستن راه‌های تماس" : "نمایش راه‌های تماس"}
+          aria-expanded={mobileExpanded}
+          onClick={() => setMobileExpanded((expanded) => !expanded)}
+        >
+          <Icon name={mobileExpanded ? "close" : "chat"} size={20} />
+        </button>
+      ) : null}
     </div>
   );
 }

@@ -2,6 +2,10 @@ from django.urls import reverse
 from rest_framework import status
 from apps.core.testing import CacheIsolatedAPITestCase
 
+from django.utils import timezone
+from datetime import timedelta
+
+from apps.banners.models import DailyDeal
 from ..models import CartItem
 from ..services import get_or_create_cart
 from .helpers import make_product, make_user, make_variant
@@ -37,6 +41,42 @@ class CartPricingTests(CacheIsolatedAPITestCase):
         self.assertEqual(info["compare_at_price"], 100000)
         self.assertTrue(info["is_on_sale"])
         self.assertEqual(response.data["items"][0]["line_total"], 160000)
+
+    def test_active_daily_deal_prices_cart_line_and_totals(self):
+        product = make_product(price=240000, stock_quantity=10)
+        now = timezone.now()
+        DailyDeal.objects.create(
+            product=product, sale_price=199000,
+            starts_at=now - timedelta(hours=1), ends_at=now + timedelta(hours=1),
+        )
+        CartItem.objects.create(cart=self.cart, product=product, quantity=2)
+
+        response = self.client.get(reverse("cart"))
+        line = response.data["items"][0]
+        self.assertEqual(line["price_info"]["price"], 199000)
+        self.assertEqual(line["price_info"]["compare_at_price"], 240000)
+        self.assertEqual(line["price_info"]["discount_percentage"], 17)
+        self.assertEqual(line["line_total"], 398000)
+        self.assertEqual(response.data["subtotal"], 398000)
+
+    def test_expired_future_and_inactive_daily_deals_are_ignored(self):
+        now = timezone.now()
+        for index, kwargs in enumerate((
+            {"starts_at": now - timedelta(days=2), "ends_at": now - timedelta(days=1)},
+            {"starts_at": now + timedelta(days=1), "ends_at": now + timedelta(days=2)},
+            {"starts_at": now - timedelta(hours=1), "ends_at": now + timedelta(hours=1), "is_active": False},
+        )):
+            with self.subTest(index=index):
+                product = make_product(price=240000, stock_quantity=10)
+                DailyDeal.objects.create(
+                    product=product, sale_price=199000,
+                    starts_at=kwargs.pop("starts_at"), ends_at=kwargs.pop("ends_at"), **kwargs,
+                )
+                cart = get_or_create_cart(self.user)
+                CartItem.objects.create(cart=cart, product=product, quantity=1)
+                response = self.client.get(reverse("cart"))
+                by_product = {item["product"]["id"]: item for item in response.data["items"]}
+                self.assertEqual(by_product[product.id]["price_info"]["price"], 240000)
 
     def test_price_changes_between_add_and_view_are_reflected_live(self):
         """The cart is NOT an order snapshot -- see master spec step 11.

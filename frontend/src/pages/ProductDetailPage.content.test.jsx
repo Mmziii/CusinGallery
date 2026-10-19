@@ -232,6 +232,12 @@ describe("Product page content (Part S5 item 5)", () => {
     expect(jsonLd.url).toMatch(/\/products\/pan-model-123\/$/);
   });
 
+  it("labels the product wishlist heart for assistive technology", async () => {
+    const { container } = renderProduct();
+    await screen.findByRole("heading", { name: "قابلمه گرانیتی" });
+    expect(container.querySelector(".product-detail__buy .icon-btn[aria-label='افزودن به علاقه‌مندی‌ها']")).toBeTruthy();
+  });
+
   it("shows an unclipped muted SKU below the image and preserves the machine-readable SKU", async () => {
     renderProduct();
     await screen.findByRole("heading", { name: "قابلمه گرانیتی" });

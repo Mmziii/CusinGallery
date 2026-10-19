@@ -1,8 +1,12 @@
 import { expect, it } from "vitest";
-import { faDigits, faDateTime, deliveryDays, deliveryRange } from "./faDigits";
+import { faDigits, latinDigits, faDate, faDateTime, deliveryDays, deliveryRange } from "./faDigits";
 it("localizes display names and counts without grouping", () => {
  expect(faDigits("سرویس 24 پارچه")).toBe("سرویس ۲۴ پارچه");
  expect(faDigits(1250)).toBe("۱۲۵۰");
+ expect(latinDigits("۰۹۳۹۶۹۸۶۴۲۸")).toBe("09396986428");
+});
+it("zero-pads Jalali month and day across storefront date surfaces", () => {
+ expect(faDate("2026-10-15T01:55:00Z")).toMatch(/۱۴۰۵\/۰۷\/۲۳/);
 });
 it("formats Persian date/time with a Persian comma", () => {
  expect(faDateTime("2026-10-15T01:55:00Z")).toContain("، ساعت ");

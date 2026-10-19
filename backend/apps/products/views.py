@@ -15,6 +15,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from . import pricing
 from .filters import ProductFilter
 from .models import Brand, Product, ProductAttributeValue, ProductImage
 from .serializers import BrandSerializer, ProductDetailSerializer, ProductListSerializer
@@ -76,7 +77,8 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
                 Prefetch(
                     "images",
                     queryset=ProductImage.objects.order_by("-is_primary", "ordering"),
-                )
+                ),
+                pricing.active_daily_deals_prefetch(),
             )
         )
         # Part R5 item 7: normalized Persian search (also powers the

@@ -4,7 +4,11 @@ the REAL checkout pipeline, discount math reflected in order totals,
 invalid coupons refusing to create orders, and CouponUsage rows written
 only when the order is actually PAID.
 """
+from datetime import timedelta
+
 from django.urls import reverse
+from django.utils import timezone
+from apps.banners.models import DailyDeal
 from rest_framework import status
 from apps.core.testing import CacheIsolatedAPITestCase
 
@@ -55,6 +59,30 @@ class CheckoutWithCouponTests(CacheIsolatedAPITestCase):
         self.assertEqual(order.coupon.code, "WELCOME10")
         self.assertEqual(response.data["discount_amount"], 20000)
         self.assertEqual(response.data["coupon_code"], "WELCOME10")
+
+    def test_active_daily_deal_is_snapshotted_charged_and_coupon_applies_on_top(self):
+        now = timezone.now()
+        DailyDeal.objects.create(
+            product=self.product,
+            sale_price=80000,
+            starts_at=now - timedelta(hours=1),
+            ends_at=now + timedelta(hours=1),
+        )
+        make_coupon("DEAL10", percentage_value=10)
+
+        response = self.client.post(
+            CHECKOUT_URL, address_payload(coupon_code="DEAL10"), format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
+        order = Order.objects.get(user=self.user)
+        order_item = order.items.get()
+        self.assertEqual(order_item.unit_price, 80000)
+        self.assertEqual(order_item.total_price, 160000)
+        self.assertEqual(order.subtotal, 160000)
+        self.assertEqual(order.discount_amount, 16000)
+
+        payment = initiate_payment(self.user, order.pk, callback_url=CALLBACK)["payment"]
+        self.assertEqual(payment.amount, order.total)
 
     def test_checkout_without_coupon_still_zero_discount(self):
         response = self.client.post(CHECKOUT_URL, address_payload(), format="json")

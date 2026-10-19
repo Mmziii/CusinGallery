@@ -111,6 +111,19 @@ describe("ProductCard compact mode (phones)", () => {
     expect(current.textContent).toBe("۱۲٬۳۴۵٬۰۰۰");
   });
 
+  it("derives a compact discount badge from compare-at pricing", () => {
+    const { container } = renderCard(makeProduct({
+      price_info: { price: 80000, compare_at_price: 100000, discount_percentage: 0 },
+    }));
+    expect(container.querySelector(".product-card__badges .badge--sale").textContent).toBe("۲۰٪");
+  });
+
+  it("changes the wishlist accessible label when the product is saved", () => {
+    useWishlistStore.setState({ items: [{ product: { id: 7 } }], toggle: async () => {} });
+    renderCard(makeProduct());
+    expect(screen.getByRole("button", { name: "حذف از علاقه‌مندی‌ها" })).toBeTruthy();
+  });
+
   it("reserves the brand line even when the product has no brand", () => {
     const { container } = renderCard(makeProduct({ brand: null }));
     const brand = container.querySelector(".product-card__brand");

@@ -4,6 +4,7 @@ import Icon from "./Icon";
 import { SOCIAL_CHANNELS } from "../content/defaults";
 import useSiteContent from "../hooks/useSiteContent";
 import useSiteSettings from "../hooks/useSiteSettings";
+import { faDigits, latinDigits } from "../utils/faDigits";
 
 /**
  * Site footer (Task 3): every value now comes from the owner-editable
@@ -45,8 +46,8 @@ function Footer() {
                 {phones.map((phone, index) => (
                   <span key={phone}>
                     {index > 0 ? "، " : null}
-                    <a dir="ltr" href={`tel:${phone.replace(/\s/g, "")}`}>
-                      {phone}
+                    <a dir="ltr" href={`tel:${latinDigits(phone).replace(/\s/g, "")}`}>
+                      {faDigits(phone)}
                     </a>
                   </span>
                 ))}
@@ -57,8 +58,8 @@ function Footer() {
                 ایمیل: <a dir="ltr" href={`mailto:${email}`}>{email}</a>
               </p>
             ) : null}
-            {address ? <p>{address}</p> : null}
-            {workingHours ? <p>ساعات پاسخگویی: {workingHours}</p> : null}
+            {address ? <p>{faDigits(address)}</p> : null}
+            {workingHours ? <p>ساعات پاسخگویی: {faDigits(workingHours)}</p> : null}
           </address>
           {socialLinks.length ? (
             <ul className="site-footer__social" aria-label="شبکه‌های اجتماعی">

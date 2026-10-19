@@ -12,6 +12,7 @@ from django.utils import timezone
 
 from apps.banners.models import Banner, DailyDeal
 from apps.payments.tests.helpers import make_product
+from apps.adminui.jalali import format_jalali
 
 PLAIN_STATIC = {
     "STORAGES": {
@@ -58,10 +59,8 @@ class DailyDealValidationTests(BannerAdminBase):
         payload = {
             "product": product.pk,
             "sale_price": "120000",  # higher than regular price -> invalid
-            "starts_at_0": now.strftime("%Y-%m-%d"),
-            "starts_at_1": now.strftime("%H:%M:%S"),
-            "ends_at_0": (now + timezone.timedelta(days=1)).strftime("%Y-%m-%d"),
-            "ends_at_1": (now + timezone.timedelta(days=1)).strftime("%H:%M:%S"),
+            "starts_at": f"{format_jalali(now)} {now:%H:%M}",
+            "ends_at": f"{format_jalali(now + timezone.timedelta(days=1))} {(now + timezone.timedelta(days=1)):%H:%M}",
             "is_active": "on",
             "_save": "Save",
         }
@@ -75,10 +74,8 @@ class DailyDealValidationTests(BannerAdminBase):
         payload = {
             "product": product.pk,
             "sale_price": "80000",
-            "starts_at_0": now.strftime("%Y-%m-%d"),
-            "starts_at_1": now.strftime("%H:%M:%S"),
-            "ends_at_0": (now - timezone.timedelta(days=1)).strftime("%Y-%m-%d"),
-            "ends_at_1": (now - timezone.timedelta(days=1)).strftime("%H:%M:%S"),
+            "starts_at": f"{format_jalali(now)} {now:%H:%M}",
+            "ends_at": f"{format_jalali(now - timezone.timedelta(days=1))} {(now - timezone.timedelta(days=1)):%H:%M}",
             "is_active": "on",
             "_save": "Save",
         }
@@ -92,10 +89,8 @@ class DailyDealValidationTests(BannerAdminBase):
         payload = {
             "product": product.pk,
             "sale_price": "80000",
-            "starts_at_0": now.strftime("%Y-%m-%d"),
-            "starts_at_1": now.strftime("%H:%M:%S"),
-            "ends_at_0": (now + timezone.timedelta(days=1)).strftime("%Y-%m-%d"),
-            "ends_at_1": (now + timezone.timedelta(days=1)).strftime("%H:%M:%S"),
+            "starts_at": f"{format_jalali(now)} {now:%H:%M}",
+            "ends_at": f"{format_jalali(now + timezone.timedelta(days=1))} {(now + timezone.timedelta(days=1)):%H:%M}",
             "is_active": "on",
             "_save": "Save",
         }

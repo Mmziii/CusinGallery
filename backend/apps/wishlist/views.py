@@ -8,6 +8,7 @@ from rest_framework.generics import get_object_or_404
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.products import pricing
 from apps.products.models import Product, ProductImage
 
 from .models import WishlistItem
@@ -22,7 +23,8 @@ def _wishlist_queryset(user):
         WishlistItem.objects.filter(user=user)
         .select_related("product", "product__category", "product__brand")
         .prefetch_related(
-            Prefetch("product__images", queryset=ProductImage.objects.order_by("-is_primary", "ordering"))
+            Prefetch("product__images", queryset=ProductImage.objects.order_by("-is_primary", "ordering")),
+            pricing.active_daily_deals_prefetch("product__daily_deals"),
         )
     )
 

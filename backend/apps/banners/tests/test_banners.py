@@ -126,7 +126,9 @@ class DailyDealTests(CacheIsolatedAPITestCase):
         make_deal(product=product, sale_price=99000)
         response = self.client.get(DEAL_URL)
         embedded = response.data["results"][0]["product"]
-        self.assertEqual(embedded["price_info"]["price"], 120000)
+        self.assertEqual(embedded["price_info"]["price"], 99000)
+        self.assertEqual(embedded["price_info"]["compare_at_price"], 120000)
+        self.assertEqual(embedded["price_info"]["discount_percentage"], 17)
         self.assertIsNotNone(embedded["primary_image"])
 
     def test_empty_when_nothing_is_active(self):

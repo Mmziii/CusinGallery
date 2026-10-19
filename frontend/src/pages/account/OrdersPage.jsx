@@ -1,4 +1,4 @@
-import { faDigits } from "../../utils/faDigits";
+import { faDigits, faDate } from "../../utils/faDigits";
 import { ContentSkeleton } from "../../components/Skeletons";
 import { useState } from "react";
 import { Link } from "react-router-dom";
@@ -52,7 +52,7 @@ function OrdersPage() {
           <Link key={order.id} to={`/account/orders/${order.id}/`} className="order-row">
             <div>
               <strong><bdi dir="ltr">{order.order_number}</bdi></strong>
-              <span className="muted">{new Date(order.created_at).toLocaleDateString("fa-IR")}</span>
+              <span className="muted">{faDate(order.created_at)}</span>
             </div>
             <div className="order-row__meta">
               <span className={`tag tag--${order.payment_status}`}>

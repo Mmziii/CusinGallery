@@ -14,10 +14,10 @@ const CONTENT = {
   trust_strip: [],
   footer: {
     about: "دربارهٔ فروشگاه به قلم مدیر.",
-    phones: ["021-12345678", "09120000000"],
+    phones: ["021-12345678", "۰۹۱۲۰۰۰۰۰۰۰"],
     email: "hello@example.com",
-    address: "تهران، خیابان نمونه، پلاک ۱",
-    working_hours: "شنبه تا پنجشنبه، ۹ تا ۱۷",
+    address: "تهران، خیابان نمونه، پلاک 46",
+    working_hours: "شنبه تا پنجشنبه، 10:00-21:00",
     socials: {
       instagram: "https://instagram.com/cusin",
       telegram: "https://t.me/cusin",
@@ -69,11 +69,13 @@ describe("footer owner content (Task 3)", () => {
     expect(await screen.findByRole("heading", { name: "گالری نمونه" })).toBeTruthy();
     expect(screen.getByText("ظروف خوب برای خانه")).toBeTruthy();
     expect(screen.getByText("دربارهٔ فروشگاه به قلم مدیر.")).toBeTruthy();
-    expect(screen.getByText("تهران، خیابان نمونه، پلاک ۱")).toBeTruthy();
-    expect(screen.getByText(/شنبه تا پنجشنبه، ۹ تا ۱۷/)).toBeTruthy();
-    expect(screen.getByRole("link", { name: /021-12345678/ }).getAttribute("href")).toBe(
+    expect(screen.getByText("تهران، خیابان نمونه، پلاک ۴۶")).toBeTruthy();
+    expect(screen.getByText("ساعات پاسخگویی: شنبه تا پنجشنبه، ۱۰:۰۰-۲۱:۰۰")).toBeTruthy();
+    expect(screen.getByRole("link", { name: /۰۲۱-۱۲۳۴۵۶۷۸/ }).textContent).toBe("۰۲۱-۱۲۳۴۵۶۷۸");
+    expect(screen.getByRole("link", { name: /۰۲۱-۱۲۳۴۵۶۷۸/ }).getAttribute("href")).toBe(
       "tel:021-12345678"
     );
+    expect(screen.getByRole("link", { name: "۰۹۱۲۰۰۰۰۰۰۰" }).getAttribute("href")).toBe("tel:09120000000");
     expect(screen.getByRole("link", { name: /hello@example.com/ }).getAttribute("href")).toBe(
       "mailto:hello@example.com"
     );

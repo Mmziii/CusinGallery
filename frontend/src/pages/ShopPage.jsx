@@ -352,11 +352,8 @@ function ShopPage({ brand: fixedBrand = null }) {
             ...(fixedBrand
               ? [{ label: "برندها" }, { label: faDigits(fixedBrand.name) }]
               : params.category
-              ? categoryCrumbs
-              : [
-                  { label: "آشپزخانه", to: "/shop/" },
-                  { label: "فروشگاه" },
-                ]),
+              ? [{ label: "فروشگاه", to: "/shop/" }, ...categoryCrumbs]
+              : [{ label: "فروشگاه" }]),
           ]}
         />
         <h1>{fixedBrand ? `محصولات برند ${faDigits(fixedBrand.name)}` : "فروشگاه"}</h1>

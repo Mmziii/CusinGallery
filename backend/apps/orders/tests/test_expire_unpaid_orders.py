@@ -215,6 +215,9 @@ class ExpireUnpaidOrdersTests(CacheIsolatedAPITestCase):
         self.run_command()
         order.refresh_from_db()
         self.assertEqual(order.status, Order.Status.CANCELLED)
+        self.assertEqual(order.payment_status, Order.PaymentStatus.FAILED)
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, Payment.Status.FAILED)
 
         late = handle_callback({
             "authority": payment.gateway_transaction_id,

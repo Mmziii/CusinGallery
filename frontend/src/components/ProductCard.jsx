@@ -51,6 +51,11 @@ function ProductCard({ product }) {
   const primary = product.primary_image?.image || images[0]?.image || null;
   const secondary = images.find((img) => img.image !== primary)?.image || null;
   const productHref = `/products/${product.slug}/`;
+  const discountPercentage = product.price_info?.discount_percentage || (
+    product.price_info?.compare_at_price > product.price_info?.price
+      ? Math.floor((product.price_info.compare_at_price - product.price_info.price) * 100 / product.price_info.compare_at_price)
+      : 0
+  );
 
   const handleAdd = async () => {
     setAdding(true);
@@ -78,8 +83,8 @@ function ProductCard({ product }) {
     <button
       type="button"
       className={`icon-btn ${extraClass} ${addedToWishlist ? "icon-btn--active" : ""}`}
-      title="افزودن به علاقه‌مندی‌ها"
-      aria-label="افزودن به علاقه‌مندی‌ها"
+      title={addedToWishlist ? "حذف از علاقه‌مندی‌ها" : "افزودن به علاقه‌مندی‌ها"}
+      aria-label={addedToWishlist ? "حذف از علاقه‌مندی‌ها" : "افزودن به علاقه‌مندی‌ها"}
       onClick={(event) => {
         // Cards can host the heart INSIDE the media <Link>; a tap must
         // toggle the wishlist, never navigate to the product.
@@ -96,8 +101,8 @@ function ProductCard({ product }) {
   const badges = (
     <span className="product-card__badges">
       {product.is_new ? <span className="badge badge--new">جدید</span> : null}
-      {product.price_info?.discount_percentage > 0 ? (
-        <span className="badge badge--sale">{faDigits(product.price_info.discount_percentage)}٪</span>
+      {discountPercentage > 0 ? (
+        <span className="badge badge--sale">{faDigits(discountPercentage)}٪</span>
       ) : null}
       {lowStock ? <span className="badge badge--low">تعداد محدود</span> : null}
       {outOfStock ? <span className="badge badge--oos">ناموجود</span> : null}

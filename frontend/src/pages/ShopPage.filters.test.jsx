@@ -131,6 +131,17 @@ const results = () => document.querySelector(".shop__results");
 const cells = () => [...document.querySelectorAll(".product-grid__cell")];
 
 describe("shop page filter transitions (Part S5 item 7)", () => {
+  it("uses concise store breadcrumbs and puts the store before category ancestry", async () => {
+    const unfiltered = renderShop();
+    await screen.findByRole("heading", { name: "فروشگاه" });
+    expect(unfiltered.container.querySelector(".breadcrumbs ol").textContent).toBe("کازین گالریفروشگاه");
+    unfiltered.unmount();
+
+    const category = renderShop("?category=pots");
+    await screen.findByRole("heading", { name: "فروشگاه" });
+    await waitFor(() => expect(category.container.querySelector(".breadcrumbs ol").textContent).toContain("قابلمه"));
+    expect(category.container.querySelector(".breadcrumbs ol").textContent).toBe("کازین گالریفروشگاهآشپزخانهظروف پختقابلمه");
+  });
   it("keeps the previous results visible, dimmed and aria-busy while the next page loads", async () => {
     renderShop();
     await screen.findByText("کالای اول");

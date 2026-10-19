@@ -16,6 +16,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.analytics.tracking import session_key_from_request
+from apps.products import pricing
 
 from .models import Order, OrderItem
 from .serializers import CheckoutSerializer, OrderSerializer
@@ -38,8 +39,10 @@ def _order_queryset(user):
             # (Part R1) from the prefetch cache -- no per-item query.
             Prefetch(
                 "items",
-                queryset=OrderItem.objects.select_related("product", "variant").prefetch_related(
-                    "product__images"
+                queryset=OrderItem.objects.select_related("product", "variant", "variant__product").prefetch_related(
+                    "product__images",
+                    pricing.active_daily_deals_prefetch("product__daily_deals"),
+                    pricing.active_daily_deals_prefetch("variant__product__daily_deals"),
                 ),
             )
         )
