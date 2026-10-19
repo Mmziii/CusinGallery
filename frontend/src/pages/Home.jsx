@@ -18,6 +18,7 @@ import { useAsync } from "../hooks/useAsync";
 import { bannerShape } from "../utils/shapes";
 import { normalizeApiError } from "../utils/apiError";
 import { formatPrice } from "../utils/formatPrice";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 import { fetchBanners, fetchDailyDeals } from "../services/bannersApi";
 import { getCategoryTree, listProducts } from "../services/catalogApi";
 import { mainGroups } from "../utils/categories";
@@ -201,9 +202,86 @@ function Countdown({ endsAt, serverNow }) {
 function DailyDealsSection({ title }) {
   const ref = useReveal();
   const { data, isLoading, error } = useAsync(() => fetchDailyDeals(), []);
+  const isMobile = useMediaQuery("(max-width: 767px)");
+  const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
+
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
+  const [tabHidden, setTabHidden] = useState(() =>
+    typeof document !== "undefined" ? document.visibilityState === "hidden" : false
+  );
+
+  // Reactive clock to expire deals without reload
+  const [, setTick] = useState(0);
+  const baseServerTime = useRef(null);
+  const baseClientTime = useRef(Date.now());
+
+  if (data?.server_now && baseServerTime.current === null) {
+    baseServerTime.current = new Date(data.server_now).getTime();
+    baseClientTime.current = Date.now();
+  }
+
+  useEffect(() => {
+    const timer = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Hidden tab detection
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      setTabHidden(document.visibilityState === "hidden");
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, []);
+
+  const currentTimestamp = baseServerTime.current !== null
+    ? baseServerTime.current + (Date.now() - baseClientTime.current)
+    : Date.now();
+
+  // Filter out expired deals so they disappear on expiry without reload
+  const activeDeals = (data?.results || []).filter((deal) => {
+    const ends = new Date(deal.ends_at).getTime();
+    return ends > currentTimestamp;
+  });
+
+  const activeCount = activeDeals.length;
+
+  // 10s auto-advance (pause on hover/focus/hidden tab/reduced-motion)
+  useEffect(() => {
+    if (activeCount <= 1 || isPaused || isFocused || tabHidden || reducedMotion || isMobile) {
+      return undefined;
+    }
+    const timer = setInterval(() => {
+      setCurrentIndex((prev) => (prev + 1) % activeCount);
+    }, 10000);
+    return () => clearInterval(timer);
+  }, [activeCount, isPaused, isFocused, tabHidden, reducedMotion, isMobile]);
 
   if (isLoading) return null;
   if (error || !data?.results?.length) return null;
+  if (activeDeals.length === 0) return null;
+
+  const safeIndex = Math.min(currentIndex, activeDeals.length - 1);
+  const currentDeal = activeDeals[safeIndex] || activeDeals[0];
+
+  const goPrev = () => {
+    setCurrentIndex((prev) => (prev - 1 + activeDeals.length) % activeDeals.length);
+  };
+  const goNext = () => {
+    setCurrentIndex((prev) => (prev + 1) % activeDeals.length);
+  };
+
+  const nearestExpiry = activeDeals.reduce((min, deal) => {
+    return !min || new Date(deal.ends_at) < new Date(min) ? deal.ends_at : min;
+  }, null);
+
+  const originalPrice = currentDeal.product.price_info?.price ?? null;
+  const discount =
+    originalPrice > 0 && originalPrice > currentDeal.sale_price
+      ? Math.round(((originalPrice - currentDeal.sale_price) / originalPrice) * 100)
+      : 0;
 
   return (
     <section className="section section--dark reveal" ref={ref} aria-label={title}>
@@ -212,36 +290,124 @@ function DailyDealsSection({ title }) {
           <h2>{title}</h2>
           <span className="section__rule" aria-hidden="true" />
         </div>
-        <div className="deals-grid">
-          {data.results.map((deal) => {
-            const originalPrice = deal.product.price_info?.price ?? null;
-            const discount =
-              originalPrice > 0 && originalPrice > deal.sale_price
-                ? Math.round(((originalPrice - deal.sale_price) / originalPrice) * 100)
-                : 0;
-            return (
-              <Link key={deal.id} to={`/products/${deal.product.slug}/`} className="deal-card">
-                <div className="deal-card__media">
-                  <SmartImage image={deal.product.primary_image || null} alt={faDigits(deal.product.name)} />
-                  {discount > 0 ? (
-                    <span className="deal-card__badge">{faDigits(discount)}٪ تخفیف</span>
-                  ) : null}
-                </div>
-                <div className="deal-card__body">
-                  <div className="deal-card__name">{faDigits(deal.product.name)}</div>
-                  <div className="deal-card__prices">
-                    <span className="deal-card__sale">{formatPrice(deal.sale_price)} تومان</span>
-                    {originalPrice && originalPrice > deal.sale_price ? (
-                      <s className="deal-card__regular">{formatPrice(originalPrice)} تومان</s>
+
+        {isMobile ? (
+          /* Phone full-width colored band with shared countdown + swipeable compact deal cards with scroll-snap */
+          <div className="deals-mobile">
+            <div className="deals-mobile__header">
+              <span className="deals-mobile__title">{title}</span>
+              <Countdown endsAt={nearestExpiry} serverNow={data.server_now} />
+            </div>
+            <div className="deals-mobile__track" role="region" aria-label="پیشنهادهای روز">
+              {activeDeals.map((deal) => {
+                const orig = deal.product.price_info?.price ?? null;
+                const disc =
+                  orig > 0 && orig > deal.sale_price
+                    ? Math.round(((orig - deal.sale_price) / orig) * 100)
+                    : 0;
+                return (
+                  <Link
+                    key={deal.id}
+                    to={`/products/${deal.product.slug}/`}
+                    className="deals-mobile__card"
+                  >
+                    <div className="deals-mobile__media">
+                      <SmartImage image={deal.product.primary_image || null} alt={faDigits(deal.product.name)} />
+                      {disc > 0 ? (
+                        <span className="deal-card__badge">{faDigits(disc)}٪ تخفیف</span>
+                      ) : null}
+                    </div>
+                    <div className="deals-mobile__body">
+                      <div className="deal-card__name deals-mobile__name">{faDigits(deal.product.name)}</div>
+                      <div className="deal-card__prices deals-mobile__prices">
+                        <span className="deal-card__sale">{formatPrice(deal.sale_price)} تومان</span>
+                        {orig && orig > deal.sale_price ? (
+                          <s className="deal-card__regular">{formatPrice(orig)} تومان</s>
+                        ) : null}
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          /* Desktop smaller main slide (40-45% width) + prev/next round arrow buttons + thumbnail row (5-6 visible) */
+          <div
+            className="deals-desktop"
+            onMouseEnter={() => setIsPaused(true)}
+            onMouseLeave={() => setIsPaused(false)}
+            onFocus={() => setIsFocused(true)}
+            onBlur={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget)) setIsFocused(false);
+            }}
+          >
+            <div className="deals-stage">
+              {activeDeals.length > 1 ? (
+                <button
+                  type="button"
+                  className="deals-arrow deals-arrow--prev"
+                  aria-label="پیشنهاد قبلی"
+                  onClick={goPrev}
+                >
+                  <Icon name="chevron-right" size={20} />
+                </button>
+              ) : null}
+
+              <div className="deals-grid deals-stage__card">
+                <Link to={`/products/${currentDeal.product.slug}/`} className="deal-card">
+                  <div className="deal-card__media">
+                    <SmartImage image={currentDeal.product.primary_image || null} alt={faDigits(currentDeal.product.name)} />
+                    {discount > 0 ? (
+                      <span className="deal-card__badge">{faDigits(discount)}٪ تخفیف</span>
                     ) : null}
                   </div>
-                  <Countdown endsAt={deal.ends_at} serverNow={data.server_now} />
-                  <span className="deal-card__cta">مشاهده محصول</span>
-                </div>
-              </Link>
-            );
-          })}
-        </div>
+                  <div className="deal-card__body">
+                    <div className="deal-card__name">{faDigits(currentDeal.product.name)}</div>
+                    <div className="deal-card__prices">
+                      <span className="deal-card__sale">{formatPrice(currentDeal.sale_price)} تومان</span>
+                      {originalPrice && originalPrice > currentDeal.sale_price ? (
+                        <s className="deal-card__regular">{formatPrice(originalPrice)} تومان</s>
+                      ) : null}
+                    </div>
+                    <Countdown endsAt={currentDeal.ends_at} serverNow={data.server_now} />
+                    <span className="deal-card__cta">مشاهده محصول</span>
+                  </div>
+                </Link>
+              </div>
+
+              {activeDeals.length > 1 ? (
+                <button
+                  type="button"
+                  className="deals-arrow deals-arrow--next"
+                  aria-label="پیشنهاد بعدی"
+                  onClick={goNext}
+                >
+                  <Icon name="chevron-left" size={20} />
+                </button>
+              ) : null}
+            </div>
+
+            {/* Thumbnail row (5-6 visible) */}
+            {activeDeals.length > 1 ? (
+              <div className="deals-thumbs" role="tablist" aria-label="انتخاب پیشنهاد">
+                {activeDeals.map((deal, idx) => (
+                  <button
+                    key={deal.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={idx === safeIndex}
+                    className={`deals-thumb${idx === safeIndex ? " deals-thumb--active" : ""}`}
+                    onClick={() => setCurrentIndex(idx)}
+                    aria-label={faDigits(deal.product.name)}
+                  >
+                    <SmartImage image={deal.product.primary_image || null} alt="" />
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        )}
       </div>
     </section>
   );
