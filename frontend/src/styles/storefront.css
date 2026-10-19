@@ -2322,7 +2322,6 @@ input, select, textarea { min-width: 0; max-width: 100%; }
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(2px);
   z-index: 300;
   animation: fade-in 0.15s ease;
 }

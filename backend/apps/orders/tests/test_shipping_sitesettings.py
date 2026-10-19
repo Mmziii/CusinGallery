@@ -107,3 +107,25 @@ class ShippingValidationTests(TestCase):
             self.site.clean()
         self.assertIn("shipping_express_cities", ctx.exception.message_dict)
         self.assertIn("لطفاً حداقل یک شهر مجاز برای ارسال اکسپرس مشخص کنید.", ctx.exception.message_dict["shipping_express_cities"])
+
+    def test_form_shows_min_days_error_once(self):
+        from apps.core.forms import SiteSettingsAdminForm
+
+        data = {
+            "shipping_standard_enabled": True,
+            "shipping_standard_cost": 50000,
+            "shipping_standard_min_days": 6,
+            "shipping_standard_max_days": 3,
+            "shipping_express_enabled": True,
+            "shipping_express_cost": 90000,
+            "shipping_express_min_days": 1,
+            "shipping_express_max_days": 1,
+            "shipping_express_cities": "تهران",
+            "shipping_pickup_enabled": True,
+        }
+        form = SiteSettingsAdminForm(data=data, instance=self.site)
+        self.assertFalse(form.is_valid())
+        errs = form.errors.get("shipping_standard_min_days", [])
+        self.assertEqual(len(errs), 1)
+        self.assertEqual(errs[0], "حداقل روز تحویل عادی نمی‌تواند بیشتر از حداکثر روز تحویل باشد.")
+

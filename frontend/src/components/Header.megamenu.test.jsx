@@ -351,7 +351,7 @@ describe("mega menu mobile sheet", () => {
       },
     ];
 
-    const view = render(
+    render(
       <MemoryRouter initialEntries={["/"]}>
         <MegaMenu
           groups={groups}

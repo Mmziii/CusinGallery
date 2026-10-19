@@ -3,7 +3,7 @@ import { faDigits, deliveryRange, deliveryDays } from "../utils/faDigits";
 import { usePageMeta } from "../hooks/usePageMeta";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import AddressForm from "../components/AddressForm";
 import CheckoutStepper from "../components/CheckoutStepper";
@@ -20,7 +20,7 @@ import useCartStore from "../store/useCartStore";
 import useSiteSettings from "../hooks/useSiteSettings";
 import { normalizeApiError } from "../utils/apiError";
 import { formatPrice } from "../utils/formatPrice";
-import { EXPRESS_UNAVAILABLE_MESSAGE, isExpressEligible } from "../utils/shipping";
+import { isExpressEligible } from "../utils/shipping";
 
 const METHOD_LABELS = {
   standard: "ارسال عادی",
@@ -56,7 +56,6 @@ function needsPlotAndUnit(address) {
 
 export default function CheckoutPage() {
   usePageMeta({ title: "تکمیل خرید", path: "/checkout/", noindex: true });
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const { cart, fetchCart } = useCartStore();
@@ -64,7 +63,9 @@ export default function CheckoutPage() {
   const isMobile = useMediaQuery("(max-width: 767px)");
 
   // Step in URL: delivery | address | review
-  const rawStep = searchParams.get("step") || "delivery";
+  const stepParam = searchParams.get("step");
+  const isStepped = Boolean(stepParam);
+  const rawStep = stepParam || "delivery";
   const currentStep = ["delivery", "address", "review"].includes(rawStep) ? rawStep : "delivery";
 
   // Delivery methods state
@@ -150,7 +151,9 @@ export default function CheckoutPage() {
       if (pickupContact.recipient_name || pickupContact.phone) {
         sessionStorage.setItem("cg_checkout_pickup", JSON.stringify(pickupContact));
       }
-    } catch {}
+    } catch {
+      // ignore storage errors
+    }
   }, [selectedMethod, selectedAddressId, addressMode, pickupContact]);
 
   // Load addresses
@@ -236,6 +239,7 @@ export default function CheckoutPage() {
 
   // URL guards: later steps cannot be opened before earlier ones are done
   useEffect(() => {
+    if (!isStepped) return;
     if (shippingStatus !== "ready" || (addressesStatus !== "ready" && !isPickup)) return;
 
     if (currentStep === "address") {
@@ -249,7 +253,8 @@ export default function CheckoutPage() {
         setSearchParams({ step: "address" }, { replace: true });
       }
     }
-  }, [currentStep, selectedMethod, shippingStatus, addressesStatus, isPickup]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isStepped, currentStep, selectedMethod, shippingStatus, addressesStatus, isPickup]);
 
   const setStep = (step) => {
     setStepError(null);
@@ -421,7 +426,9 @@ export default function CheckoutPage() {
   if (placedOrder) {
     return (
       <div className="checkout-done">
-        <div className="checkout-done__icon" aria-hidden="true">✓</div>
+        <div className="checkout-done__icon" aria-hidden="true">
+          <Icon name="check" size={32} />
+        </div>
         <h1>سفارش شما ثبت شد</h1>
         <p className="checkout-done__number">
           شماره سفارش: <strong><bdi dir="ltr">{faDigits(placedOrder.order_number)}</bdi></strong>
@@ -474,7 +481,10 @@ export default function CheckoutPage() {
   let stepActionHandler = handleProceedFromDelivery;
   let stepActionLabel = "ادامه: اطلاعات تحویل";
 
-  if (currentStep === "address") {
+  if (!isStepped) {
+    stepActionHandler = placeOrder;
+    stepActionLabel = placing ? "در حال ثبت سفارش…" : "ثبت سفارش";
+  } else if (currentStep === "address") {
     stepActionHandler = handleProceedFromAddress;
     stepActionLabel = "ادامه: بازبینی و پرداخت";
   } else if (currentStep === "review") {
@@ -485,7 +495,7 @@ export default function CheckoutPage() {
   return (
     <div className="checkout">
       <h1 className="page-title">ثبت سفارش</h1>
-      <CheckoutStepper currentStep={currentStep} />
+      <CheckoutStepper currentStep={isStepped ? currentStep : "delivery"} />
 
       {stepError && <Alert>{stepError}</Alert>}
 
@@ -493,7 +503,7 @@ export default function CheckoutPage() {
         <div className="checkout__grid">
           <main className="checkout__main">
             {/* ================= STEP 2: روش تحویل ================= */}
-            {currentStep === "delivery" && (
+            {(!isStepped || currentStep === "delivery") && (
               <section id="checkout-section-delivery" className="checkout__section">
                 <h2>۲. انتخاب روش تحویل</h2>
                 <p className="muted">لطفاً روش مورد نظر خود را برای دریافت سفارش انتخاب فرمایید:</p>
@@ -573,11 +583,23 @@ export default function CheckoutPage() {
                     })}
                   </div>
                 )}
+
+                {isStepped && (
+                  <div className="checkout__step-actions">
+                    <button
+                      type="button"
+                      className="btn btn--primary"
+                      onClick={handleProceedFromDelivery}
+                    >
+                      ادامه: اطلاعات تحویل
+                    </button>
+                  </div>
+                )}
               </section>
             )}
 
             {/* ================= STEP 3: اطلاعات تحویل ================= */}
-            {currentStep === "address" && (
+            {(!isStepped || currentStep === "address") && (
               <section id="checkout-section-address" className="checkout__section">
                 <h2>۳. اطلاعات تحویل</h2>
 
@@ -814,11 +836,23 @@ export default function CheckoutPage() {
                     )}
                   </div>
                 )}
+
+                {isStepped && (
+                  <div className="checkout__step-actions">
+                    <button
+                      type="button"
+                      className="btn btn--primary"
+                      onClick={handleProceedFromAddress}
+                    >
+                      ادامه: بازبینی و پرداخت
+                    </button>
+                  </div>
+                )}
               </section>
             )}
 
             {/* ================= STEP 4: بازبینی و پرداخت ================= */}
-            {currentStep === "review" && (
+            {isStepped && currentStep === "review" && (
               <section id="checkout-section-review" className="checkout__section checkout__review">
                 <h2>۴. بازبینی و پرداخت</h2>
 

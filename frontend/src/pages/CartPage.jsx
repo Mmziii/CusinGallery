@@ -342,8 +342,12 @@ function CartPage() {
                 <dd>{formatPrice(cart.subtotal)} تومان</dd>
               </div>
             </dl>
-            <button type="button" className="btn btn--primary btn--block" onClick={() => navigate("/checkout/?step=delivery")}>
-              ادامه
+            <button
+              type="button"
+              className="btn btn--primary btn--block"
+              onClick={() => navigate("/checkout/")}
+            >
+              ادامه و ثبت سفارش
             </button>
             <p className="cart-page__note">
               هزینهٔ ارسال و مبلغ نهایی را در مرحلهٔ بعد ببینید.
@@ -361,7 +365,7 @@ function CartPage() {
           <button
             type="button"
             className="btn btn--primary"
-            onClick={() => navigate("/checkout/?step=delivery")}
+            onClick={() => navigate("/checkout/")}
           >
             ادامه
           </button>

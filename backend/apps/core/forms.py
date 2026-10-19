@@ -76,26 +76,6 @@ class SiteSettingsAdminForm(forms.ModelForm):
             if cleaned.get("shipping_express_max_days") is None:
                 cleaned["shipping_express_max_days"] = 1
 
-            std_min = cleaned.get("shipping_standard_min_days")
-            std_max = cleaned.get("shipping_standard_max_days")
-            if std_min is not None and std_max is not None and std_min > std_max:
-                self.add_error("shipping_standard_min_days", "حداقل روز تحویل عادی نمی‌تواند بیشتر از حداکثر روز تحویل باشد.")
-
-            exp_min = cleaned.get("shipping_express_min_days")
-            exp_max = cleaned.get("shipping_express_max_days")
-            if exp_min is not None and exp_max is not None and exp_min > exp_max:
-                self.add_error("shipping_express_min_days", "حداقل روز تحویل اکسپرس نمی‌تواند بیشتر از حداکثر روز تحویل باشد.")
-
-            std_enabled = cleaned.get("shipping_standard_enabled")
-            exp_enabled = cleaned.get("shipping_express_enabled")
-            pic_enabled = cleaned.get("shipping_pickup_enabled")
-            if std_enabled is not None and exp_enabled is not None and pic_enabled is not None:
-                if not std_enabled and not exp_enabled and not pic_enabled:
-                    self.add_error("shipping_standard_enabled", "حداقل یکی از روش‌های ارسال باید فعال باشد.")
-
-            if exp_enabled and not (cleaned.get("shipping_express_cities") or "").strip():
-                self.add_error("shipping_express_cities", "لطفاً حداقل یک شهر مجاز برای ارسال اکسپرس مشخص کنید.")
-
         # WCAG contrast guard. Runs only when the form really carries the
         # theme fields (it always does on the site settings page; the guard
         # is skipped for any future form that reuses this class without

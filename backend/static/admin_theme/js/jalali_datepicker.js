@@ -363,6 +363,7 @@
         popup.hidden = true;
         popup.classList.remove("jalali-date-picker--mobile");
         button.setAttribute("aria-expanded", "false");
+        window.removeEventListener("scroll", repositionPopup, true);
         document.removeEventListener("scroll", repositionPopup, true);
         window.removeEventListener("resize", repositionPopup);
         if (restoreFocus) button.focus();
@@ -374,6 +375,7 @@
         button.setAttribute("aria-expanded", "true");
         render();
         repositionPopup();
+        window.addEventListener("scroll", repositionPopup, true);
         document.addEventListener("scroll", repositionPopup, true);
         window.addEventListener("resize", repositionPopup);
       };
