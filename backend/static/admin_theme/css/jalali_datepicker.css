@@ -1,11 +1,64 @@
 .jalali-date-wrap { display: inline-flex; position: relative; align-items: center; gap: 4px; max-width: 100%; }
 .jalali-date-wrap > input { min-width: 12em; }
-.jalali-date-open { cursor: pointer; min-width: 30px; height: 30px; border: 1px solid var(--cusin-border, #c9c5b5); border-radius: 5px; background: var(--cusin-surface, #fff); color: var(--cusin-olive, #52602d); font-size: 18px; }
-.jalali-date-picker { position: absolute; z-index: 1000; inset-inline-start: 0; top: calc(100% + 4px); width: 280px; padding: 10px; border: 1px solid #c9c5b5; border-radius: 8px; background: #fff; box-shadow: 0 8px 24px #0002; direction: rtl; }
+.jalali-date-open {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 32px;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  padding: 5px;
+  border: 1px solid var(--cusin-border, #c9c5b5);
+  border-radius: 5px;
+  background: var(--cusin-surface, #fff);
+  color: var(--cusin-olive, #52602d);
+  cursor: pointer;
+}
+.jalali-date-open:hover, .jalali-date-open:focus-visible {
+  border-color: var(--cusin-olive, #52602d);
+  background: var(--cusin-surface-2, #faf9f5);
+}
+.jalali-date-open__icon { width: 18px; height: 18px; vertical-align: middle; }
+.jalali-date-picker {
+  position: fixed;
+  z-index: 1200;
+  width: 280px;
+  box-sizing: border-box;
+  padding: 10px;
+  border: 1px solid #c9c5b5;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 8px 24px #0003;
+  direction: rtl;
+  color: #292d20;
+}
 .jalali-date-picker[hidden] { display: none; }
 .jalali-date-picker__head { display: flex; align-items: center; justify-content: space-between; gap: 4px; margin-bottom: 8px; }
-.jalali-date-picker__head button, .jalali-date-picker__days button { min-width: 30px; min-height: 30px; border: 1px solid #e1dfd5; border-radius: 5px; background: #faf9f5; cursor: pointer; }
+.jalali-date-picker__head button, .jalali-date-picker__days button {
+  min-width: 30px;
+  min-height: 30px;
+  border: 1px solid #e1dfd5;
+  border-radius: 5px;
+  background: #faf9f5;
+  cursor: pointer;
+}
 .jalali-date-picker__head select { min-width: 88px; }
 .jalali-date-picker__head input { width: 58px; }
 .jalali-date-picker__days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
 .jalali-date-picker__days button:hover, .jalali-date-picker__days button:focus-visible { background: #eaf0e2; border-color: #52602d; }
+
+@media (max-width: 600px) {
+  .jalali-date-picker.jalali-date-picker--mobile {
+    inset-inline: 8px !important;
+    right: 8px !important;
+    left: 8px !important;
+    top: auto !important;
+    bottom: max(8px, env(safe-area-inset-bottom, 0px)) !important;
+    width: auto !important;
+    max-width: none !important;
+    max-height: min(72vh, 560px) !important;
+    overflow-y: auto;
+    border-radius: 12px;
+  }
+}

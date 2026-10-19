@@ -25,6 +25,7 @@
   }; 
 
   const initialized = new WeakSet();
+  let pickerSequence = 0;
   const initialize = (root = document) => {
     const fields = [];
     if (root.matches?.('input[data-jalali-date="true"]')) fields.push(root);
@@ -48,14 +49,24 @@
     button.type = "button";
     button.className = "jalali-date-open";
     button.setAttribute("aria-label", "بازکردن تقویم جلالی");
-    button.textContent = "▦";
+    button.setAttribute("aria-expanded", "false");
+    const calendarIcon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    calendarIcon.setAttribute("class", "cusin-icon jalali-date-open__icon");
+    calendarIcon.setAttribute("aria-hidden", "true");
+    calendarIcon.setAttribute("focusable", "false");
+    const calendarUse = document.createElementNS("http://www.w3.org/2000/svg", "use");
+    calendarUse.setAttribute("href", "#cusin-i-calendar");
+    calendarIcon.appendChild(calendarUse);
+    button.appendChild(calendarIcon);
     wrap.appendChild(button);
     const popup = document.createElement("div");
     popup.className = "jalali-date-picker";
+    popup.id = `jalali-date-picker-${++pickerSequence}`;
+    button.setAttribute("aria-controls", popup.id);
     popup.hidden = true;
     popup.setAttribute("role", "dialog");
     popup.setAttribute("aria-label", "انتخاب تاریخ جلالی");
-    wrap.appendChild(popup);
+    document.body.appendChild(popup);
 
     const initial = currentJalali();
     let year = initial.year;
@@ -91,7 +102,7 @@
           input.value = `${fa(year)}/${fa(String(month).padStart(2, "0"))}/${fa(String(day).padStart(2, "0"))}${time ? ` ${fa(time)}` : ""}`;
           input.dispatchEvent(new Event("input", { bubbles: true }));
           input.dispatchEvent(new Event("change", { bubbles: true }));
-          popup.hidden = true;
+          closePopup();
           input.focus();
         });
         days.appendChild(choice);
@@ -99,8 +110,89 @@
       popup.append(head, days);
     };
     render();
-    button.addEventListener("click", () => { popup.hidden = !popup.hidden; if (!popup.hidden) render(); });
-    document.addEventListener("click", event => { if (!wrap.contains(event.target)) popup.hidden = true; });
+
+    const repositionPopup = () => {
+      if (popup.hidden) return;
+      const viewportWidth = Math.max(document.documentElement.clientWidth, window.innerWidth || 0);
+      const viewportHeight = Math.max(document.documentElement.clientHeight, window.innerHeight || 0);
+      const margin = 8;
+      const inputRect = input.getBoundingClientRect();
+      const isPhone = viewportWidth <= 600;
+
+      popup.style.position = "fixed";
+      popup.style.zIndex = "1200";
+      popup.style.visibility = "hidden";
+      popup.style.maxWidth = `${Math.max(0, viewportWidth - margin * 2)}px`;
+      popup.style.maxHeight = `${Math.max(120, viewportHeight - margin * 2)}px`;
+      popup.style.overflowY = "auto";
+      popup.classList.toggle("jalali-date-picker--mobile", isPhone);
+
+      if (isPhone) {
+        popup.style.left = `${margin}px`;
+        popup.style.right = `${margin}px`;
+        popup.style.top = "auto";
+        popup.style.bottom = "8px";
+        popup.style.width = "auto";
+        popup.style.maxWidth = "none";
+        popup.style.maxHeight = `${Math.max(120, Math.min(viewportHeight - margin * 2, viewportHeight * 0.72))}px`;
+        popup.style.visibility = "visible";
+        return;
+      }
+
+      popup.style.right = "auto";
+      popup.style.bottom = "auto";
+      popup.style.width = "280px";
+      popup.style.left = "0px";
+      popup.style.top = "0px";
+      const measured = popup.getBoundingClientRect();
+      const popupWidth = Math.min(measured.width || 280, Math.max(0, viewportWidth - margin * 2));
+      const popupHeight = Math.min(measured.height || popup.scrollHeight || 340, viewportHeight - margin * 2);
+      const below = viewportHeight - inputRect.bottom - margin;
+      const above = inputRect.top - margin;
+      const placeBelow = below >= popupHeight || (above < popupHeight && below >= above);
+      let left = inputRect.right - popupWidth;
+      let top = placeBelow ? inputRect.bottom + 4 : inputRect.top - popupHeight - 4;
+      left = Math.max(margin, Math.min(left, viewportWidth - popupWidth - margin));
+      top = Math.max(margin, Math.min(top, viewportHeight - popupHeight - margin));
+      popup.style.width = `${popupWidth}px`;
+      popup.style.left = `${left}px`;
+      popup.style.top = `${top}px`;
+      popup.style.visibility = "visible";
+    };
+
+    const closePopup = (restoreFocus = false) => {
+      if (popup.hidden) return;
+      popup.hidden = true;
+      popup.classList.remove("jalali-date-picker--mobile");
+      button.setAttribute("aria-expanded", "false");
+      window.removeEventListener("scroll", repositionPopup, true);
+      window.removeEventListener("resize", repositionPopup);
+      if (restoreFocus) button.focus();
+    };
+
+    const openPopup = () => {
+      popup.hidden = false;
+      button.setAttribute("aria-expanded", "true");
+      render();
+      repositionPopup();
+      window.addEventListener("scroll", repositionPopup, true);
+      window.addEventListener("resize", repositionPopup);
+    };
+
+    button.addEventListener("click", () => {
+      if (popup.hidden) openPopup();
+      else closePopup();
+    });
+    document.addEventListener("click", event => {
+      if (!wrap.contains(event.target) && !popup.contains(event.target)) closePopup();
+    });
+    document.addEventListener("keydown", event => {
+      if (!popup.hidden && event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        closePopup(true);
+      }
+    });
     });
   };
 

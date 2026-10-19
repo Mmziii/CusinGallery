@@ -16,20 +16,81 @@ async function mount(html = '<div class="form-row"><input id="id_date" data-jala
   return mounted.doc;
 }
 
+function rect({ left, right, top, bottom, width, height }) {
+  return { left, right, top, bottom, width, height, x: left, y: top, toJSON: () => ({}) };
+}
+
 describe("Jalali date picker", () => {
-  it("initializes on DOMContentLoaded, opens, and writes selected Persian digits", async () => {
+  it("portals to body, positions by the input, and writes selected Persian digits", async () => {
     const doc = await mount();
     const input = doc.getElementById("id_date");
     const button = doc.querySelector(".jalali-date-open");
-    const popup = doc.querySelector(".jalali-date-picker");
+    const popup = doc.getElementById(button.getAttribute("aria-controls"));
 
-    expect(button).not.toBeNull();
+    expect(button.querySelector("use").getAttribute("href")).toBe("#cusin-i-calendar");
+    expect(popup.parentElement).toBe(doc.body);
+    input.getBoundingClientRect = () => rect({ left: 100, right: 450, top: 200, bottom: 230, width: 350, height: 30 });
+    popup.getBoundingClientRect = () => rect({ left: 0, right: 280, top: 0, bottom: 320, width: 280, height: 320 });
+
     button.click();
     expect(popup.hidden).toBe(false);
+    expect(popup.style.position).toBe("fixed");
+    expect(popup.style.left).toBe("170px");
+    expect(popup.style.top).toBe("234px");
 
     popup.querySelector('[aria-label="۱۴۰۵/۰۷/۰۱"]').click();
     expect(input.value).toBe("۱۴۰۵/۰۷/۰۱");
     expect(popup.hidden).toBe(true);
+  });
+
+  it("flips above the input when the popup will not fit below it", async () => {
+    const doc = await mount();
+    const button = doc.querySelector(".jalali-date-open");
+    const input = doc.getElementById("id_date");
+    const popup = doc.getElementById(button.getAttribute("aria-controls"));
+    mounted.win.innerHeight = 700;
+    input.getBoundingClientRect = () => rect({ left: 100, right: 450, top: 600, bottom: 630, width: 350, height: 30 });
+    popup.getBoundingClientRect = () => rect({ left: 0, right: 280, top: 0, bottom: 320, width: 280, height: 320 });
+
+    button.click();
+
+    expect(popup.style.top).toBe("276px");
+  });
+
+  it("anchors repositioning to scroll and resize and closes on Escape or outside click", async () => {
+    const doc = await mount();
+    const button = doc.querySelector(".jalali-date-open");
+    const input = doc.getElementById("id_date");
+    const popup = doc.getElementById(button.getAttribute("aria-controls"));
+    let top = 100;
+    input.getBoundingClientRect = () => rect({ left: 100, right: 450, top, bottom: top + 30, width: 350, height: 30 });
+    popup.getBoundingClientRect = () => rect({ left: 0, right: 280, top: 0, bottom: 320, width: 280, height: 320 });
+
+    button.click();
+    top = 180;
+    mounted.win.dispatchEvent(new mounted.win.Event("scroll"));
+    expect(popup.style.top).toBe("214px");
+    doc.dispatchEvent(new mounted.win.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(popup.hidden).toBe(true);
+
+    button.click();
+    doc.body.dispatchEvent(new mounted.win.MouseEvent("click", { bubbles: true }));
+    expect(popup.hidden).toBe(true);
+  });
+
+  it("uses a full-width bottom sheet on phone-sized viewports", async () => {
+    const doc = await mount();
+    const button = doc.querySelector(".jalali-date-open");
+    const popup = doc.getElementById(button.getAttribute("aria-controls"));
+    mounted.win.innerWidth = 390;
+    button.click();
+
+    expect(popup.classList.contains("jalali-date-picker--mobile")).toBe(true);
+    expect(popup.style.position).toBe("fixed");
+    expect(popup.style.left).toBe("8px");
+    expect(popup.style.right).toBe("8px");
+    expect(popup.style.bottom).toBe("8px");
+    expect(popup.style.width).toBe("auto");
   });
 
   it("initializes inline rows cloned from the decorated empty form", async () => {
@@ -45,6 +106,6 @@ describe("Jalali date picker", () => {
     expect(button).not.toBeNull();
     expect(row.querySelectorAll(".jalali-date-wrap")).toHaveLength(1);
     button.click();
-    expect(row.querySelector(".jalali-date-picker").hidden).toBe(false);
+    expect(doc.getElementById(button.getAttribute("aria-controls")).hidden).toBe(false);
   });
 });
