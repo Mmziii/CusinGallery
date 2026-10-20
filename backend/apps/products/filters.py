@@ -5,6 +5,7 @@ Product filtering, per master spec section 12. Uses django_filters
 query-param parser.
 """
 import django_filters
+from django.db.models import F
 
 from .models import Product
 
@@ -24,6 +25,10 @@ class ProductFilter(django_filters.FilterSet):
     is_featured = django_filters.BooleanFilter(field_name="is_featured")
     is_new = django_filters.BooleanFilter(field_name="is_new")
     is_best_seller = django_filters.BooleanFilter(field_name="is_best_seller")
+    # «مشاهده همه» under the daily-deals band: /shop/?on_sale=1. A product
+    # is on sale when its compare-at price beats its selling price -- the
+    # same signal apps/products/pricing.py derives `is_on_sale` from.
+    on_sale = django_filters.BooleanFilter(method="filter_on_sale")
 
     class Meta:
         model = Product
@@ -39,3 +44,10 @@ class ProductFilter(django_filters.FilterSet):
 
     def filter_in_stock(self, queryset, name, value):
         return queryset.filter(stock_quantity__gt=0) if value else queryset.filter(stock_quantity=0)
+
+    def filter_on_sale(self, queryset, name, value):
+        """?on_sale=true keeps only discounted products; any other value
+        (including false) leaves the catalog untouched."""
+        if not value:
+            return queryset
+        return queryset.filter(compare_at_price__gt=F("price"))

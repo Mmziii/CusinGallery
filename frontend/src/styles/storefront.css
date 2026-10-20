@@ -1511,19 +1511,28 @@ h1, h2, h3, .section__head h2 {
 }
 
 .deals-thumbs {
+  --deals-thumb-size: 62px;
+  --deals-thumb-gap: 12px;
   display: flex;
-  align-items: center;
   justify-content: center;
-  gap: 12px;
   margin-top: var(--space-4);
   max-width: 600px;
   margin-inline: auto;
   overflow-x: auto;
   padding: 4px;
 }
+/* The track is the positioned ancestor of the sliding highlight. It is only
+   ever as wide as the thumbnails, so «index * (size + gap)» from its inline
+   start lands on the right thumb however wide the centring container is. */
+.deals-thumbs__track {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--deals-thumb-gap);
+}
 .deals-thumb {
-  width: 62px;
-  height: 62px;
+  width: var(--deals-thumb-size);
+  height: var(--deals-thumb-size);
   padding: 3px;
   border-radius: var(--radius-md);
   border: 2px solid transparent;
@@ -1531,7 +1540,7 @@ h1, h2, h3, .section__head h2 {
   cursor: pointer;
   overflow: hidden;
   transition: border-color .18s ease, transform .18s ease;
-  flex: 0 0 62px;
+  flex: 0 0 var(--deals-thumb-size);
 }
 .deals-thumb img, .deals-thumb .img-placeholder {
   width: 100%;
@@ -1542,9 +1551,65 @@ h1, h2, h3, .section__head h2 {
   transform: translateY(-2px);
   border-color: rgba(206,180,100,.7);
 }
-.deals-thumb--active {
-  border-color: var(--brand-gold) !important;
-  transform: scale(1.06);
+/* --- Slide transition ----------------------------------------------------
+   Both the outgoing and the incoming slide live in the SAME grid cell, so
+   the stage box is the taller of the two and the page never jumps while
+   they cross over. The incoming slide fades in with a 14px slide in the
+   direction of travel (--deals-dir: 1 forward, -1 back) plus a slight
+   scale on the image; the name, prices and CTA rise in 70ms apart. The
+   whole thing is ~450ms ease-out, and instant under reduced motion. */
+.deals-slides { grid-template-areas: "slide"; }
+.deals-slide { grid-area: slide; min-width: 0; }
+
+@keyframes deals-slide-in {
+  from { opacity: 0; transform: translateX(calc(var(--deals-dir, 1) * 14px)); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes deals-slide-out {
+  from { opacity: 1; transform: translateX(0); }
+  to   { opacity: 0; transform: translateX(calc(var(--deals-dir, 1) * -14px)); }
+}
+@keyframes deals-media-in {
+  from { transform: scale(.98); }
+  to   { transform: scale(1); }
+}
+@keyframes deals-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.deals-slide--out { animation: deals-slide-out 450ms ease-out both; pointer-events: none; }
+.deals-slide--in { animation: deals-slide-in 450ms ease-out both; }
+.deals-slide--in .deal-card__media img,
+.deals-slide--in .deal-card__media .img-placeholder { animation: deals-media-in 450ms ease-out both; }
+.deals-slide--in .deal-card__name { animation: deals-rise 320ms ease-out 70ms both; }
+.deals-slide--in .deal-card__prices { animation: deals-rise 320ms ease-out 140ms both; }
+.deals-slide--in .deal-card__cta { animation: deals-rise 320ms ease-out 210ms both; }
+
+/* Thumbnails: ONE highlight box that slides to the selected thumb. */
+.deals-thumbs__highlight {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: calc(var(--deals-thumb-index, 0) * (var(--deals-thumb-size) + var(--deals-thumb-gap)));
+  width: var(--deals-thumb-size);
+  height: var(--deals-thumb-size);
+  border: 2px solid var(--brand-gold);
+  border-radius: var(--radius-md);
+  transition: inset-inline-start .3s ease-out;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .deals-slide--in, .deals-slide--out,
+  .deals-slide--in .deal-card__media img,
+  .deals-slide--in .deal-card__media .img-placeholder,
+  .deals-slide--in .deal-card__name,
+  .deals-slide--in .deal-card__prices,
+  .deals-slide--in .deal-card__cta,
+  .deals-thumbs__highlight {
+    animation: none;
+    transition: none;
+  }
 }
 
 /* Phone daily deals: full-width colored band with shared countdown + swipeable compact deal cards with scroll-snap */
@@ -1570,6 +1635,22 @@ h1, h2, h3, .section__head h2 {
   font-weight: 800;
   font-size: var(--font-size-md);
 }
+.deals-mobile__head-main { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.deals-mobile__all {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  min-height: 32px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(206,180,100,.55);
+  color: var(--brand-gold);
+  font-weight: 700;
+  font-size: .78rem;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.deals-mobile__all:hover, .deals-mobile__all:focus-visible { background: rgba(206,180,100,.16); }
 .deals-mobile__track {
   display: flex;
   gap: 12px;
@@ -1584,8 +1665,9 @@ h1, h2, h3, .section__head h2 {
 }
 .deals-mobile__card {
   scroll-snap-align: start;
-  flex: 0 0 78%;
-  max-width: 280px;
+  /* ~45vw: a little over two cards peeking, Digikala-style. */
+  flex: 0 0 45vw;
+  max-width: none;
   background: #fff;
   border-radius: var(--radius-md);
   border: 1px solid rgba(206,180,100,.45);

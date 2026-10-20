@@ -77,3 +77,23 @@ class ShopFilterMetadataTests(CacheIsolatedAPITestCase):
         response = self.client.get(reverse("product-facets"), {"category": self.parent.slug, "brand": self.brand.slug})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["results"], [{"slug": "material", "name": "جنس", "values": [{"value": "استیل", "count": 1}]}])
+
+    def test_on_sale_keeps_only_products_whose_compare_at_price_beats_the_price(self):
+        make_product(category=self.child, brand=self.brand, name="کفگیر تخفیف‌دار", price=50000, compare_at_price=90000, stock_quantity=2)
+        make_product(category=self.child, brand=self.brand, name="کفگیر معمولی", price=50000, compare_at_price=None, stock_quantity=2)
+        # A compare-at price equal to the price is not a discount.
+        make_product(category=self.child, brand=self.brand, name="کفگیر بدون تغییر", price=50000, compare_at_price=50000, stock_quantity=2)
+
+        data = self.request_products(category=self.child.slug, brand="", on_sale="true")
+        names = {row["name"] for row in data["results"]}
+        self.assertIn("کفگیر تخفیف‌دار", names)
+        self.assertNotIn("کفگیر معمولی", names)
+        self.assertNotIn("کفگیر بدون تغییر", names)
+
+    def test_on_sale_absent_or_falsey_leaves_the_whole_catalog(self):
+        data = self.request_products(category=self.child.slug, brand="", on_sale="false")
+        self.assertGreaterEqual(data["count"], 1)
+        self.assertEqual(
+            {row["name"] for row in self.request_products(category=self.child.slug, brand="")["results"]},
+            {row["name"] for row in data["results"]},
+        )

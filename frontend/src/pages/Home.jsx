@@ -1,6 +1,6 @@
 import { faDigits } from "../utils/faDigits";
 import PropTypes from "prop-types";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import BrandTiles from "../components/BrandTiles";
@@ -212,6 +212,50 @@ function getDealOriginalPrice(deal) {
   return null;
 }
 
+/**
+ * Discount badge for a deal: FLOORED, and never 100%. Rounding 99.98% up
+ * to «۱۰۰٪» promises more than the price actually gives, and a 0-rial deal
+ * price would round to a perfect hundred -- neither may reach the badge.
+ */
+function dealDiscount(originalPrice, salePrice) {
+  if (!(originalPrice > 0) || !(originalPrice > salePrice)) return 0;
+  return Math.min(99, Math.floor(((originalPrice - salePrice) / originalPrice) * 100));
+}
+
+/** How long a slide change takes (ms) -- must match the CSS animation. */
+const DEALS_TRANSITION_MS = 450;
+
+function DealCard({ deal, discount, serverNow }) {
+  const originalPrice = getDealOriginalPrice(deal);
+  return (
+    <Link to={`/products/${deal.product.slug}/`} className="deal-card">
+      <div className="deal-card__media">
+        <SmartImage image={deal.product.primary_image || null} alt={faDigits(deal.product.name)} />
+        {discount > 0 ? (
+          <span className="deal-card__badge">{faDigits(discount)}٪ تخفیف</span>
+        ) : null}
+      </div>
+      <div className="deal-card__body">
+        <div className="deal-card__name">{faDigits(deal.product.name)}</div>
+        <div className="deal-card__prices">
+          <span className="deal-card__sale">{formatPrice(deal.sale_price)} تومان</span>
+          {originalPrice && originalPrice > deal.sale_price ? (
+            <s className="deal-card__regular">{formatPrice(originalPrice)} تومان</s>
+          ) : null}
+        </div>
+        <Countdown endsAt={deal.ends_at} serverNow={serverNow} />
+        <span className="deal-card__cta">مشاهده محصول</span>
+      </div>
+    </Link>
+  );
+}
+
+DealCard.propTypes = {
+  deal: PropTypes.object.isRequired,
+  discount: PropTypes.number,
+  serverNow: PropTypes.string.isRequired,
+};
+
 function DailyDealsSection({ title }) {
   const ref = useReveal();
   const { data, isLoading, error } = useAsync(() => fetchDailyDeals(), []);
@@ -219,6 +263,13 @@ function DailyDealsSection({ title }) {
   const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
 
   const [currentIndex, setCurrentIndex] = useState(0);
+  // The slide that is still fading OUT while the new one fades in (null
+  // when nothing is moving -- which is also the permanent state under
+  // prefers-reduced-motion).
+  const [outgoingIndex, setOutgoingIndex] = useState(null);
+  // Travel direction of the last change: 1 = forward (the new slide comes
+  // in from the right, the old one leaves to the left), -1 = backwards.
+  const [direction, setDirection] = useState(1);
   const [isPaused, setIsPaused] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
   const [tabHidden, setTabHidden] = useState(() =>
@@ -229,6 +280,9 @@ function DailyDealsSection({ title }) {
   const [, setTick] = useState(0);
   const baseServerTime = useRef(null);
   const baseClientTime = useRef(Date.now());
+  // Mirrors currentIndex for the event handlers below, so a change can be
+  // decided (and the outgoing slide captured) outside a state updater.
+  const shownIndexRef = useRef(0);
 
   if (data?.server_now && baseServerTime.current === null) {
     baseServerTime.current = new Date(data.server_now).getTime();
@@ -261,16 +315,42 @@ function DailyDealsSection({ title }) {
 
   const activeCount = activeDeals.length;
 
+  /**
+   * The ONE way the slide changes -- arrows, thumbnails and the
+   * auto-advance timer all come through here, so every change (including
+   * the automatic one) plays the same cross-fade + slide animation.
+   * Under prefers-reduced-motion the swap is instant.
+   */
+  const showDeal = useCallback((next, travel) => {
+    const previous = shownIndexRef.current;
+    if (next === previous) return;
+    shownIndexRef.current = next;
+    if (reducedMotion) {
+      setOutgoingIndex(null);
+    } else {
+      setDirection(travel);
+      setOutgoingIndex(previous);
+    }
+    setCurrentIndex(next);
+  }, [reducedMotion]);
+
   // 10s auto-advance (pause on hover/focus/hidden tab/reduced-motion)
   useEffect(() => {
     if (activeCount <= 1 || isPaused || isFocused || tabHidden || reducedMotion || isMobile) {
       return undefined;
     }
     const timer = setInterval(() => {
-      setCurrentIndex((prev) => (prev + 1) % activeCount);
+      showDeal((shownIndexRef.current + 1) % activeCount, 1);
     }, 10000);
     return () => clearInterval(timer);
-  }, [activeCount, isPaused, isFocused, tabHidden, reducedMotion, isMobile]);
+  }, [activeCount, isPaused, isFocused, tabHidden, reducedMotion, isMobile, showDeal]);
+
+  // Drop the outgoing slide once its fade-out has played.
+  useEffect(() => {
+    if (outgoingIndex === null) return undefined;
+    const timer = setTimeout(() => setOutgoingIndex(null), DEALS_TRANSITION_MS);
+    return () => clearTimeout(timer);
+  }, [outgoingIndex]);
 
   if (isLoading) return null;
   if (error || !data?.results?.length) return null;
@@ -278,23 +358,17 @@ function DailyDealsSection({ title }) {
 
   const safeIndex = Math.min(currentIndex, activeDeals.length - 1);
   const currentDeal = activeDeals[safeIndex] || activeDeals[0];
+  const outgoingDeal = outgoingIndex === null ? null : activeDeals[outgoingIndex];
 
-  const goPrev = () => {
-    setCurrentIndex((prev) => (prev - 1 + activeDeals.length) % activeDeals.length);
-  };
-  const goNext = () => {
-    setCurrentIndex((prev) => (prev + 1) % activeDeals.length);
-  };
+  const goPrev = () => showDeal((shownIndexRef.current - 1 + activeDeals.length) % activeDeals.length, -1);
+  const goNext = () => showDeal((shownIndexRef.current + 1) % activeDeals.length, 1);
 
   const nearestExpiry = activeDeals.reduce((min, deal) => {
     return !min || new Date(deal.ends_at) < new Date(min) ? deal.ends_at : min;
   }, null);
 
   const originalPrice = getDealOriginalPrice(currentDeal);
-  const discount =
-    originalPrice > 0 && originalPrice > currentDeal.sale_price
-      ? Math.round(((originalPrice - currentDeal.sale_price) / originalPrice) * 100)
-      : 0;
+  const discount = dealDiscount(originalPrice, currentDeal.sale_price);
 
   return (
     <section className="section section--dark reveal" ref={ref} aria-label={title}>
@@ -308,16 +382,20 @@ function DailyDealsSection({ title }) {
           /* Phone full-width colored band with shared countdown + swipeable compact deal cards with scroll-snap */
           <div className="deals-mobile">
             <div className="deals-mobile__header">
-              <span className="deals-mobile__title">{title}</span>
+              <div className="deals-mobile__head-main">
+                <span className="deals-mobile__title">{title}</span>
+                {/* «مشاهده همه» lands on the shop's discounted-products
+                    filter -- the same one the backend exposes. */}
+                <Link className="deals-mobile__all" to="/shop/?on_sale=1">
+                  مشاهده همه
+                </Link>
+              </div>
               <Countdown endsAt={nearestExpiry} serverNow={data.server_now} />
             </div>
             <div className="deals-mobile__track" role="region" aria-label="پیشنهادهای روز">
               {activeDeals.map((deal) => {
                 const orig = getDealOriginalPrice(deal);
-                const disc =
-                  orig > 0 && orig > deal.sale_price
-                    ? Math.round(((orig - deal.sale_price) / orig) * 100)
-                    : 0;
+                const disc = dealDiscount(orig, deal.sale_price);
                 return (
                   <Link
                     key={deal.id}
@@ -367,26 +445,36 @@ function DailyDealsSection({ title }) {
                 </button>
               ) : null}
 
-              <div className="deals-grid deals-stage__card">
-                <Link to={`/products/${currentDeal.product.slug}/`} className="deal-card">
-                  <div className="deal-card__media">
-                    <SmartImage image={currentDeal.product.primary_image || null} alt={faDigits(currentDeal.product.name)} />
-                    {discount > 0 ? (
-                      <span className="deal-card__badge">{faDigits(discount)}٪ تخفیف</span>
-                    ) : null}
+              {/* Both slides live in the SAME grid cell, so the box height is
+                  the taller of the two and nothing jumps while they cross
+                  over; the outgoing one is dropped when its fade ends. */}
+              <div
+                className="deals-grid deals-stage__card deals-slides"
+                style={{ "--deals-dir": direction }}
+              >
+                {outgoingDeal ? (
+                  <div
+                    className="deals-slide deals-slide--out"
+                    key={`out-${outgoingDeal.id}`}
+                    aria-hidden="true"
+                  >
+                    <DealCard
+                      deal={outgoingDeal}
+                      discount={dealDiscount(getDealOriginalPrice(outgoingDeal), outgoingDeal.sale_price)}
+                      serverNow={data.server_now}
+                    />
                   </div>
-                  <div className="deal-card__body">
-                    <div className="deal-card__name">{faDigits(currentDeal.product.name)}</div>
-                    <div className="deal-card__prices">
-                      <span className="deal-card__sale">{formatPrice(currentDeal.sale_price)} تومان</span>
-                      {originalPrice && originalPrice > currentDeal.sale_price ? (
-                        <s className="deal-card__regular">{formatPrice(originalPrice)} تومان</s>
-                      ) : null}
-                    </div>
-                    <Countdown endsAt={currentDeal.ends_at} serverNow={data.server_now} />
-                    <span className="deal-card__cta">مشاهده محصول</span>
-                  </div>
-                </Link>
+                ) : null}
+                <div
+                  className={`deals-slide${outgoingDeal ? " deals-slide--in" : ""}`}
+                  key={`in-${currentDeal.id}`}
+                >
+                  <DealCard
+                    deal={currentDeal}
+                    discount={discount}
+                    serverNow={data.server_now}
+                  />
+                </div>
               </div>
 
               {activeDeals.length > 1 ? (
@@ -403,20 +491,30 @@ function DailyDealsSection({ title }) {
 
             {/* Thumbnail row (5-6 visible) */}
             {activeDeals.length > 1 ? (
-              <div className="deals-thumbs" role="tablist" aria-label="انتخاب پیشنهاد">
-                {activeDeals.map((deal, idx) => (
-                  <button
-                    key={deal.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={idx === safeIndex}
-                    className={`deals-thumb${idx === safeIndex ? " deals-thumb--active" : ""}`}
-                    onClick={() => setCurrentIndex(idx)}
-                    aria-label={faDigits(deal.product.name)}
-                  >
-                    <SmartImage image={deal.product.primary_image || null} alt="" />
-                  </button>
-                ))}
+              <div
+                className="deals-thumbs"
+                role="tablist"
+                aria-label="انتخاب پیشنهاد"
+                style={{ "--deals-thumb-index": safeIndex }}
+              >
+                <div className="deals-thumbs__track">
+                  {activeDeals.map((deal, idx) => (
+                    <button
+                      key={deal.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={idx === safeIndex}
+                      className="deals-thumb"
+                      onClick={() => showDeal(idx, idx > safeIndex ? 1 : -1)}
+                      aria-label={faDigits(deal.product.name)}
+                    >
+                      <SmartImage image={deal.product.primary_image || null} alt="" />
+                    </button>
+                  ))}
+                  {/* The highlight is one box that SLIDES to the selected
+                      thumb instead of fading in per thumbnail. */}
+                  <span className="deals-thumbs__highlight" aria-hidden="true" />
+                </div>
               </div>
             ) : null}
           </div>
