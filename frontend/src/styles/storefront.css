@@ -1492,22 +1492,70 @@ h1, h2, h3, .section__head h2 {
 .countdown__sep { font-weight: 800; color: var(--brand-green-dark); padding-inline: 1px; }
 .countdown.is-over { background: #fdecea; color: var(--color-danger); border-color: #f5c6c0; }
 
-/* Desktop daily deals redesign: compact main slide (40-45% width) + round arrows + thumbnail row */
+/* ---------- Desktop daily deals: coverflow (>=1024px) --------------------
+   The current deal is the large card in the CENTRE; the previous/next deals
+   sit behind it on the right/left -- smaller (scale .8), partly hidden
+   behind the centre card, dimmed (opacity .45) and softly blurred. Up to
+   two more deals stack further out on each side, even smaller and fainter.
+   Every card is absolutely positioned in a FIXED-height stage and moves
+   with transform/opacity/filter only, so a rotation is ONE continuous
+   ~600ms ease-in-out interpolation: the chosen side card slides to the
+   centre, grows, sharpens and comes to the front while the old centre card
+   shrinks, fades and moves back to the other side. Nothing re-mounts and
+   nothing shifts the page.
+   RTL: the next deal (positive offset) is drawn on the LEFT, the previous
+   one on the RIGHT, so picking the right-hand card moves the set left. */
 .deals-desktop { position: relative; width: 100%; }
-.deals-stage {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-4);
+.deals-cf {
+  --deals-cf-height: clamp(350px, 29vw, 430px);
+  --deals-cf-card-width: clamp(330px, 44%, 560px);
   position: relative;
   width: 100%;
 }
-.deals-stage__card {
-  width: 44%;
-  max-width: 45%;
-  min-width: 360px;
+.deals-cf__stage {
+  position: relative;
+  width: 100%;
+  height: var(--deals-cf-height);
 }
+.deals-cf__card {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--deals-cf-card-width);
+  height: 100%;
+  transform: translate(-50%, -50%) translateX(calc(var(--cf-dx, 0) * 1%)) scale(var(--cf-scale, 1));
+  transform-origin: center center;
+  transition: transform 600ms ease-in-out, opacity 600ms ease-in-out, filter 600ms ease-in-out;
+  opacity: var(--cf-opacity, 1);
+  filter: blur(var(--cf-blur, 0px));
+  will-change: transform, opacity, filter;
+}
+.deals-cf__card .deal-card { width: 100%; height: 100%; min-height: 0; }
+.deals-cf__card.is-side .deal-card { cursor: pointer; }
+.deals-cf__card.is-hidden { pointer-events: none; }
+.deals-cf__card:focus-within { outline: 2px solid var(--brand-gold); outline-offset: 4px; border-radius: var(--radius-lg); }
+
+/* The centre card's text (name, prices, badge, countdown, CTA) fades in
+   AFTER the card has arrived -- it never pops in mid-flight. */
+.deals-cf__stage.is-rotating .deals-cf__card.is-centre .deal-card__name,
+.deals-cf__stage.is-rotating .deals-cf__card.is-centre .deal-card__prices,
+.deals-cf__stage.is-rotating .deals-cf__card.is-centre .countdown,
+.deals-cf__stage.is-rotating .deals-cf__card.is-centre .deal-card__cta,
+.deals-cf__stage.is-rotating .deals-cf__card.is-centre .deal-card__badge {
+  animation: deals-cf-text-in 240ms ease-out 400ms both;
+}
+@keyframes deals-cf-text-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Round arrows: «قبلی» on the inline-start (right in RTL), «بعدی» on the
+   inline-end -- matching the side the cards come from. */
 .deals-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 30;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1518,114 +1566,39 @@ h1, h2, h3, .section__head h2 {
   background: rgba(30,36,18,.85);
   color: var(--brand-gold);
   cursor: pointer;
-  transition: all .18s ease;
+  transition: background .18s ease, color .18s ease, transform .18s ease;
   flex: none;
 }
-.deals-arrow:hover {
-  background: var(--brand-gold);
-  color: var(--brand-green-dark);
-  transform: scale(1.08);
-}
+.deals-arrow--prev { inset-inline-start: 0; }
+.deals-arrow--next { inset-inline-end: 0; }
+.deals-arrow:hover { background: var(--brand-gold); color: var(--brand-green-dark); transform: translateY(-50%) scale(1.08); }
+.deals-arrow:focus-visible { outline: 2px solid var(--brand-gold); outline-offset: 3px; }
 
-.deals-thumbs {
-  --deals-thumb-size: 62px;
-  --deals-thumb-gap: 12px;
-  display: flex;
-  justify-content: center;
-  margin-top: var(--space-4);
-  max-width: 600px;
-  margin-inline: auto;
-  overflow-x: auto;
-  padding: 4px;
-}
-/* The track is the positioned ancestor of the sliding highlight. It is only
-   ever as wide as the thumbnails, so «index * (size + gap)» from its inline
-   start lands on the right thumb however wide the centring container is. */
-.deals-thumbs__track {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: var(--deals-thumb-gap);
-}
-.deals-thumb {
-  width: var(--deals-thumb-size);
-  height: var(--deals-thumb-size);
-  padding: 3px;
-  border-radius: var(--radius-md);
-  border: 2px solid transparent;
-  background: #fff;
-  cursor: pointer;
-  overflow: hidden;
-  transition: border-color .18s ease, transform .18s ease;
-  flex: 0 0 var(--deals-thumb-size);
-}
-.deals-thumb img, .deals-thumb .img-placeholder {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-.deals-thumb:hover {
-  transform: translateY(-2px);
-  border-color: rgba(206,180,100,.7);
-}
-/* --- Slide transition ----------------------------------------------------
-   Both the outgoing and the incoming slide live in the SAME grid cell, so
-   the stage box is the taller of the two and the page never jumps while
-   they cross over. The incoming slide fades in with a 14px slide in the
-   direction of travel (--deals-dir: 1 forward, -1 back) plus a slight
-   scale on the image; the name, prices and CTA rise in 70ms apart. The
-   whole thing is ~450ms ease-out, and instant under reduced motion. */
-.deals-slides { grid-template-areas: "slide"; }
-.deals-slide { grid-area: slide; min-width: 0; }
-
-@keyframes deals-slide-in {
-  from { opacity: 0; transform: translateX(calc(var(--deals-dir, 1) * 14px)); }
-  to   { opacity: 1; transform: translateX(0); }
-}
-@keyframes deals-slide-out {
-  from { opacity: 1; transform: translateX(0); }
-  to   { opacity: 0; transform: translateX(calc(var(--deals-dir, 1) * -14px)); }
-}
-@keyframes deals-media-in {
-  from { transform: scale(.98); }
-  to   { transform: scale(1); }
-}
-@keyframes deals-rise {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-.deals-slide--out { animation: deals-slide-out 450ms ease-out both; pointer-events: none; }
-.deals-slide--in { animation: deals-slide-in 450ms ease-out both; }
-.deals-slide--in .deal-card__media img,
-.deals-slide--in .deal-card__media .img-placeholder { animation: deals-media-in 450ms ease-out both; }
-.deals-slide--in .deal-card__name { animation: deals-rise 320ms ease-out 70ms both; }
-.deals-slide--in .deal-card__prices { animation: deals-rise 320ms ease-out 140ms both; }
-.deals-slide--in .deal-card__cta { animation: deals-rise 320ms ease-out 210ms both; }
-
-/* Thumbnails: ONE highlight box that slides to the selected thumb. */
-.deals-thumbs__highlight {
-  position: absolute;
-  inset-block: 0;
-  inset-inline-start: calc(var(--deals-thumb-index, 0) * (var(--deals-thumb-size) + var(--deals-thumb-gap)));
-  width: var(--deals-thumb-size);
-  height: var(--deals-thumb-size);
-  border: 2px solid var(--brand-gold);
-  border-radius: var(--radius-md);
-  transition: inset-inline-start .3s ease-out;
-  pointer-events: none;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .deals-slide--in, .deals-slide--out,
-  .deals-slide--in .deal-card__media img,
-  .deals-slide--in .deal-card__media .img-placeholder,
-  .deals-slide--in .deal-card__name,
-  .deals-slide--in .deal-card__prices,
-  .deals-slide--in .deal-card__cta,
-  .deals-thumbs__highlight {
-    animation: none;
+/* Tablet (768-1023px): no coverflow -- just the current card, in flow. */
+@media (max-width: 1023px) {
+  .deals-cf__stage { height: auto; }
+  .deals-cf__card {
+    position: static;
+    width: 100%;
+    height: auto;
+    transform: none;
+    opacity: 1;
+    filter: none;
     transition: none;
+  }
+  .deals-cf__card.is-side { display: none; }
+  .deals-arrow { display: none; }
+}
+
+/* Reduced motion: the set switches instantly and the text never hides. */
+@media (prefers-reduced-motion: reduce) {
+  .deals-cf__card { transition: none; }
+  .deals-cf__stage.is-rotating .deals-cf__card.is-centre .deal-card__name,
+  .deals-cf__stage.is-rotating .deals-cf__card.is-centre .deal-card__prices,
+  .deals-cf__stage.is-rotating .deals-cf__card.is-centre .countdown,
+  .deals-cf__stage.is-rotating .deals-cf__card.is-centre .deal-card__cta,
+  .deals-cf__stage.is-rotating .deals-cf__card.is-centre .deal-card__badge {
+    animation: none;
   }
 }
 
