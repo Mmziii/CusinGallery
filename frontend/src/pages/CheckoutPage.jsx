@@ -1,5 +1,5 @@
 import { formatAddress } from "../utils/formatAddress";
-import { faDigits, deliveryRange, deliveryDays } from "../utils/faDigits";
+import { faDigits, deliveryRange, deliveryDays, hoursRange } from "../utils/faDigits";
 import { usePageMeta } from "../hooks/usePageMeta";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -575,7 +575,10 @@ export default function CheckoutPage() {
 
                           <div className="shipping-card__body">
                             {method.description ? (
-                              <p className="shipping-card__desc">{method.description}</p>
+                              /* The pickup method's description IS the owner's pickup
+                                 hours (the API falls back to pickup_hours), so it gets
+                                 the same bidi-safe rewrite as the pickup cards above. */
+                              <p className="shipping-card__desc">{hoursRange(method.description)}</p>
                             ) : null}
                             <p className="shipping-card__time muted">
                               {method.requires_address === false
@@ -624,7 +627,7 @@ export default function CheckoutPage() {
                       ) : null}
                       {siteSettings.pickup_hours ? (
                         <p>
-                          <strong>ساعات تحویل:</strong> {faDigits(siteSettings.pickup_hours)}
+                          <strong>ساعات تحویل:</strong> {hoursRange(siteSettings.pickup_hours)}
                         </p>
                       ) : null}
                       <p className="muted">
@@ -955,7 +958,7 @@ export default function CheckoutPage() {
                         )}
                         {siteSettings.pickup_hours && (
                           <p>
-                            <strong>ساعات دریافت:</strong> {faDigits(siteSettings.pickup_hours)}
+                            <strong>ساعات دریافت:</strong> {hoursRange(siteSettings.pickup_hours)}
                           </p>
                         )}
                       </>

@@ -70,7 +70,7 @@ describe("footer owner content (Task 3)", () => {
     expect(screen.getByText("ظروف خوب برای خانه")).toBeTruthy();
     expect(screen.getByText("دربارهٔ فروشگاه به قلم مدیر.")).toBeTruthy();
     expect(screen.getByText("تهران، خیابان نمونه، پلاک ۴۶")).toBeTruthy();
-    expect(screen.getByText("ساعات پاسخگویی: شنبه تا پنجشنبه، ۱۰:۰۰-۲۱:۰۰")).toBeTruthy();
+    expect(screen.getByText("ساعات پاسخگویی: شنبه تا پنجشنبه، ۱۰:۰۰ تا ۲۱:۰۰")).toBeTruthy();
     expect(screen.getByRole("link", { name: /۰۲۱-۱۲۳۴۵۶۷۸/ }).textContent).toBe("۰۲۱-۱۲۳۴۵۶۷۸");
     expect(screen.getByRole("link", { name: /۰۲۱-۱۲۳۴۵۶۷۸/ }).getAttribute("href")).toBe(
       "tel:021-12345678"

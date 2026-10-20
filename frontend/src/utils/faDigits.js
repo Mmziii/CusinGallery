@@ -22,6 +22,28 @@ export function faDateTime(value) {
   if (Number.isNaN(date.getTime())) return "";
   return `${faDate(date)}، ساعت ${date.toLocaleTimeString("fa-IR", { hour: "numeric", minute: "2-digit" })}`;
 }
+/**
+ * Owner-entered opening / pickup hours.
+ *
+ * A bare `HH:MM-HH:MM` is a bidi hazard inside an RTL paragraph: the colon
+ * and the hyphen carry no direction of their own, so «۱۰:۰۰-۲۱:۰۰» can be
+ * read back to front and the range's ends swap sides. Every such range is
+ * therefore rewritten as «۱۰:۰۰ تا ۲۱:۰۰» -- Persian digits and the Persian
+ * word «تا», which is strongly RTL and pins each end where it belongs.
+ *
+ * Values that already say «تا», or that are free text («شنبه تا پنجشنبه ۹ تا
+ * ۲۱»), keep their shape; only their digits are Persianised.
+ */
+const HOURS_RANGE = /([۰-۹0-9]{1,2}):([۰-۹0-9]{2})\s*[-–—]\s*([۰-۹0-9]{1,2}):([۰-۹0-9]{2})/g;
+
+export function hoursRange(value) {
+  return faDigits(String(value ?? "")).replace(
+    HOURS_RANGE,
+    (_match, fromHour, fromMinute, toHour, toMinute) =>
+      `${fromHour}:${fromMinute} تا ${toHour}:${toMinute}`
+  );
+}
+
 export function deliveryRange(earliest, latest) {
   if (!earliest) return "";
   const first = faDate(earliest);

@@ -4,7 +4,7 @@ import Icon from "./Icon";
 import { SOCIAL_CHANNELS } from "../content/defaults";
 import useSiteContent from "../hooks/useSiteContent";
 import useSiteSettings from "../hooks/useSiteSettings";
-import { faDigits, latinDigits } from "../utils/faDigits";
+import { faDigits, hoursRange, latinDigits } from "../utils/faDigits";
 
 /**
  * Site footer (Task 3): every value now comes from the owner-editable
@@ -59,7 +59,7 @@ function Footer() {
               </p>
             ) : null}
             {address ? <p>{faDigits(address)}</p> : null}
-            {workingHours ? <p>ساعات پاسخگویی: {faDigits(workingHours)}</p> : null}
+            {workingHours ? <p>ساعات پاسخگویی: {hoursRange(workingHours)}</p> : null}
           </address>
           {socialLinks.length ? (
             <ul className="site-footer__social" aria-label="شبکه‌های اجتماعی">
