@@ -199,6 +199,19 @@ function Countdown({ endsAt, serverNow }) {
   );
 }
 
+function getDealOriginalPrice(deal) {
+  const pInfo = deal?.product?.price_info;
+  const compareAt = pInfo?.compare_at_price != null ? Number(pInfo.compare_at_price) : null;
+  if (compareAt && compareAt > 0) return compareAt;
+  const regular = deal?.product?.regular_price != null ? Number(deal.product.regular_price) : null;
+  if (regular && regular > 0) return regular;
+  const pInfoPrice = pInfo?.price != null ? Number(pInfo.price) : null;
+  if (pInfoPrice && pInfoPrice > deal.sale_price) return pInfoPrice;
+  const prodPrice = deal?.product?.price != null ? Number(deal.product.price) : null;
+  if (prodPrice && prodPrice > deal.sale_price) return prodPrice;
+  return null;
+}
+
 function DailyDealsSection({ title }) {
   const ref = useReveal();
   const { data, isLoading, error } = useAsync(() => fetchDailyDeals(), []);
@@ -277,7 +290,7 @@ function DailyDealsSection({ title }) {
     return !min || new Date(deal.ends_at) < new Date(min) ? deal.ends_at : min;
   }, null);
 
-  const originalPrice = currentDeal.product.price_info?.price ?? null;
+  const originalPrice = getDealOriginalPrice(currentDeal);
   const discount =
     originalPrice > 0 && originalPrice > currentDeal.sale_price
       ? Math.round(((originalPrice - currentDeal.sale_price) / originalPrice) * 100)
@@ -300,7 +313,7 @@ function DailyDealsSection({ title }) {
             </div>
             <div className="deals-mobile__track" role="region" aria-label="پیشنهادهای روز">
               {activeDeals.map((deal) => {
-                const orig = deal.product.price_info?.price ?? null;
+                const orig = getDealOriginalPrice(deal);
                 const disc =
                   orig > 0 && orig > deal.sale_price
                     ? Math.round(((orig - deal.sale_price) / orig) * 100)
