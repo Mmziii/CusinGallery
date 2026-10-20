@@ -21,6 +21,7 @@ import { errorMessage } from "../components/ui";
 import { normalizeApiError } from "../utils/apiError";
 import { trackEvent } from "../utils/behaviour";
 import { formatPrice } from "../utils/formatPrice";
+import { isTruthyParam } from "../utils/queryFlags";
 import { shareImageUrl } from "../utils/shareImage";
 import { brandShape } from "../utils/shapes";
 import { brandUrl } from "../utils/brands";
@@ -331,13 +332,14 @@ function ShopPage({ brand: fixedBrand = null }) {
         </label>
       </FilterGroup>
 
-      {/* The daily-deals band's «مشاهده همه» lands here: /shop/?on_sale=1
-          (same filter the backend exposes, apps/products/filters.py). */}
+      {/* The daily-deals band's «مشاهده همه» lands here: /shop/?on_sale=true
+          (same filter the backend exposes, apps/products/filters.py, which
+          also accepts 1/yes -- an old bookmark must still read as checked). */}
       <FilterGroup title="تخفیف">
         <label className="checkbox">
           <input
             type="checkbox"
-            checked={searchParams.get("on_sale") === "true"}
+            checked={isTruthyParam(searchParams.get("on_sale"))}
             onChange={(e) => setParam("on_sale", e.target.checked ? "true" : "")}
           />
           فقط کالاهای تخفیف‌دار

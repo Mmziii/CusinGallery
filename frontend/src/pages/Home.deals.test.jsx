@@ -340,7 +340,7 @@ describe("daily deals slide transition", () => {
     await screen.findByText("پارچ مدل ۱۲۳");
 
     const seeAll = screen.getByRole("link", { name: "مشاهده همه" });
-    expect(seeAll.getAttribute("href")).toBe("/shop/?on_sale=1");
+    expect(seeAll.getAttribute("href")).toBe("/shop/?on_sale=true");
     expect(container.querySelector(".deals-mobile__all")).toBe(seeAll);
 
     // The phone band keeps the carousel markup out of the way.

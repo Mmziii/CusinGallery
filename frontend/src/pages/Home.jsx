@@ -385,8 +385,10 @@ function DailyDealsSection({ title }) {
               <div className="deals-mobile__head-main">
                 <span className="deals-mobile__title">{title}</span>
                 {/* «مشاهده همه» lands on the shop's discounted-products
-                    filter -- the same one the backend exposes. */}
-                <Link className="deals-mobile__all" to="/shop/?on_sale=1">
+                    filter. `on_sale=true` is the value the API documents
+                    (1/yes also work, but the link should not rely on the
+                    tolerant parser). */}
+                <Link className="deals-mobile__all" to="/shop/?on_sale=true">
                   مشاهده همه
                 </Link>
               </div>
