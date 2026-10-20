@@ -23,6 +23,12 @@ def _query_count_for(client, url):
 
 
 class CartQueryCountTests(CacheIsolatedAPITestCase):
+    def setUp(self):
+        super().setUp()
+        from apps.orders import shipping
+
+        shipping.get_shipping_methods()
+
     def test_get_cart_query_count_does_not_scale_with_item_count(self):
         user = make_user(phone="+989100000060")
         self.client.login(username="+989100000060", password="a-strong-passw0rd!")

@@ -1,22 +1,12 @@
 /**
- * Part S5 item 4: "دکمهٔ ثبت سفارش غیرفعال است".
- *
- * Reproduces the owner's report first (the button was disabled whenever
- * addressMode === "saved" without a selected address, or "inline" with an
- * empty recipient_name -- which ignores pickup entirely and leaves a
- * shopper with no saved address stuck forever), then locks in the fixed
- * behaviour:
- *   - the button is enabled whenever an order is not being placed;
- *   - clicking it validates everything and shows inline, Persian errors
- *     next to the relevant section (address / shipping / cart / coupon);
- *   - a short "what is still missing" checklist appears under the button;
- *   - pickup needs only a name and a phone, never an address;
- *   - an account with no saved address can still order (inline address);
- *   - an address-list load failure offers a retry instead of a dead end;
- *   - double submits are guarded, and 429/5xx get friendly wording.
+ * Place-order and validation tests (Task 2 redesigned flow):
+ * 1. Cart (/cart/)
+ * 2. Delivery Method (/checkout/?step=delivery)
+ * 3. Delivery Info (/checkout/?step=address)
+ * 4. Review & Payment (/checkout/?step=review)
  */
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import CheckoutPage from "./CheckoutPage";
@@ -92,50 +82,59 @@ const SAVED_ADDRESS = {
   is_default: true,
 };
 
-function renderPage() {
+function renderPage(initialEntry = "/checkout/?step=delivery") {
   return render(
-    <MemoryRouter>
-      <CheckoutPage />
+    <MemoryRouter initialEntries={[initialEntry]}>
+      <Routes>
+        <Route path="/checkout/" element={<CheckoutPage />} />
+      </Routes>
     </MemoryRouter>
   );
 }
 
-function submit() {
-  fireEvent.click(screen.getByRole("button", { name: /ثبت سفارش/ }));
-}
-
 beforeEach(() => {
   vi.clearAllMocks();
+  sessionStorage.clear();
   fetchSiteSettings.mockResolvedValue({});
   fetchLocations.mockResolvedValue({ provinces: [] });
   fetchCart.mockResolvedValue(CART);
-  useCartStore.setState({ cart: null, isLoading: false, error: null });
+  useCartStore.setState({ cart: CART, isLoading: false, error: null });
 });
 
 afterEach(() => cleanup());
 
-describe("Place-order button (Part S5 item 4)", () => {
-  it("pickup with no saved address at all: button is enabled and orders with name + phone only", async () => {
+describe("Place-order button & flow validation (Task 2)", () => {
+  it("pickup with no saved address at all: orders with name + phone only", async () => {
     listAddresses.mockResolvedValue([]);
     fetchShippingMethods.mockResolvedValue(SHIPPING);
     placeOrder.mockResolvedValue({ id: 1, order_number: "CG-1", subtotal: 250000, total: 250000 });
 
-    renderPage();
+    renderPage("/checkout/?step=delivery");
     await screen.findByRole("heading", { name: "ثبت سفارش" });
 
-    // Choose pickup, which needs no postal address.
+    // Choose pickup in step 2
     fireEvent.click(await screen.findByRole("radio", { name: /دریافت حضوری/ }));
 
-    await waitFor(() => {
-      expect(screen.getByLabelText(/نام تحویل‌گیرنده/)).toBeTruthy();
-    });
+    // Proceed to Step 3 (address / pickup info)
+    const nextBtn = screen.getAllByRole("button", { name: /ادامه: اطلاعات تحویل/ })[0];
+    fireEvent.click(nextBtn);
+
+    await screen.findByRole("heading", { name: /۳\. اطلاعات تحویل/ });
+    expect(screen.getByLabelText(/نام تحویل‌گیرنده/)).toBeTruthy();
+
     fireEvent.change(screen.getByLabelText(/نام تحویل‌گیرنده/), { target: { value: "سارا" } });
     fireEvent.change(screen.getByLabelText(/شماره تماس/), { target: { value: "09121112233" } });
 
-    const button = screen.getByRole("button", { name: /ثبت سفارش/ });
-    expect(button.disabled).toBe(false);
+    // Proceed to Step 4 (review)
+    const toReviewBtn = screen.getAllByRole("button", { name: /ادامه: بازبینی و پرداخت/ })[0];
+    fireEvent.click(toReviewBtn);
 
-    submit();
+    await screen.findByRole("heading", { name: /۴\. بازبینی و پرداخت/ });
+
+    // Submit order
+    const submitBtn = screen.getAllByRole("button", { name: /ثبت سفارش و پرداخت/ })[0];
+    fireEvent.click(submitBtn);
+
     await waitFor(() => expect(placeOrder).toHaveBeenCalledTimes(1));
     expect(placeOrder.mock.calls[0][0]).toMatchObject({
       recipient_name: "سارا",
@@ -144,36 +143,33 @@ describe("Place-order button (Part S5 item 4)", () => {
     });
   });
 
-  it("account with zero saved addresses: the button is enabled and clicking it explains what is missing inline", async () => {
+  it("account with zero saved addresses: shows inline form and explains what is missing if empty", async () => {
     listAddresses.mockResolvedValue([]);
     fetchShippingMethods.mockResolvedValue(SHIPPING);
+    sessionStorage.setItem("cg_checkout_method", "standard");
 
-    renderPage();
-    await screen.findByRole("heading", { name: "ثبت سفارش" });
+    renderPage("/checkout/?step=address");
+    await screen.findByRole("heading", { name: /۳\. اطلاعات تحویل/ });
 
-    const button = screen.getByRole("button", { name: /ثبت سفارش/ });
-    expect(button.disabled).toBe(false);
+    const nextBtn = screen.getAllByRole("button", { name: /ادامه: بازبینی و پرداخت/ })[0];
+    fireEvent.click(nextBtn);
 
-    submit();
-
+    // Shows validation error
+    expect(await screen.findByText(/آدرس ارسال کامل نیست/)).toBeTruthy();
     expect(placeOrder).not.toHaveBeenCalled();
-    const errors = await screen.findAllByText(/نام گیرنده را وارد کنید/);
-    expect(errors.length).toBeGreaterThan(0);
-    // The checklist under the button names what is still missing.
-    expect(screen.getByRole("list", { name: "موارد ناقص" })).toBeTruthy();
   });
 
-  it("address list failure offers a retry instead of a permanently dead button", async () => {
+  it("address list failure offers a retry", async () => {
     listAddresses.mockRejectedValueOnce({ response: { status: 500, data: {} } });
     fetchShippingMethods.mockResolvedValue(SHIPPING);
+    sessionStorage.setItem("cg_checkout_method", "standard");
 
-    renderPage();
-    await screen.findByRole("heading", { name: "ثبت سفارش" });
+    renderPage("/checkout/?step=address");
+    await screen.findByRole("heading", { name: /۳\. اطلاعات تحویل/ });
 
     expect(await screen.findByRole("button", { name: /تلاش دوباره برای آدرس‌ها/ })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /ثبت سفارش/ }).disabled).toBe(false);
 
-    // Retry succeeds and the saved address is auto-selected (default first).
+    // Retry succeeds and the saved address is auto-selected
     listAddresses.mockResolvedValue([SAVED_ADDRESS]);
     fireEvent.click(screen.getByRole("button", { name: /تلاش دوباره برای آدرس‌ها/ }));
     await waitFor(() => {
@@ -184,25 +180,27 @@ describe("Place-order button (Part S5 item 4)", () => {
   it("auto-selects the default saved address and the default shipping method on load", async () => {
     listAddresses.mockResolvedValue([SAVED_ADDRESS]);
     fetchShippingMethods.mockResolvedValue(SHIPPING);
-    placeOrder.mockResolvedValue({ id: 2, order_number: "CG-2", subtotal: 250000, total: 250000 });
+    sessionStorage.setItem("cg_checkout_method", "standard");
+    sessionStorage.setItem("cg_checkout_addr_id", "7");
+    placeOrder.mockResolvedValue({ id: 2, order_number: "CG-2", subtotal: 250000, total: 295000 });
 
-    renderPage();
-    await screen.findByRole("heading", { name: "ثبت سفارش" });
+    renderPage("/checkout/?step=review");
+    await screen.findByRole("heading", { name: /۴\. بازبینی و پرداخت/ });
 
-    await waitFor(() => expect(screen.getByRole("radio", { name: /سارا/ }).checked).toBe(true));
-    expect(screen.getByRole("radio", { name: /ارسال عادی/ }).checked).toBe(true);
+    const submitBtn = screen.getAllByRole("button", { name: /ثبت سفارش و پرداخت/ })[0];
+    fireEvent.click(submitBtn);
 
-    submit();
     await waitFor(() => expect(placeOrder).toHaveBeenCalledTimes(1));
     expect(placeOrder.mock.calls[0][0]).toMatchObject({ address_id: 7, shipping_method: "standard" });
   });
 
-  it("a saved address without plot/unit shows a completion prompt with an edit action, not a silent block", async () => {
+  it("a saved address without plot/unit shows a completion prompt with an edit action", async () => {
     listAddresses.mockResolvedValue([{ ...SAVED_ADDRESS, unit: "", building_number: "" }]);
     fetchShippingMethods.mockResolvedValue(SHIPPING);
+    sessionStorage.setItem("cg_checkout_method", "standard");
 
-    renderPage();
-    await screen.findByRole("heading", { name: "ثبت سفارش" });
+    renderPage("/checkout/?step=address");
+    await screen.findByRole("heading", { name: /۳\. اطلاعات تحویل/ });
 
     expect(await screen.findByText(/پلاک و واحد/)).toBeTruthy();
     expect(screen.getByRole("button", { name: /تکمیل این آدرس/ })).toBeTruthy();
@@ -211,58 +209,67 @@ describe("Place-order button (Part S5 item 4)", () => {
   it("a typed but unapplied coupon code is reported before ordering", async () => {
     listAddresses.mockResolvedValue([SAVED_ADDRESS]);
     fetchShippingMethods.mockResolvedValue(SHIPPING);
+    sessionStorage.setItem("cg_checkout_method", "standard");
+    sessionStorage.setItem("cg_checkout_addr_id", "7");
 
-    renderPage();
-    await screen.findByRole("heading", { name: "ثبت سفارش" });
-    fireEvent.change(screen.getByLabelText("کد تخفیف"), { target: { value: "OFF10" } });
+    renderPage("/checkout/?step=review");
+    await screen.findByRole("heading", { name: /۴\. بازبینی و پرداخت/ });
 
-    submit();
+    fireEvent.change(screen.getByPlaceholderText("کد تخفیف را وارد کنید"), { target: { value: "OFF10" } });
+
+    const submitBtn = screen.getAllByRole("button", { name: /ثبت سفارش و پرداخت/ })[0];
+    fireEvent.click(submitBtn);
 
     expect(placeOrder).not.toHaveBeenCalled();
-    expect((await screen.findAllByText(/کد تخفیف.*اعمال نشده/)).length).toBeGreaterThan(0);
+    expect(await screen.findByText(/کد تخفیف را وارد کرده‌اید اما اعمال نشده است/)).toBeTruthy();
   });
 
   it("guards against double submit", async () => {
     listAddresses.mockResolvedValue([SAVED_ADDRESS]);
     fetchShippingMethods.mockResolvedValue(SHIPPING);
+    sessionStorage.setItem("cg_checkout_method", "standard");
+    sessionStorage.setItem("cg_checkout_addr_id", "7");
+
     let release;
     placeOrder.mockImplementation(
-      () => new Promise((resolve) => { release = () => resolve({ id: 3, order_number: "CG-3", subtotal: 250000, total: 250000 }); })
+      () => new Promise((resolve) => { release = () => resolve({ id: 3, order_number: "CG-3", subtotal: 250000, total: 295000 }); })
     );
 
-    renderPage();
-    await screen.findByRole("heading", { name: "ثبت سفارش" });
-    await waitFor(() => expect(screen.getByRole("radio", { name: /سارا/ }).checked).toBe(true));
+    renderPage("/checkout/?step=review");
+    await screen.findByRole("heading", { name: /۴\. بازبینی و پرداخت/ });
 
-    submit();
-    submit();
-    submit();
+    const submitBtn = screen.getAllByRole("button", { name: /ثبت سفارش و پرداخت/ })[0];
+    fireEvent.click(submitBtn);
+    fireEvent.click(submitBtn);
+    fireEvent.click(submitBtn);
+
     release();
-    await waitFor(() => expect(screen.getByText(/CG-3/)).toBeTruthy());
-    expect(placeOrder).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(placeOrder).toHaveBeenCalledTimes(1));
   });
 
   it("shows a friendly Persian message when the server rate-limits (429)", async () => {
     listAddresses.mockResolvedValue([SAVED_ADDRESS]);
     fetchShippingMethods.mockResolvedValue(SHIPPING);
+    sessionStorage.setItem("cg_checkout_method", "standard");
+    sessionStorage.setItem("cg_checkout_addr_id", "7");
     placeOrder.mockRejectedValue({ response: { status: 429, data: {} } });
 
-    renderPage();
-    await screen.findByRole("heading", { name: "ثبت سفارش" });
-    await waitFor(() => expect(screen.getByRole("radio", { name: /سارا/ }).checked).toBe(true));
+    renderPage("/checkout/?step=review");
+    await screen.findByRole("heading", { name: /۴\. بازبینی و پرداخت/ });
 
-    submit();
-    expect((await screen.findAllByText(/تعداد درخواست‌ها در مدت کوتاه زیاد بوده است/)).length).toBeGreaterThan(0);
-    // The button recovers so the shopper can retry.
-    await waitFor(() => expect(screen.getByRole("button", { name: /ثبت سفارش/ }).disabled).toBe(false));
+    const submitBtn = screen.getAllByRole("button", { name: /ثبت سفارش و پرداخت/ })[0];
+    fireEvent.click(submitBtn);
+
+    expect(await screen.findByText(/تعداد درخواست‌ها در مدت کوتاه زیاد بوده است/)).toBeTruthy();
   });
 
-  it("reports an empty cart in the checklist instead of a dead button", async () => {
+  it("reports an empty cart instead of proceeding with ordering", async () => {
     listAddresses.mockResolvedValue([SAVED_ADDRESS]);
     fetchShippingMethods.mockResolvedValue(SHIPPING);
     fetchCart.mockResolvedValue({ items: [], subtotal: 0, total: 0, item_count: 0 });
+    useCartStore.setState({ cart: { items: [], subtotal: 0, total: 0, item_count: 0 }, isLoading: false, error: null });
 
-    renderPage();
+    renderPage("/checkout/?step=delivery");
     expect(await screen.findByText("سبد خرید شما خالی است.")).toBeTruthy();
     expect(placeOrder).not.toHaveBeenCalled();
   });

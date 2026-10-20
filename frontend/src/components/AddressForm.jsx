@@ -126,13 +126,17 @@ function AddressForm({ value = {}, onChange, onSaved, compact = false, initial =
   // Controlled mode updates via a single onChange call, so compound edits
   // (province change resets city) must happen in one handler.
   const changeProvince = (name) => {
-    const entry = provinces.find((p) => p.name === name);
-    const city = entry && entry.cities.includes(current.city) ? current.city : "";
     setOtherCityMode(false);
     if (isControlled) {
-      onChange({ ...value, province: name, city });
+      onChange({ ...value, province: name, city: "" });
     } else {
-      setForm((f) => ({ ...f, province: name, city }));
+      setForm((f) => ({ ...f, province: name, city: "" }));
+      setOwnFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next.province;
+        delete next.city;
+        return next;
+      });
     }
   };
 

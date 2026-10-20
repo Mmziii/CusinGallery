@@ -258,6 +258,66 @@ class SiteSettings(TimeStampedModel):
     )
     pickup_hours = models.CharField("ساعات دریافت حضوری", max_length=120, blank=True, default="")
 
+    # --- ارسال و تحویل --------------------------------------------------
+    shipping_standard_enabled = models.BooleanField(
+        "ارسال عادی فعال باشد", default=True,
+        help_text="امکان انتخاب ارسال عادی برای مشتریان در سراسر ایران.",
+    )
+    shipping_standard_cost = models.PositiveIntegerField(
+        "هزینهٔ ارسال عادی (تومان)", default=50000, blank=True,
+        help_text="هزینه به تومان برای سفارش‌هایی که به سقف ارسال رایگان نرسیده‌اند.",
+    )
+    shipping_standard_min_days = models.PositiveIntegerField(
+        "حداقل روز تحویل عادی", default=3, blank=True,
+        help_text="حداقل تعداد روز تقویمی برای تحویل سفارش عادی.",
+    )
+    shipping_standard_max_days = models.PositiveIntegerField(
+        "حداکثر روز تحویل عادی", default=5, blank=True,
+        help_text="حداکثر تعداد روز تقویمی برای تحویل سفارش عادی.",
+    )
+    shipping_standard_description = models.CharField(
+        "توضیحات ارسال عادی", max_length=255, blank=True, default="",
+        help_text="توضیح اختیاری که در مرحلهٔ انتخاب روش تحویل نمایش داده می‌شود.",
+    )
+    shipping_free_threshold = models.PositiveIntegerField(
+        "سقف ارسال رایگان (تومان)", null=True, blank=True, default=1000000,
+        help_text="مبلغ سبد خرید به تومان که بالاتر از آن ارسال عادی رایگان می‌شود. خالی = بدون ارسال رایگان.",
+    )
+
+    shipping_express_enabled = models.BooleanField(
+        "ارسال اکسپرس فعال باشد", default=True,
+        help_text="امکان انتخاب ارسال سریع/اکسپرس برای شهرهای مجاز.",
+    )
+    shipping_express_cost = models.PositiveIntegerField(
+        "هزینهٔ ارسال اکسپرس (تومان)", default=90000, blank=True,
+        help_text="هزینهٔ ثابت به تومان برای ارسال اکسپرس.",
+    )
+    shipping_express_min_days = models.PositiveIntegerField(
+        "حداقل روز تحویل اکسپرس", default=1, blank=True,
+        help_text="حداقل تعداد روز برای ارسال اکسپرس.",
+    )
+    shipping_express_max_days = models.PositiveIntegerField(
+        "حداکثر روز تحویل اکسپرس", default=1, blank=True,
+        help_text="حداکثر تعداد روز برای ارسال اکسپرس.",
+    )
+    shipping_express_description = models.CharField(
+        "توضیحات ارسال اکسپرس", max_length=255, blank=True, default="",
+        help_text="توضیح اختیاری برای ارسال اکسپرس در مرحلهٔ تحویل.",
+    )
+    shipping_express_cities = models.TextField(
+        "شهرهای مجاز ارسال اکسپرس", blank=True, default="تهران",
+        help_text="نام شهرهای مجاز برای ارسال اکسپرس (هر شهر در یک خط یا با ویرگول جدا شود). پیش‌فرض: تهران.",
+    )
+
+    shipping_pickup_enabled = models.BooleanField(
+        "دریافت حضوری فعال باشد", default=True,
+        help_text="امکان انتخاب تحویل حضوری سفارش در محل فروشگاه.",
+    )
+    shipping_pickup_description = models.CharField(
+        "توضیحات دریافت حضوری", max_length=255, blank=True, default="",
+        help_text="توضیح کوتاه دریافت حضوری برای نمایش در مرحلهٔ تحویل.",
+    )
+
     # --- دکمه‌های شناور تماس --------------------------------------------
     floating_enabled = models.BooleanField(
         "نمایش دکمه‌های شناور", default=True,
@@ -385,6 +445,32 @@ class SiteSettings(TimeStampedModel):
         from .placeholders import missing_site_items
 
         return missing_site_items(self)
+
+    def clean(self):
+        super().clean()
+        from django.core.exceptions import ValidationError
+
+        errors = {}
+        if self.shipping_standard_min_days is not None and self.shipping_standard_max_days is not None:
+            if self.shipping_standard_min_days > self.shipping_standard_max_days:
+                errors["shipping_standard_min_days"] = "حداقل روز تحویل عادی نمی‌تواند بیشتر از حداکثر روز تحویل باشد."
+
+        if self.shipping_express_min_days is not None and self.shipping_express_max_days is not None:
+            if self.shipping_express_min_days > self.shipping_express_max_days:
+                errors["shipping_express_min_days"] = "حداقل روز تحویل اکسپرس نمی‌تواند بیشتر از حداکثر روز تحویل باشد."
+
+        if (
+            not self.shipping_standard_enabled
+            and not self.shipping_express_enabled
+            and not getattr(self, "shipping_pickup_enabled", True)
+        ):
+            errors["shipping_standard_enabled"] = "حداقل یکی از روش‌های ارسال باید فعال باشد."
+
+        if self.shipping_express_enabled and not (self.shipping_express_cities or "").strip():
+            errors["shipping_express_cities"] = "لطفاً حداقل یک شهر مجاز برای ارسال اکسپرس مشخص کنید."
+
+        if errors:
+            raise ValidationError(errors)
 
     @classmethod
     def load(cls) -> "SiteSettings":

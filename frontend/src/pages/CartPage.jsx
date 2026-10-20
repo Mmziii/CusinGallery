@@ -7,6 +7,7 @@ import { Link, useNavigate } from "react-router-dom";
 import PriceTag from "../components/PriceTag";
 import RecentlyViewed from "../components/RecentlyViewed";
 import SmartImage from "../components/SmartImage";
+import CheckoutStepper from "../components/CheckoutStepper";
 import { Alert, EmptyState, ErrorState, Spinner, errorMessage } from "../components/ui";
 import useAuthStore from "../store/useAuthStore";
 import useCartStore from "../store/useCartStore";
@@ -118,6 +119,7 @@ function GuestCartView() {
   return (
     <div className="cart-page">
       <h1 className="page-title">سبد خرید</h1>
+      <CheckoutStepper currentStep="cart" />
       <p className="muted cart-page__guest-note">
         شما به‌صورت مهمان خرید می‌کنید؛ قیمت‌ها از سرور دریافت می‌شوند و با ورود یا ثبت‌نام،
         همین سبد به حساب شما منتقل خواهد شد.
@@ -243,6 +245,7 @@ function CartPage() {
   return (
     <div className="cart-page">
       <h1 className="page-title">سبد خرید</h1>
+      <CheckoutStepper currentStep="cart" />
 
       {/* Part S5 follow-up 4 item 4: dedicated sticky wrapper (see the guest
           view); the grid holds only the items + summary columns. */}
@@ -339,13 +342,33 @@ function CartPage() {
                 <dd>{formatPrice(cart.subtotal)} تومان</dd>
               </div>
             </dl>
-            <button type="button" className="btn btn--primary btn--block" onClick={() => navigate("/checkout/")}>
+            <button
+              type="button"
+              className="btn btn--primary btn--block"
+              onClick={() => navigate("/checkout/")}
+            >
               ادامه و ثبت سفارش
             </button>
             <p className="cart-page__note">
               هزینهٔ ارسال و مبلغ نهایی را در مرحلهٔ بعد ببینید.
             </p>
           </aside>
+        </div>
+      </div>
+
+      <div className="cart-page__mobile-bar">
+        <div className="cart-page__mobile-bar-row">
+          <span className="cart-page__mobile-total">
+            <small>جمع کل</small>
+            <b>{formatPrice(cart.subtotal)} تومان</b>
+          </span>
+          <button
+            type="button"
+            className="btn btn--primary"
+            onClick={() => navigate("/checkout/")}
+          >
+            ادامه
+          </button>
         </div>
       </div>
 

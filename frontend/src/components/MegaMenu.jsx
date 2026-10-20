@@ -122,9 +122,10 @@ export default function MegaMenu({ groups, open, onOpen, onClose }) {
   useEffect(() => {
     if (!open) return undefined;
     function onClick(event) {
+      const path = typeof event.composedPath === "function" ? event.composedPath() : [];
       if (
-        (sheetRef.current && sheetRef.current.contains(event.target)) ||
-        (triggerRef.current && triggerRef.current.contains(event.target))
+        (sheetRef.current && (sheetRef.current.contains(event.target) || path.includes(sheetRef.current))) ||
+        (triggerRef.current && (triggerRef.current.contains(event.target) || path.includes(triggerRef.current)))
       ) {
         return;
       }
@@ -173,6 +174,28 @@ export default function MegaMenu({ groups, open, onOpen, onClose }) {
     else if (event.key === "End") next = items.length - 1;
     else next = (index + (forward ? 1 : -1) + items.length) % items.length;
     items[next]?.focus();
+  };
+
+  const touchStartRef = useRef(null);
+  const handleTouchStart = (event) => {
+    const touch = event.touches[0];
+    if (touch) {
+      touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+    }
+  };
+  const handleTouchEnd = (event, action) => {
+    if (!touchStartRef.current) return;
+    const touch = event.changedTouches[0];
+    if (!touch) return;
+    const dx = Math.abs(touch.clientX - touchStartRef.current.x);
+    const dy = Math.abs(touch.clientY - touchStartRef.current.y);
+    touchStartRef.current = null;
+    // Only trigger if it is a genuine tap, not a scroll gesture
+    if (dx < 12 && dy < 12) {
+      event.preventDefault();
+      event.stopPropagation();
+      action();
+    }
   };
 
   const drillInto = (category) => {
@@ -331,6 +354,8 @@ export default function MegaMenu({ groups, open, onOpen, onClose }) {
                     type="button"
                     className="mega-sheet__back"
                     onClick={drillBack}
+                    onTouchStart={handleTouchStart}
+                    onTouchEnd={(e) => handleTouchEnd(e, drillBack)}
                   >
                     <Icon name="chevron-right" size={18} />
                     بازگشت
@@ -380,6 +405,10 @@ export default function MegaMenu({ groups, open, onOpen, onClose }) {
                         <button
                           type="button"
                           onClick={() => drillInto(category)}
+                          onTouchStart={handleTouchStart}
+                          onTouchEnd={(e) =>
+                            handleTouchEnd(e, () => drillInto(category))
+                          }
                         >
                           <span className="mega-sheet__icon">{icon}</span>
                           <span>{category.name}</span>

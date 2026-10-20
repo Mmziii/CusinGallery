@@ -48,6 +48,34 @@ class SiteSettingsAdminForm(forms.ModelForm):
                 continue
             cleaned[field] = normalize_hex(raw)
 
+        # Shipping preservation & validation
+        shipping_fields_present = any(
+            f in self.data for f in ("shipping_standard_enabled", "shipping_express_enabled", "shipping_pickup_enabled", "shipping_standard_cost")
+        )
+        if not shipping_fields_present and self.instance and self.instance.pk:
+            for field in (
+                "shipping_standard_enabled", "shipping_express_enabled", "shipping_pickup_enabled",
+                "shipping_standard_cost", "shipping_standard_min_days", "shipping_standard_max_days",
+                "shipping_standard_description", "shipping_free_threshold",
+                "shipping_express_cost", "shipping_express_min_days", "shipping_express_max_days",
+                "shipping_express_description", "shipping_express_cities",
+                "shipping_pickup_description",
+            ):
+                cleaned[field] = getattr(self.instance, field)
+        else:
+            if cleaned.get("shipping_standard_cost") is None:
+                cleaned["shipping_standard_cost"] = 50000
+            if cleaned.get("shipping_standard_min_days") is None:
+                cleaned["shipping_standard_min_days"] = 3
+            if cleaned.get("shipping_standard_max_days") is None:
+                cleaned["shipping_standard_max_days"] = 5
+            if cleaned.get("shipping_express_cost") is None:
+                cleaned["shipping_express_cost"] = 90000
+            if cleaned.get("shipping_express_min_days") is None:
+                cleaned["shipping_express_min_days"] = 1
+            if cleaned.get("shipping_express_max_days") is None:
+                cleaned["shipping_express_max_days"] = 1
+
         # WCAG contrast guard. Runs only when the form really carries the
         # theme fields (it always does on the site settings page; the guard
         # is skipped for any future form that reuses this class without

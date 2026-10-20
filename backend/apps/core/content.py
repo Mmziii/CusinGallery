@@ -273,7 +273,7 @@ def invalidate_site_cache() -> None:
     """Drop every public site-content cache entry (called from signals)."""
     from .models import INFO_PAGE_SLUGS
 
-    keys = [CONTENT_CACHE_KEY]
+    keys = [CONTENT_CACHE_KEY, "orders:shipping_methods:v1"]
     keys += [INFO_PAGE_CACHE_KEY.format(slug=slug) for slug, _label in INFO_PAGE_SLUGS]
     cache.delete_many(keys)
 
