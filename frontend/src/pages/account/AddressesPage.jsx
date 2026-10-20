@@ -1,4 +1,5 @@
 import { formatAddress } from "../../utils/formatAddress";
+import { faDigits } from "../../utils/faDigits";
 import { ContentSkeleton } from "../../components/Skeletons";
 import { useCallback, useEffect, useState } from "react";
 
@@ -120,7 +121,8 @@ function AddressesPage() {
                 <p>
                   {formatAddress(address)}
                 </p>
-                <p className="muted">کد پستی: <bdi dir="ltr">{address.postal_code}</bdi> — تماس: <bdi dir="ltr">{address.phone}</bdi></p>
+                <p className="muted">کد پستی: <bdi dir="ltr">{address.postal_code}</bdi> — تماس:{" "}
+                  <bdi dir="ltr">{faDigits(address.phone)}</bdi></p>
               </div>
               <div className="address-card__actions">
                 {!address.is_default ? (
