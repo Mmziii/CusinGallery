@@ -93,6 +93,39 @@ describe("Jalali date picker", () => {
     expect(popup.style.width).toBe("auto");
   });
 
+  it("reads the time row like a clock: hour left, minute right, label right", async () => {
+    const doc = await mount(
+      '<div class="form-row"><input id="id_date" data-jalali-date="true" data-jalali-with-time="true" value="۱۴۰۵/۰۷/۲۷ ۱۰:۳۰"></div>'
+    );
+    doc.querySelector(".jalali-date-open").click();
+
+    const timeRow = doc.querySelector(".jalali-date-picker__time");
+    expect(timeRow).toBeTruthy();
+    // The row itself is LTR, so the DOM order IS the visual order...
+    expect(timeRow.getAttribute("dir")).toBe("ltr");
+    // ... hour, then the separator, then the minute.
+    const order = [...timeRow.children].map((node) =>
+      node.classList.contains("jalali-date-picker__time-select")
+        ? node.getAttribute("aria-label")
+        : node.className || node.textContent
+    );
+    expect(order).toEqual([
+      "ساعت",
+      "jalali-date-picker__time-sep",
+      "دقیقه",
+      "jalali-date-picker__confirm",
+      "jalali-date-picker__time-label",
+    ]);
+    // The «زمان:» label is the LAST child -- the right edge of an LTR row.
+    expect(timeRow.lastElementChild.textContent).toBe("زمان:");
+    expect(timeRow.lastElementChild.className).toBe("jalali-date-picker__time-label");
+
+    // The stored value still round-trips through the selects.
+    const selects = timeRow.querySelectorAll(".jalali-date-picker__time-select");
+    expect(selects[0].value).toBe("10");
+    expect(selects[1].value).toBe("30");
+  });
+
   it("initializes inline rows cloned from the decorated empty form", async () => {
     const doc = await mount(
       '<div class="empty-form" id="empty"><input id="id_empty_date" data-jalali-date="true"></div><div id="inline-group"></div>',
