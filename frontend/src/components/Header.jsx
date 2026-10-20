@@ -1,6 +1,7 @@
 import { faDigits } from "../utils/faDigits";
 import useWishlistStore from "../store/useWishlistStore";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import Icon from "./Icon";
@@ -14,7 +15,8 @@ import useAuthStore from "../store/useAuthStore";
 import useCartStore from "../store/useCartStore";
 import { getCategoryTree, listProducts } from "../services/catalogApi";
 import { catalogGroups } from "../utils/categories";
-import { isDesktopViewport } from "../utils/viewport";
+import { measureBorderBoxHeight } from "../utils/headerMeasure";
+import { isDesktopViewport, isPhoneViewport } from "../utils/viewport";
 import {
   lineTotalForLine,
   priceInfoForLine,
@@ -25,21 +27,27 @@ import {
 import { formatPrice } from "../utils/formatPrice";
 
 /**
- * Site header (PR 19 redesign): the OUTER header keeps a constant height in
- * the layout on every viewport and only the inner layer changes shape.
+ * Site header (PR 19 redesign, PR 20 follow-ups): the OUTER header keeps a
+ * constant height in the layout on every viewport and only the inner layer
+ * changes shape.
  *
- *  - Desktop (>= 768px): the header is a fixed-height sticky box whose bar
- *    (`.site-header__inner`) morphs into a floating "pill" once scrolled.
- *    Geometry alone animates; the document height never changes.
+ *  - Desktop/tablet (>= 768px): the header is a fixed-height sticky box
+ *    whose bar (`.site-header__inner`) morphs into a floating "pill" once
+ *    scrolled. Geometry alone animates; the document height never changes.
  *  - Phone (<= 767px): the header is FIXED and a sibling spacer (rendered
- *    below) reserves the expanded header's natural height. Collapsing the
- *    phone row can therefore never move the document, which is what used to
- *    feed scroll anchoring back into the scroll handler and made the header
- *    toggle every ~40ms.
+ *    below) reserves the expanded header's border-box height. The expanded
+ *    phone header is exactly TWO rows (burger/brand/account/cart, then a
+ *    full-width search) and the inner stays `height: auto` -- never a
+ *    pinned pixel value, which is what measured 190px while the search
+ *    row needed 246px and spilled over the page. The fold animates with a
+ *    FLIP pin (read height, pin inline, animate, clear back to auto), and
+ *    because the spacer owns the flow height, collapsing can never move
+ *    the document (the PR 19 scroll-anchoring loop fix).
  *
  * Scroll state uses hysteresis (compact on past 40px, off only below 8px)
  * and a short post-toggle lock that ignores scroll deltas, so a self-caused
- * scroll correction can never undo the state that caused it.
+ * scroll correction can never undo the state that caused it. The phone
+ * one-row fold (`rowCollapsed`) is gated to phone viewports.
  */
 function Header() {
   const wishlist = useWishlistStore();
@@ -68,10 +76,10 @@ function Header() {
   // Desktop pill / phone shrink state. Hysteresis: it turns on past 40px and
   // only turns off below 8px, so no single-pixel boundary can flutter it.
   const [compact, setCompact] = useState(false);
-  // Phone only: the wrapped header (~232px: brand + categories +
-  // account/cart + search rows) folds into one row once the shopper has
-  // scrolled past 80px and is still going down. Scrolling up by 24px --
-  // or reaching the top -- restores it.
+  // Phone only (gated in the scroll pass): the two-row header (~120px:
+  // brand/account/cart, then the full-width search) folds into one pill
+  // row once the shopper has scrolled past 80px and is still going down.
+  // Scrolling up by 24px -- or reaching the top -- restores it.
   const [rowCollapsed, setRowCollapsed] = useState(false);
   // The collapsed row's search icon grows the search field back into view.
   const [searchRevealed, setSearchRevealed] = useState(false);
@@ -110,6 +118,14 @@ function Header() {
   // True while the inner's height transition is running. A mid-flight
   // offsetHeight is between the folded and expanded heights, i.e. neither.
   const animatingRef = useRef(false);
+  // The EXPANDED phone header's last measured border-box height (px). The
+  // measure pass keeps it fresh; the fold's FLIP reads it as the expand
+  // target before clearing back to `height: auto` at rest.
+  const naturalHeightRef = useRef(0);
+  // The measure pass's scheduler, so auth/cart changes (which swap the
+  // account control / badge and can re-wrap the bar) can ask for a fresh
+  // measurement without re-registering the whole effect.
+  const scheduleMeasureRef = useRef(null);
   const searchTimer = useRef(null);
   // A response can arrive after the shopper has used the home brand action.
   // Versioning prevents that stale response from reopening suggestions.
@@ -220,29 +236,30 @@ function Header() {
     setSearchRevealed(next);
   };
 
-  // Audit 19: publish the header's REAL height as --site-header-height.
-  // Sticky elements that must sit directly under it (the shop's mobile
-  // filter/sort bar, the gallery) used to hard-code 76px, which is wrong the
-  // moment the phone layout wraps the search onto a second row. With the
-  // phone header now FIXED, this is also the offset anchors and sticky
-  // siblings sit at.
+  // Audit 19 / PR 20: publish the header's REAL height as
+  // --site-header-height (sticky siblings and anchor scroll-margins sit
+  // directly under it). What "real" means depends on the form factor:
   //
-  // The same pass publishes --header-natural-height: the EXPANDED header
-  // height. On phones it is the permanent height of `.site-header-spacer`
-  // (the fixed header's share of the document flow). Measuring it while the
-  // header is folded, compact or mid-animation would pin the spacer to a
-  // shorter-than-content value and let the page slide under the header, so:
+  //  - Desktop/tablet: the sticky OUTER box -- constant at
+  //    var(--header-height), never the morphing pill inside it.
+  //  - Phone: the EXPANDED header's border-box height. The fixed folded
+  //    pill must never move the page's offsets, so on phones the same
+  //    value is also published as --header-natural-height, the permanent
+  //    height of `.site-header-spacer` (the fixed header's share of the
+  //    document flow). variables.css seeds --site-header-height with the
+  //    desktop token so it is never EMPTY before this pass runs (live:
+  //    /checkout at 375px fell back to 92px anchor margins).
   //
-  //   * the natural height is measured ONLY while the header is fully
-  //     expanded (!rowCollapsed) AND not shrinking (!compact) AND not
-  //     animating -- otherwise the frame is skipped;
-  //   * `scrollHeight` (the content height) is preferred over `offsetHeight`
-  //     (the box height), so even a frame caught mid-transition reads the
-  //     real content, never an interpolated box;
-  //   * a ResizeObserver watches the expanded inner, so wrapped rows, font
-  //     swaps and orientation changes re-measure on their own;
-  //   * it re-measures on resize/orientationchange, after webfonts load and
-  //     once the height transition ends.
+  // The expanded phone inner is `height: auto`, so its border-box rect
+  // always describes the real two rows -- no pinned pixel height can
+  // re-measure itself (the 190px lock whose search row spilled over the
+  // page) and no `scrollHeight` read can drop the padding (232 for 246).
+  // The natural height is still measured ONLY while the header is fully
+  // expanded (!rowCollapsed), not shrinking (!compact) and not animating
+  // -- a folded/mid-flight frame would pin the spacer short. Re-measure
+  // triggers: ResizeObserver on the expanded inner, width changes,
+  // orientation, webfont load, the fold settling, and auth/cart changes
+  // (the account control and badge swap size).
   useEffect(() => {
     const root = document.documentElement;
     let frame = null;
@@ -260,18 +277,20 @@ function Header() {
       const header = headerRef.current;
       const inner = innerRef.current;
       if (!header || !inner) return;
-      const height = header.offsetHeight || 0;
-      // jsdom and hidden tabs report 0 -- keep the last real value instead
-      // of pinning every sticky offset to 0.
-      if (height > 0) root.style.setProperty("--site-header-height", `${height}px`);
+      if (!isPhoneViewport()) {
+        const outer = measureBorderBoxHeight(header);
+        // jsdom and hidden tabs report 0 -- keep the last real value
+        // instead of pinning every sticky offset to 0.
+        if (outer > 0) root.style.setProperty("--site-header-height", `${outer}px`);
+        return;
+      }
       if (!naturalCanBeMeasured()) return;
-      // Content height first: when the inner is height-constrained (folded,
-      // searching or animating) scrollHeight still describes the content,
-      // while offsetHeight describes the animation frame.
-      const natural = Math.max(inner.scrollHeight || 0, inner.offsetHeight || 0);
-      // `auto` (no variable) is always correct, so only publish real
-      // measurements -- a 0 must never overwrite a good value.
-      if (natural > 0) root.style.setProperty("--header-natural-height", `${natural}px`);
+      const natural = measureBorderBoxHeight(inner);
+      if (natural > 0) {
+        naturalHeightRef.current = natural;
+        root.style.setProperty("--header-natural-height", `${natural}px`);
+        root.style.setProperty("--site-header-height", `${natural}px`);
+      }
     };
     const schedule = () => {
       if (frame !== null) return;
@@ -307,7 +326,12 @@ function Header() {
     // Webfonts change the Persian line boxes; re-measure once they are in.
     const fonts = typeof document !== "undefined" ? document.fonts : null;
     if (fonts?.ready?.then) fonts.ready.then(schedule).catch(() => {});
+    // Auth/cart changes and the fold's settle point ask for a re-measure
+    // through this ref (see the effects below) without re-registering
+    // any of these listeners.
+    scheduleMeasureRef.current = schedule;
     return () => {
+      scheduleMeasureRef.current = null;
       if (frame !== null && window.cancelAnimationFrame) window.cancelAnimationFrame(frame);
       window.removeEventListener("scroll", schedule);
       window.removeEventListener("resize", onResize);
@@ -378,16 +402,50 @@ function Header() {
       }, LOCK_MS);
     };
 
+    // PR 20 FLIP for the fold. The expanded inner is `height: auto` --
+    // never a pinned pixel value that can end up smaller than its
+    // content -- and `auto` cannot transition. So: read the CURRENT
+    // border-box height, pin it inline, force a reflow, commit the class
+    // change synchronously (flushSync) while the pin holds the box, then
+    // aim the box at the other end. Folding just releases the pin (the
+    // collapsed class owns the row height); expanding targets the last
+    // measured natural height. The transition-tracking effect below
+    // clears the pin on transitionend (watchdog-covered), so at rest the
+    // expanded inner is `auto` again and can never clip its rows. In
+    // non-layout environments (jsdom: 0 height) the flip is skipped and
+    // only the class changes.
+    const flipRow = (collapsing, applyState) => {
+      const inner = innerRef.current;
+      const from = inner ? measureBorderBoxHeight(inner) : 0;
+      if (!inner || from <= 0) {
+        applyState();
+        return;
+      }
+      inner.style.height = `${from}px`;
+      inner.style.overflow = "hidden";
+      void inner.offsetHeight; // commit the pin as the transition's start
+      flushSync(applyState);
+      if (collapsing) {
+        inner.style.removeProperty("height");
+      } else if (naturalHeightRef.current > 0) {
+        inner.style.height = `${naturalHeightRef.current}px`;
+      } else {
+        inner.style.removeProperty("height");
+      }
+    };
+
     const collapseRow = () => {
       rowCollapsedRef.current = true;
       // Folding with the search row open would keep the inner tall.
       searchRevealedRef.current = false;
-      setSearchRevealed(false);
-      setRowCollapsed(true);
+      flipRow(true, () => {
+        setSearchRevealed(false);
+        setRowCollapsed(true);
+      });
     };
     const expandRow = () => {
       rowCollapsedRef.current = false;
-      setRowCollapsed(false);
+      flipRow(false, () => setRowCollapsed(false));
     };
 
     function evaluate() {
@@ -407,6 +465,16 @@ function Header() {
       }
 
       const deltasLocked = Date.now() < lockUntil;
+      // PR 20: the fold is a PHONE behaviour only. The class used to be
+      // set on desktop too (harmless -- its styles live in the phone
+      // block -- but it made the state lie about what was on screen).
+      const phone = isPhoneViewport();
+      if (!phone && rowCollapsedRef.current) {
+        // The viewport crossed to tablet/desktop while folded (rotate,
+        // resize): the wider bar must never inherit the fold.
+        expandRow();
+        toggled = true;
+      }
 
       if (y <= TOP_ZONE) {
         downTravel = 0;
@@ -419,7 +487,7 @@ function Header() {
           searchRevealedRef.current = false;
           setSearchRevealed(false);
         }
-      } else if (!deltasLocked) {
+      } else if (!deltasLocked && phone) {
         if (delta > 0) {
           downTravel += delta;
           upTravel = 0;
@@ -460,35 +528,38 @@ function Header() {
   }, []);
 
   // Track the inner's height transition so the measurement pass above can
-  // skip the interpolated frames and then re-measure at rest.
+  // skip the interpolated frames and then re-measure at rest -- and so the
+  // fold's FLIP pin (inline height/overflow) is always released once the
+  // box settles: expanded rest is `height: auto` again, folded rest is
+  // the collapsed class's row height. A cancelled/interrupted transition
+  // may never fire `transitionend`; the watchdog settles it instead, so
+  // neither the pin nor the measurement gate can stay stuck.
   useEffect(() => {
     const inner = innerRef.current;
     if (!inner) return undefined;
     let watchdog = null;
-    const onTransitionStart = (event) => {
-      if (event.propertyName !== "height") return;
-      animatingRef.current = true;
-      // A cancelled/interrupted transition may never fire `transitionend`;
-      // the watchdog guarantees measurement can never stay frozen.
-      if (watchdog !== null) window.clearTimeout(watchdog);
-      watchdog = window.setTimeout(() => {
-        animatingRef.current = false;
-        watchdog = null;
-      }, 400);
-    };
-    const onTransitionEnd = (event) => {
-      if (event.propertyName && event.propertyName !== "height") return;
+    const settle = () => {
       animatingRef.current = false;
+      inner.style.removeProperty("height");
+      inner.style.removeProperty("overflow");
       if (watchdog !== null) {
         window.clearTimeout(watchdog);
         watchdog = null;
       }
-      if (!rowCollapsedRef.current && !compactRef.current) {
-        const natural = Math.max(inner.scrollHeight || 0, inner.offsetHeight || 0);
-        if (natural > 0) {
-          document.documentElement.style.setProperty("--header-natural-height", `${natural}px`);
-        }
-      }
+      scheduleMeasureRef.current?.();
+    };
+    const onTransitionStart = (event) => {
+      if (event.propertyName !== "height") return;
+      animatingRef.current = true;
+      if (watchdog !== null) window.clearTimeout(watchdog);
+      watchdog = window.setTimeout(() => {
+        watchdog = null;
+        settle();
+      }, 400);
+    };
+    const onTransitionEnd = (event) => {
+      if (event.propertyName && event.propertyName !== "height") return;
+      settle();
     };
     inner.addEventListener("transitionstart", onTransitionStart);
     inner.addEventListener("transitionend", onTransitionEnd);
@@ -611,6 +682,16 @@ function Header() {
     ? (cart?.subtotal ?? null)
     : sumLineTotals(cartLines.map((line) => line.lineTotal));
 
+  // The account control swaps between «ورود | ثبت‌نام» and the user menu,
+  // the cart badge pops in/out and the owner-edited brand name can arrive
+  // late -- any of those can change the expanded bar's height (a wrap on
+  // a narrow phone), so ask the measure pass for a fresh read. The
+  // ResizeObserver usually beats this to it; this covers swaps that keep
+  // the same box height in the same frame the gate would otherwise skip.
+  useEffect(() => {
+    scheduleMeasureRef.current?.();
+  }, [isAuthenticated, isLoading, itemCount, brandName]);
+
   const headerClass = [
     "site-header",
     compact && "site-header--compact",
@@ -689,9 +770,12 @@ function Header() {
           ) : null}
         </div>
 
-        {/* Stage 2: the trigger lives OUTSIDE .site-header__nav
-            (which phones hide) so «دسته‌بندی کالاها» is
-            reachable on every screen size. */}
+        {/* Stage 2: the trigger lives OUTSIDE .site-header__nav so
+            «دسته‌بندی کالاها» survives the tablet range hiding the text
+            nav. PR 20: phones hide this trigger entirely (CSS) -- the
+            two-row phone header has no room for it, and the burger drawer
+            opens the same category sheet. The sheet itself renders from
+            MegaMenu regardless of the trigger's visibility. */}
         <MegaMenu groups={groups} open={megaOpen} onOpen={() => setMegaOpen(true)} onClose={() => setMegaOpen(false)} />
         <nav className="site-header__nav" aria-label="ناوبری اصلی">
           <NavLink to="/shop/">فروشگاه</NavLink>
@@ -737,12 +821,22 @@ function Header() {
 
           {isLoading ? null : isAuthenticated ? (
             <div className="user-menu" ref={userMenuRef}>
+              {/* PR 20: icon + name on wide screens; the phone header's
+                  first row and the 768-1099px tablet range show the icon
+                  only (the label hides in CSS), so the button carries its
+                  «حساب کاربری» name explicitly instead of relying on the
+                  visible text. */}
               <button
                 type="button"
                 className="user-menu__trigger"
+                aria-label="حساب کاربری"
+                aria-expanded={userMenuOpen}
                 onClick={() => setUserMenuOpen((open) => !open)}
               >
-                {user?.first_name || (user?.phone ? <bdi dir="ltr">{user.phone}</bdi> : "حساب کاربری")}
+                <Icon name="user" size={20} />
+                <span className="user-menu__trigger-label">
+                  {user?.first_name || (user?.phone ? <bdi dir="ltr">{user.phone}</bdi> : "حساب کاربری")}
+                </span>
               </button>
               {userMenuOpen ? (
                 <div className="user-menu__panel">
@@ -756,7 +850,14 @@ function Header() {
               ) : null}
             </div>
           ) : (
-            <Link to="/login/" className="btn btn--outline-light btn--sm">ورود | ثبت‌نام</Link>
+            <Link
+              to="/login/"
+              className="btn btn--outline-light btn--sm site-header__login"
+              aria-label="ورود | ثبت‌نام"
+            >
+              <Icon name="user" size={18} />
+              <span className="site-header__login-label">ورود | ثبت‌نام</span>
+            </Link>
           )}
         </div>
       </div>
@@ -953,10 +1054,12 @@ function Header() {
     {/* PR 19: on phones the header is `position: fixed`, so it paints over
         the page instead of taking part in its flow. This spacer owns the
         header's flow height and is the ONE thing the document layout sees.
-        Its height is the EXPANDED header's measured height and never
-        changes with the collapsed/compact state -- that is what keeps the
-        document height (and therefore scrollY) constant while the pill
-        folds, which is the root-cause fix for the scroll feedback loop.
+        Its height is the EXPANDED header's measured border-box height
+        (PR 20: `--header-natural-height`, re-measured whenever the
+        expanded two rows change size) and never changes with the
+        collapsed/compact state -- that is what keeps the document height
+        (and therefore scrollY) constant while the pill folds, which is
+        the root-cause fix for the scroll feedback loop.
         Hidden on desktop, where the outer header stays in the flow. */}
     <div className="site-header-spacer" aria-hidden="true" />
     </>

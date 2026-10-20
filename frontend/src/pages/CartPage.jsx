@@ -8,6 +8,7 @@ import PriceTag from "../components/PriceTag";
 import RecentlyViewed from "../components/RecentlyViewed";
 import SmartImage from "../components/SmartImage";
 import CheckoutStepper from "../components/CheckoutStepper";
+import useConfirm from "../hooks/useConfirm";
 import { Alert, EmptyState, ErrorState, Spinner, errorMessage } from "../components/ui";
 import useAuthStore from "../store/useAuthStore";
 import useCartStore from "../store/useCartStore";
@@ -68,6 +69,8 @@ function GuestCartView() {
     guestLines, guestProducts, guestVariants, guestHydration, guestHydrationError,
     hydrateGuestProducts, updateGuestItem,
   } = useCartStore();
+  // PR 20: styled confirm dialog instead of the native confirm prompt.
+  const { confirm, dialog } = useConfirm();
 
   useEffect(() => {
     hydrateGuestProducts();
@@ -167,10 +170,11 @@ function GuestCartView() {
                     <button
                       type="button"
                       aria-label="کاهش تعداد"
-                      onClick={() => {
+                      onClick={async () => {
                         // Part S2 item 6: dropping the last item removes the
-                        // line -- confirm that destructive step.
-                        if (line.quantity - 1 <= 0 && !window.confirm("این کالا از سبد خرید حذف شود؟")) return;
+                        // line -- confirm that destructive step (PR 20:
+                        // styled dialog, never the native confirm()).
+                        if (line.quantity - 1 <= 0 && !(await confirm("این کالا از سبد خرید حذف شود؟"))) return;
                         updateGuestItem(line.product_id, line.variant_id, line.quantity - 1);
                       }}
                     >
@@ -211,6 +215,7 @@ function GuestCartView() {
 
       {/* Part R5 item 10 -- outside the sticky wrapper (item 4) */}
       <RecentlyViewed />
+      {dialog}
     </div>
   );
 }
@@ -219,6 +224,8 @@ function CartPage() {
   usePageMeta({ title: "سبد خرید", path: "/cart/", noindex: true });
   const { isAuthenticated, isLoading: authLoading } = useAuthStore();
   const { cart, isLoading, error, fetchCart, updateItem, removeItem } = useCartStore();
+  // PR 20: styled confirm dialog instead of the native confirm prompt.
+  const { confirm, dialog } = useConfirm();
 
   useEffect(() => {
     if (!authLoading && isAuthenticated) fetchCart();
@@ -279,9 +286,9 @@ function CartPage() {
                     <button
                       type="button"
                       aria-label="کاهش تعداد"
-                      onClick={() => {
+                      onClick={async () => {
                         if (item.quantity - 1 <= 0) {
-                          if (!window.confirm("این کالا از سبد خرید حذف شود؟")) return;
+                          if (!(await confirm("این کالا از سبد خرید حذف شود؟"))) return;
                         }
                         updateItem(item.id, item.quantity - 1).then((result) => {
                           if (result && !result.success) {
@@ -312,9 +319,10 @@ function CartPage() {
                   <button
                     type="button"
                     className="link-danger"
-                    onClick={() => {
-                      // Part S2 item 6: destructive action needs confirmation.
-                      if (!window.confirm("این کالا از سبد خرید حذف شود؟")) return;
+                    onClick={async () => {
+                      // Part S2 item 6: destructive action needs
+                      // confirmation (PR 20: the styled dialog).
+                      if (!(await confirm("این کالا از سبد خرید حذف شود؟"))) return;
                       removeItem(item.id).then((result) => {
                         if (result && !result.success) {
                           toast(errorMessage(result.error) || "حذف انجام نشد.", "error");
@@ -373,6 +381,7 @@ function CartPage() {
 
       {/* Part R5 item 10 -- outside the sticky wrapper (item 4) */}
       <RecentlyViewed />
+      {dialog}
     </div>
   );
 }

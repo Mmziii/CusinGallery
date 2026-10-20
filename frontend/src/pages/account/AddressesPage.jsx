@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import AddressForm from "../../components/AddressForm";
 import { Alert, EmptyState, errorMessage } from "../../components/ui";
+import useConfirm from "../../hooks/useConfirm";
 import * as authApi from "../../services/authApi";
 import { normalizeApiError } from "../../utils/apiError";
 
@@ -18,6 +19,8 @@ function AddressesPage() {
   // Part S2 item 6: per-row busy flag so destructive buttons can neither
   // double-submit nor be spammed while a request is in flight.
   const [busyId, setBusyId] = useState(null);
+  // PR 20: styled confirm dialog instead of the native confirm prompt.
+  const { confirm, dialog } = useConfirm();
 
   // authApi.listAddresses() owns pagination and always resolves to a plain
   // array. Keep this defensive guard at the render boundary as well: a
@@ -42,8 +45,9 @@ function AddressesPage() {
   }, [load]);
 
   const handleDelete = async (id) => {
-    // Part S2 item 6: destructive action needs confirmation.
-    if (!window.confirm("این آدرس برای همیشه حذف شود؟")) return;
+    // Part S2 item 6: destructive action needs confirmation (PR 20:
+    // the styled dialog, never the native confirm()).
+    if (!(await confirm("این آدرس برای همیشه حذف شود؟"))) return;
     setActionError(null);
     setBusyId(id);
     try {
@@ -158,6 +162,7 @@ function AddressesPage() {
           ))}
         </div>
       )}
+      {dialog}
     </div>
   );
 }

@@ -81,4 +81,11 @@
   --header-height-compact: 60px;
   /* the phone header's collapsed one-row height */
   --header-height-row: 56px;
+  /* The live header offset sticky siblings and anchors sit at. Header.jsx
+     overwrites this inline with the measured value (desktop: the sticky
+     outer height; phone: the EXPANDED header's border-box height). The
+     token seeds it so the variable is never EMPTY before that pass runs
+     (PR 20: on /checkout at 375px it was unset and anchor scroll-margins
+     silently fell back to the desktop figure). */
+  --site-header-height: var(--header-height);
 }

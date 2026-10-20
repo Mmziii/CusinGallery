@@ -7,6 +7,7 @@ import { Link } from "react-router-dom";
 import PriceTag from "../components/PriceTag";
 import SmartImage from "../components/SmartImage";
 import { EmptyState, ErrorState, errorMessage } from "../components/ui";
+import useConfirm from "../hooks/useConfirm";
 import { useWishlist } from "../hooks/useWishlist";
 import useCartStore from "../store/useCartStore";
 import { toast } from "../utils/toast";
@@ -17,9 +18,11 @@ function WishlistPage() {
   const addToCart = useCartStore((s) => s.addItem);
   // Part S2 item 6: per-row busy flags (no double submit) + feedback.
   const [busyId, setBusyId] = useState(null);
+  // PR 20: styled confirm dialog instead of the native confirm prompt.
+  const { confirm, dialog } = useConfirm();
 
   const handleRemove = async (id) => {
-    if (!window.confirm("این کالا از علاقه‌مندی‌ها حذف شود؟")) return;
+    if (!(await confirm("این کالا از علاقه‌مندی‌ها حذف شود؟"))) return;
     setBusyId(id);
     await removeItem(id);
     setBusyId(null);
@@ -97,6 +100,7 @@ function WishlistPage() {
           );
         })}
       </div>
+      {dialog}
     </div>
   );
 }

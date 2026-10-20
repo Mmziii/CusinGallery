@@ -171,6 +171,22 @@ describe("homepage daily deal", () => {
     expect(timer.textContent).toContain("ثانیه");
   });
 
+  it("reads the countdown like a clock: hours, minutes, seconds in DOM order, laid out LTR", async () => {
+    // PR 20: the segments run hours (left) -> minutes -> seconds (right)
+    // with ":" separators and the Persian label under its own number;
+    // `.countdown` carries direction:ltr so the flex row paints in that
+    // order inside the RTL page. Digits stay Persian, the aria-label too.
+    renderHome();
+    const timer = await screen.findByRole("timer", { name: "زمان باقی‌مانده" });
+    const values = [...timer.querySelectorAll(".countdown__value")].map((n) => n.textContent);
+    const labels = [...timer.querySelectorAll(".countdown__label")].map((n) => n.textContent);
+    // DAILY_DEAL: server_now 12:00:00, ends 15:02:09 -> 3h 2m 9s.
+    expect(values).toEqual(["۰۳", "۰۲", "۰۹"]);
+    expect(labels).toEqual(["ساعت", "دقیقه", "ثانیه"]);
+    expect(timer.querySelectorAll(".countdown__sep")).toHaveLength(2);
+    expect(CSS).toContain(".countdown { direction: ltr;");
+  });
+
   it("does not render deals section when all deals are expired", async () => {
     serveDeals({
       count: 1,
@@ -529,6 +545,23 @@ describe("phone deal band", () => {
     expect(seeAll.getAttribute("href")).toBe("/shop/?on_sale=true");
     expect(container.querySelector(".deals-mobile__all")).toBe(seeAll);
     expect(container.querySelector(".deals-desktop")).toBeNull();
+  });
+
+  it("prints «پیشنهاد امروز» once on phones: the band header keeps it, the section h2 hides", async () => {
+    // PR 20: the title showed twice on phones (the section's h2 AND the
+    // band's own header). The band header (title + «مشاهده همه» + timer)
+    // is the one that stays; the section head is display:none at
+    // <=767px only.
+    setViewport(true);
+    const { container } = renderHome();
+    await screen.findByText("پارچ مدل ۱۲۳");
+
+    const bandHeader = container.querySelector(".deals-mobile__header");
+    expect(bandHeader.querySelector(".deals-mobile__title").textContent).toBe("پیشنهاد امروز");
+    expect(within(bandHeader).getByRole("link", { name: "مشاهده همه" })).toBeTruthy();
+    expect(bandHeader.querySelector(".countdown")).toBeTruthy();
+
+    expect(CSS).toContain("@media (max-width: 767px) { .section--dark .section__head { display: none; } }");
   });
 });
 

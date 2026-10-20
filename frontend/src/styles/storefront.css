@@ -1025,11 +1025,20 @@ h1, h2, h3, .section__head h2 {
   position: relative; z-index: 1;
   display: flex; align-items: center; gap: var(--space-4);
   width: 100%; max-width: none;
+  /* PR 20: exactly the outer box's height, border INCLUDED -- with only
+     min-height the 1px border + tall content made the bar 79px inside
+     the 76px outer and it painted over the page. border-box restated
+     (globals.css already sets it) so this rule is safe in isolation.
+     Padding-block is 10px so the one-row content (44px logo/controls)
+     fits the 76px content box. Phones override `height` back to auto
+     in the S6 block at the end of this file. */
+  box-sizing: border-box;
+  height: var(--header-height);
   min-height: var(--header-height);
   margin-inline: auto;
   /* Full-bleed bar, content aligned to `.container`. */
   padding-inline: max(var(--space-3), calc((100% - var(--container-max-width)) / 2 + var(--space-3)));
-  padding-block: var(--space-3);
+  padding-block: 10px;
   border: 1px solid transparent;
   border-radius: 0;
   /* The bar owns the solid fill (the contrast audit reads it). The compact
@@ -1068,8 +1077,14 @@ h1, h2, h3, .section__head h2 {
    radius, fill, border and shadow animate; the outer box keeps its 76px. */
 @media (min-width: 768px) {
   .site-header--compact .site-header__inner {
-    width: 80%;
+    /* PR 20: 80% was too narrow at 1024px -- every label wrapped, the
+       pill grew to 87px and overflowed the 76px outer box. Near-full
+       width (capped like the content) + nowrap labels keeps it one row
+       at 1024/1280/1366, and the exact compact height (12px margin-top
+       + 60px = 72px) always fits the outer box. */
+    width: calc(100% - 32px);
     max-width: 1160px;
+    height: var(--header-height-compact);
     min-height: var(--header-height-compact);
     margin-top: 12px;
     padding-inline: var(--space-4);
@@ -1124,7 +1139,10 @@ h1, h2, h3, .section__head h2 {
 .search-suggest__price { color: var(--brand-gold-deep); font-size: var(--font-size-sm); }
 
 .site-header__nav { display: flex; align-items: center; gap: var(--space-4); }
-.site-header__nav a { color: var(--brand-ivory); font-size: var(--font-size-sm); padding: 6px 2px; border-bottom: 2px solid transparent; }
+/* PR 20: header labels never wrap -- a two-line «دسته‌بندی کالاها» or
+   «علاقه‌مندی‌ها» is what grew the tablet/desktop pill to 87px. The
+   bar and pill have exact heights now, so wrapping would clip. */
+.site-header__nav a { color: var(--brand-ivory); font-size: var(--font-size-sm); padding: 6px 2px; border-bottom: 2px solid transparent; white-space: nowrap; }
 .site-header__nav a:hover, .site-header__nav a.active { color: var(--brand-gold); border-color: var(--brand-gold); }
 
 .site-header__mega-btn {
@@ -1133,8 +1151,12 @@ h1, h2, h3, .section__head h2 {
   padding: 8px 14px; cursor: pointer;
   display: inline-flex; align-items: center; gap: 6px;
   font: inherit;
+  white-space: nowrap;
 }
 .site-header__mega-btn .icon { flex: none; }
+/* PR 20: the 768-1099px range swaps in the short label (tablet block at
+   the end of this file); everywhere else the full one shows. */
+.site-header__mega-label--short { display: none; }
 /* Stage 2 (Digikala-style mega menu): NO physical gap between
    trigger and panel -- the wrapper's padding-top is the invisible
    bridge, so moving the pointer "through the gap" never leaves the
@@ -1148,8 +1170,20 @@ h1, h2, h3, .section__head h2 {
    bridge below) keeps the menu alive while the
    pointer crosses the gap. */
 .site-header__mega-trigger { position: static; }
+/* PR 20: the dropdown is independent of the bar/pill it hangs from. It
+   used to span the inner's box with the panel at min(1150px, 94vw)
+   inside -- in pill mode the panel was WIDER than the pill and, RTL
+   auto margins being 0 on overflow, stuck out to the left (off the
+   viewport at 1024px). Now the dropdown owns a viewport-centred width
+   (the pill is centred too, so left:50% of the inner is the viewport
+   centre at rest and in pill mode alike), top: 100% puts its hover
+   bridge at the bar/pill bottom and the panel 8px below it, and the
+   panel simply fills the dropdown -- nothing can stick out. */
 .mega-menu {
-  position: absolute; top: 100%; left: 0; right: 0; padding-top: 8px;
+  position: absolute; top: 100%; left: 50%; right: auto;
+  width: min(1160px, calc(100vw - 32px));
+  transform: translateX(-50%);
+  padding-top: 8px;
   background: transparent; z-index: 65;
 }
 /* Dimmed overlay over the page content BEHIND the panel (below
@@ -1161,9 +1195,13 @@ h1, h2, h3, .section__head h2 {
   z-index: 64;
   animation: fade-in .2s ease-out;
 }
+/* In pill mode the dim starts at the PILL's bottom (12px float margin +
+   the compact height), not the outer box's. */
+.site-header--compact .mega-menu__overlay { top: calc(12px + var(--header-height-compact)); }
 .mega-menu__inner {
   position: relative; z-index: 65;
-  width: min(1150px, 94vw);
+  width: 100%;
+  max-width: 100%;
   margin-inline: auto;
   background: #fff; color: var(--brand-ink); border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg); display: flex; overflow: hidden;
@@ -1196,7 +1234,7 @@ h1, h2, h3, .section__head h2 {
 .mega-menu__root-icon img, .mega-menu__root-icon .img-placeholder { width: 28px; height: 28px; object-fit: contain; border-radius: 6px; }
 .mega-menu__root-icon .icon { color: var(--brand-gold-deep); }
 .mega-menu__root-name { flex: 1; }
-.mega-menu__panel { flex: 1; padding: var(--space-4); overflow-y: auto; max-height: 70vh; }
+.mega-menu__panel { flex: 1; min-width: 0; max-width: 100%; padding: var(--space-4); overflow-y: auto; max-height: 70vh; }
 .mega-menu__all {
   display: inline-flex; align-items: center; gap: 6px;
   color: var(--brand-gold-deep); font-weight: 800;
@@ -1297,7 +1335,12 @@ h1, h2, h3, .section__head h2 {
 .site-header__search-toggle:hover { color: var(--brand-gold); }
 .site-header__search-toggle .icon { color: var(--brand-gold); }
 
-.user-menu__trigger { background: none; border: 1px solid rgba(206,180,100,.4); color: var(--brand-ivory); border-radius: 10px; padding: 7px 12px; cursor: pointer; }
+/* PR 20: account = user icon + name on wide screens, icon only below
+   1100px and in the phone header's first row (the label spans hide in
+   the tablet/phone blocks at the end of this file). Never wraps. */
+.user-menu__trigger { background: none; border: 1px solid rgba(206,180,100,.4); color: var(--brand-ivory); border-radius: 10px; padding: 7px 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.user-menu__trigger .icon { flex: none; display: block; }
+.site-header__login .icon { flex: none; }
 .user-menu__panel { background: #fff; color: var(--brand-ink); }
 .user-menu__panel a:hover, .user-menu__panel button:hover { background: var(--brand-green-tint); }
 
@@ -1542,7 +1585,13 @@ h1, h2, h3, .section__head h2 {
 .deal-card__sale { color: var(--brand-gold-deep); font-weight: 800; font-size: var(--font-size-lg); }
 .deal-card__regular { color: var(--color-text-muted); font-size: var(--font-size-sm); margin-inline-start: 0; }
 .deal-card__cta { margin-top: var(--space-2); align-self: flex-start; background: var(--brand-green-dark); color: var(--brand-gold); padding: 8px 14px; border-radius: 999px; font-weight: 700; font-size: var(--font-size-sm); }
-.countdown { display: inline-flex; align-items: center; gap: 6px; font-weight: 800; color: var(--brand-green-dark); background: var(--brand-green-tint); border: var(--hairline); border-radius: 10px; padding: 6px 12px; width: max-content; font-variant-numeric: tabular-nums; }
+/* PR 20: a countdown reads like a CLOCK -- hours on the LEFT, then
+   minutes, then seconds on the right, ":" between them -- so the row
+   runs LTR even inside the RTL page. The digits stay Persian and each
+   Persian label sits under its own number (DOM order in Home.jsx is
+   already hours -> minutes -> seconds; the flex row follows the new
+   direction). The aria-label stays Persian («زمان باقی‌مانده»). */
+.countdown { direction: ltr; display: inline-flex; align-items: center; gap: 6px; font-weight: 800; color: var(--brand-green-dark); background: var(--brand-green-tint); border: var(--hairline); border-radius: 10px; padding: 6px 12px; width: max-content; font-variant-numeric: tabular-nums; }
 .countdown__segment { display: inline-flex; flex-direction: column; align-items: center; min-width: 44px; gap: 1px; }
 .countdown__value { font-variant-numeric: tabular-nums; font-size: var(--font-size-md); line-height: 1; min-width: 2ch; text-align: center; }
 .countdown__label { font-size: 10px; font-weight: 600; color: var(--color-text-muted); line-height: 1; }
@@ -1755,6 +1804,14 @@ h1, h2, h3, .section__head h2 {
   display: flex;
   align-items: baseline;
   gap: 8px;
+}
+
+/* PR 20: on phones the band's own header carries «پیشنهاد امروز» (next to
+   «مشاهده همه» and the timer), so the section's h2 above it would print
+   the title twice. Hide the section head on phones only -- the section
+   keeps its aria-label, and desktop/tablet keep the h2. */
+@media (max-width: 767px) {
+  .section--dark .section__head { display: none; }
 }
 
 @media (max-width: 767px) {
@@ -2599,7 +2656,10 @@ input, select, textarea { min-width: 0; max-width: 100%; }
   }
   .site-header-spacer {
     display: block;
-    height: var(--header-natural-height, 232px);
+    /* PR 20: the two-row phone header is ~120px; the variable (the
+       measured border-box height) replaces this fallback on the first
+       frame after mount. */
+    height: var(--header-natural-height, 124px);
     /* `.app-shell` is a flex column: the spacer must never shrink. */
     flex: none;
     /* Never collapses, never animates: a look change of the header must
@@ -2610,10 +2670,22 @@ input, select, textarea { min-width: 0; max-width: 100%; }
   .site-header__inner {
     flex-wrap: wrap;
     row-gap: 10px;
-    /* Definite when Header.jsx has measured it, so the fold can animate;
-       `auto` is the safe fallback before/without a measurement. */
-    height: var(--header-natural-height, auto);
+    /* PR 20: while expanded the inner is height:AUTO -- NEVER a pinned
+       pixel value. The old lock (height: var(--header-natural-height))
+       measured 190px on first load while the rows needed 246px, and a
+       locked box can only ever re-measure itself, so the search row
+       permanently spilled out of the bar. `auto` cannot be smaller than
+       its content; the fold animates via a JS FLIP pin (Header.jsx) and
+       the spacer -- not this box -- owns the flow height. (The base
+       rule's desktop height: var(--header-height) is overridden here.) */
+    height: auto;
   }
+  /* PR 20: exactly two rows. Row 1 = burger, logo + name, account icon,
+     cart (the mega trigger leaves the phone header -- the burger drawer
+     opens the same category sheet; the account label hides in the
+     max-width:1099px block). Row 2 = the full-width search (order 3,
+     basis 100% below). Total ~= 120px. */
+  .site-header__mega-trigger { display: none; }
   .site-header__search {
     order: 3;
     flex: 1 0 100%;
@@ -2667,16 +2739,33 @@ input, select, textarea { min-width: 0; max-width: 100%; }
 
   .site-header--collapsed .site-header__search-toggle { display: inline-grid; }
 
-  /* The search icon grows the field back into view under the row: the inner
-     returns to its natural height and only the search row comes with it.
-     (The suggestions list is absolutely positioned below it, so the inner
-     must not clip while the shopper is typing.) The fixed header simply
-     paints over the page; the spacer keeps the document still. */
+  /* The search icon grows the field back into view INSIDE the pill: the
+     pill becomes two rows -- row 1 keeps the icons, row 2 is the
+     full-width field inside the pill's padding. PR 20: the field used
+     to stay in the nowrap row with flex-basis:100% and stuck 147px out
+     of the pill (input x=-139..199 at 375px). Wrapping + basis 100% +
+     min-width:0 down the form keeps every edge inside the pill.
+     (The suggestions list is absolutely positioned below the field, so
+     the inner must not clip while the shopper is typing.) The fixed
+     header simply paints over the page; the spacer keeps it still. */
   .site-header--collapsed.site-header--searching .site-header__inner {
     height: auto;
+    flex-wrap: wrap;
+    row-gap: 10px;
+    padding-block: 10px;
     overflow: visible;
   }
-  .site-header--collapsed.site-header--searching .site-header__search { display: flex; }
+  .site-header--collapsed.site-header--searching .site-header__search {
+    display: flex;
+    order: 10;
+    flex: 1 1 100%;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    margin-inline: 0;
+  }
+  .site-header--collapsed.site-header--searching .site-header__search form { flex: 1 1 auto; min-width: 0; width: 100%; }
+  .site-header--collapsed.site-header--searching .site-header__search input { flex: 1 1 auto; min-width: 0; }
 
   /* No backdrop-filter: the phone pill falls back to the solid brand green. */
   @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
@@ -3256,3 +3345,98 @@ input, select, textarea { min-width: 0; max-width: 100%; }
 }
 .skeleton-line--short { width: 45%; }
 @keyframes skeleton-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
+/* ==========================================================================
+   PR 20 — HEADER FOLLOW-UPS (live test of PR 19) + CONFIRM DIALOG
+   ==========================================================================
+   Appended last for the same reason as the S6 block: these ranges must
+   win over the earlier unconditional header rules. What lives here:
+     768-1199px  tightened desktop/tablet gaps, flexible search floor
+     768-1099px  the tablet header (text nav stays in the drawer)
+     <= 1099px   icon-only account controls (phone row 1 + tablet)
+     .confirm-dialog / .btn--danger — the window.confirm() replacement
+   ========================================================================== */
+
+/* Below 1200px the bar and the pill run out of slack: tighten the gaps,
+   let the search flex down to a sensible 200px floor (never to the
+   29px sliver the tablet pill had), and let long brand/account names
+   ellipsize instead of pushing the row wider than the pill. */
+@media (min-width: 768px) and (max-width: 1199px) {
+  .site-header__inner { gap: 12px; }
+  .site-header__nav { gap: 12px; }
+  .site-header__actions { gap: 12px; }
+  .site-header__search { min-width: 200px; }
+  .site-header__brand { min-width: 0; }
+  .site-header__brand-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .user-menu__trigger-label { max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+}
+
+/* Tablet (768-1099px, e.g. iPad Air 820px): the full desktop row cannot
+   fit -- the search was 167px at rest / 29px in the pill, and
+   «دسته‌بندی کالاها» / «حساب کاربری» wrapped into an 87px pill. So this
+   range gets the compact chrome: the burger does the navigation (the
+   text links live in its drawer), the mega trigger is icon + SHORT
+   label with nowrap, the account button is icon-only (block below),
+   and the search flexes with a 220px floor. One row, always. */
+@media (min-width: 768px) and (max-width: 1099px) {
+  .site-header__inner { flex-wrap: nowrap; }
+  .site-header__nav { display: none; }
+  .site-header__burger { display: block; }
+  .site-header__mega-label { display: none; }
+  .site-header__mega-label--short { display: inline; }
+  .site-header__search { flex: 1 1 auto; min-width: 220px; max-width: none; }
+}
+
+/* Icon-only account controls: the phone header's first row and the
+   whole tablet range. The visible name/«ورود | ثبت‌نام» text steps
+   aside; the aria-label in Header.jsx carries the name instead. Both
+   controls keep a 44px+ tap target. */
+@media (max-width: 1099px) {
+  .user-menu__trigger-label,
+  .site-header__login-label { display: none; }
+  .user-menu__trigger,
+  .site-header__login {
+    padding: 10px;
+    min-width: 44px;
+    min-height: 44px;
+    justify-content: center;
+  }
+}
+
+/* --- Confirm dialog (PR 20): the styled replacement for window.confirm().
+   Rendered through the body Portal; RTL inherits from <html>, colours are
+   the brand's, and it layers above the drawers/toaster (115/116/120) but
+   below the product lightbox (1400). «انصراف» is first in the DOM (and
+   first focused); «حذف» is the danger button at the inline end. */
+.btn--danger { background: var(--color-danger); color: #fff; }
+.btn--danger:hover:not(:disabled) { background: #992a1a; }
+.confirm-dialog {
+  position: fixed; inset: 0; z-index: 210;
+  display: grid; place-items: center;
+  padding: var(--space-3);
+}
+.confirm-dialog__backdrop {
+  position: absolute; inset: 0;
+  background: rgba(20, 26, 10, .5);
+  animation: fade-in .18s ease-out;
+}
+.confirm-dialog__box {
+  position: relative;
+  width: min(420px, 100%);
+  background: #fff; color: var(--brand-ink);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-4);
+  animation: confirm-dialog-in .18s ease-out;
+}
+@keyframes confirm-dialog-in {
+  from { opacity: 0; transform: translateY(8px) scale(.98); }
+  to { opacity: 1; transform: none; }
+}
+.confirm-dialog__message { margin: 0 0 var(--space-4); font-weight: 700; line-height: 1.9; }
+.confirm-dialog__actions { display: flex; gap: var(--space-2); justify-content: flex-end; flex-wrap: wrap; }
+.confirm-dialog__actions .btn { min-height: 44px; min-width: 96px; }
+@media (prefers-reduced-motion: reduce) {
+  .confirm-dialog__backdrop, .confirm-dialog__box { animation: none; }
+}
