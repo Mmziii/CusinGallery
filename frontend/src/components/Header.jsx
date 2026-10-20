@@ -384,12 +384,25 @@ function Header() {
   useEffect(() => {
     const inner = innerRef.current;
     if (!inner) return undefined;
+    let watchdog = null;
     const onTransitionStart = (event) => {
-      if (event.propertyName === "height") animatingRef.current = true;
+      if (event.propertyName !== "height") return;
+      animatingRef.current = true;
+      // A cancelled/interrupted transition may never fire `transitionend`;
+      // the watchdog guarantees measurement can never stay frozen.
+      if (watchdog !== null) window.clearTimeout(watchdog);
+      watchdog = window.setTimeout(() => {
+        animatingRef.current = false;
+        watchdog = null;
+      }, 400);
     };
     const onTransitionEnd = (event) => {
       if (event.propertyName && event.propertyName !== "height") return;
       animatingRef.current = false;
+      if (watchdog !== null) {
+        window.clearTimeout(watchdog);
+        watchdog = null;
+      }
       if (!rowCollapsedRef.current && !compactRef.current) {
         const natural = Math.max(inner.scrollHeight || 0, inner.offsetHeight || 0);
         if (natural > 0) {
@@ -401,6 +414,7 @@ function Header() {
     inner.addEventListener("transitionend", onTransitionEnd);
     inner.addEventListener("transitioncancel", onTransitionEnd);
     return () => {
+      if (watchdog !== null) window.clearTimeout(watchdog);
       inner.removeEventListener("transitionstart", onTransitionStart);
       inner.removeEventListener("transitionend", onTransitionEnd);
       inner.removeEventListener("transitioncancel", onTransitionEnd);
