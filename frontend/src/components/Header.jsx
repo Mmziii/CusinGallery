@@ -56,6 +56,13 @@ function Header() {
   const [megaOpen, setMegaOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [compact, setCompact] = useState(false);
+  // Phone only: the wrapped header (~245px: brand + categories +
+  // account/cart + search rows) folds into one row once the shopper has
+  // scrolled past 80px and is still going down. Scrolling up -- or
+  // reaching the top -- restores it.
+  const [rowCollapsed, setRowCollapsed] = useState(false);
+  // The collapsed row's search icon grows the search field back into view.
+  const [searchRevealed, setSearchRevealed] = useState(false);
   const [categories, setCategories] = useState([]);
   // Owner-editable brand (Task 3): name + logo come from the admin page,
   // falling back to the bundled mark until the API answers.
@@ -73,8 +80,17 @@ function Header() {
   const hasOpenDrawer =
     menuMounted || cartOpen || (megaOpen && !isDesktopViewport());
   const headerRef = useRef(null);
+  const innerRef = useRef(null);
   const userMenuRef = useRef(null);
   const searchRef = useRef(null);
+  const searchInputRef = useRef(null);
+  // Mirrors of the two phone-header states, read by the measure effect
+  // below. That effect must never re-register (nor read a stale render)
+  // just because the header folded: a stale read would publish the
+  // COLLAPSED height as the natural one, and the header could then never
+  // animate back open.
+  const rowCollapsedRef = useRef(false);
+  const searchRevealedRef = useRef(false);
   const searchTimer = useRef(null);
   // A response can arrive after the shopper has used the home brand action.
   // Versioning prevents that stale response from reopening suggestions.
@@ -172,28 +188,76 @@ function Header() {
     if (!isAuthenticated && guestLines.length > 0) hydrateGuestProducts();
   }, [isAuthenticated, guestLines, hydrateGuestProducts]);
 
-  // Sticky shrink.
+  // Sticky shrink + the phone one-row collapse.
+  //
+  // `compact` is the long-standing shrink every viewport gets past 24px
+  // (smaller logo, shorter bar). `rowCollapsed` is phone-only and needs the
+  // scroll DIRECTION as well as the offset: past 80px while still going
+  // down the header collapses; scrolling back up or reaching the top
+  // restores it, so the shopper always sees the full header when they look
+  // for it. The 2px dead band swallows scroll jitter (rubber-banding, the
+  // tail of a smooth scroll) that would otherwise flicker the height.
   useEffect(() => {
-    const onScroll = () => setCompact(window.scrollY > 24);
+    const DEAD_BAND = 2;
+    const COLLAPSE_AT = 80;
+    let lastY = window.scrollY;
+    let goingDown = false;
+    const onScroll = () => {
+      const y = window.scrollY;
+      const delta = y - lastY;
+      lastY = y;
+      if (Math.abs(delta) >= DEAD_BAND) goingDown = delta > 0;
+      rowCollapsedRef.current = y > COLLAPSE_AT && goingDown;
+      setCompact(y > 24);
+      setRowCollapsed(rowCollapsedRef.current);
+    };
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
+  // The collapsed row's search icon reveals the field; focus follows so the
+  // phone keyboard is already up. (React commits the class change before
+  // running effects, so the field is displayed by the time this fires.)
+  useEffect(() => {
+    if (searchRevealed) searchInputRef.current?.focus();
+  }, [searchRevealed]);
+
+  const toggleSearchReveal = () => {
+    const next = !searchRevealedRef.current;
+    searchRevealedRef.current = next;
+    setSearchRevealed(next);
+  };
 
   // Audit 19: publish the header's REAL height as --site-header-height.
   // Sticky elements that must sit directly under the header (the shop's
   // mobile filter/sort bar) used to hard-code 76px, which is wrong the
   // moment the phone layout wraps the search onto a second row. Measured
   // after every scroll (the header shrinks), on resize and once on mount.
+  //
+  // The same pass publishes --header-natural-height, the inner's height
+  // while the header is fully expanded. The phone collapse transitions the
+  // inner between that value and the one-row height -- CSS cannot
+  // interpolate to/from `height: auto`, so without a measured value the
+  // header would snap between the two heights and drag the page content
+  // with it. It is refreshed on every resize, and deliberately NOT while
+  // the header is collapsed or searching (neither height is natural).
   useEffect(() => {
     const root = document.documentElement;
     let frame = null;
     const measure = () => {
       frame = null;
-      const height = headerRef.current?.offsetHeight || 0;
+      const header = headerRef.current;
+      const inner = innerRef.current;
+      if (!header || !inner) return;
+      const height = header.offsetHeight || 0;
       // jsdom and hidden tabs report 0 -- keep the last real value instead
       // of pinning every sticky offset to 0.
       if (height > 0) root.style.setProperty("--site-header-height", `${height}px`);
+      if (!rowCollapsedRef.current && !searchRevealedRef.current) {
+        const natural = inner.offsetHeight || 0;
+        if (natural > 0) root.style.setProperty("--header-natural-height", `${natural}px`);
+      }
     };
     const schedule = () => {
       if (frame !== null) return;
@@ -204,8 +268,9 @@ function Header() {
     window.addEventListener("resize", schedule);
     const resizeObserver =
       typeof ResizeObserver === "function" ? new ResizeObserver(schedule) : null;
-    if (resizeObserver && headerRef.current) resizeObserver.observe(headerRef.current);
+    if (resizeObserver && innerRef.current) resizeObserver.observe(innerRef.current);
     return () => {
+      if (frame !== null && window.cancelAnimationFrame) window.cancelAnimationFrame(frame);
       window.removeEventListener("scroll", schedule);
       window.removeEventListener("resize", schedule);
       resizeObserver?.disconnect();
@@ -260,6 +325,8 @@ function Header() {
     setUserMenuOpen(false);
     setSuggestions([]);
     setSearchTerm("");
+    searchRevealedRef.current = false;
+    setSearchRevealed(false);
   };
 
   const handleHomeNavigation = () => {
@@ -320,9 +387,18 @@ function Header() {
     ? (cart?.subtotal ?? null)
     : sumLineTotals(cartLines.map((line) => line.lineTotal));
 
+  const headerClass = [
+    "site-header",
+    compact && "site-header--compact",
+    rowCollapsed && "site-header--collapsed",
+    rowCollapsed && searchRevealed && "site-header--searching",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
-    <header className={`site-header ${compact ? "site-header--compact" : ""}`} ref={headerRef}>
-      <div className="container site-header__inner">
+    <header className={headerClass} ref={headerRef}>
+      <div className="container site-header__inner" ref={innerRef}>
         <button
           type="button"
           className="site-header__burger"
@@ -349,10 +425,11 @@ function Header() {
           <span className="site-header__brand-name">{brandName}</span>
         </Link>
 
-        <div className="site-header__search" ref={searchRef} role="search">
+        <div className="site-header__search" id="site-header-search" ref={searchRef} role="search">
           <form onSubmit={submitSearch}>
             <input
               type="search"
+              ref={searchInputRef}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="جستجوی محصول…"
@@ -397,6 +474,21 @@ function Header() {
         </nav>
 
         <div className="site-header__actions">
+          {/* The collapsed phone row's search icon. It is the only way to
+              reach the field while the header is folded to one row, so it
+              grows the search row back into view (see the phone block in
+              storefront.css). Hidden at every other size and state. */}
+          <button
+            type="button"
+            className="site-header__search-toggle"
+            aria-label="نمایش جستجو"
+            aria-expanded={searchRevealed}
+            aria-controls="site-header-search"
+            onClick={toggleSearchReveal}
+          >
+            <Icon name="search" size={22} />
+          </button>
+
           <button
             type="button"
             className="cart-link"

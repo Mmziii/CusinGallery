@@ -1223,6 +1223,23 @@ h1, h2, h3, .section__head h2 {
 }
 @keyframes badge-pop { 0% { transform: scale(.4); } 70% { transform: scale(1.18); } 100% { transform: scale(1); } }
 
+/* The collapsed phone row's search icon: a quiet gold glyph on the dark
+   header, 44px tap target, same family as the cart button next to it. */
+.site-header__search-toggle {
+  display: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: rgba(250, 247, 240, 0.08);
+  color: var(--brand-ivory);
+  cursor: pointer;
+}
+.site-header__search-toggle:hover { color: var(--brand-gold); }
+.site-header__search-toggle .icon { color: var(--brand-gold); }
+
 .user-menu__trigger { background: none; border: 1px solid rgba(206,180,100,.4); color: var(--brand-ivory); border-radius: 10px; padding: 7px 12px; cursor: pointer; }
 .user-menu__panel { background: #fff; color: var(--brand-ink); }
 .user-menu__panel a:hover, .user-menu__panel button:hover { background: var(--brand-green-tint); }
@@ -2545,6 +2562,60 @@ input, select, textarea { min-width: 0; max-width: 100%; }
   }
   .site-header__search input { min-height: 44px; }
   .site-header__brand-name { font-size: var(--font-size-base); }
+}
+
+/* --- 1b. The phone header collapses to ONE row while scrolling down -------
+   Scrolled past 80px and still going down (Header.jsx owns the direction),
+   the wrapped phone header folds into a single ~56px row: burger, brand,
+   search icon, cart badge. Scrolling back up -- or reaching the top --
+   restores it, so the full header is always there when the shopper looks.
+
+   The height is TRANSITIONED, not snapped: `height: auto` cannot be
+   interpolated, so the expanded height is published by Header.jsx as
+   --header-natural-height (the inner's own measured height, refreshed on
+   every resize) and the fold is a definite-to-definite 200ms ease. The
+   sticky header stays in flow and simply changes size, which is what keeps
+   the page content from jumping. */
+@media (max-width: 767px) {
+  .site-header__inner {
+    height: var(--header-natural-height, auto);
+    transition: height .2s ease, min-height .25s ease;
+  }
+
+  .site-header--collapsed .site-header__inner {
+    height: var(--header-height-row);
+    min-height: 0;
+    gap: var(--space-2);
+    overflow: hidden;
+  }
+
+  /* Everything that is not part of the one row steps aside. Categories, the
+     account and the wishlist stay reachable through the burger drawer. */
+  .site-header--collapsed .site-header__search,
+  .site-header--collapsed .site-header__nav,
+  .site-header--collapsed .site-header__mega-trigger,
+  .site-header--collapsed .site-header__actions .btn,
+  .site-header--collapsed .site-header__actions .user-menu { display: none; }
+
+  /* A long brand name must never push the row wider than the viewport. */
+  .site-header--collapsed .site-header__brand { min-width: 0; }
+  .site-header--collapsed .site-header__brand-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: var(--font-size-sm);
+  }
+
+  .site-header--collapsed .site-header__search-toggle { display: inline-grid; }
+
+  /* The search icon grows the field back into view under the row: the inner
+     returns to its natural height and only the search row comes with it.
+     (The suggestions list is absolutely positioned below it, so the inner
+     must not clip while the shopper is typing.) */
+  .site-header--collapsed.site-header--searching .site-header__inner {
+    height: auto;
+    overflow: visible;
+  }
+  .site-header--collapsed.site-header--searching .site-header__search { display: flex; }
 }
 
 /* --- 2. Password fields: the eye button (item 3) --------------------------
