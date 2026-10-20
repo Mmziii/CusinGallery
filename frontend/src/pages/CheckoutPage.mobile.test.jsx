@@ -180,6 +180,24 @@ describe("mobile checkout steps (Task 2)", () => {
     expect(total()).toContain("۵۰۰٬۰۰۰");
   });
 
+  it("shows the pickup hours as «۱۰:۰۰ تا ۲۱:۰۰», never as a bare HH:MM-HH:MM", async () => {
+    fetchSiteSettings.mockResolvedValue({
+      pickup_address: "تهران، میدان تجریش، پلاک ۲۰",
+      pickup_hours: "10:00-21:00",
+    });
+    renderApp("/checkout/?step=delivery");
+    await screen.findByRole("heading", { name: /۲\. انتخاب روش تحویل/ });
+
+    fireEvent.click(screen.getByRole("radio", { name: /دریافت حضوری/ }));
+    fireEvent.click(barButton());
+    await screen.findByRole("heading", { name: /۳\. اطلاعات تحویل/ });
+
+    const info = document.querySelector(".checkout__pickup-info");
+    expect(info.textContent).toContain("ساعات تحویل:");
+    expect(info.textContent).toContain("۱۰:۰۰ تا ۲۱:۰۰");
+    expect(info.textContent).not.toContain("۱۰:۰۰-۲۱:۰۰");
+  });
+
   it("lets completed steps be clicked on the stepper to navigate back", async () => {
     renderApp("/checkout/?step=address");
     await screen.findByRole("heading", { name: /۳\. اطلاعات تحویل/ });

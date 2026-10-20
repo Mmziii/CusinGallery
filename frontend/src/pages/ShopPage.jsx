@@ -97,7 +97,7 @@ function ShopPage({ brand: fixedBrand = null }) {
 
   const params = useMemo(() => {
     const p = {};
-    for (const key of ["search", "category", "brand", "min_price", "max_price", "in_stock", "ordering", "page"]) {
+    for (const key of ["search", "category", "brand", "min_price", "max_price", "in_stock", "on_sale", "ordering", "page"]) {
       const value = searchParams.get(key);
       if (value) p[key] = value;
     }
@@ -267,7 +267,7 @@ function ShopPage({ brand: fixedBrand = null }) {
 
   const clearAllFilters = () => {
     const next = new URLSearchParams(searchParams);
-    ["category", "brand", "min_price", "max_price", "in_stock", "page", ...attrKeys].forEach((k) => next.delete(k));
+    ["category", "brand", "min_price", "max_price", "in_stock", "on_sale", "page", ...attrKeys].forEach((k) => next.delete(k));
     setSearchParams(next);
   };
 
@@ -331,7 +331,20 @@ function ShopPage({ brand: fixedBrand = null }) {
         </label>
       </FilterGroup>
 
-      {(searchParams.get("category") || searchParams.get("brand") || searchParams.get("min_price") || searchParams.get("max_price") || searchParams.get("in_stock") || attrKeys.length > 0) ? (
+      {/* The daily-deals band's «مشاهده همه» lands here: /shop/?on_sale=1
+          (same filter the backend exposes, apps/products/filters.py). */}
+      <FilterGroup title="تخفیف">
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={searchParams.get("on_sale") === "true"}
+            onChange={(e) => setParam("on_sale", e.target.checked ? "true" : "")}
+          />
+          فقط کالاهای تخفیف‌دار
+        </label>
+      </FilterGroup>
+
+      {(searchParams.get("category") || searchParams.get("brand") || searchParams.get("min_price") || searchParams.get("max_price") || searchParams.get("in_stock") || searchParams.get("on_sale") || attrKeys.length > 0) ? (
         <button type="button" className="btn btn--outline btn--sm" onClick={clearAllFilters}>
           حذف همه فیلترها
         </button>

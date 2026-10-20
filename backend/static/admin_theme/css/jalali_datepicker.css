@@ -99,10 +99,15 @@
 }
 
 /* Time component */
+/* The row reads like a clock: hour on the LEFT, minute on the RIGHT
+   («ساعت : دقیقه»), so its own direction is LTR even inside the RTL
+   popup. The «زمان:» label keeps the right edge (auto margin) and its own
+   RTL text direction, so the colon stays where it always was. */
 .jalali-date-picker__time {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  direction: ltr;
   gap: 6px;
   margin-top: 10px;
   padding-top: 8px;
@@ -112,6 +117,8 @@
 .jalali-date-picker__time-label {
   font-weight: 700;
   color: #52602d;
+  direction: rtl;
+  margin-inline-start: auto;
 }
 .jalali-date-picker__time-select {
   padding: 3px 6px;

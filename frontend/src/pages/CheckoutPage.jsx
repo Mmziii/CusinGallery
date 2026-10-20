@@ -1,5 +1,5 @@
 import { formatAddress } from "../utils/formatAddress";
-import { faDigits, deliveryRange, deliveryDays } from "../utils/faDigits";
+import { faDigits, deliveryRange, deliveryDays, hoursRange } from "../utils/faDigits";
 import { usePageMeta } from "../hooks/usePageMeta";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -49,6 +49,11 @@ const ADDRESS_FIELD_ORDER = [
   "unit",
 ];
 
+/** The only steps a checkout URL may name. Anything else (including a
+ *  missing ?step) is replaced with the first one -- there is no
+ *  single-page checkout that skips delivery/address/review. */
+const STEP_IDS = ["delivery", "address", "review"];
+
 function needsPlotAndUnit(address) {
   if (!address) return false;
   return !String(address.building_number || "").trim() || !String(address.unit || "").trim();
@@ -62,11 +67,12 @@ export default function CheckoutPage() {
   const siteSettings = useSiteSettings();
   const isMobile = useMediaQuery("(max-width: 767px)");
 
-  // Step in URL: delivery | address | review
+  // Step in URL: delivery | address | review. The step IS the page: an
+  // unknown or missing value is redirected to «delivery» below, so the
+  // order can only ever be placed from the review step.
   const stepParam = searchParams.get("step");
-  const isStepped = Boolean(stepParam);
-  const rawStep = stepParam || "delivery";
-  const currentStep = ["delivery", "address", "review"].includes(rawStep) ? rawStep : "delivery";
+  const hasValidStep = STEP_IDS.includes(stepParam);
+  const currentStep = hasValidStep ? stepParam : "delivery";
 
   // Delivery methods state
   const [shippingData, setShippingData] = useState(null);
@@ -237,9 +243,17 @@ export default function CheckoutPage() {
     return true;
   };
 
+  // A checkout URL without a valid step (the old /checkout/ link from the
+  // cart, a typo, a stale bookmark) is REPLACED with the first step. There
+  // is deliberately no legacy single-page mode: without this the cart's
+  // «ادامه و ثبت سفارش» could open a form that skips review and coupon.
+  useEffect(() => {
+    if (hasValidStep) return;
+    setSearchParams({ step: "delivery" }, { replace: true });
+  }, [hasValidStep, setSearchParams]);
+
   // URL guards: later steps cannot be opened before earlier ones are done
   useEffect(() => {
-    if (!isStepped) return;
     if (shippingStatus !== "ready" || (addressesStatus !== "ready" && !isPickup)) return;
 
     if (currentStep === "address") {
@@ -254,7 +268,7 @@ export default function CheckoutPage() {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isStepped, currentStep, selectedMethod, shippingStatus, addressesStatus, isPickup]);
+  }, [currentStep, selectedMethod, shippingStatus, addressesStatus, isPickup]);
 
   const setStep = (step) => {
     setStepError(null);
@@ -477,14 +491,12 @@ export default function CheckoutPage() {
   const discountAmount = couponPreview?.discount_amount || 0;
   const payableTotal = Math.max(0, subtotal + previewedShippingCost - discountAmount);
 
-  // Main action handler & label per step
+  // Main action handler & label per step. The order is placed ONLY from the
+  // review step -- delivery and address just move the flow forward.
   let stepActionHandler = handleProceedFromDelivery;
   let stepActionLabel = "ادامه: اطلاعات تحویل";
 
-  if (!isStepped) {
-    stepActionHandler = placeOrder;
-    stepActionLabel = placing ? "در حال ثبت سفارش…" : "ثبت سفارش";
-  } else if (currentStep === "address") {
+  if (currentStep === "address") {
     stepActionHandler = handleProceedFromAddress;
     stepActionLabel = "ادامه: بازبینی و پرداخت";
   } else if (currentStep === "review") {
@@ -495,7 +507,7 @@ export default function CheckoutPage() {
   return (
     <div className="checkout">
       <h1 className="page-title">ثبت سفارش</h1>
-      <CheckoutStepper currentStep={isStepped ? currentStep : "delivery"} />
+      <CheckoutStepper currentStep={currentStep} />
 
       {stepError && <Alert>{stepError}</Alert>}
 
@@ -503,7 +515,7 @@ export default function CheckoutPage() {
         <div className="checkout__grid">
           <main className="checkout__main">
             {/* ================= STEP 2: روش تحویل ================= */}
-            {(!isStepped || currentStep === "delivery") && (
+            {currentStep === "delivery" && (
               <section id="checkout-section-delivery" className="checkout__section">
                 <h2>۲. انتخاب روش تحویل</h2>
                 <p className="muted">لطفاً روش مورد نظر خود را برای دریافت سفارش انتخاب فرمایید:</p>
@@ -563,7 +575,10 @@ export default function CheckoutPage() {
 
                           <div className="shipping-card__body">
                             {method.description ? (
-                              <p className="shipping-card__desc">{method.description}</p>
+                              /* The pickup method's description IS the owner's pickup
+                                 hours (the API falls back to pickup_hours), so it gets
+                                 the same bidi-safe rewrite as the pickup cards above. */
+                              <p className="shipping-card__desc">{hoursRange(method.description)}</p>
                             ) : null}
                             <p className="shipping-card__time muted">
                               {method.requires_address === false
@@ -584,22 +599,20 @@ export default function CheckoutPage() {
                   </div>
                 )}
 
-                {isStepped && (
-                  <div className="checkout__step-actions">
-                    <button
-                      type="button"
-                      className="btn btn--primary"
-                      onClick={handleProceedFromDelivery}
-                    >
-                      ادامه: اطلاعات تحویل
-                    </button>
-                  </div>
-                )}
+                <div className="checkout__step-actions">
+                  <button
+                    type="button"
+                    className="btn btn--primary"
+                    onClick={handleProceedFromDelivery}
+                  >
+                    ادامه: اطلاعات تحویل
+                  </button>
+                </div>
               </section>
             )}
 
             {/* ================= STEP 3: اطلاعات تحویل ================= */}
-            {(!isStepped || currentStep === "address") && (
+            {currentStep === "address" && (
               <section id="checkout-section-address" className="checkout__section">
                 <h2>۳. اطلاعات تحویل</h2>
 
@@ -614,7 +627,7 @@ export default function CheckoutPage() {
                       ) : null}
                       {siteSettings.pickup_hours ? (
                         <p>
-                          <strong>ساعات تحویل:</strong> {faDigits(siteSettings.pickup_hours)}
+                          <strong>ساعات تحویل:</strong> {hoursRange(siteSettings.pickup_hours)}
                         </p>
                       ) : null}
                       <p className="muted">
@@ -837,22 +850,20 @@ export default function CheckoutPage() {
                   </div>
                 )}
 
-                {isStepped && (
-                  <div className="checkout__step-actions">
-                    <button
-                      type="button"
-                      className="btn btn--primary"
-                      onClick={handleProceedFromAddress}
-                    >
-                      ادامه: بازبینی و پرداخت
-                    </button>
-                  </div>
-                )}
+                <div className="checkout__step-actions">
+                  <button
+                    type="button"
+                    className="btn btn--primary"
+                    onClick={handleProceedFromAddress}
+                  >
+                    ادامه: بازبینی و پرداخت
+                  </button>
+                </div>
               </section>
             )}
 
             {/* ================= STEP 4: بازبینی و پرداخت ================= */}
-            {isStepped && currentStep === "review" && (
+            {currentStep === "review" && (
               <section id="checkout-section-review" className="checkout__section checkout__review">
                 <h2>۴. بازبینی و پرداخت</h2>
 
@@ -947,7 +958,7 @@ export default function CheckoutPage() {
                         )}
                         {siteSettings.pickup_hours && (
                           <p>
-                            <strong>ساعات دریافت:</strong> {faDigits(siteSettings.pickup_hours)}
+                            <strong>ساعات دریافت:</strong> {hoursRange(siteSettings.pickup_hours)}
                           </p>
                         )}
                       </>

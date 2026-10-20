@@ -65,13 +65,23 @@ async function addAddressThenOpenCheckout() {
   fireEvent.click(screen.getByRole("button", { name: /سبد خرید/ }));
   fireEvent.click(await screen.findByRole("link", { name: /مشاهدهٔ سبد و ثبت سفارش/ }));
   await screen.findByRole("heading", { name: "سبد خرید" });
-  fireEvent.click(screen.getByRole("button", { name: "ادامه و ثبت سفارش" }));
-  await screen.findByRole("heading", { name: "ثبت سفارش" });
 
-  // The newly saved address is available and selected in saved-address mode.
-  await waitFor(() => {
-    expect(screen.getByRole("radio", { name: /سارا احمدی/ }).checked).toBe(true);
-  });
+  // The cart's action is a real link to the FIRST checkout step: there is no
+  // single-page checkout that would place the order from here.
+  fireEvent.click(screen.getByRole("link", { name: "ادامه و ثبت سفارش" }));
+  await screen.findByRole("heading", { name: "ثبت سفارش" });
+  await screen.findByRole("heading", { name: /۲\. انتخاب روش تحویل/ });
+}
+
+/** Walks delivery -> address -> review, exactly like a shopper on a phone.
+ *  `onAddressStep` runs while the delivery-info step is on screen (the
+ *  pickup contact form and the saved-address list live there). */
+async function walkToReviewStep(onAddressStep) {
+  fireEvent.click(screen.getAllByRole("button", { name: "ادامه: اطلاعات تحویل" })[0]);
+  await screen.findByRole("heading", { name: /۳\. اطلاعات تحویل/ });
+  await onAddressStep?.();
+  fireEvent.click(screen.getAllByRole("button", { name: "ادامه: بازبینی و پرداخت" })[0]);
+  await screen.findByRole("heading", { name: /۴\. بازبینی و پرداخت/ });
 }
 
 function renderLoggedInApp() {
@@ -167,11 +177,21 @@ describe("saved-address checkout flow", () => {
 
     if (method === "pickup") {
       fireEvent.click(screen.getByRole("radio", { name: /دریافت حضوری/ }));
-      fireEvent.change(await screen.findByLabelText(/^نام تحویل‌گیرنده/), { target: { value: "سارا" } });
-      fireEvent.change(screen.getByLabelText(/^شماره تماس/), { target: { value: "09121112233" } });
     }
 
-    fireEvent.click(screen.getByRole("button", { name: /ثبت سفارش/ }));
+    await walkToReviewStep(async () => {
+      if (method === "standard") {
+        // The newly saved address is available and auto-selected.
+        await waitFor(() => {
+          expect(screen.getByRole("radio", { name: /سارا احمدی/ }).checked).toBe(true);
+        });
+        return;
+      }
+      fireEvent.change(await screen.findByLabelText(/^نام تحویل‌گیرنده/), { target: { value: "سارا" } });
+      fireEvent.change(screen.getByLabelText(/^شماره تماس/), { target: { value: "09121112233" } });
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /ثبت سفارش و پرداخت/ }));
     await waitFor(() => expect(checkoutPayloads).toHaveLength(1));
     await screen.findByRole("heading", { name: "سفارش شما ثبت شد" });
 

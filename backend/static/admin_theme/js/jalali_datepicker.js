@@ -299,7 +299,11 @@
             updateInputValue(true);
           });
 
-          timeWrap.append(timeLabel, hourSelect, timeSep, minSelect, confirmBtn);
+          // Clock order, not paragraph order: the row is LTR so the hour
+          // select sits on the LEFT and the minute on the RIGHT («ساعت :
+          // دقیقه»), while the «زمان:» label stays on the right edge.
+          timeWrap.setAttribute("dir", "ltr");
+          timeWrap.append(hourSelect, timeSep, minSelect, confirmBtn, timeLabel);
           popup.appendChild(timeWrap);
         }
       };
