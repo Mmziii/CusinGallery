@@ -2571,11 +2571,14 @@ input, select, textarea { min-width: 0; max-width: 100%; }
    restores it, so the full header is always there when the shopper looks.
 
    The height is TRANSITIONED, not snapped: `height: auto` cannot be
-   interpolated, so the expanded height is published by Header.jsx as
-   --header-natural-height (the inner's own measured height, refreshed on
-   every resize) and the fold is a definite-to-definite 200ms ease. The
-   sticky header stays in flow and simply changes size, which is what keeps
-   the page content from jumping. */
+   interpolated, so the expanded content height is published by Header.jsx
+   as --header-natural-height and the fold is a definite-to-definite 200ms
+   ease. The measurement is taken ONLY while the header is expanded,
+   non-compact and at rest (see Header.jsx), and `auto` is the fallback
+   whenever no trustworthy value exists -- so the box can never end up
+   shorter than its content and paint over the page underneath. The sticky
+   header keeps its real height in the flow, which is what keeps the page
+   content from jumping or being covered. */
 @media (max-width: 767px) {
   .site-header__inner {
     height: var(--header-natural-height, auto);
@@ -2597,13 +2600,11 @@ input, select, textarea { min-width: 0; max-width: 100%; }
   .site-header--collapsed .site-header__actions .btn,
   .site-header--collapsed .site-header__actions .user-menu { display: none; }
 
-  /* A long brand name must never push the row wider than the viewport. */
+  /* The one row is exactly: menu, logo, search icon, cart badge. The brand
+     NAME steps aside so a long owner-edited name can never push the row
+     wider than the viewport; the logo alone stays as the home affordance. */
   .site-header--collapsed .site-header__brand { min-width: 0; }
-  .site-header--collapsed .site-header__brand-name {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    font-size: var(--font-size-sm);
-  }
+  .site-header--collapsed .site-header__brand-name { display: none; }
 
   .site-header--collapsed .site-header__search-toggle { display: inline-grid; }
 
