@@ -236,6 +236,7 @@ export default function MegaMenu({ groups, open, onOpen, onClose }) {
           aria-haspopup="true"
           aria-expanded={open}
           aria-controls={`${panelId} ${sheetId}`}
+          aria-label="دسته‌بندی کالاها"
           onClick={() => {
             if (open) {
               close();
@@ -245,7 +246,13 @@ export default function MegaMenu({ groups, open, onOpen, onClose }) {
           }}
         >
           <Icon name="grid" size={16} />
-          دسته‌بندی کالاها
+          {/* PR 20: the 768-1099px range shows the SHORT label (CSS swaps
+              them); the accessible name stays «دسته‌بندی کالاها» either
+              way via the aria-label above. */}
+          <span className="site-header__mega-label">دسته‌بندی کالاها</span>
+          <span className="site-header__mega-label site-header__mega-label--short" aria-hidden="true">
+            دسته‌بندی
+          </span>
           <Icon name="chevron-down" size={16} />
         </button>
 

@@ -44,7 +44,6 @@ const ADDRESSES = {
 };
 
 beforeEach(() => {
-  vi.spyOn(window, "confirm").mockReturnValue(true);
   apiClient.defaults.adapter = async (config) => {
     const url = config.url || "";
     if (url === "/accounts/locations/") {

@@ -38,7 +38,9 @@ describe("saved-address collection refreshes", () => {
   beforeEach(() => {
     addresses = [address(1, "سارا احمدی", true), address(2, "رضا کریمی")];
     addressGets = 0;
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+    // PR 20: deletion goes through the styled dialog; the native prompt
+    // must never be called (asserted at the end of the flow).
+    vi.spyOn(window, "confirm");
 
     apiClient.defaults.adapter = async (config) => {
       const url = config.url || "";
@@ -98,7 +100,11 @@ describe("saved-address collection refreshes", () => {
     expect(within(cardFor("رضا کریمی")).getByText(/کرج/)).toBeTruthy();
 
     fireEvent.click(within(cardFor("رضا کریمی")).getByRole("button", { name: "حذف" }));
+    // The styled confirm dialog asks first; «حذف» inside it goes ahead.
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "حذف" }));
     await waitFor(() => expect(addressGets).toBe(4));
     expect(screen.queryByText("رضا کریمی")).toBeNull();
+    expect(window.confirm).not.toHaveBeenCalled();
   });
 });

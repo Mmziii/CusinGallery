@@ -22,12 +22,39 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import apiClient from "../services/apiClient";
 import useAuthStore from "../store/useAuthStore";
 import useCartStore from "../store/useCartStore";
+import { loadStyles } from "../test/cssCascade";
 import Header from "./Header.jsx";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CSS = readFileSync(join(HERE, "..", "styles", "storefront.css"), "utf8");
 
+/** Resolved per-range stylesheets (var() substituted), for asserting that
+ *  a rule exists inside ONE media query and not merely somewhere in the
+ *  file. */
+const MEDIA = loadStyles().media;
+const mediaCss = (params) =>
+  MEDIA.filter((entry) => entry.params === params)
+    .map((entry) => entry.css)
+    .join("\n")
+    .replace(/\s+/g, " ");
+
 const originalAdapter = apiClient.defaults.adapter;
+const originalMatchMedia = window.matchMedia;
+
+/** PR 20 gates the fold to phones, so the viewport is part of the harness:
+ *  `phone` makes `(max-width: 767px)` match, everything else does not. */
+function setPhoneViewport(phone) {
+  window.matchMedia = (query) => ({
+    matches: Boolean(phone && query.includes("max-width: 767px")),
+    media: query,
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  });
+}
 
 /** Resolves after the component's rAF-throttled pass has run. */
 function nextFrame() {
@@ -87,6 +114,10 @@ function naturalHeight() {
   return document.documentElement.style.getPropertyValue("--header-natural-height");
 }
 
+function siteHeaderHeight() {
+  return document.documentElement.style.getPropertyValue("--site-header-height");
+}
+
 /** Capturing ResizeObserver: the component observes the expanded inner. */
 class MockResizeObserver {
   static instances = [];
@@ -111,6 +142,9 @@ class MockResizeObserver {
 }
 
 beforeEach(() => {
+  // The fold/measurement behaviours under test are the phone ones; the
+  // desktop cases opt out explicitly with setPhoneViewport(false).
+  setPhoneViewport(true);
   apiClient.defaults.adapter = async (config) => {
     if ((config.url || "").startsWith("/categories/tree/")) {
       return { data: { count: 0, next: null, previous: null, results: [] }, status: 200, statusText: "OK", headers: {}, config };
@@ -132,6 +166,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   apiClient.defaults.adapter = originalAdapter;
+  window.matchMedia = originalMatchMedia;
   Object.defineProperty(window, "scrollY", { value: 0, configurable: true });
   document.documentElement.style.removeProperty("--header-natural-height");
   document.documentElement.style.removeProperty("--site-header-height");
@@ -294,6 +329,23 @@ describe("phone header collapse on scroll", () => {
     expect(header.className).not.toContain("site-header--searching");
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
   });
+
+  it("never folds beyond the phone boundary (PR 20 gating)", async () => {
+    // The collapsed class used to be set on desktop too: harmless (its
+    // styles are phone-only) but the state lied. On a wide viewport the
+    // pill is the ONLY scrolled state, however far the shopper goes.
+    setPhoneViewport(false);
+    renderHeader();
+    const header = document.querySelector(".site-header");
+
+    await scrollTo(480);
+    expect(header.className).toContain("site-header--compact");
+    expect(header.className).not.toContain("site-header--collapsed");
+
+    await waitOutLock();
+    await scrollTo(600);
+    expect(header.className).not.toContain("site-header--collapsed");
+  });
 });
 
 describe("natural header height measurement", () => {
@@ -352,6 +404,44 @@ describe("natural header height measurement", () => {
     await waitFor(() => expect(naturalHeight()).toBe("244px"));
   });
 
+  it("FLIP-pins the fold and releases the pin when the height settles", async () => {
+    // PR 20: the expanded inner is `height: auto`, which cannot
+    // transition -- so the fold pins the current height inline, lets
+    // the class take over, and the pin is ALWAYS gone at rest. A stuck
+    // pixel height is the bug this replaces.
+    renderHeader();
+    const header = document.querySelector(".site-header");
+    const inner = document.querySelector(".site-header__inner");
+    const heightSettled = () => {
+      const event = new Event("transitionend");
+      Object.defineProperty(event, "propertyName", { value: "height" });
+      inner.dispatchEvent(event);
+    };
+
+    stubInnerHeight({ box: 124, content: 124 });
+    await waitFor(() => expect(naturalHeight()).toBe("124px"));
+    expect(inner.style.height).toBe("");
+
+    // Fold: the pin is released to the collapsed class's row height
+    // (inline height already gone; overflow stays pinned mid-flight).
+    await scrollTo(220);
+    expect(header.className).toContain("site-header--collapsed");
+    expect(inner.style.height).toBe("");
+    heightSettled();
+    expect(inner.style.overflow).toBe("");
+
+    // Expand: the pin targets the measured natural height...
+    stubInnerHeight({ box: 56, content: 56 });
+    await scrollTo(0);
+    expect(header.className).not.toContain("site-header--collapsed");
+    expect(inner.style.height).toBe("124px");
+
+    // ...and is cleared back to auto when the transition settles.
+    heightSettled();
+    expect(inner.style.height).toBe("");
+    expect(inner.style.overflow).toBe("");
+  });
+
   it("re-measures on resize and drops back to auto while it does", async () => {
     renderHeader();
     stubInnerHeight({ box: 243, content: 243 });
@@ -367,20 +457,40 @@ describe("natural header height measurement", () => {
     await waitFor(() => expect(naturalHeight()).toBe("258px"));
   });
 
-  it("keeps --site-header-height on the real rendered height", async () => {
+  it("publishes --site-header-height from the EXPANDED phone header, folded or not", async () => {
+    // PR 20: on phones the published offset is the expanded (spacer)
+    // height. Live it followed the folded pill -- and on /checkout it
+    // was EMPTY entirely, so anchor scroll-margins fell back to 92px.
+    renderHeader();
+    stubInnerHeight({ box: 124, content: 124 });
+    await waitFor(() => expect(siteHeaderHeight()).toBe("124px"));
+    expect(naturalHeight()).toBe("124px");
+
+    // Folded to the pill the box is 56px, but sticky siblings hang off
+    // the spacer behind the fixed header -- the offset must not follow.
+    stubInnerHeight({ box: 56, content: 56 });
+    await scrollTo(220);
+    expect(document.querySelector(".site-header").className).toContain("site-header--collapsed");
+    const observer = MockResizeObserver.instances.at(-1);
+    await act(async () => {
+      observer.trigger();
+      await nextFrame();
+    });
+    expect(siteHeaderHeight()).toBe("124px");
+  });
+
+  it("publishes --site-header-height from the desktop OUTER box, pill or not", async () => {
+    setPhoneViewport(false);
     renderHeader();
     const header = document.querySelector(".site-header");
-    Object.defineProperty(header, "offsetHeight", { configurable: true, get: () => 245 });
-    stubInnerHeight({ box: 243, content: 243 });
-    await waitFor(() =>
-      expect(document.documentElement.style.getPropertyValue("--site-header-height")).toBe("245px")
-    );
+    Object.defineProperty(header, "offsetHeight", { configurable: true, get: () => 76 });
+    await waitFor(() => expect(siteHeaderHeight()).toBe("76px"));
 
-    Object.defineProperty(header, "offsetHeight", { configurable: true, get: () => 57 });
+    // The pill morphs INSIDE the outer box; the published offset is the
+    // constant outer height in both states.
     await scrollTo(220);
-    await waitFor(() =>
-      expect(document.documentElement.style.getPropertyValue("--site-header-height")).toBe("57px")
-    );
+    expect(header.className).toContain("site-header--compact");
+    expect(siteHeaderHeight()).toBe("76px");
   });
 });
 
@@ -394,8 +504,8 @@ describe("header spacer and pill state (PR 19)", () => {
     expect(spacer.parentElement).toBe(header.parentElement);
     expect(header.nextElementSibling).toBe(spacer);
 
-    stubInnerHeight({ box: 232, content: 232 });
-    await waitFor(() => expect(naturalHeight()).toBe("232px"));
+    stubInnerHeight({ box: 124, content: 124 });
+    await waitFor(() => expect(naturalHeight()).toBe("124px"));
   });
 
   it("applies the pill as a class on the header, never as inline styles", async () => {
@@ -426,15 +536,19 @@ describe("header layout contract", () => {
 
   it("renders the phone spacer with the natural height and fixed header", () => {
     expect(CSS).toMatch(/\.site-header-spacer \{ display: none; \}/);
-    expect(CSS).toMatch(/@media \(max-width: 767px\) \{[\s\S]*?\.site-header \{\s*position: fixed;\s*top: 0;\s*inset-inline: 0;[\s\S]*?\.site-header-spacer \{\s*display: block;\s*height: var\(--header-natural-height, 232px\);/);
+    expect(CSS).toMatch(/@media \(max-width: 767px\) \{[\s\S]*?\.site-header \{\s*position: fixed;\s*top: 0;\s*inset-inline: 0;[\s\S]*?\.site-header-spacer \{\s*display: block;[\s\S]*?height: var\(--header-natural-height, 124px\);/);
     // The spacer is not allowed to animate with the collapse.
     expect(CSS).toMatch(/\.site-header-spacer \{[^}]*transition: none/);
   });
 
   it("morphs the desktop bar into the floating pill", () => {
     const compact = CSS.replace(/\s+/g, " ").match(/\.site-header--compact \.site-header__inner \{[^}]*\}/)[0];
-    expect(compact).toContain("width: 80%;");
+    // PR 20: 80% wrapped every label at 1024px into an 87px pill.
+    expect(compact).toContain("width: calc(100% - 32px);");
     expect(compact).toContain("max-width: 1160px;");
+    // The exact compact height is what keeps the pill inside the 76px
+    // outer box (12px float margin + 60px = 72px).
+    expect(compact).toContain("height: var(--header-height-compact);");
     expect(compact).toContain("margin-top: 12px;");
     expect(compact).toContain("border-radius: 16px;");
     expect(compact).toContain("border-color: rgba(206,180,100,.35);");
@@ -456,7 +570,11 @@ describe("header layout contract", () => {
   });
 
   it("folds the phone row into the same pill and restores the search field", () => {
-    expect(CSS).toMatch(/\.site-header__inner \{\s*flex-wrap: wrap;\s*row-gap: 10px;\s*\/\*[\s\S]*?\*\/\s*height: var\(--header-natural-height, auto\);/);
+    // PR 20: expanded = height:auto, NEVER a pinned pixel/var height --
+    // a locked box can only re-measure itself (live: 190px for 246px of
+    // content, search row spilling over the page).
+    expect(CSS).toMatch(/\.site-header__inner \{\s*flex-wrap: wrap;\s*row-gap: 10px;\s*\/\*[\s\S]*?\*\/\s*height: auto;/);
+    expect(CSS).not.toMatch(/height: var\(--header-natural-height, auto\)/);
     const collapsed = CSS.replace(/\s+/g, " ").match(/\.site-header--collapsed \.site-header__inner \{[^}]*\}/)[0];
     expect(collapsed).toContain("height: var(--header-height-row);");
     expect(collapsed).toContain("margin: 8px;");
@@ -467,9 +585,26 @@ describe("header layout contract", () => {
       /\.site-header--collapsed \.site-header__inner::before \{ -webkit-backdrop-filter: blur\(12px\); backdrop-filter: blur\(12px\); \}/
     );
     expect(CSS).toMatch(/\.site-header--collapsed \.site-header__search-toggle \{ display: inline-grid; \}/);
-    // Searching grows the inner back and stops clipping the suggestions list.
-    expect(CSS).toMatch(/\.site-header--collapsed\.site-header--searching \.site-header__inner \{\s*height: auto;\s*overflow: visible;\s*\}/);
-    expect(CSS).toMatch(/\.site-header--collapsed\.site-header--searching \.site-header__search \{ display: flex; \}/);
+  });
+
+  it("keeps the searching pill's field inside the pill as a second row", () => {
+    // PR 20: the revealed field used to stay in the nowrap pill row and
+    // stick ~147px out of it (x=-139..199 at 375px). The searching pill
+    // wraps instead: icons on row 1, the field on row 2 inside the
+    // padding, shrinkable all the way down (min-width: 0).
+    const flat = CSS.replace(/\s+/g, " ");
+    const inner = flat.match(/\.site-header--collapsed\.site-header--searching \.site-header__inner \{[^}]*\}/)[0];
+    expect(inner).toContain("height: auto;");
+    expect(inner).toContain("flex-wrap: wrap;");
+    expect(inner).toContain("overflow: visible;");
+    const search = flat.match(/\.site-header--collapsed\.site-header--searching \.site-header__search \{[^}]*\}/)[0];
+    expect(search).toContain("display: flex;");
+    expect(search).toContain("flex: 1 1 100%;");
+    expect(search).toContain("max-width: 100%;");
+    expect(search).toContain("min-width: 0;");
+    expect(flat).toContain(
+      ".site-header--collapsed.site-header--searching .site-header__search input { flex: 1 1 auto; min-width: 0; }"
+    );
   });
 
   it("defines the one-row height and hides the toggle everywhere else", () => {
@@ -498,6 +633,122 @@ describe("header layout contract", () => {
     // it is paired with a static-height spacer -- the document height never
     // depends on the collapsed state.
     expect(CSS).toMatch(/@media \(max-width: 767px\) \{[\s\S]*?\.site-header \{\s*position: fixed;/);
-    expect(CSS.replace(/\s+/g, " ")).toContain("height: var(--header-natural-height, 232px);");
+    expect(CSS.replace(/\s+/g, " ")).toContain("height: var(--header-natural-height, 124px);");
+  });
+
+  it("gives the desktop bar an exact border-box height (79px-inside-76px fix)", () => {
+    // PR 20: at rest the inner painted 79px inside the 76px outer box
+    // (min-height + the transparent border). The bar's own box is now
+    // exactly var(--header-height), border included.
+    const inner = [...CSS.replace(/\s+/g, " ").matchAll(/\.site-header__inner \{[^}]*\}/g)]
+      .map((match) => match[0])
+      .find((rule) => rule.includes("background-color: var(--brand-green-dark);"));
+    expect(inner).toBeTruthy();
+    expect(inner).toContain("box-sizing: border-box;");
+    expect(inner).toContain("height: var(--header-height);");
+  });
+
+  it("makes the phone header exactly two rows: no mega trigger, search on row 2", () => {
+    const phone = mediaCss("(max-width: 767px)");
+    // The «دسته‌بندی کالاها» trigger leaves the phone header entirely
+    // (the burger drawer opens the same sheet).
+    expect(phone).toContain(".site-header__mega-trigger { display: none; }");
+    // Row 2 is the full-width search.
+    const search = phone.match(/\.site-header__search \{[^}]*\}/g) || [];
+    expect(search.some((rule) => rule.includes("order: 3") && rule.includes("100%"))).toBe(true);
+    // And the expanded inner wraps (so there IS a second row) at auto.
+    expect(phone).toContain("height: auto;");
+  });
+
+  it("gives tablets (768-1099px) the compact one-row chrome", () => {
+    const tablet = mediaCss("(min-width: 768px) and (max-width: 1099px)");
+    // Live at 820px: 29px search, wrapping labels, 87px pill. Now:
+    expect(tablet).toContain(".site-header__nav { display: none; }");
+    expect(tablet).toContain(".site-header__burger { display: block; }");
+    // Mega trigger: icon + SHORT label (the full label swaps out).
+    expect(tablet).toContain(".site-header__mega-label { display: none; }");
+    expect(tablet).toContain(".site-header__mega-label--short { display: inline; }");
+    // The search flexes with a real floor.
+    expect(tablet).toContain("min-width: 220px;");
+    // One row, always (the ≤1199px tightening never re-wraps it).
+    expect(tablet).toContain(".site-header__inner { flex-wrap: nowrap; }");
+    // Account is icon-only at and below this range.
+    const iconOnly = mediaCss("(max-width: 1099px)");
+    expect(iconOnly).toContain(".user-menu__trigger-label");
+    expect(iconOnly).toContain(".site-header__login-label { display: none; }");
+    // And the labels that DO show (>=1100px) can never wrap.
+    const flat = CSS.replace(/\s+/g, " ");
+    expect(flat).toContain(".site-header__mega-btn {");
+    expect(flat.match(/\.site-header__mega-btn \{[^}]*white-space: nowrap;/)).toBeTruthy();
+    expect(flat.match(/\.user-menu__trigger \{[^}]*white-space: nowrap;/)).toBeTruthy();
+    expect(flat.match(/\.site-header__nav a \{[^}]*white-space: nowrap;/)).toBeTruthy();
+  });
+
+  it("detaches the mega dropdown from the pill: centred, capped, nothing sticks out", () => {
+    // PR 20: in pill mode the panel was wider than the pill and hung off
+    // the left edge of the viewport at 1024px (inner x=-55).
+    const flat = CSS.replace(/\s+/g, " ");
+    const menu = flat.match(/\.mega-menu \{[^}]*\}/)[0];
+    expect(menu).toContain("width: min(1160px, calc(100vw - 32px));");
+    expect(menu).toContain("left: 50%;");
+    expect(menu).toContain("transform: translateX(-50%);");
+    expect(menu).toContain("top: 100%;");
+    const inner = flat.match(/\.mega-menu__inner \{[^}]*\}/)[0];
+    expect(inner).toContain("max-width: 100%;");
+    expect(inner).not.toContain("94vw");
+    // The dim starts at the pill's bottom when compact.
+    expect(flat).toContain(
+      ".site-header--compact .mega-menu__overlay { top: calc(12px + var(--header-height-compact)); }"
+    );
+  });
+});
+
+describe("phone header markup (PR 20 two rows)", () => {
+  it("orders row 1 as burger, brand, actions -- with the search wrapping to row 2", () => {
+    renderHeader();
+    const inner = document.querySelector(".site-header__inner");
+    const burger = inner.querySelector(".site-header__burger");
+    const brand = inner.querySelector(".site-header__brand");
+    const search = inner.querySelector(".site-header__search");
+    const actions = inner.querySelector(".site-header__actions");
+    // DOM order puts the account + cart (actions) after the brand, and the
+    // search carries the order-3/full-basis phone treatment (asserted in
+    // the CSS contract above), so visually it wraps under them.
+    expect(burger.compareDocumentPosition(brand) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(brand.compareDocumentPosition(actions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(search).toBeTruthy();
+    // The cart (with its badge slot) lives in the actions cluster.
+    expect(actions.querySelector(".cart-link")).toBeTruthy();
+  });
+
+  it("keeps an accessible name on the icon-only account controls", () => {
+    renderHeader();
+    // Logged out: the login link is icon-only at <=1099px (CSS), so it
+    // must not lose its name when the label hides.
+    const login = document.querySelector(".site-header__login");
+    expect(login).toBeTruthy();
+    expect(login.getAttribute("aria-label")).toBe("ورود | ثبت‌نام");
+    expect(login.querySelector(".site-header__login-label").textContent).toBe("ورود | ثبت‌نام");
+    expect(login.querySelector("svg")).toBeTruthy();
+  });
+
+  it("labels the account button «حساب کاربری» and pairs the icon with the name", () => {
+    const realFetchMe = useAuthStore.getState().fetchMe;
+    useAuthStore.setState({
+      user: { first_name: "سارا" },
+      isAuthenticated: true,
+      isLoading: false,
+      fetchMe: async () => ({ success: true }),
+    });
+    try {
+      renderHeader();
+      const trigger = document.querySelector(".user-menu__trigger");
+      expect(trigger).toBeTruthy();
+      expect(trigger.getAttribute("aria-label")).toBe("حساب کاربری");
+      expect(trigger.querySelector("svg")).toBeTruthy();
+      expect(trigger.querySelector(".user-menu__trigger-label").textContent).toBe("سارا");
+    } finally {
+      useAuthStore.setState({ fetchMe: realFetchMe });
+    }
   });
 });
