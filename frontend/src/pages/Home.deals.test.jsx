@@ -2,9 +2,9 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { MemoryRouter, useLocation } from "react-router-dom";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import apiClient from "../services/apiClient";
 import Home from "./Home";
@@ -18,6 +18,22 @@ const CSS = readFileSync(
 
 const originalAdapter = apiClient.defaults.adapter;
 const SERVER_NOW = "2026-10-18T12:00:00.000Z";
+
+const deal = (id, name, slug, overrides = {}) => ({
+  id,
+  sale_price: 50000,
+  starts_at: "2026-10-18T10:00:00.000Z",
+  ends_at: "2026-10-18T18:00:00.000Z",
+  product: {
+    id: 100 + id,
+    name,
+    slug,
+    primary_image: { image: `/img${id}.jpg`, alt_text: name },
+    price_info: { price: 100000, compare_at_price: null },
+  },
+  ...overrides,
+});
+
 const DAILY_DEAL = {
   count: 1,
   next: null,
@@ -50,32 +66,27 @@ const MULTI_DEALS = {
   count: 2,
   server_now: SERVER_NOW,
   results: [
-    {
-      id: 1,
-      sale_price: 50000,
-      starts_at: "2026-10-18T10:00:00.000Z",
-      ends_at: "2026-10-18T18:00:00.000Z",
-      product: {
-        id: 101,
-        name: "کالای اول",
-        slug: "item-1",
-        primary_image: { image: "/img1.jpg", alt_text: "کالا ۱" },
-        price_info: { price: 100000 },
-      },
-    },
-    {
-      id: 2,
-      sale_price: 70000,
-      starts_at: "2026-10-18T10:00:00.000Z",
-      ends_at: "2026-10-18T18:00:00.000Z",
-      product: {
-        id: 102,
-        name: "کالای دوم",
-        slug: "item-2",
-        primary_image: { image: "/img2.jpg", alt_text: "کالا ۲" },
-        price_info: { price: 100000 },
-      },
-    },
+    deal(1, "کالای اول", "item-1", { sale_price: 50000 }),
+    deal(2, "کالای دوم", "item-2", { sale_price: 70000 }),
+  ],
+};
+
+const THREE_DEALS = {
+  count: 3,
+  server_now: SERVER_NOW,
+  results: [deal(1, "کالای اول", "item-1"), deal(2, "کالای دوم", "item-2"), deal(3, "کالای سوم", "item-3")],
+};
+
+const SIX_DEALS = {
+  count: 6,
+  server_now: SERVER_NOW,
+  results: [
+    deal(1, "کالای اول", "item-1"),
+    deal(2, "کالای دوم", "item-2"),
+    deal(3, "کالای سوم", "item-3"),
+    deal(4, "کالای چهارم", "item-4"),
+    deal(5, "کالای پنجم", "item-5"),
+    deal(6, "کالای ششم", "item-6"),
   ],
 };
 
@@ -104,6 +115,31 @@ function setViewport(mobile) {
   });
 }
 
+/** The live URL, so "a side card does not navigate" can be asserted. */
+function LocationProbe() {
+  const location = useLocation();
+  return (
+    <output data-testid="location" hidden>
+      {location.pathname}
+    </output>
+  );
+}
+
+function renderHome() {
+  return render(
+    <MemoryRouter>
+      <Home />
+      <LocationProbe />
+    </MemoryRouter>
+  );
+}
+
+/** Desktop coverflow cards, in DOM order. */
+const cards = (container) => [...container.querySelectorAll(".deals-cf__card")];
+const cardAt = (container, offset) => container.querySelector(`.deals-cf__card[data-offset="${offset}"]`);
+const centreCard = (container) => container.querySelector(".deals-cf__card.is-centre");
+const centreName = (container) => centreCard(container)?.querySelector(".deal-card__name")?.textContent;
+
 beforeEach(() => {
   serveDeals(DAILY_DEAL);
 });
@@ -112,15 +148,12 @@ afterEach(() => {
   cleanup();
   apiClient.defaults.adapter = originalAdapter;
   window.matchMedia = originalMatchMedia;
+  vi.useRealTimers();
 });
 
 describe("homepage daily deal", () => {
   it("renders the actual deal discount, old price, Persian name and labeled Persian countdown", async () => {
-    const { container } = render(
-      <MemoryRouter>
-        <Home />
-      </MemoryRouter>
-    );
+    const { container } = renderHome();
 
     const dealName = await screen.findByText("پارچ مدل ۱۲۳");
     expect(dealName.className).toContain("deal-card__name");
@@ -138,72 +171,27 @@ describe("homepage daily deal", () => {
     expect(timer.textContent).toContain("ثانیه");
   });
 
-  it("handles carousel prev/next and thumbnail clicks with multiple deals", async () => {
-    serveDeals(MULTI_DEALS);
-
-    const { container } = render(
-      <MemoryRouter>
-        <Home />
-      </MemoryRouter>
-    );
-
-    const firstName = await screen.findByText("کالای اول");
-    expect(firstName).toBeTruthy();
-
-    const nextBtn = screen.getByRole("button", { name: "پیشنهاد بعدی" });
-    nextBtn.click();
-
-    const secondName = await screen.findByText("کالای دوم");
-    expect(secondName).toBeTruthy();
-
-    const thumbs = container.querySelectorAll(".deals-thumb");
-    expect(thumbs.length).toBe(2);
-    thumbs[0].click();
-
-    expect(await screen.findByText("کالای اول")).toBeTruthy();
-  });
-
   it("does not render deals section when all deals are expired", async () => {
-    const EXPIRED_DEALS = {
+    serveDeals({
       count: 1,
       server_now: SERVER_NOW,
       results: [
-        {
-          id: 99,
-          sale_price: 50000,
+        deal(99, "کالای منقضی", "expired-item", {
           starts_at: "2026-10-18T08:00:00.000Z",
           ends_at: "2026-10-18T10:00:00.000Z", // before server_now (12:00)
-          product: {
-            id: 999,
-            name: "کالای منقضی",
-            slug: "expired-item",
-            price_info: { price: 100000 },
-          },
-        },
+        }),
       ],
-    };
+    });
 
-    apiClient.defaults.adapter = async (config) => {
-      if ((config.url || "").includes("/banners/daily-deals/")) {
-        return { data: EXPIRED_DEALS, status: 200, statusText: "OK", headers: {}, config };
-      }
-      return originalAdapter(config);
-    };
+    const { container } = renderHome();
 
-    const { container } = render(
-      <MemoryRouter>
-        <Home />
-      </MemoryRouter>
-    );
-
-    // Wait a tick for any async state to settle
     await new Promise((r) => setTimeout(r, 50));
     expect(screen.queryByText("کالای منقضی")).toBeNull();
     expect(container.querySelector(".deals-section")).toBeNull();
   });
 
   it("renders struck compare_at_price and correct percentage when price_info.price equals sale_price", async () => {
-    const DEAL_WITH_COMPARE_AT = {
+    serveDeals({
       count: 1,
       next: null,
       previous: null,
@@ -219,27 +207,13 @@ describe("homepage daily deal", () => {
             name: "سرویس قاشق و چنگال",
             slug: "cutlery-set",
             primary_image: null,
-            price_info: {
-              price: 199000,
-              compare_at_price: 240000,
-            },
+            price_info: { price: 199000, compare_at_price: 240000 },
           },
         },
       ],
-    };
+    });
 
-    apiClient.defaults.adapter = async (config) => {
-      if ((config.url || "").includes("/banners/daily-deals/")) {
-        return { data: DEAL_WITH_COMPARE_AT, status: 200, statusText: "OK", headers: {}, config };
-      }
-      return originalAdapter(config);
-    };
-
-    const { container } = render(
-      <MemoryRouter>
-        <Home />
-      </MemoryRouter>
-    );
+    const { container } = renderHome();
 
     const dealName = await screen.findByText("سرویس قاشق و چنگال");
     expect(dealName).toBeTruthy();
@@ -256,64 +230,130 @@ describe("homepage daily deal", () => {
   });
 });
 
-describe("daily deals slide transition", () => {
-  const renderMulti = async () => {
-    serveDeals(MULTI_DEALS);
-    const { container } = render(
-      <MemoryRouter>
-        <Home />
-      </MemoryRouter>
-    );
+describe("desktop coverflow layout", () => {
+  it("places the centre card, ±1 and ±2 on their sides and hides the rest", async () => {
+    serveDeals(SIX_DEALS);
+    const { container } = renderHome();
     await screen.findByText("کالای اول");
-    return container;
-  };
 
-  const slides = (container) => container.querySelectorAll(".deals-slide");
+    const centre = centreCard(container);
+    expect(centre.getAttribute("data-offset")).toBe("0");
+    expect(centre.className).toContain("is-centre");
+    expect(centre.getAttribute("data-role")).toBe("centre");
+    expect(centre.querySelector(".deal-card__name").textContent).toBe("کالای اول");
+    // The centre card links to the product.
+    expect(centre.querySelector("a").getAttribute("href")).toBe("/products/item-1/");
+    expect(centre.querySelector("a").getAttribute("role")).toBeNull();
 
-  it("cross-fades the outgoing slide with the incoming one, then drops it", async () => {
-    const container = await renderMulti();
-    expect(slides(container)).toHaveLength(1);
+    // +1 = the next deal, drawn on the LEFT in RTL; -1 = previous, RIGHT.
+    const nextOne = cardAt(container, "1");
+    expect(nextOne.className).toContain("is-side");
+    expect(nextOne.className).toContain("is-next");
+    expect(nextOne.querySelector(".deal-card__name").textContent).toBe("کالای دوم");
+    // Side cards only bring themselves to the centre.
+    expect(nextOne.querySelector("a").getAttribute("role")).toBe("button");
 
-    fireEvent.click(screen.getByRole("button", { name: "پیشنهاد بعدی" }));
+    const prevOne = cardAt(container, "-1");
+    expect(prevOne.className).toContain("is-prev");
+    // With six deals, -1 wraps to the last one.
+    expect(prevOne.querySelector(".deal-card__name").textContent).toBe("کالای ششم");
 
-    // Both slides are on screen at once: the old one leaving, the new one
-    // entering -- which is what makes it a transition instead of a swap.
-    expect(slides(container)).toHaveLength(2);
-    expect(container.querySelector(".deals-slide--out").getAttribute("aria-hidden")).toBe("true");
-    expect(container.querySelector(".deals-slide--in").textContent).toContain("کالای دوم");
+    // RTL geometry: the next card is offset to the LEFT (negative dx), the
+    // previous one to the RIGHT (positive dx); the centre is at 0.
+    expect(Number(centre.style.getPropertyValue("--cf-dx"))).toBe(0);
+    expect(Number(nextOne.style.getPropertyValue("--cf-dx"))).toBeLessThan(0);
+    expect(Number(prevOne.style.getPropertyValue("--cf-dx"))).toBeGreaterThan(0);
+    // Scale/opacity fall off with the distance from the centre.
+    expect(centre.style.getPropertyValue("--cf-scale")).toBe("1");
+    expect(centre.style.getPropertyValue("--cf-opacity")).toBe("1");
+    expect(Number(nextOne.style.getPropertyValue("--cf-scale"))).toBeCloseTo(0.8);
+    expect(Number(nextOne.style.getPropertyValue("--cf-opacity"))).toBeCloseTo(0.45);
+    expect(Number(cardAt(container, "2").style.getPropertyValue("--cf-scale"))).toBeLessThan(0.8);
+    expect(Number(cardAt(container, "2").style.getPropertyValue("--cf-opacity"))).toBeLessThan(0.45);
+    // ...and the centre card is on top.
+    expect(Number(centre.style.zIndex)).toBeGreaterThan(Number(nextOne.style.zIndex));
 
-    // Forward travel: the new slide comes in from the right (dir = 1).
-    const stage = container.querySelector(".deals-slides");
-    expect(stage.style.getPropertyValue("--deals-dir")).toBe("1");
+    // ±2 are the second ring: smaller and fainter (per the stylesheet).
+    expect(cardAt(container, "2").className).toContain("is-near");
+    expect(cardAt(container, "-2").className).toContain("is-near");
+    // ...and nothing further out is shown.
+    expect(cardAt(container, "3").className).toContain("is-hidden");
+    expect(cardAt(container, "3").getAttribute("aria-hidden")).toBe("true");
 
-    // ... and the outgoing slide is gone once the animation has played.
-    await waitFor(() => expect(slides(container)).toHaveLength(1), { timeout: 2000 });
-    expect(container.querySelector(".deals-slide--in")).toBeNull();
+    expect(cards(container)).toHaveLength(6);
   });
 
-  it("slides the other way when going back", async () => {
-    const container = await renderMulti();
+  it("moves the chosen side card to the centre instead of navigating", async () => {
+    serveDeals(SIX_DEALS);
+    const { container } = renderHome();
+    await screen.findByText("کالای اول");
+
+    const side = cardAt(container, "2");
+    const sideLink = side.querySelector("a");
+    expect(sideLink.getAttribute("href")).toBe("/products/item-3/");
+
+    fireEvent.click(sideLink);
+
+    // It became the centre card -- same DOM node, no navigation.
+    expect(centreName(container)).toBe("کالای سوم");
+    expect(screen.getByTestId("location").textContent).toBe("/");
+    expect(cardAt(container, "0")).toBe(side);
+    expect(cardAt(container, "0").className).toContain("is-centre");
+
+    // And the one that was centred moved two slots to the RIGHT (it was two
+    // to the left of the chosen card, so the set travelled left by two).
+    expect(cardAt(container, "-2").querySelector(".deal-card__name").textContent).toBe("کالای اول");
+    expect(cardAt(container, "1").querySelector(".deal-card__name").textContent).toBe("کالای چهارم");
+  });
+
+  it("rotates with the arrows, in both directions", async () => {
+    serveDeals(THREE_DEALS);
+    const { container } = renderHome();
+    await screen.findByText("کالای اول");
+
     fireEvent.click(screen.getByRole("button", { name: "پیشنهاد بعدی" }));
-    await screen.findByText("کالای دوم");
+    expect(centreName(container)).toBe("کالای دوم");
 
     fireEvent.click(screen.getByRole("button", { name: "پیشنهاد قبلی" }));
-    expect(container.querySelector(".deals-slides").style.getPropertyValue("--deals-dir")).toBe("-1");
-    expect(container.querySelector(".deals-slide--in").textContent).toContain("کالای اول");
+    expect(centreName(container)).toBe("کالای اول");
   });
 
-  it("moves the thumbnail highlight to the selected deal", async () => {
-    const container = await renderMulti();
-    const thumbs = container.querySelector(".deals-thumbs");
-    expect(thumbs.style.getPropertyValue("--deals-thumb-index")).toBe("0");
-    // The highlight lives inside the track -- the element that is exactly as
-    // wide as the thumbnails, so its offset lands on the right thumb however
-    // wide the centring container is.
-    const highlight = thumbs.querySelector(".deals-thumbs__track .deals-thumbs__highlight");
-    expect(highlight).toBeTruthy();
+  it("wraps around in both directions", async () => {
+    serveDeals(THREE_DEALS);
+    const { container } = renderHome();
+    await screen.findByText("کالای اول");
 
-    fireEvent.click(container.querySelectorAll(".deals-thumb")[1]);
-    await screen.findByText("کالای دوم");
-    expect(thumbs.style.getPropertyValue("--deals-thumb-index")).toBe("1");
+    // Before the first deal comes the last one.
+    fireEvent.click(screen.getByRole("button", { name: "پیشنهاد قبلی" }));
+    expect(centreName(container)).toBe("کالای سوم");
+
+    // After the last deal comes the first one.
+    fireEvent.click(screen.getByRole("button", { name: "پیشنهاد بعدی" }));
+    expect(centreName(container)).toBe("کالای اول");
+  });
+
+  it("follows the visual sides with ArrowLeft / ArrowRight", async () => {
+    serveDeals(THREE_DEALS);
+    const { container } = renderHome();
+    await screen.findByText("کالای اول");
+
+    const stage = container.querySelector(".deals-desktop");
+    fireEvent.keyDown(stage, { key: "ArrowLeft" });
+    expect(centreName(container)).toBe("کالای دوم");
+    fireEvent.keyDown(stage, { key: "ArrowRight" });
+    expect(centreName(container)).toBe("کالای اول");
+  });
+
+  it("marks the rotation so the centre card's text fades in after it arrives", async () => {
+    serveDeals(THREE_DEALS);
+    const { container } = renderHome();
+    await screen.findByText("کالای اول");
+    const stage = container.querySelector(".deals-cf__stage");
+    expect(stage.className).not.toContain("is-rotating");
+
+    fireEvent.click(screen.getByRole("button", { name: "پیشنهاد بعدی" }));
+    expect(stage.className).toContain("is-rotating");
+    await waitFor(() => expect(stage.className).not.toContain("is-rotating"), { timeout: 2000 });
   });
 
   it("swaps instantly under prefers-reduced-motion", async () => {
@@ -321,41 +361,108 @@ describe("daily deals slide transition", () => {
       ...originalMatchMedia(query),
       matches: query.includes("prefers-reduced-motion"),
     });
-    const container = await renderMulti();
+    serveDeals(THREE_DEALS);
+    const { container } = renderHome();
+    await screen.findByText("کالای اول");
 
     fireEvent.click(screen.getByRole("button", { name: "پیشنهاد بعدی" }));
-    await screen.findByText("کالای دوم");
-
-    expect(slides(container)).toHaveLength(1);
-    expect(container.querySelector(".deals-slide--out")).toBeNull();
+    expect(centreName(container)).toBe("کالای دوم");
+    // No motion state at all: the set has already switched.
+    expect(container.querySelector(".deals-cf__stage").className).not.toContain("is-rotating");
   });
 
-  it("shows the phone band's «مشاهده همه» link and ~2.2 cards per screen", async () => {
-    setViewport(true);
-    const { container } = render(
-      <MemoryRouter>
-        <Home />
-      </MemoryRouter>
-    );
+  it("shows a single centre card, no arrows and no sides for one deal", async () => {
+    const { container } = renderHome();
     await screen.findByText("پارچ مدل ۱۲۳");
 
-    const seeAll = screen.getByRole("link", { name: "مشاهده همه" });
-    expect(seeAll.getAttribute("href")).toBe("/shop/?on_sale=1");
-    expect(container.querySelector(".deals-mobile__all")).toBe(seeAll);
+    expect(cards(container)).toHaveLength(1);
+    expect(centreName(container)).toBe("پارچ مدل ۱۲۳");
+    expect(container.querySelectorAll(".deals-cf__card.is-side")).toHaveLength(0);
+    expect(screen.queryByRole("button", { name: "پیشنهاد بعدی" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "پیشنهاد قبلی" })).toBeNull();
+  });
 
-    // The phone band keeps the carousel markup out of the way.
-    expect(container.querySelector(".deals-desktop")).toBeNull();
+  it("keeps exactly one side card with two deals", async () => {
+    serveDeals(MULTI_DEALS);
+    const { container } = renderHome();
+    await screen.findByText("کالای اول");
+
+    expect(cards(container)).toHaveLength(2);
+    expect(container.querySelectorAll(".deals-cf__card.is-side")).toHaveLength(1);
+    expect(cardAt(container, "1").querySelector(".deal-card__name").textContent).toBe("کالای دوم");
+
+    fireEvent.click(cardAt(container, "1").querySelector("a"));
+    expect(centreName(container)).toBe("کالای دوم");
+    expect(cardAt(container, "1").querySelector(".deal-card__name").textContent).toBe("کالای اول");
+  });
+});
+
+describe("desktop coverflow auto-advance", () => {
+  it("advances every 10 seconds", async () => {
+    serveDeals(THREE_DEALS);
+    vi.useFakeTimers();
+    const { container } = renderHome();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(centreName(container)).toBe("کالای اول");
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(9999);
+    });
+    expect(centreName(container)).toBe("کالای اول");
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(centreName(container)).toBe("کالای دوم");
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10000);
+    });
+    expect(centreName(container)).toBe("کالای سوم");
+  });
+
+  it("pauses on hover and resumes when the pointer leaves", async () => {
+    serveDeals(THREE_DEALS);
+    vi.useFakeTimers();
+    const { container } = renderHome();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    const stage = container.querySelector(".deals-desktop");
+
+    fireEvent.mouseEnter(stage);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30000);
+    });
+    expect(centreName(container)).toBe("کالای اول");
+
+    fireEvent.mouseLeave(stage);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10000);
+    });
+    expect(centreName(container)).toBe("کالای دوم");
+  });
+
+  it("never auto-advances a single deal", async () => {
+    vi.useFakeTimers();
+    const { container } = renderHome();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(centreName(container)).toBe("پارچ مدل ۱۲۳");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60000);
+    });
+    expect(centreName(container)).toBe("پارچ مدل ۱۲۳");
   });
 });
 
 describe("daily deals discount badge", () => {
   const serveOne = (payload) => {
     serveDeals(payload);
-    return render(
-      <MemoryRouter>
-        <Home />
-      </MemoryRouter>
-    );
+    return renderHome();
   };
 
   it("floors the percentage instead of rounding it up", async () => {
@@ -379,8 +486,7 @@ describe("daily deals discount badge", () => {
       ],
     });
 
-    const dealName = await screen.findByText("کالای نزدیک به رایگان");
-    expect(dealName).toBeTruthy();
+    await screen.findByText("کالای نزدیک به رایگان");
     // 99.998% floors to 99 -- it must never read «۱۰۰٪ تخفیف».
     expect(screen.getByText("۹۹٪ تخفیف")).toBeTruthy();
     expect(screen.queryByText("۱۰۰٪ تخفیف")).toBeNull();
@@ -413,27 +519,47 @@ describe("daily deals discount badge", () => {
   });
 });
 
-describe("daily deals transition stylesheet", () => {
-  it("fades + slides the incoming slide for ~450ms ease-out with a staggered body", () => {
-    expect(CSS).toMatch(/\.deals-slides \{[^}]*grid-template-areas: "slide"/);
-    expect(CSS).toMatch(/\.deals-slide \{[^}]*grid-area: slide/);
-    expect(CSS).toMatch(/\.deals-slide--in \{[^}]*animation: deals-slide-in 450ms ease-out both/);
-    expect(CSS).toMatch(/\.deals-slide--out \{[^}]*animation: deals-slide-out 450ms ease-out both/);
-    expect(CSS).toMatch(/@keyframes deals-slide-in \{[^}]*translateX\(calc\(var\(--deals-dir, 1\) \* 14px\)\)/);
-    expect(CSS).toMatch(/@keyframes deals-media-in \{[^}]*scale\(\.98\)/);
-    expect(CSS).toMatch(/\.deals-slide--in \.deal-card__name \{[^}]*deals-rise 320ms ease-out 70ms both/);
-    expect(CSS).toMatch(/\.deals-slide--in \.deal-card__prices \{[^}]*deals-rise 320ms ease-out 140ms both/);
-    expect(CSS).toMatch(/\.deals-slide--in \.deal-card__cta \{[^}]*deals-rise 320ms ease-out 210ms both/);
-    expect(CSS).toMatch(/\.deals-thumbs__highlight \{[^}]*transition: inset-inline-start \.3s ease-out/);
+describe("phone deal band", () => {
+  it("shows the phone band's «مشاهده همه» link and keeps the coverflow out", async () => {
+    setViewport(true);
+    const { container } = renderHome();
+    await screen.findByText("پارچ مدل ۱۲۳");
+
+    const seeAll = screen.getByRole("link", { name: "مشاهده همه" });
+    expect(seeAll.getAttribute("href")).toBe("/shop/?on_sale=true");
+    expect(container.querySelector(".deals-mobile__all")).toBe(seeAll);
+    expect(container.querySelector(".deals-desktop")).toBeNull();
+  });
+});
+
+describe("coverflow stylesheet", () => {
+  it("moves every card with one 600ms transform/opacity/blur transition", () => {
+    expect(CSS).toMatch(
+      /\.deals-cf__card \{[^}]*transform: translate\(-50%, -50%\) translateX\(calc\(var\(--cf-dx, 0\) \* 1%\)\) scale\(var\(--cf-scale, 1\)\)/
+    );
+    expect(CSS).toMatch(
+      /\.deals-cf__card \{[^}]*transition: transform 600ms ease-in-out, opacity 600ms ease-in-out, filter 600ms ease-in-out/
+    );
+    expect(CSS).toMatch(/\.deals-cf__card \{[^}]*opacity: var\(--cf-opacity, 1\)/);
+    expect(CSS).toMatch(/\.deals-cf__card \{[^}]*filter: blur\(var\(--cf-blur, 0px\)\)/);
+    // Fixed-height stage: no layout shift while the set rotates.
+    expect(CSS).toMatch(/\.deals-cf__stage \{[^}]*height: var\(--deals-cf-height\)/);
   });
 
-  it("drops every deal animation under prefers-reduced-motion", () => {
+  it("fades the centre card's text in only after it has arrived", () => {
     expect(CSS).toMatch(
-      /@media \(prefers-reduced-motion: reduce\) \{[^@]*?\.deals-slide--in, \.deals-slide--out,[^}]*\{[^}]*animation: none/
+      /\.deals-cf__stage\.is-rotating \.deals-cf__card\.is-centre \.deal-card__name[^{]*\{[^}]*animation: deals-cf-text-in 240ms ease-out 400ms both/
+    );
+    expect(CSS).toMatch(/@keyframes deals-cf-text-in \{[^}]*translateY\(6px\)/);
+  });
+
+  it("drops the motion under prefers-reduced-motion", () => {
+    expect(CSS).toMatch(
+      /@media \(prefers-reduced-motion: reduce\) \{[^@]*?\.deals-cf__card \{ transition: none; \}/
     );
   });
 
-  it("shows a bit over two deal cards on a phone (45vw)", () => {
+  it("keeps the phone band's card width untouched", () => {
     expect(CSS).toMatch(/\.deals-mobile__card \{[^}]*flex: 0 0 45vw/);
     expect(CSS).toMatch(/\.deals-mobile__all \{/);
   });

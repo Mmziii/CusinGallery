@@ -222,13 +222,35 @@ function dealDiscount(originalPrice, salePrice) {
   return Math.min(99, Math.floor(((originalPrice - salePrice) / originalPrice) * 100));
 }
 
-/** How long a slide change takes (ms) -- must match the CSS animation. */
-const DEALS_TRANSITION_MS = 450;
+/** One full rotation of the desktop coverflow (ms) -- matches the CSS. */
+const DEALS_ROTATE_MS = 600;
 
-function DealCard({ deal, discount, serverNow }) {
+/** The furthest-offset card still shown on each side of the centre one. */
+const DEALS_MAX_SIDE = 2;
+
+/**
+ * Circular distance from the centre card to `index`, signed like the layout:
+ * positive = the NEXT deal (drawn on the LEFT in this RTL page), negative =
+ * the PREVIOUS one (drawn on the RIGHT). With 2 deals the second one reports
+ * +1, i.e. exactly one card on the side; with an even count the shortest way
+ * round is chosen so no card ever appears twice.
+ */
+function coverflowOffset(index, centre, count) {
+  if (count <= 1) return 0;
+  let offset = ((index - centre) % count + count) % count;
+  if (offset > count / 2) offset -= count;
+  return offset;
+}
+
+/**
+ * The card CONTENT (image, badge, name, prices, countdown, CTA) -- shared by
+ * every coverflow card so a card moving to the centre never has to remount
+ * its content (which is what makes the motion continuous instead of a swap).
+ */
+function DealCardBody({ deal, discount, serverNow }) {
   const originalPrice = getDealOriginalPrice(deal);
   return (
-    <Link to={`/products/${deal.product.slug}/`} className="deal-card">
+    <>
       <div className="deal-card__media">
         <SmartImage image={deal.product.primary_image || null} alt={faDigits(deal.product.name)} />
         {discount > 0 ? (
@@ -246,14 +268,89 @@ function DealCard({ deal, discount, serverNow }) {
         <Countdown endsAt={deal.ends_at} serverNow={serverNow} />
         <span className="deal-card__cta">مشاهده محصول</span>
       </div>
-    </Link>
+    </>
   );
 }
 
-DealCard.propTypes = {
+DealCardBody.propTypes = {
   deal: PropTypes.object.isRequired,
   discount: PropTypes.number,
   serverNow: PropTypes.string.isRequired,
+};
+
+/**
+ * One desktop coverflow card.
+ *
+ * The wrapper is the ONLY thing that moves: it is absolutely positioned in
+ * the fixed-height stage and its transform/opacity/blur come from CSS
+ * variables, so going from a side slot to the centre (or back) is one
+ * continuous 600ms ease-in-out interpolation -- no remount, no jump.
+ * A side card is exposed as a button (it rotates the carousel, it does NOT
+ * navigate); only the centre card is the real product link.
+ */
+function CoverflowCard({ deal, offset, serverNow, onSelect }) {
+  const distance = Math.abs(offset);
+  const isCentre = offset === 0;
+  const isNear = distance === 2;
+  const isHidden = distance > DEALS_MAX_SIDE;
+  // Positive offsets (the next deal) sit on the LEFT in RTL, negative (the
+  // previous deal) on the RIGHT -- a physical transition value, so the sign
+  // is deliberately not logical.
+  const dx = offset === 0 ? 0 : -Math.sign(offset) * (distance === 1 ? 55 : 92);
+  const scale = isCentre ? 1 : distance === 1 ? 0.8 : isNear ? 0.62 : 0.5;
+  const opacity = isCentre ? 1 : distance === 1 ? 0.45 : isNear ? 0.25 : 0;
+  const blur = isCentre ? 0 : distance === 1 ? 1.5 : 2.5;
+  const discount = dealDiscount(getDealOriginalPrice(deal), deal.sale_price);
+
+  return (
+    <div
+      className={[
+        "deals-cf__card",
+        isCentre ? "is-centre" : "is-side",
+        offset > 0 ? "is-next" : offset < 0 ? "is-prev" : "",
+        isNear ? "is-near" : "",
+        isHidden ? "is-hidden" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      data-offset={offset}
+      data-role={isCentre ? "centre" : "side"}
+      aria-hidden={isHidden ? "true" : undefined}
+      style={{
+        "--cf-dx": dx,
+        "--cf-scale": scale,
+        "--cf-opacity": opacity,
+        "--cf-blur": `${blur}px`,
+        zIndex: 10 - distance * 2,
+      }}
+    >
+      <Link
+        to={`/products/${deal.product.slug}/`}
+        className="deal-card"
+        role={isCentre ? undefined : "button"}
+        aria-label={isCentre ? undefined : `نمایش پیشنهاد ${faDigits(deal.product.name)}`}
+        tabIndex={isHidden ? -1 : undefined}
+        onClick={
+          isCentre
+            ? undefined
+            : (event) => {
+                // A side card only brings itself to the centre.
+                event.preventDefault();
+                onSelect();
+              }
+        }
+      >
+        <DealCardBody deal={deal} discount={discount} serverNow={serverNow} />
+      </Link>
+    </div>
+  );
+}
+
+CoverflowCard.propTypes = {
+  deal: PropTypes.object.isRequired,
+  offset: PropTypes.number.isRequired,
+  serverNow: PropTypes.string.isRequired,
+  onSelect: PropTypes.func.isRequired,
 };
 
 function DailyDealsSection({ title }) {
@@ -263,13 +360,10 @@ function DailyDealsSection({ title }) {
   const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
 
   const [currentIndex, setCurrentIndex] = useState(0);
-  // The slide that is still fading OUT while the new one fades in (null
-  // when nothing is moving -- which is also the permanent state under
-  // prefers-reduced-motion).
-  const [outgoingIndex, setOutgoingIndex] = useState(null);
-  // Travel direction of the last change: 1 = forward (the new slide comes
-  // in from the right, the old one leaves to the left), -1 = backwards.
-  const [direction, setDirection] = useState(1);
+  // True for the duration of one coverflow rotation: the stage's CSS uses it
+  // to fade the incoming centre card's text in AFTER it has arrived.
+  const [rotating, setRotating] = useState(false);
+  const rotateTimer = useRef(null);
   const [isPaused, setIsPaused] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
   const [tabHidden, setTabHidden] = useState(() =>
@@ -280,8 +374,9 @@ function DailyDealsSection({ title }) {
   const [, setTick] = useState(0);
   const baseServerTime = useRef(null);
   const baseClientTime = useRef(Date.now());
-  // Mirrors currentIndex for the event handlers below, so a change can be
-  // decided (and the outgoing slide captured) outside a state updater.
+  // Mirrors currentIndex for the event handlers below, so a step can be
+  // decided synchronously (two clicks in one frame must not both start from
+  // the same index).
   const shownIndexRef = useRef(0);
 
   if (data?.server_now && baseServerTime.current === null) {
@@ -316,59 +411,70 @@ function DailyDealsSection({ title }) {
   const activeCount = activeDeals.length;
 
   /**
-   * The ONE way the slide changes -- arrows, thumbnails and the
+   * The ONE way the set rotates -- side cards, arrows, keyboard and the
    * auto-advance timer all come through here, so every change (including
-   * the automatic one) plays the same cross-fade + slide animation.
+   * the automatic one) plays the same continuous motion: each card is
+   * re-slotted and its own CSS transition carries it to the new place.
    * Under prefers-reduced-motion the swap is instant.
    */
-  const showDeal = useCallback((next, travel) => {
+  const showDeal = useCallback((next) => {
     const previous = shownIndexRef.current;
     if (next === previous) return;
     shownIndexRef.current = next;
-    if (reducedMotion) {
-      setOutgoingIndex(null);
-    } else {
-      setDirection(travel);
-      setOutgoingIndex(previous);
-    }
     setCurrentIndex(next);
+    if (reducedMotion) {
+      setRotating(false);
+      return;
+    }
+    setRotating(true);
+    if (rotateTimer.current) clearTimeout(rotateTimer.current);
+    rotateTimer.current = setTimeout(() => setRotating(false), DEALS_ROTATE_MS);
   }, [reducedMotion]);
 
-  // 10s auto-advance (pause on hover/focus/hidden tab/reduced-motion)
+  useEffect(() => () => {
+    if (rotateTimer.current) clearTimeout(rotateTimer.current);
+  }, []);
+
+  // 10s auto-advance (pause on hover/focus/hidden tab/reduced-motion and
+  // whenever there is nothing to advance to).
   useEffect(() => {
     if (activeCount <= 1 || isPaused || isFocused || tabHidden || reducedMotion || isMobile) {
       return undefined;
     }
     const timer = setInterval(() => {
-      showDeal((shownIndexRef.current + 1) % activeCount, 1);
+      showDeal((shownIndexRef.current + 1) % activeCount);
     }, 10000);
     return () => clearInterval(timer);
   }, [activeCount, isPaused, isFocused, tabHidden, reducedMotion, isMobile, showDeal]);
-
-  // Drop the outgoing slide once its fade-out has played.
-  useEffect(() => {
-    if (outgoingIndex === null) return undefined;
-    const timer = setTimeout(() => setOutgoingIndex(null), DEALS_TRANSITION_MS);
-    return () => clearTimeout(timer);
-  }, [outgoingIndex]);
 
   if (isLoading) return null;
   if (error || !data?.results?.length) return null;
   if (activeDeals.length === 0) return null;
 
   const safeIndex = Math.min(currentIndex, activeDeals.length - 1);
+  // A deal can expire between ticks and shrink the set under the cursor;
+  // clamp the ref too so the next arrow/keyboard step does not skip.
+  if (shownIndexRef.current !== safeIndex) shownIndexRef.current = safeIndex;
   const currentDeal = activeDeals[safeIndex] || activeDeals[0];
-  const outgoingDeal = outgoingIndex === null ? null : activeDeals[outgoingIndex];
 
-  const goPrev = () => showDeal((shownIndexRef.current - 1 + activeDeals.length) % activeDeals.length, -1);
-  const goNext = () => showDeal((shownIndexRef.current + 1) % activeDeals.length, 1);
+  const goPrev = () => showDeal((shownIndexRef.current - 1 + activeDeals.length) % activeDeals.length);
+  const goNext = () => showDeal((shownIndexRef.current + 1) % activeDeals.length);
+  // Arrow keys follow the visual sides in RTL: ArrowLeft takes the card on
+  // the left (the next deal) to the centre, ArrowRight the previous one.
+  const onStageKeyDown = (event) => {
+    if (activeCount <= 1) return;
+    if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      goNext();
+    } else if (event.key === "ArrowRight") {
+      event.preventDefault();
+      goPrev();
+    }
+  };
 
   const nearestExpiry = activeDeals.reduce((min, deal) => {
     return !min || new Date(deal.ends_at) < new Date(min) ? deal.ends_at : min;
   }, null);
-
-  const originalPrice = getDealOriginalPrice(currentDeal);
-  const discount = dealDiscount(originalPrice, currentDeal.sale_price);
 
   return (
     <section className="section section--dark reveal" ref={ref} aria-label={title}>
@@ -385,8 +491,10 @@ function DailyDealsSection({ title }) {
               <div className="deals-mobile__head-main">
                 <span className="deals-mobile__title">{title}</span>
                 {/* «مشاهده همه» lands on the shop's discounted-products
-                    filter -- the same one the backend exposes. */}
-                <Link className="deals-mobile__all" to="/shop/?on_sale=1">
+                    filter. `on_sale=true` is the value the API documents
+                    (1/yes also work, but the link should not rely on the
+                    tolerant parser). */}
+                <Link className="deals-mobile__all" to="/shop/?on_sale=true">
                   مشاهده همه
                 </Link>
               </div>
@@ -423,7 +531,12 @@ function DailyDealsSection({ title }) {
             </div>
           </div>
         ) : (
-          /* Desktop smaller main slide (40-45% width) + prev/next round arrow buttons + thumbnail row (5-6 visible) */
+          /* Desktop (>=1024px) coverflow: the current deal is the large
+             card in the middle, the previous/next deals sit behind it on
+             the right/left, smaller, dimmed and softly blurred; two more
+             stack further out on each side. Picking a side card (or an
+             arrow, or ArrowLeft/ArrowRight) rotates the whole set with one
+             continuous ~600ms CSS transform -- nothing is re-mounted. */
           <div
             className="deals-desktop"
             onMouseEnter={() => setIsPaused(true)}
@@ -432,8 +545,14 @@ function DailyDealsSection({ title }) {
             onBlur={(e) => {
               if (!e.currentTarget.contains(e.relatedTarget)) setIsFocused(false);
             }}
+            onKeyDown={onStageKeyDown}
           >
-            <div className="deals-stage">
+            <div
+              className="deals-cf"
+              role="group"
+              aria-roledescription="carousel"
+              aria-label={title}
+            >
               {activeDeals.length > 1 ? (
                 <button
                   type="button"
@@ -445,36 +564,22 @@ function DailyDealsSection({ title }) {
                 </button>
               ) : null}
 
-              {/* Both slides live in the SAME grid cell, so the box height is
-                  the taller of the two and nothing jumps while they cross
-                  over; the outgoing one is dropped when its fade ends. */}
               <div
-                className="deals-grid deals-stage__card deals-slides"
-                style={{ "--deals-dir": direction }}
+                className={`deals-cf__stage${rotating ? " is-rotating" : ""}`}
+                data-count={activeDeals.length}
               >
-                {outgoingDeal ? (
-                  <div
-                    className="deals-slide deals-slide--out"
-                    key={`out-${outgoingDeal.id}`}
-                    aria-hidden="true"
-                  >
-                    <DealCard
-                      deal={outgoingDeal}
-                      discount={dealDiscount(getDealOriginalPrice(outgoingDeal), outgoingDeal.sale_price)}
+                {activeDeals.map((deal, idx) => {
+                  const offset = coverflowOffset(idx, safeIndex, activeDeals.length);
+                  return (
+                    <CoverflowCard
+                      key={deal.id}
+                      deal={deal}
+                      offset={offset}
                       serverNow={data.server_now}
+                      onSelect={() => showDeal(idx)}
                     />
-                  </div>
-                ) : null}
-                <div
-                  className={`deals-slide${outgoingDeal ? " deals-slide--in" : ""}`}
-                  key={`in-${currentDeal.id}`}
-                >
-                  <DealCard
-                    deal={currentDeal}
-                    discount={discount}
-                    serverNow={data.server_now}
-                  />
-                </div>
+                  );
+                })}
               </div>
 
               {activeDeals.length > 1 ? (
@@ -487,36 +592,12 @@ function DailyDealsSection({ title }) {
                   <Icon name="chevron-left" size={20} />
                 </button>
               ) : null}
-            </div>
 
-            {/* Thumbnail row (5-6 visible) */}
-            {activeDeals.length > 1 ? (
-              <div
-                className="deals-thumbs"
-                role="tablist"
-                aria-label="انتخاب پیشنهاد"
-                style={{ "--deals-thumb-index": safeIndex }}
-              >
-                <div className="deals-thumbs__track">
-                  {activeDeals.map((deal, idx) => (
-                    <button
-                      key={deal.id}
-                      type="button"
-                      role="tab"
-                      aria-selected={idx === safeIndex}
-                      className="deals-thumb"
-                      onClick={() => showDeal(idx, idx > safeIndex ? 1 : -1)}
-                      aria-label={faDigits(deal.product.name)}
-                    >
-                      <SmartImage image={deal.product.primary_image || null} alt="" />
-                    </button>
-                  ))}
-                  {/* The highlight is one box that SLIDES to the selected
-                      thumb instead of fading in per thumbnail. */}
-                  <span className="deals-thumbs__highlight" aria-hidden="true" />
-                </div>
-              </div>
-            ) : null}
+              {/* Screen readers hear the centre card change. */}
+              <p className="sr-only" aria-live="polite">
+                {`پیشنهاد ${faDigits(safeIndex + 1)} از ${faDigits(activeDeals.length)}: ${faDigits(currentDeal.product.name)}`}
+              </p>
+            </div>
           </div>
         )}
       </div>

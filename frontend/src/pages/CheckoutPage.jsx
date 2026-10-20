@@ -949,7 +949,7 @@ export default function CheckoutPage() {
                           <strong>تحویل‌گیرنده:</strong> {pickupContact.recipient_name}
                         </p>
                         <p>
-                          <strong>شماره تماس:</strong> {pickupContact.phone}
+                          <strong>شماره تماس:</strong> {faDigits(pickupContact.phone)}
                         </p>
                         {siteSettings.pickup_address && (
                           <p>
@@ -965,7 +965,8 @@ export default function CheckoutPage() {
                     ) : (
                       <>
                         <p>
-                          <strong>گیرنده:</strong> {destination?.recipient_name} — {destination?.phone}
+                          <strong>گیرنده:</strong> {destination?.recipient_name} —{" "}
+                          {faDigits(destination?.phone)}
                         </p>
                         <p>
                           <strong>نشانی:</strong> {formatAddress(destination || {})}

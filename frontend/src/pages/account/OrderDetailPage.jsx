@@ -158,7 +158,7 @@ function OrderDetailPage() {
       <div className="order-detail__address card">
         <h2>آدرس ارسال</h2>
         <p>
-          {order.shipping_recipient_name} — <bdi dir="ltr">{order.shipping_phone}</bdi>
+          {order.shipping_recipient_name} — <bdi dir="ltr">{faDigits(order.shipping_phone)}</bdi>
         </p>
         <p>
           {formatAddress(order, "shipping_")}

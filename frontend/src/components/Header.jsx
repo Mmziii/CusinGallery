@@ -58,8 +58,8 @@ function Header() {
   const [compact, setCompact] = useState(false);
   // Phone only: the wrapped header (~245px: brand + categories +
   // account/cart + search rows) folds into one row once the shopper has
-  // scrolled past 80px and is still going down. Scrolling up -- or
-  // reaching the top -- restores it.
+  // scrolled past 80px and is still going down. Scrolling up by 24px --
+  // or reaching the top -- restores it.
   const [rowCollapsed, setRowCollapsed] = useState(false);
   // The collapsed row's search icon grows the search field back into view.
   const [searchRevealed, setSearchRevealed] = useState(false);
@@ -91,6 +91,13 @@ function Header() {
   // animate back open.
   const rowCollapsedRef = useRef(false);
   const searchRevealedRef = useRef(false);
+  // The shrink every viewport gets past 24px, mirrored for the same reason:
+  // the compact header is shorter than the expanded one, so its height is
+  // never a valid "natural" height either.
+  const compactRef = useRef(false);
+  // True while the inner's height transition is running. A mid-flight
+  // offsetHeight is between the folded and expanded heights, i.e. neither.
+  const animatingRef = useRef(false);
   const searchTimer = useRef(null);
   // A response can arrive after the shopper has used the home brand action.
   // Versioning prevents that stale response from reopening suggestions.
@@ -188,34 +195,6 @@ function Header() {
     if (!isAuthenticated && guestLines.length > 0) hydrateGuestProducts();
   }, [isAuthenticated, guestLines, hydrateGuestProducts]);
 
-  // Sticky shrink + the phone one-row collapse.
-  //
-  // `compact` is the long-standing shrink every viewport gets past 24px
-  // (smaller logo, shorter bar). `rowCollapsed` is phone-only and needs the
-  // scroll DIRECTION as well as the offset: past 80px while still going
-  // down the header collapses; scrolling back up or reaching the top
-  // restores it, so the shopper always sees the full header when they look
-  // for it. The 2px dead band swallows scroll jitter (rubber-banding, the
-  // tail of a smooth scroll) that would otherwise flicker the height.
-  useEffect(() => {
-    const DEAD_BAND = 2;
-    const COLLAPSE_AT = 80;
-    let lastY = window.scrollY;
-    let goingDown = false;
-    const onScroll = () => {
-      const y = window.scrollY;
-      const delta = y - lastY;
-      lastY = y;
-      if (Math.abs(delta) >= DEAD_BAND) goingDown = delta > 0;
-      rowCollapsedRef.current = y > COLLAPSE_AT && goingDown;
-      setCompact(y > 24);
-      setRowCollapsed(rowCollapsedRef.current);
-    };
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
   // The collapsed row's search icon reveals the field; focus follows so the
   // phone keyboard is already up. (React commits the class change before
   // running effects, so the field is displayed by the time this fires.)
@@ -230,21 +209,43 @@ function Header() {
   };
 
   // Audit 19: publish the header's REAL height as --site-header-height.
-  // Sticky elements that must sit directly under the header (the shop's
-  // mobile filter/sort bar) used to hard-code 76px, which is wrong the
-  // moment the phone layout wraps the search onto a second row. Measured
-  // after every scroll (the header shrinks), on resize and once on mount.
+  // Sticky elements that must sit directly under it (the shop's mobile
+  // filter/sort bar, the gallery) used to hard-code 76px, which is wrong the
+  // moment the phone layout wraps the search onto a second row.
   //
-  // The same pass publishes --header-natural-height, the inner's height
-  // while the header is fully expanded. The phone collapse transitions the
-  // inner between that value and the one-row height -- CSS cannot
-  // interpolate to/from `height: auto`, so without a measured value the
-  // header would snap between the two heights and drag the page content
-  // with it. It is refreshed on every resize, and deliberately NOT while
-  // the header is collapsed or searching (neither height is natural).
+  // The same pass publishes --header-natural-height: the EXPANDED inner
+  // height the phone collapse transitions to/from. CSS cannot interpolate
+  // to/from `height: auto`, so the value has to be measured -- and the one
+  // bug that must never come back is publishing a measurement taken while
+  // the header was folded or mid-animation (the phone shrink runs 200ms and
+  // the compact shrink changes the logo height). A stale, too-small value
+  // pins the header box below its content, which then paints over the page.
+  //
+  // Therefore:
+  //   * the natural height is measured ONLY while the header is fully
+  //     expanded (!rowCollapsed) AND not shrinking (!compact) AND not
+  //     animating -- otherwise the frame is skipped;
+  //   * `scrollHeight` (the content height) is preferred over `offsetHeight`
+  //     (the box height), so even a frame caught mid-transition reads the
+  //     real content, never an interpolated box;
+  //   * a ResizeObserver watches the expanded inner, so wrapped rows, font
+  //     swaps and orientation changes re-measure on their own;
+  //   * it re-measures on resize/orientationchange, after webfonts load and
+  //     once the height transition ends.
+  // The rendered header is also a sticky element that keeps its real height
+  // in the flow, so page content can never slide underneath it.
   useEffect(() => {
     const root = document.documentElement;
     let frame = null;
+    // The refs are updated by the rAF-throttled scroll pass, which may run
+    // one frame after this one; the live offset closes that gap, so a
+    // measurement can never be taken while the header is compact or folded.
+    const naturalCanBeMeasured = () =>
+      (window.scrollY || 0) <= 24 &&
+      !rowCollapsedRef.current &&
+      !compactRef.current &&
+      !animatingRef.current;
+
     const measure = () => {
       frame = null;
       const header = headerRef.current;
@@ -254,26 +255,169 @@ function Header() {
       // jsdom and hidden tabs report 0 -- keep the last real value instead
       // of pinning every sticky offset to 0.
       if (height > 0) root.style.setProperty("--site-header-height", `${height}px`);
-      if (!rowCollapsedRef.current && !searchRevealedRef.current) {
-        const natural = inner.offsetHeight || 0;
-        if (natural > 0) root.style.setProperty("--header-natural-height", `${natural}px`);
-      }
+      if (!naturalCanBeMeasured()) return;
+      // Content height first: when the inner is height-constrained (folded,
+      // searching or animating) scrollHeight still describes the content,
+      // while offsetHeight describes the animation frame.
+      const natural = Math.max(inner.scrollHeight || 0, inner.offsetHeight || 0);
+      // `auto` (no variable) is always correct, so only publish real
+      // measurements -- a 0 must never overwrite a good value.
+      if (natural > 0) root.style.setProperty("--header-natural-height", `${natural}px`);
     };
     const schedule = () => {
       if (frame !== null) return;
       frame = window.requestAnimationFrame ? window.requestAnimationFrame(measure) : measure();
     };
+    // A width/orientation change invalidates the measurement (rows wrap
+    // differently): drop back to `auto` -- always safe, never clips -- and
+    // re-measure on the next frame.
+    const onViewportChange = () => {
+      if (!rowCollapsedRef.current) root.style.removeProperty("--header-natural-height");
+      schedule();
+    };
     schedule();
     window.addEventListener("scroll", schedule, { passive: true });
-    window.addEventListener("resize", schedule);
+    window.addEventListener("resize", onViewportChange);
+    window.addEventListener("orientationchange", onViewportChange);
     const resizeObserver =
       typeof ResizeObserver === "function" ? new ResizeObserver(schedule) : null;
     if (resizeObserver && innerRef.current) resizeObserver.observe(innerRef.current);
+    // Webfonts change the Persian line boxes; re-measure once they are in.
+    const fonts = typeof document !== "undefined" ? document.fonts : null;
+    if (fonts?.ready?.then) fonts.ready.then(schedule).catch(() => {});
     return () => {
       if (frame !== null && window.cancelAnimationFrame) window.cancelAnimationFrame(frame);
       window.removeEventListener("scroll", schedule);
-      window.removeEventListener("resize", schedule);
+      window.removeEventListener("resize", onViewportChange);
+      window.removeEventListener("orientationchange", onViewportChange);
       resizeObserver?.disconnect();
+    };
+  }, []);
+
+  // Sticky shrink + the phone one-row collapse.
+  //
+  // `compact` is the long-standing shrink every viewport gets past 24px
+  // (smaller logo, shorter bar). `rowCollapsed` is phone-only and needs the
+  // scroll DIRECTION, a travel threshold and an offset: past 80px, with 24px
+  // of cumulative downward travel, the header folds; 24px of upward travel --
+  // or reaching the top (<= 10px) -- restores it. The two thresholds are the
+  // hysteresis: rubber-banding and the tail of a smooth scroll never flicker
+  // the height, but a deliberate swipe up always brings the full header back.
+  // The listener is rAF-throttled: at most one state pass per frame.
+  useEffect(() => {
+    const TOP_ZONE = 10;
+    const COMPACT_AT = 24;
+    const COLLAPSE_AT = 80;
+    const COLLAPSE_TRAVEL = 24;
+    const EXPAND_TRAVEL = 24;
+    let lastY = window.scrollY || 0;
+    let downTravel = 0;
+    let upTravel = 0;
+    let frame = null;
+
+    const collapseRow = () => {
+      rowCollapsedRef.current = true;
+      // Folding with the search row open would keep the inner tall.
+      searchRevealedRef.current = false;
+      setSearchRevealed(false);
+      setRowCollapsed(true);
+    };
+    const expandRow = () => {
+      rowCollapsedRef.current = false;
+      setRowCollapsed(false);
+    };
+
+    const evaluate = () => {
+      frame = null;
+      const y = window.scrollY || 0;
+      const delta = y - lastY;
+      lastY = y;
+
+      const isCompact = y > COMPACT_AT;
+      compactRef.current = isCompact;
+      setCompact(isCompact);
+
+      if (y <= TOP_ZONE) {
+        downTravel = 0;
+        upTravel = 0;
+        if (rowCollapsedRef.current) expandRow();
+        if (searchRevealedRef.current) {
+          searchRevealedRef.current = false;
+          setSearchRevealed(false);
+        }
+        return;
+      }
+
+      if (delta > 0) {
+        downTravel += delta;
+        upTravel = 0;
+        // A downward jitter must not re-fold a header the shopper just
+        // opened with an upward swipe.
+        if (!rowCollapsedRef.current && y > COLLAPSE_AT && downTravel >= COLLAPSE_TRAVEL) {
+          collapseRow();
+        }
+      } else if (delta < 0) {
+        upTravel += -delta;
+        downTravel = 0;
+        if (rowCollapsedRef.current && upTravel >= EXPAND_TRAVEL) expandRow();
+      }
+    };
+
+    const onScroll = () => {
+      if (frame !== null) return;
+      frame = window.requestAnimationFrame
+        ? window.requestAnimationFrame(evaluate)
+        : window.setTimeout(evaluate, 16);
+    };
+    evaluate();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (frame === null) return;
+      if (window.cancelAnimationFrame) window.cancelAnimationFrame(frame);
+      else window.clearTimeout(frame);
+    };
+  }, []);
+
+  // Track the inner's height transition so the measurement pass above can
+  // skip the interpolated frames and then re-measure at rest.
+  useEffect(() => {
+    const inner = innerRef.current;
+    if (!inner) return undefined;
+    let watchdog = null;
+    const onTransitionStart = (event) => {
+      if (event.propertyName !== "height") return;
+      animatingRef.current = true;
+      // A cancelled/interrupted transition may never fire `transitionend`;
+      // the watchdog guarantees measurement can never stay frozen.
+      if (watchdog !== null) window.clearTimeout(watchdog);
+      watchdog = window.setTimeout(() => {
+        animatingRef.current = false;
+        watchdog = null;
+      }, 400);
+    };
+    const onTransitionEnd = (event) => {
+      if (event.propertyName && event.propertyName !== "height") return;
+      animatingRef.current = false;
+      if (watchdog !== null) {
+        window.clearTimeout(watchdog);
+        watchdog = null;
+      }
+      if (!rowCollapsedRef.current && !compactRef.current) {
+        const natural = Math.max(inner.scrollHeight || 0, inner.offsetHeight || 0);
+        if (natural > 0) {
+          document.documentElement.style.setProperty("--header-natural-height", `${natural}px`);
+        }
+      }
+    };
+    inner.addEventListener("transitionstart", onTransitionStart);
+    inner.addEventListener("transitionend", onTransitionEnd);
+    inner.addEventListener("transitioncancel", onTransitionEnd);
+    return () => {
+      if (watchdog !== null) window.clearTimeout(watchdog);
+      inner.removeEventListener("transitionstart", onTransitionStart);
+      inner.removeEventListener("transitionend", onTransitionEnd);
+      inner.removeEventListener("transitioncancel", onTransitionEnd);
     };
   }, []);
 

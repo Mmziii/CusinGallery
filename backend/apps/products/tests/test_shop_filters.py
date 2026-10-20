@@ -97,3 +97,59 @@ class ShopFilterMetadataTests(CacheIsolatedAPITestCase):
             {row["name"] for row in self.request_products(category=self.child.slug, brand="")["results"]},
             {row["name"] for row in data["results"]},
         )
+
+    def test_on_sale_accepts_1_true_and_yes_alike(self):
+        """«مشاهده همه» links to /shop/?on_sale=1 -- the same set as =true."""
+        sale = make_product(
+            category=self.child, brand=self.brand, name="پارچ تخفیف‌دار", price=50000, compare_at_price=90000, stock_quantity=2
+        )
+        plain = make_product(category=self.child, brand=self.brand, name="پارچ معمولی", price=50000, stock_quantity=2)
+        sale_ids = {sale.pk}
+        for value in ("1", "true", "TRUE", "yes", "on"):
+            data = self.request_products(category=self.child.slug, brand="", on_sale=value)
+            ids = {row["id"] for row in data["results"]}
+            self.assertEqual(ids, sale_ids, f"on_sale={value} should only keep the discounted product")
+        self.assertNotIn(plain.pk, sale_ids)
+
+    def test_on_sale_falsey_values_leave_the_catalog_untouched(self):
+        sale = make_product(
+            category=self.child, brand=self.brand, name="کاسه تخفیف‌دار", price=50000, compare_at_price=90000, stock_quantity=2
+        )
+        plain = make_product(category=self.child, brand=self.brand, name="کاسه معمولی", price=50000, stock_quantity=2)
+        for value in ("0", "false", "FALSE", "no", "off", ""):
+            data = self.request_products(category=self.child.slug, brand="", on_sale=value)
+            ids = {row["id"] for row in data["results"]}
+            self.assertIn(sale.pk, ids, f"on_sale={value!r} must not filter")
+            self.assertIn(plain.pk, ids, f"on_sale={value!r} must not filter")
+
+    def test_on_sale_includes_products_with_an_active_daily_deal(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from apps.banners.models import DailyDeal
+
+        now = timezone.now()
+        product = make_product(category=self.child, brand=self.brand, name="قوری پیشنهاد روز", price=200000, stock_quantity=2)
+        DailyDeal.objects.create(
+            product=product, sale_price=150000, starts_at=now - timedelta(hours=1), ends_at=now + timedelta(hours=2)
+        )
+        # Same shape, but not active right now -- neither may count.
+        expired = make_product(category=self.child, brand=self.brand, name="قوری منقضی", price=200000, stock_quantity=2)
+        DailyDeal.objects.create(
+            product=expired, sale_price=150000, starts_at=now - timedelta(days=2), ends_at=now - timedelta(days=1)
+        )
+        inactive = make_product(category=self.child, brand=self.brand, name="قوری غیرفعال", price=200000, stock_quantity=2)
+        DailyDeal.objects.create(
+            product=inactive,
+            sale_price=150000,
+            starts_at=now - timedelta(hours=1),
+            ends_at=now + timedelta(hours=2),
+            is_active=False,
+        )
+
+        data = self.request_products(category=self.child.slug, brand="", on_sale="1")
+        ids = {row["id"] for row in data["results"]}
+        self.assertIn(product.pk, ids)
+        self.assertNotIn(expired.pk, ids)
+        self.assertNotIn(inactive.pk, ids)
