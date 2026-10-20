@@ -852,7 +852,11 @@ input:focus, textarea:focus, select:focus {
   .shop__sidebar { position: static; max-height: none; overflow-y: visible; }
 }
 
-@media (max-width: 768px) {
+/* PR 19: header-specific rules are split off at the phone boundary. Phones
+   are <= 767px while the desktop pill starts at 768px, so the two layouts
+   must never share a viewport (the rest of this block keeps its historical
+   768px layouts, pinned by StickyLayout.test.jsx). */
+@media (max-width: 767px) {
   .site-header__inner { flex-wrap: wrap; }
   .site-header__search { order: 3; flex-basis: 100%; max-width: none; }
   .site-header__nav { display: none; }
@@ -865,7 +869,9 @@ input:focus, textarea:focus, select:focus {
     gap: var(--space-2);
   }
   .category-bar { display: none; }
+}
 
+@media (max-width: 768px) {
   .cart-page__grid, .checkout__grid { grid-template-columns: 1fr; }
   .cart-page__summary, .checkout__summary { position: static; }
   .account { grid-template-columns: 1fr; }
@@ -997,41 +1003,92 @@ h1, h2, h3, .section__head h2 {
 .btn--gold:hover { background: #d9c078; }
 
 /* ============================ HEADER ============================ */
+/* PR 19 — constant-height OUTER box, morphing inner bar.
+   The document layout only ever sees `.site-header` at var(--header-height)
+   on desktop and `.site-header-spacer` (the measured natural height) on
+   phones. Every look change happens INSIDE that constant box, so folding
+   the header can never change the page height, shift scrollY, or feed the
+   browser's scroll anchoring back into Header.jsx. */
 .site-header {
   position: sticky; top: 0; z-index: 60;
   isolation: isolate;
-  background: var(--brand-green-dark);
+  height: var(--header-height);
+  background: transparent;
   color: var(--brand-ivory);
-  box-shadow: 0 2px 14px rgba(20,26,10,.35);
-  border-bottom: 1px solid rgba(206,180,100,.35);
+  border: 0;
+  box-shadow: none;
 }
+/* Only takes part in the flow on phones (see the phone block below). */
+.site-header-spacer { display: none; }
+
 .site-header__inner {
   position: relative; z-index: 1;
   display: flex; align-items: center; gap: var(--space-4);
+  width: 100%; max-width: none;
   min-height: var(--header-height);
-  transition: min-height .25s ease;
+  margin-inline: auto;
+  /* Full-bleed bar, content aligned to `.container`. */
+  padding-inline: max(var(--space-3), calc((100% - var(--container-max-width)) / 2 + var(--space-3)));
+  padding-block: var(--space-3);
+  border: 1px solid transparent;
+  border-radius: 0;
+  /* The bar owns the solid fill (the contrast audit reads it). The compact
+     pill only swaps this one color to the translucent glass green. */
+  background-color: var(--brand-green-dark);
+  box-shadow: none;
+  /* The outer height is NEVER transitioned; only this inner layer morphs. */
+  transition:
+    width .3s ease-out,
+    max-width .3s ease-out,
+    margin .3s ease-out,
+    padding .3s ease-out,
+    border-radius .3s ease-out,
+    border-color .3s ease-out,
+    background-color .3s ease-out,
+    box-shadow .3s ease-out,
+    min-height .3s ease-out,
+    height .3s ease-out;
 }
-.site-header--compact .site-header__inner { min-height: var(--header-height-compact); }
-/* The blur deliberately lives on a visual sibling, not the sticky header.
-   A filter/backdrop-filter on a header can capture a fixed descendant as its
-   containing block; this pseudo-element has no descendants, while the real
-   header content stays above it. */
-.site-header--compact {
-  background: transparent;
-  box-shadow: 0 6px 24px rgba(20,26,10,.4);
-}
-.site-header--compact::before {
+/* The BLUR lives on a pseudo-element that has NO descendants. A
+   backdrop-filter on the header or on the inner itself would become the
+   containing block of their fixed descendants (the mega-menu's viewport
+   overlay) and drag that overlay under the pill. This layer is purely
+   visual, so every real child stays free to use position: fixed. */
+.site-header__inner::before {
   content: "";
   position: absolute;
   inset: 0;
-  z-index: 0;
+  z-index: -1;
   pointer-events: none;
-  background: rgba(47, 58, 24, 0.85);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
+  border-radius: inherit;
 }
+
+/* Desktop: at rest the inner is the familiar full-width dark green bar. Once
+   compact it becomes the floating pill (trustwallet-style) -- width, margin,
+   radius, fill, border and shadow animate; the outer box keeps its 76px. */
+@media (min-width: 768px) {
+  .site-header--compact .site-header__inner {
+    width: 80%;
+    max-width: 1160px;
+    min-height: var(--header-height-compact);
+    margin-top: 12px;
+    padding-inline: var(--space-4);
+    padding-block: 4px;
+    border-radius: 16px;
+    border-color: rgba(206,180,100,.35);
+    /* Glass fill: the bar's own color turns translucent; the pseudo layer
+       behind the content blurs whatever shows through it. */
+    background-color: rgba(47,58,24,.88);
+    box-shadow: 0 8px 24px rgba(20,26,10,.25);
+  }
+  .site-header--compact .site-header__inner::before {
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+  }
+}
+/* Without backdrop-filter the pill falls back to the solid brand green. */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .site-header--compact::before { background: var(--brand-green-dark); }
+  .site-header--compact .site-header__inner { background-color: var(--brand-green-dark); }
 }
 
 .site-header__brand { display: flex; align-items: center; gap: var(--space-2); }
@@ -1931,8 +1988,10 @@ html.js-reveal .reveal.is-revealed, .reveal.is-revealed { opacity: 1; transform:
 html { overflow-x: clip; }
 
 /* Anchor jumps (checkout sections, review anchor, etc.) must clear the
-   sticky header, including when the on-screen keyboard reflows the page. */
-[id] { scroll-margin-top: calc(var(--header-height, 72px) + 16px); }
+   header, including when the on-screen keyboard reflows the page. The live
+   measured height wins on phones, where the header is fixed and its bar is
+   taller than the desktop token. */
+[id] { scroll-margin-top: calc(var(--site-header-height, var(--header-height, 72px)) + 16px); }
 
 /* --- 2. centering: controls ----------------------------------------------
    Buttons/chips/pagination carry flex centering + a tight line-height so
@@ -2525,7 +2584,34 @@ input, select, textarea { min-width: 0; max-width: 100%; }
    search occupies the second one on its own -- always ≥ 70% of the width,
    and the Persian placeholder «جستجوی محصول…» is fully visible. */
 @media (max-width: 767px) {
-  .site-header__inner { flex-wrap: wrap; row-gap: 10px; }
+  /* PR 19: on phones the header leaves the flow entirely. It is FIXED so
+     the collapsed pill can shrink without the document (or scrollY) moving.
+     The sibling `.site-header-spacer` below owns its flow height, always at
+     the expanded natural height -- INCLUDING while the header is folded.
+     That constant contribution to layout is the root-cause fix for the
+     375x812 loop where folding the in-flow header shifted scrollY and the
+     handler read the browser's scroll-anchoring correction as a gesture. */
+  .site-header {
+    position: fixed;
+    top: 0;
+    inset-inline: 0;
+    height: auto;
+  }
+  .site-header-spacer {
+    display: block;
+    height: var(--header-natural-height, 232px);
+    /* Never collapses, never animates: a look change of the header must
+       never change the document height. */
+    transition: none;
+  }
+
+  .site-header__inner {
+    flex-wrap: wrap;
+    row-gap: 10px;
+    /* Definite when Header.jsx has measured it, so the fold can animate;
+       `auto` is the safe fallback before/without a measurement. */
+    height: var(--header-natural-height, auto);
+  }
   .site-header__search {
     order: 3;
     flex: 1 0 100%;
@@ -2535,34 +2621,32 @@ input, select, textarea { min-width: 0; max-width: 100%; }
   }
   .site-header__search input { min-height: 44px; }
   .site-header__brand-name { font-size: var(--font-size-base); }
-}
 
-/* --- 1b. The phone header collapses to ONE row while scrolling down -------
-   Scrolled past 80px and still going down (Header.jsx owns the direction),
-   the wrapped phone header folds into a single ~56px row: burger, brand,
-   search icon, cart badge. Scrolling back up -- or reaching the top --
-   restores it, so the full header is always there when the shopper looks.
-
-   The height is TRANSITIONED, not snapped: `height: auto` cannot be
-   interpolated, so the expanded content height is published by Header.jsx
-   as --header-natural-height and the fold is a definite-to-definite 200ms
-   ease. The measurement is taken ONLY while the header is expanded,
-   non-compact and at rest (see Header.jsx), and `auto` is the fallback
-   whenever no trustworthy value exists -- so the box can never end up
-   shorter than its content and paint over the page underneath. The sticky
-   header keeps its real height in the flow, which is what keeps the page
-   content from jumping or being covered. */
-@media (max-width: 767px) {
-  .site-header__inner {
-    height: var(--header-natural-height, auto);
-    transition: height .2s ease, min-height .25s ease;
-  }
-
+  /* --- 1b. The phone header collapses to ONE floating pill row -----------
+     Past 80px and still going down (Header.jsx owns the direction) the
+     wrapped phone header folds into the same glass pill as desktop: menu,
+     logo, search icon, cart badge. Scrolling up 24px -- or reaching the top
+     -- restores it. The height is transitioned between the measured natural
+     height and the row height; the spacer keeps the page still. */
   .site-header--collapsed .site-header__inner {
+    flex-wrap: nowrap;
+    row-gap: 0;
     height: var(--header-height-row);
-    min-height: 0;
+    min-height: var(--header-height-row);
+    width: auto;
+    margin: 8px;
+    padding-block: 0;
+    padding-inline: 10px;
     gap: var(--space-2);
+    border-radius: 14px;
+    border-color: rgba(206,180,100,.35);
+    background-color: rgba(47,58,24,.88);
+    box-shadow: 0 8px 24px rgba(20,26,10,.25);
     overflow: hidden;
+  }
+  .site-header--collapsed .site-header__inner::before {
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
   }
 
   /* Everything that is not part of the one row steps aside. Categories, the
@@ -2584,12 +2668,18 @@ input, select, textarea { min-width: 0; max-width: 100%; }
   /* The search icon grows the field back into view under the row: the inner
      returns to its natural height and only the search row comes with it.
      (The suggestions list is absolutely positioned below it, so the inner
-     must not clip while the shopper is typing.) */
+     must not clip while the shopper is typing.) The fixed header simply
+     paints over the page; the spacer keeps the document still. */
   .site-header--collapsed.site-header--searching .site-header__inner {
     height: auto;
     overflow: visible;
   }
   .site-header--collapsed.site-header--searching .site-header__search { display: flex; }
+
+  /* No backdrop-filter: the phone pill falls back to the solid brand green. */
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .site-header--collapsed .site-header__inner { background-color: var(--brand-green-dark); }
+  }
 }
 
 /* --- 2. Password fields: the eye button (item 3) --------------------------

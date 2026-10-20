@@ -1,13 +1,15 @@
 /*
- * The phone header's scroll behaviour.
+ * The header's scroll behaviour (PR 19: floating pill + constant outer box).
  *
  * jsdom has no layout viewport, so the CSS that paints the collapsed row is
  * asserted straight from the authored stylesheet (same source-audit pattern
  * as the mobile/fixed-UI guards), while this file drives the real component:
- * the scroll hysteresis (80px down / 24px up / always open at the top), the
- * class names it publishes, the measured heights the height transition
- * needs -- which must NEVER be taken from the folded or compact header --
- * and the search icon that grows the field back in place.
+ * the compact hysteresis (on past 40px, off below 8px), the phone fold
+ * (80px down / 24px up / always open at the top), the 350ms post-toggle
+ * delta lock that breaks the scroll-anchoring feedback loop, the spacer that
+ * owns the phone header's flow height, the measured heights -- which must
+ * NEVER be taken from the folded or compact header -- and the search icon
+ * that grows the field back in place.
  */
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -43,6 +45,19 @@ async function scrollTo(y) {
   Object.defineProperty(window, "scrollY", { value: y, configurable: true });
   await act(async () => {
     fireEvent.scroll(window);
+    await nextFrame();
+  });
+}
+
+/**
+ * Let the post-toggle delta lock (350ms) expire. The unlock pass re-bases
+ * lastY to the live scrollY and resets both travel counters, then schedules
+ * one measurement frame -- awaited here so React state settles inside act().
+ */
+async function waitOutLock() {
+  await act(async () => {
+    // 350ms lock + a comfortable margin for timer/rAF scheduling.
+    await new Promise((resolve) => setTimeout(resolve, 420));
     await nextFrame();
   });
 }
@@ -131,9 +146,12 @@ describe("phone header collapse on scroll", () => {
     });
     expect(header.className).not.toContain("site-header--collapsed");
 
-    await scrollTo(40);
+    await scrollTo(41);
     expect(header.className).toContain("site-header--compact");
     expect(header.className).not.toContain("site-header--collapsed");
+
+    // The compact toggle locked deltas for 350ms; let a real gesture resume.
+    await waitOutLock();
 
     await scrollTo(79);
     expect(header.className).not.toContain("site-header--collapsed");
@@ -151,14 +169,17 @@ describe("phone header collapse on scroll", () => {
 
     // Deliberate swipe up: the full header comes back while still deep in
     // the page -- the bug was that it never did.
+    await waitOutLock();
     await scrollTo(276);
     expect(header.className).not.toContain("site-header--collapsed");
 
     // ...and a second trip down folds it again.
+    await waitOutLock();
     await scrollTo(300);
     expect(header.className).toContain("site-header--collapsed");
 
-    // Reaching the top (<= 10px) always restores it, whatever the travel.
+    // Reaching the top (<= 10px) always restores it, whatever the travel
+    // (and even inside the lock window: the top is not a gesture).
     await scrollTo(6);
     expect(header.className).not.toContain("site-header--collapsed");
     await scrollTo(0);
@@ -183,6 +204,65 @@ describe("phone header collapse on scroll", () => {
     expect(header.className).toContain("site-header--collapsed");
     await scrollTo(303);
     expect(header.className).toContain("site-header--collapsed");
+  });
+
+  it("holds the folded row through a scroll-anchoring correction (the 375x812 loop)", async () => {
+    renderHeader();
+    const header = document.querySelector(".site-header");
+
+    await scrollTo(480);
+    expect(header.className).toContain("site-header--collapsed");
+
+    // What the browser did on a real phone: shrink the header, scroll
+    // anchoring corrected scrollY upward, this handler read the correction
+    // as an upward swipe and expanded -- then the cycle repeated ~every
+    // 40ms. Both corrections arrive inside the 350ms lock and are ignored.
+    await scrollTo(457);
+    expect(header.className).toContain("site-header--collapsed");
+
+    await scrollTo(484);
+    expect(header.className).toContain("site-header--collapsed");
+  });
+
+  it("accepts a real upward swipe again once the delta lock expires", async () => {
+    renderHeader();
+    const header = document.querySelector(".site-header");
+
+    await scrollTo(480);
+    expect(header.className).toContain("site-header--collapsed");
+
+    // 30px up, but inside the lock window: still a correction, not a swipe.
+    await scrollTo(450);
+    expect(header.className).toContain("site-header--collapsed");
+
+    // After the window the position is re-based, so the next 30px are read
+    // as real travel and restore the full header.
+    await waitOutLock();
+    await scrollTo(420);
+    expect(header.className).not.toContain("site-header--collapsed");
+  });
+
+  it("uses hysteresis for the compact state on every viewport", async () => {
+    renderHeader();
+    const header = document.querySelector(".site-header");
+    await act(async () => {
+      await nextFrame();
+    });
+
+    // Below the upper threshold nothing happens...
+    await scrollTo(30);
+    expect(header.className).not.toContain("site-header--compact");
+
+    // ...past 40px it turns on...
+    await scrollTo(41);
+    expect(header.className).toContain("site-header--compact");
+
+    // ...and it stays on well below that, down to the 8px release line.
+    await scrollTo(20);
+    expect(header.className).toContain("site-header--compact");
+
+    await scrollTo(5);
+    expect(header.className).not.toContain("site-header--compact");
   });
 
   it("grows the search field back into place and focuses it, without navigating", async () => {
@@ -230,9 +310,9 @@ describe("natural header height measurement", () => {
     const observer = MockResizeObserver.instances.at(-1);
     expect(observer.elements).toContain(document.querySelector(".site-header__inner"));
 
-    // Compact but still expanded (scrollY > 24): the box is shorter.
+    // Compact but still expanded (scrollY > 40): the box is shorter.
     stubInnerHeight({ box: 58, content: 58 });
-    await scrollTo(40);
+    await scrollTo(41);
     await act(async () => {
       observer.trigger();
       await nextFrame();
@@ -304,10 +384,88 @@ describe("natural header height measurement", () => {
   });
 });
 
-describe("phone header collapse stylesheet", () => {
-  it("transitions the inner's height between the measured and one-row heights", () => {
-    expect(CSS).toMatch(/@media \(max-width: 767px\) \{[\s\S]*?\.site-header__inner \{\s*height: var\(--header-natural-height, auto\);\s*transition: height \.2s ease/);
-    expect(CSS).toMatch(/\.site-header--collapsed \.site-header__inner \{\s*height: var\(--header-height-row\);\s*min-height: 0;/);
+describe("header spacer and pill state (PR 19)", () => {
+  it("renders a sibling spacer that reserves the expanded natural height", async () => {
+    renderHeader();
+    const header = document.querySelector(".site-header");
+    const spacer = document.querySelector(".site-header-spacer");
+    expect(spacer).toBeTruthy();
+    expect(spacer.getAttribute("aria-hidden")).toBe("true");
+    expect(spacer.parentElement).toBe(header.parentElement);
+    expect(header.nextElementSibling).toBe(spacer);
+
+    stubInnerHeight({ box: 232, content: 232 });
+    await waitFor(() => expect(naturalHeight()).toBe("232px"));
+  });
+
+  it("applies the pill as a class on the header, never as inline styles", async () => {
+    renderHeader();
+    const header = document.querySelector(".site-header");
+    await scrollTo(120);
+    expect(header.className).toContain("site-header--compact");
+    expect(header.className).toContain("site-header--collapsed");
+    // Pill geometry lives in the stylesheet only -- the document element
+    // carries the measured height variables, the header carries classes.
+    expect(header.getAttribute("style")).toBeNull();
+  });
+});
+
+describe("header layout contract", () => {
+  it("keeps a constant-height outer box on desktop and never transitions it", () => {
+    // The sticky header's own height is the layout height: fixed at the
+    // token, independent of compact/collapsed.
+    expect(CSS).toMatch(/\.site-header \{\s*position: sticky; top: 0; z-index: 60;\s*isolation: isolate;\s*height: var\(--header-height\);/);
+    // The morph is inner-only, and the outer height is not animated.
+    const headerRule = [...CSS.matchAll(/\.site-header \{[^}]*\}/g)]
+      .map((match) => match[0])
+      .find((rule) => rule.includes("height: var(--header-height);"));
+    expect(headerRule).toBeTruthy();
+    expect(headerRule).not.toContain("transition");
+    expect(CSS).toMatch(/\.site-header__inner \{[\s\S]*?transition:\s*[\s\S]*?width \.3s ease-out/);
+  });
+
+  it("renders the phone spacer with the natural height and fixed header", () => {
+    expect(CSS).toMatch(/\.site-header-spacer \{ display: none; \}/);
+    expect(CSS).toMatch(/@media \(max-width: 767px\) \{[\s\S]*?\.site-header \{\s*position: fixed;\s*top: 0;\s*inset-inline: 0;[\s\S]*?\.site-header-spacer \{\s*display: block;\s*height: var\(--header-natural-height, 232px\);/);
+    // The spacer is not allowed to animate with the collapse.
+    expect(CSS).toMatch(/\.site-header-spacer \{[^}]*transition: none/);
+  });
+
+  it("morphs the desktop bar into the floating pill", () => {
+    const compact = CSS.replace(/\s+/g, " ").match(/\.site-header--compact \.site-header__inner \{[^}]*\}/)[0];
+    expect(compact).toContain("width: 80%;");
+    expect(compact).toContain("max-width: 1160px;");
+    expect(compact).toContain("margin-top: 12px;");
+    expect(compact).toContain("border-radius: 16px;");
+    expect(compact).toContain("border-color: rgba(206,180,100,.35);");
+    expect(compact).toContain("box-shadow: 0 8px 24px rgba(20,26,10,.25);");
+    expect(compact).toContain("background-color: rgba(47,58,24,.88);");
+    // The blur lives on the descendant-free pseudo layer (never on the bar
+    // itself, which would capture the mega-menu's fixed overlay).
+    expect(CSS.replace(/\s+/g, " ")).toMatch(
+      /\.site-header--compact \.site-header__inner::before \{ -webkit-backdrop-filter: blur\(12px\); backdrop-filter: blur\(12px\); \}/
+    );
+    // The transition list animates the pill's geometry, not the outer box.
+    const inner = [...CSS.replace(/\s+/g, " ").matchAll(/\.site-header__inner \{[^}]*\}/g)]
+      .map((match) => match[0])
+      .find((rule) => rule.includes("transition:"));
+    expect(inner).toBeTruthy();
+    for (const prop of ["width .3s ease-out", "max-width .3s ease-out", "margin .3s ease-out", "padding .3s ease-out", "border-radius .3s ease-out", "background-color .3s ease-out", "box-shadow .3s ease-out"]) {
+      expect(inner, `transition must include ${prop}`).toContain(prop);
+    }
+  });
+
+  it("folds the phone row into the same pill and restores the search field", () => {
+    expect(CSS).toMatch(/\.site-header__inner \{\s*flex-wrap: wrap;\s*row-gap: 10px;\s*\/\*[\s\S]*?\*\/\s*height: var\(--header-natural-height, auto\);/);
+    const collapsed = CSS.replace(/\s+/g, " ").match(/\.site-header--collapsed \.site-header__inner \{[^}]*\}/)[0];
+    expect(collapsed).toContain("height: var(--header-height-row);");
+    expect(collapsed).toContain("margin: 8px;");
+    expect(collapsed).toContain("border-radius: 14px;");
+    expect(collapsed).toContain("border-color: rgba(206,180,100,.35);");
+    expect(collapsed).toContain("background-color: rgba(47,58,24,.88);");
+    expect(CSS.replace(/\s+/g, " ")).toMatch(
+      /\.site-header--collapsed \.site-header__inner::before \{ -webkit-backdrop-filter: blur\(12px\); backdrop-filter: blur\(12px\); \}/
+    );
     expect(CSS).toMatch(/\.site-header--collapsed \.site-header__search-toggle \{ display: inline-grid; \}/);
     // Searching grows the inner back and stops clipping the suggestions list.
     expect(CSS).toMatch(/\.site-header--collapsed\.site-header--searching \.site-header__inner \{\s*height: auto;\s*overflow: visible;\s*\}/);
@@ -335,11 +493,11 @@ describe("phone header collapse stylesheet", () => {
     expect(CSS).not.toMatch(/\.site-header--collapsed \.site-header__(burger|brand|actions) \{ display: none/);
   });
 
-  it("keeps the header in the normal flow so it can never cover the page", () => {
-    expect(CSS).toMatch(/\.site-header \{\s*position: sticky; top: 0;/);
-    // The sticky header is not overlaid by an absolutely positioned copy of
-    // itself: its box is the flow box, so the content below always starts
-    // under the real rendered height.
-    expect(CSS).not.toMatch(/\.site-header \{[^}]*position: fixed/);
+  it("keeps the phone header fixed with a spacer owning its flow height", () => {
+    // The only `position: fixed` header is inside the phone breakpoint, and
+    // it is paired with a static-height spacer -- the document height never
+    // depends on the collapsed state.
+    expect(CSS).toMatch(/@media \(max-width: 767px\) \{[\s\S]*?\.site-header \{\s*position: fixed;/);
+    expect(CSS.replace(/\s+/g, " ")).toContain("height: var(--header-natural-height, 232px);");
   });
 });
