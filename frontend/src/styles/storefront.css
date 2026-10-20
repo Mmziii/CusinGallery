@@ -2600,6 +2600,8 @@ input, select, textarea { min-width: 0; max-width: 100%; }
   .site-header-spacer {
     display: block;
     height: var(--header-natural-height, 232px);
+    /* `.app-shell` is a flex column: the spacer must never shrink. */
+    flex: none;
     /* Never collapses, never animates: a look change of the header must
        never change the document height. */
     transition: none;
