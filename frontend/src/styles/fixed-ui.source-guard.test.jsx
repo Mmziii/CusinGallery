@@ -60,12 +60,26 @@ function targetsShellAncestor(selector) {
 }
 
 describe("fixed UI stylesheet guard", () => {
-  it("keeps the blur on the compact-header pseudo-element, never on the header", () => {
-    const pseudo = declarationsFor(".site-header--compact::before");
-    expect(pseudo).toEqual(expect.arrayContaining([
-      { prop: "-webkit-backdrop-filter", value: "blur(12px)" },
-      { prop: "backdrop-filter", value: "blur(12px)" },
-    ]));
+  it("keeps the blur on descendant-free pseudo-elements, never on the shell", () => {
+    // PR 19: the floating pill blurs its backdrop with a pseudo-element of
+    // the inner bar. Like the old compact-header layer, it has no
+    // descendants, so its backdrop-filter can never capture the mega-menu's
+    // fixed viewport overlay. The blur must never move onto `.site-header`
+    // or `.site-header__inner` themselves (the glass FILL is a plain
+    // background-color on the bar and is safe there).
+    const BLUR_OWNERS = [
+      ".site-header--compact .site-header__inner::before",
+      ".site-header--collapsed .site-header__inner::before",
+    ];
+    expect(valuesFor(".site-header__inner", "background-color")).toContain("var(--brand-green-dark)");
+    expect(valuesFor(".site-header--compact .site-header__inner", "background-color")).toContain("rgba(47,58,24,.88)");
+
+    for (const selector of BLUR_OWNERS) {
+      expect(declarationsFor(selector), selector).toEqual(expect.arrayContaining([
+        { prop: "-webkit-backdrop-filter", value: "blur(12px)" },
+        { prop: "backdrop-filter", value: "blur(12px)" },
+      ]));
+    }
 
     const blurRules = [];
     root.walkRules((rule) => {
@@ -75,7 +89,11 @@ describe("fixed UI stylesheet guard", () => {
         }
       });
     });
-    expect(blurRules).toEqual([".site-header--compact::before", ".site-header--compact::before"]);
+    expect(blurRules.every((selector) => BLUR_OWNERS.includes(selector))).toBe(true);
+    expect(new Set(blurRules)).toEqual(new Set([
+      ".site-header--compact .site-header__inner::before",
+      ".site-header--collapsed .site-header__inner::before",
+    ]));
   });
 
   it("keeps shell ancestors free of fixed-containing-block properties", () => {

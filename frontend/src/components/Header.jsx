@@ -25,11 +25,21 @@ import {
 import { formatPrice } from "../utils/formatPrice";
 
 /**
- * Site header (Part 3 redesign): sticky + shrinks on scroll, brand
- * mark + Persian name in the display face, live search suggestions,
- * desktop mega-menu over the category tree, a clean drawer on mobile,
- * and a mini-cart drawer fed by the shared cart store (server lines or
- * guest lines hydrated from the products API).
+ * Site header (PR 19 redesign): the OUTER header keeps a constant height in
+ * the layout on every viewport and only the inner layer changes shape.
+ *
+ *  - Desktop (>= 768px): the header is a fixed-height sticky box whose bar
+ *    (`.site-header__inner`) morphs into a floating "pill" once scrolled.
+ *    Geometry alone animates; the document height never changes.
+ *  - Phone (<= 767px): the header is FIXED and a sibling spacer (rendered
+ *    below) reserves the expanded header's natural height. Collapsing the
+ *    phone row can therefore never move the document, which is what used to
+ *    feed scroll anchoring back into the scroll handler and made the header
+ *    toggle every ~40ms.
+ *
+ * Scroll state uses hysteresis (compact on past 40px, off only below 8px)
+ * and a short post-toggle lock that ignores scroll deltas, so a self-caused
+ * scroll correction can never undo the state that caused it.
  */
 function Header() {
   const wishlist = useWishlistStore();
@@ -55,8 +65,10 @@ function Header() {
   const [cartOpen, setCartOpen] = useState(false);
   const [megaOpen, setMegaOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  // Desktop pill / phone shrink state. Hysteresis: it turns on past 40px and
+  // only turns off below 8px, so no single-pixel boundary can flutter it.
   const [compact, setCompact] = useState(false);
-  // Phone only: the wrapped header (~245px: brand + categories +
+  // Phone only: the wrapped header (~232px: brand + categories +
   // account/cart + search rows) folds into one row once the shopper has
   // scrolled past 80px and is still going down. Scrolling up by 24px --
   // or reaching the top -- restores it.
@@ -211,17 +223,16 @@ function Header() {
   // Audit 19: publish the header's REAL height as --site-header-height.
   // Sticky elements that must sit directly under it (the shop's mobile
   // filter/sort bar, the gallery) used to hard-code 76px, which is wrong the
-  // moment the phone layout wraps the search onto a second row.
+  // moment the phone layout wraps the search onto a second row. With the
+  // phone header now FIXED, this is also the offset anchors and sticky
+  // siblings sit at.
   //
-  // The same pass publishes --header-natural-height: the EXPANDED inner
-  // height the phone collapse transitions to/from. CSS cannot interpolate
-  // to/from `height: auto`, so the value has to be measured -- and the one
-  // bug that must never come back is publishing a measurement taken while
-  // the header was folded or mid-animation (the phone shrink runs 200ms and
-  // the compact shrink changes the logo height). A stale, too-small value
-  // pins the header box below its content, which then paints over the page.
+  // The same pass publishes --header-natural-height: the EXPANDED header
+  // height. On phones it is the permanent height of `.site-header-spacer`
+  // (the fixed header's share of the document flow). Measuring it while the
+  // header is folded, compact or mid-animation would pin the spacer to a
+  // shorter-than-content value and let the page slide under the header, so:
   //
-  // Therefore:
   //   * the natural height is measured ONLY while the header is fully
   //     expanded (!rowCollapsed) AND not shrinking (!compact) AND not
   //     animating -- otherwise the frame is skipped;
@@ -232,8 +243,6 @@ function Header() {
   //     swaps and orientation changes re-measure on their own;
   //   * it re-measures on resize/orientationchange, after webfonts load and
   //     once the height transition ends.
-  // The rendered header is also a sticky element that keeps its real height
-  // in the flow, so page content can never slide underneath it.
   useEffect(() => {
     const root = document.documentElement;
     let frame = null;
@@ -241,7 +250,7 @@ function Header() {
     // one frame after this one; the live offset closes that gap, so a
     // measurement can never be taken while the header is compact or folded.
     const naturalCanBeMeasured = () =>
-      (window.scrollY || 0) <= 24 &&
+      (window.scrollY || 0) <= 40 &&
       !rowCollapsedRef.current &&
       !compactRef.current &&
       !animatingRef.current;
@@ -268,17 +277,30 @@ function Header() {
       if (frame !== null) return;
       frame = window.requestAnimationFrame ? window.requestAnimationFrame(measure) : measure();
     };
-    // A width/orientation change invalidates the measurement (rows wrap
-    // differently): drop back to `auto` -- always safe, never clips -- and
-    // re-measure on the next frame.
-    const onViewportChange = () => {
+    // A WIDTH change invalidates the measurement (rows wrap differently):
+    // drop back to `auto` -- always safe, never clips -- and re-measure on
+    // the next frame. Height-only resizes are NOT invalidating: on phones
+    // the address bar collapses/expands while scrolling and fires `resize`
+    // with the same width, which must not resize (or clear) the spacer.
+    let lastWidth = window.innerWidth || 0;
+    const onResize = () => {
+      const width = window.innerWidth || 0;
+      if (width === lastWidth) {
+        schedule();
+        return;
+      }
+      lastWidth = width;
+      if (!rowCollapsedRef.current) root.style.removeProperty("--header-natural-height");
+      schedule();
+    };
+    const onOrientationChange = () => {
       if (!rowCollapsedRef.current) root.style.removeProperty("--header-natural-height");
       schedule();
     };
     schedule();
     window.addEventListener("scroll", schedule, { passive: true });
-    window.addEventListener("resize", onViewportChange);
-    window.addEventListener("orientationchange", onViewportChange);
+    window.addEventListener("resize", onResize);
+    window.addEventListener("orientationchange", onOrientationChange);
     const resizeObserver =
       typeof ResizeObserver === "function" ? new ResizeObserver(schedule) : null;
     if (resizeObserver && innerRef.current) resizeObserver.observe(innerRef.current);
@@ -288,32 +310,73 @@ function Header() {
     return () => {
       if (frame !== null && window.cancelAnimationFrame) window.cancelAnimationFrame(frame);
       window.removeEventListener("scroll", schedule);
-      window.removeEventListener("resize", onViewportChange);
-      window.removeEventListener("orientationchange", onViewportChange);
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("orientationchange", onOrientationChange);
       resizeObserver?.disconnect();
     };
   }, []);
 
   // Sticky shrink + the phone one-row collapse.
   //
-  // `compact` is the long-standing shrink every viewport gets past 24px
-  // (smaller logo, shorter bar). `rowCollapsed` is phone-only and needs the
-  // scroll DIRECTION, a travel threshold and an offset: past 80px, with 24px
-  // of cumulative downward travel, the header folds; 24px of upward travel --
-  // or reaching the top (<= 10px) -- restores it. The two thresholds are the
-  // hysteresis: rubber-banding and the tail of a smooth scroll never flicker
-  // the height, but a deliberate swipe up always brings the full header back.
+  // `compact` drives the desktop pill (and the smaller logo everywhere).
+  // It is HYSTERETIC: on once y > 40, off only once y < 8. A single
+  // threshold would flip on every frame that scroll anchoring nudges the
+  // page a pixel or two around the boundary.
+  //
+  // `rowCollapsed` is the phone one-row fold. It still needs the scroll
+  // DIRECTION, an offset and travel: past 80px, with 24px of cumulative
+  // downward travel, the row folds; 24px of upward travel -- or reaching
+  // the top (<= 10px) -- restores it.
+  //
+  // THE FIX for the 375x812 feedback loop (108 toggles in ~4s): collapsing
+  // used to shrink the header's in-flow height by ~175px, the browser's
+  // scroll anchoring corrected scrollY, and this handler read that
+  // correction as an upward gesture, expanded, and looped. Two independent
+  // guards now make that impossible:
+  //   1. the document height is owned by a constant-height outer box (the
+  //      header on desktop, the spacer on phone -- see the component), so
+  //      a look change cannot move scrollY at all;
+  //   2. every self-caused toggle of `compact` or `rowCollapsed` starts a
+  //      350ms window in which scroll deltas are ignored. When it expires
+  //      lastY is re-based to the live scrollY and both travel counters are
+  //      reset, so a correction can never be banked as travel.
   // The listener is rAF-throttled: at most one state pass per frame.
   useEffect(() => {
     const TOP_ZONE = 10;
-    const COMPACT_AT = 24;
+    const COMPACT_ON = 40;
+    const COMPACT_OFF = 8;
     const COLLAPSE_AT = 80;
     const COLLAPSE_TRAVEL = 24;
     const EXPAND_TRAVEL = 24;
+    const LOCK_MS = 350;
     let lastY = window.scrollY || 0;
     let downTravel = 0;
     let upTravel = 0;
     let frame = null;
+    let lockUntil = 0;
+    let unlockTimer = null;
+
+    const schedule = () => {
+      if (frame !== null) return;
+      frame = window.requestAnimationFrame
+        ? window.requestAnimationFrame(evaluate)
+        : window.setTimeout(evaluate, 16);
+    };
+
+    const lockDeltas = () => {
+      lockUntil = Date.now() + LOCK_MS;
+      if (unlockTimer !== null) window.clearTimeout(unlockTimer);
+      unlockTimer = window.setTimeout(() => {
+        unlockTimer = null;
+        lockUntil = 0;
+        lastY = window.scrollY || 0;
+        downTravel = 0;
+        upTravel = 0;
+        // The position may have changed while deltas were ignored: re-read
+        // it now so the header is correct even if no further scroll fires.
+        schedule();
+      }, LOCK_MS);
+    };
 
     const collapseRow = () => {
       rowCollapsedRef.current = true;
@@ -327,41 +390,57 @@ function Header() {
       setRowCollapsed(false);
     };
 
-    const evaluate = () => {
+    function evaluate() {
       frame = null;
       const y = window.scrollY || 0;
       const delta = y - lastY;
       lastY = y;
+      let toggled = false;
 
-      const isCompact = y > COMPACT_AT;
-      compactRef.current = isCompact;
-      setCompact(isCompact);
+      // Absolute-position hysteresis: immune to the delta lock below, so
+      // the state is always truthful for where the page actually is.
+      const nextCompact = compactRef.current ? y >= COMPACT_OFF : y > COMPACT_ON;
+      if (nextCompact !== compactRef.current) {
+        compactRef.current = nextCompact;
+        setCompact(nextCompact);
+        toggled = true;
+      }
+
+      const deltasLocked = Date.now() < lockUntil;
 
       if (y <= TOP_ZONE) {
         downTravel = 0;
         upTravel = 0;
-        if (rowCollapsedRef.current) expandRow();
+        if (rowCollapsedRef.current) {
+          expandRow();
+          toggled = true;
+        }
         if (searchRevealedRef.current) {
           searchRevealedRef.current = false;
           setSearchRevealed(false);
         }
-        return;
+      } else if (!deltasLocked) {
+        if (delta > 0) {
+          downTravel += delta;
+          upTravel = 0;
+          // A downward jitter must not re-fold a header the shopper just
+          // opened with an upward swipe.
+          if (!rowCollapsedRef.current && y > COLLAPSE_AT && downTravel >= COLLAPSE_TRAVEL) {
+            collapseRow();
+            toggled = true;
+          }
+        } else if (delta < 0) {
+          upTravel += -delta;
+          downTravel = 0;
+          if (rowCollapsedRef.current && upTravel >= EXPAND_TRAVEL) {
+            expandRow();
+            toggled = true;
+          }
+        }
       }
 
-      if (delta > 0) {
-        downTravel += delta;
-        upTravel = 0;
-        // A downward jitter must not re-fold a header the shopper just
-        // opened with an upward swipe.
-        if (!rowCollapsedRef.current && y > COLLAPSE_AT && downTravel >= COLLAPSE_TRAVEL) {
-          collapseRow();
-        }
-      } else if (delta < 0) {
-        upTravel += -delta;
-        downTravel = 0;
-        if (rowCollapsedRef.current && upTravel >= EXPAND_TRAVEL) expandRow();
-      }
-    };
+      if (toggled) lockDeltas();
+    }
 
     const onScroll = () => {
       if (frame !== null) return;
@@ -373,6 +452,7 @@ function Header() {
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => {
       window.removeEventListener("scroll", onScroll);
+      if (unlockTimer !== null) window.clearTimeout(unlockTimer);
       if (frame === null) return;
       if (window.cancelAnimationFrame) window.cancelAnimationFrame(frame);
       else window.clearTimeout(frame);
@@ -541,6 +621,7 @@ function Header() {
     .join(" ");
 
   return (
+    <>
     <header className={headerClass} ref={headerRef}>
       <div className="container site-header__inner" ref={innerRef}>
         <button
@@ -868,6 +949,17 @@ function Header() {
         </Portal>
       ) : null}
     </header>
+
+    {/* PR 19: on phones the header is `position: fixed`, so it paints over
+        the page instead of taking part in its flow. This spacer owns the
+        header's flow height and is the ONE thing the document layout sees.
+        Its height is the EXPANDED header's measured height and never
+        changes with the collapsed/compact state -- that is what keeps the
+        document height (and therefore scrollY) constant while the pill
+        folds, which is the root-cause fix for the scroll feedback loop.
+        Hidden on desktop, where the outer header stays in the flow. */}
+    <div className="site-header-spacer" aria-hidden="true" />
+    </>
   );
 }
 
