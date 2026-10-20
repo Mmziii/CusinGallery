@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import CartPage from "./CartPage";
@@ -127,6 +127,30 @@ function renderCheckout(initialEntry = "/checkout/?step=delivery") {
     </MemoryRouter>
   );
 }
+
+/** Renders the app plus a probe of the live URL, so a redirect can be
+ *  asserted (MemoryRouter never touches window.location). */
+function renderWithLocationProbe(initialEntry = "/checkout/") {
+  function LocationProbe() {
+    const location = useLocation();
+    return (
+      <output data-testid="location" hidden>
+        {`${location.pathname}${location.search}`}
+      </output>
+    );
+  }
+  return render(
+    <MemoryRouter initialEntries={[initialEntry]}>
+      <Routes>
+        <Route path="/cart/" element={<CartPage />} />
+        <Route path="/checkout/" element={<CheckoutPage />} />
+      </Routes>
+      <LocationProbe />
+    </MemoryRouter>
+  );
+}
+
+const currentUrl = () => screen.getByTestId("location").textContent;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -282,5 +306,81 @@ describe("Redesigned Checkout Flow (Task 2)", () => {
         shipping_method: "standard",
       })
     );
+  });
+});
+
+describe("no single-page checkout (the cart's step must never be skipped)", () => {
+  it("replaces /checkout/ (no step) with ?step=delivery", async () => {
+    listAddresses.mockResolvedValue([TEHRAN_ADDRESS]);
+    fetchShippingMethods.mockResolvedValue(SHIPPING);
+    renderWithLocationProbe("/checkout/");
+
+    await screen.findByRole("heading", { name: /۲\. انتخاب روش تحویل/ });
+    expect(currentUrl()).toBe("/checkout/?step=delivery");
+  });
+
+  it("replaces an unknown step with ?step=delivery", async () => {
+    listAddresses.mockResolvedValue([TEHRAN_ADDRESS]);
+    fetchShippingMethods.mockResolvedValue(SHIPPING);
+    renderWithLocationProbe("/checkout/?step=pay-now");
+
+    await screen.findByRole("heading", { name: /۲\. انتخاب روش تحویل/ });
+    expect(currentUrl()).toBe("/checkout/?step=delivery");
+  });
+
+  it("the cart's «ادامه و ثبت سفارش» links to the first step", async () => {
+    render(
+      <MemoryRouter initialEntries={["/cart/"]}>
+        <Routes>
+          <Route path="/cart/" element={<CartPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    const cartButton = await screen.findByRole("link", { name: "ادامه و ثبت سفارش" });
+    expect(cartButton.getAttribute("href")).toBe("/checkout/?step=delivery");
+
+    const mobileButton = document.querySelector(".cart-page__mobile-bar a");
+    expect(mobileButton).toBeTruthy();
+    expect(mobileButton.getAttribute("href")).toBe("/checkout/?step=delivery");
+  });
+
+  it("never places an order from the delivery or the address step", async () => {
+    listAddresses.mockResolvedValue([TEHRAN_ADDRESS]);
+    fetchShippingMethods.mockResolvedValue(SHIPPING);
+
+    // Step 2 (delivery): the only action moves the flow forward.
+    renderCheckout("/checkout/?step=delivery");
+    await screen.findByRole("heading", { name: /۲\. انتخاب روش تحویل/ });
+    fireEvent.click(screen.getAllByRole("button", { name: /ادامه: اطلاعات تحویل/ })[0]);
+    await screen.findByRole("heading", { name: /۳\. اطلاعات تحویل/ });
+    expect(placeOrder).not.toHaveBeenCalled();
+
+    // Step 3 (address): same -- there is no «ثبت سفارش» button here at all.
+    expect(screen.queryByRole("button", { name: /ثبت سفارش/ })).toBeNull();
+    fireEvent.click(screen.getAllByRole("button", { name: /ادامه: بازبینی و پرداخت/ })[0]);
+    await screen.findByRole("heading", { name: /۴\. بازبینی و پرداخت/ });
+    expect(placeOrder).not.toHaveBeenCalled();
+
+    // Only the review step can place the order.
+    fireEvent.click(screen.getAllByRole("button", { name: /ثبت سفارش و پرداخت/ })[0]);
+    await waitFor(() => expect(placeOrder).toHaveBeenCalledTimes(1));
+  });
+
+  it("shows the coupon field only on the review step", async () => {
+    listAddresses.mockResolvedValue([TEHRAN_ADDRESS]);
+    fetchShippingMethods.mockResolvedValue(SHIPPING);
+
+    renderCheckout("/checkout/?step=delivery");
+    await screen.findByRole("heading", { name: /۲\. انتخاب روش تحویل/ });
+    expect(document.getElementById("checkout-coupon")).toBeNull();
+
+    fireEvent.click(screen.getAllByRole("button", { name: /ادامه: اطلاعات تحویل/ })[0]);
+    await screen.findByRole("heading", { name: /۳\. اطلاعات تحویل/ });
+    expect(document.getElementById("checkout-coupon")).toBeNull();
+
+    fireEvent.click(screen.getAllByRole("button", { name: /ادامه: بازبینی و پرداخت/ })[0]);
+    await screen.findByRole("heading", { name: /۴\. بازبینی و پرداخت/ });
+    expect(document.getElementById("checkout-coupon")).toBeTruthy();
   });
 });

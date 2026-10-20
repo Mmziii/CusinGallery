@@ -2,7 +2,7 @@ import { faDigits } from "../utils/faDigits";
 import { usePageMeta } from "../hooks/usePageMeta";
 import PropTypes from "prop-types";
 import { useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 
 import PriceTag from "../components/PriceTag";
 import RecentlyViewed from "../components/RecentlyViewed";
@@ -217,7 +217,6 @@ function GuestCartView() {
 
 function CartPage() {
   usePageMeta({ title: "سبد خرید", path: "/cart/", noindex: true });
-  const navigate = useNavigate();
   const { isAuthenticated, isLoading: authLoading } = useAuthStore();
   const { cart, isLoading, error, fetchCart, updateItem, removeItem } = useCartStore();
 
@@ -342,13 +341,14 @@ function CartPage() {
                 <dd>{formatPrice(cart.subtotal)} تومان</dd>
               </div>
             </dl>
-            <button
-              type="button"
+            {/* Task: every way into the checkout names the first step --
+                there is no single-page checkout to fall back to. */}
+            <Link
+              to="/checkout/?step=delivery"
               className="btn btn--primary btn--block"
-              onClick={() => navigate("/checkout/")}
             >
               ادامه و ثبت سفارش
-            </button>
+            </Link>
             <p className="cart-page__note">
               هزینهٔ ارسال و مبلغ نهایی را در مرحلهٔ بعد ببینید.
             </p>
@@ -362,13 +362,12 @@ function CartPage() {
             <small>جمع کل</small>
             <b>{formatPrice(cart.subtotal)} تومان</b>
           </span>
-          <button
-            type="button"
+          <Link
+            to="/checkout/?step=delivery"
             className="btn btn--primary"
-            onClick={() => navigate("/checkout/")}
           >
             ادامه
-          </button>
+          </Link>
         </div>
       </div>
 

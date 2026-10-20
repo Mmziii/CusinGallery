@@ -2781,6 +2781,16 @@ input, select, textarea { min-width: 0; max-width: 100%; }
 .checkout__mobile-total b { color: var(--brand-green-dark); }
 .checkout__review-block h3 { color: var(--color-text-muted); }
 .checkout__review-change { color: var(--brand-gold-deep); background: none; }
+/* Cart: the same sticky bottom bar the checkout steps use, so the total and
+   «ادامه» stay reachable one-handed while the list scrolls (phone only). */
+.cart-page__mobile-bar {
+  display: none;
+  position: static;
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+}
+.cart-page__mobile-total small { color: var(--color-text-muted); font-size: 0.72rem; }
+.cart-page__mobile-total b { color: var(--brand-green-dark); }
 /* Selected delivery card: gold border + tinted field + a ring, identical on
    every screen size (declared out here so the contrast audit can see it). */
 .shipping-method--active {
@@ -2810,6 +2820,25 @@ input, select, textarea { min-width: 0; max-width: 100%; }
   .checkout__mobile-total { display: flex; flex-direction: column; line-height: 1.4; min-width: 0; }
   .checkout__mobile-total b { font-size: var(--font-size-md); white-space: nowrap; }
   .checkout__mobile-bar .btn { flex: 1; min-height: 46px; }
+
+  /* Cart phone bar: identical geometry to the checkout one above. */
+  .cart-page { padding-bottom: 96px; }      /* room for the fixed action bar */
+  .cart-page__mobile-bar {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    z-index: 90;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -6px 22px rgba(30, 36, 18, .12);
+  }
+  .cart-page__mobile-bar-row { display: flex; align-items: center; gap: var(--space-3); }
+  .cart-page__mobile-total { display: flex; flex-direction: column; line-height: 1.4; min-width: 0; }
+  .cart-page__mobile-total b { font-size: var(--font-size-md); white-space: nowrap; }
+  .cart-page__mobile-bar .btn { flex: 1; min-height: 46px; }
 
   /* The review step (phone only): address + delivery method + items, with a
      «تغییر» link on every block that can still change. */
