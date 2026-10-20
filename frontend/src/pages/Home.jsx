@@ -285,8 +285,8 @@ DealCardBody.propTypes = {
  * the fixed-height stage and its transform/opacity/blur come from CSS
  * variables, so going from a side slot to the centre (or back) is one
  * continuous 600ms ease-in-out interpolation -- no remount, no jump.
- * A side card is a button (it rotates the carousel, it does NOT navigate);
- * the centre card is the real product link.
+ * A side card is exposed as a button (it rotates the carousel, it does NOT
+ * navigate); only the centre card is the real product link.
  */
 function CoverflowCard({ deal, offset, serverNow, onSelect }) {
   const distance = Math.abs(offset);
@@ -374,8 +374,9 @@ function DailyDealsSection({ title }) {
   const [, setTick] = useState(0);
   const baseServerTime = useRef(null);
   const baseClientTime = useRef(Date.now());
-  // Mirrors currentIndex for the event handlers below, so a change can be
-  // decided (and the outgoing slide captured) outside a state updater.
+  // Mirrors currentIndex for the event handlers below, so a step can be
+  // decided synchronously (two clicks in one frame must not both start from
+  // the same index).
   const shownIndexRef = useRef(0);
 
   if (data?.server_now && baseServerTime.current === null) {
