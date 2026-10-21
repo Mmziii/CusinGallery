@@ -1115,15 +1115,23 @@ h1, h2, h3, .section__head h2 {
   font-size: var(--font-size-md); color: var(--brand-gold); white-space: nowrap;
 }
 
-.site-header__search { position: relative; flex: 1; max-width: 460px; margin-inline: auto; }
-.site-header__search form { display: flex; }
+.site-header__search { position: relative; flex: 1; display: flex; max-width: 460px; margin-inline: auto; }
+/* PR 21: the field must FILL its container at every width. The form used
+   to be a shrink-to-fit flex child, so the input only ever got its
+   natural size and left a gap on the inline-start side (live: container
+   13..363 but input 135..363 at 375px, 271..796 vs 568..796 at 1024px,
+   658..1082 vs 854..1082 at 1366px). Form and input now grow, and
+   `min-width: 0` lets them shrink inside the pill; the submit button
+   keeps its own size (flex: none). */
+.site-header__search form { display: flex; flex: 1 1 auto; min-width: 0; width: 100%; }
 .site-header__search input {
-  width: 100%; border: 1px solid rgba(206,180,100,.4);
+  flex: 1 1 auto; min-width: 0; width: 100%;
+  border: 1px solid rgba(206,180,100,.4);
   border-radius: 0 10px 10px 0; padding: 10px 14px;
   background: rgba(250,247,240,.08); color: var(--brand-ivory);
 }
 .site-header__search input::placeholder { color: rgba(250,247,240,.55); }
-.site-header__search .btn { border-radius: 10px 0 0 10px; padding-inline: 14px; font-size: 1.1rem; }
+.site-header__search .btn { flex: none; border-radius: 10px 0 0 10px; padding-inline: 14px; font-size: 1.1rem; }
 
 .search-suggest {
   position: absolute; inset-inline: 0; top: calc(100% + 6px);
@@ -3439,4 +3447,96 @@ input, select, textarea { min-width: 0; max-width: 100%; }
 .confirm-dialog__actions .btn { min-height: 44px; min-width: 96px; }
 @media (prefers-reduced-motion: reduce) {
   .confirm-dialog__backdrop, .confirm-dialog__box { animation: none; }
+}
+
+/* ==========================================================================
+   PR 21 — FIXES FROM THE LIVE TEST OF PR 20
+   ==========================================================================
+   Appended last (same reason as the PR 20 block: these must win over the
+   earlier unconditional header rules). What lives here:
+     <= 1099px   the account panel anchors to the trigger's LEFT edge
+     phone band  «پیشنهاد امروز» never wraps; the timer drops to its own row
+     search (×)  the native clear button wears the brand, 44px hit area
+     <= 767px    checkout review thumbnails capped at 64px
+   ========================================================================== */
+
+/* --- The account panel can no longer open off-screen ----------------------
+   At <= 1099px the trigger is the icon-only 44px button at the INLINE END
+   of the row, i.e. flush with the physical LEFT edge of the viewport. The
+   panel used to position itself from `inset-inline-start: 0` (its right
+   edge on the trigger's right edge) and so opened LEFTWARD, out of the
+   viewport: live x = -123..57 at 375px, -97..83 at 820 and 1024px.
+   Anchoring to the trigger's physical LEFT edge makes it open to the
+   right, and the viewport cap keeps it on screen at any width. Wide
+   screens (>= 1100px, live 1366px x = 8..188) keep the current
+   placement. */
+@media (max-width: 1099px) {
+  .user-menu__panel {
+    left: 0;
+    right: auto;
+    max-width: calc(100vw - 16px);
+  }
+}
+
+/* --- Phone deals band header ---------------------------------------------
+   «پیشنهاد امروز» wrapped onto two lines next to «مشاهده همه» and the
+   timer. The title is one line now, and the header may wrap: when the
+   row cannot fit, the countdown drops to its own full-width row under
+   the title + link (the phone band is only ever rendered <= 767px). */
+.deals-mobile__title { white-space: nowrap; }
+.deals-mobile__header {
+  flex-wrap: wrap;
+  row-gap: 8px;
+  column-gap: 10px;
+}
+.deals-mobile__head-main { flex: 1 1 auto; }
+@media (max-width: 480px) {
+  /* 360-480px: title + «مشاهده همه» (about 205px) plus the timer (about
+     185px) never fit, so the timer takes the whole second row instead of
+     squeezing the title into two lines. */
+  .deals-mobile__header > .countdown {
+    flex: 1 1 100%;
+    width: 100%;
+    margin-inline-start: 0;
+    justify-content: center;
+  }
+}
+
+/* --- The search field's native clear (×) --------------------------------
+   WebKit paints `::-webkit-search-cancel-button` in the browser-default
+   blue. It is a real control, so it gets a real 44px hit area and the
+   brand's colours: gold on the green header, ink on white surfaces (the
+   shop's brand filter). The glyph is a mask so one path serves both. */
+input[type="search"] { --search-clear-color: var(--brand-ink); }
+.site-header__search input { --search-clear-color: var(--brand-gold); }
+input[type="search"]::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  cursor: pointer;
+  opacity: .85;
+  background-color: var(--search-clear-color, var(--brand-ink));
+  -webkit-mask: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6 6l12 12M18 6L6 18' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E") center / 18px 18px no-repeat;
+  mask: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6 6l12 12M18 6L6 18' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E") center / 18px 18px no-repeat;
+}
+input[type="search"]::-webkit-search-cancel-button:hover { opacity: 1; }
+input[type="search"]::-webkit-search-decoration { -webkit-appearance: none; appearance: none; }
+
+/* --- Checkout review thumbnails on phones --------------------------------
+   The line-item image rendered at ~110px and squeezed «کارد ۵۵۱۰» onto two
+   lines. Capped at 64px on phones, matching the cart's 70px rail. */
+@media (max-width: 767px) {
+  .checkout__review-item > picture,
+  .checkout__review-item > picture img,
+  .checkout__review-item > img,
+  .checkout__review-item > .img-placeholder {
+    flex: none;
+    width: 64px;
+    height: 64px;
+    max-width: 64px;
+    border-radius: 8px;
+    object-fit: cover;
+  }
 }
