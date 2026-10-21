@@ -1532,8 +1532,8 @@ h1, h2, h3, .section__head h2 {
 .category-card .img-placeholder { position: absolute; inset: 0; }
 .category-card__name {
   position: absolute; inset-inline: 0; bottom: 0; text-align: center;
-  background: linear-gradient(to top, rgba(24,30,12,.85), transparent);
-  color: var(--brand-ivory); padding: var(--space-4) 0 var(--space-2);
+  background: linear-gradient(to top, rgba(24,30,12,.92) 0%, rgba(24,30,12,.8) 72%, rgba(24,30,12,0) 100%);
+  color: var(--brand-ivory); padding: 44px 8px 10px;
   font-weight: 700; font-size: var(--font-size-md);
 }
 
@@ -1833,7 +1833,7 @@ h1, h2, h3, .section__head h2 {
 .review-highlights { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--space-4); }
 .review-highlight {
   background: #fff; border-radius: var(--radius-lg); border: 1px solid var(--color-border);
-  border-top: 3px solid var(--brand-gold); padding: var(--space-4); margin: 0;
+  padding: var(--space-4); margin: 0;
 }
 .review-highlight p { margin: 0 0 var(--space-3); line-height: 2; }
 .review-highlight cite { color: var(--color-text-muted); font-style: normal; font-size: var(--font-size-sm); }
@@ -2879,8 +2879,8 @@ input, select, textarea { min-width: 0; max-width: 100%; }
 
   .product-card__badges { top: 6px; inset-inline-start: 6px; gap: 4px; max-width: calc(100% - 44px); }
   .product-card__badges .badge {
-    font-size: 0.68rem;
-    line-height: 1.6;
+    font-size: 12px;
+    line-height: 1.45;
     padding: 1px 7px;
     border-radius: 999px;
     white-space: nowrap;
@@ -2913,9 +2913,9 @@ input, select, textarea { min-width: 0; max-width: 100%; }
     height: 3.4em;
     min-height: 3.4em;
   }
-  .product-card__brand { font-size: 11px; height: 1.7em; min-height: 1.7em; }
+  .product-card__brand { font-size: 12px; line-height: 1.55; height: 1.56em; min-height: 1.56em; }
   .price--sm .price__current { font-size: 0.95rem; }
-  .product-card__body .price__compare { font-size: 0.72rem; }
+  .product-card__body .price__compare { font-size: 12px; }
   .product-card__body .price__badge { display: none; }
 
   .product-card--compact .product-card__footer {
@@ -2997,7 +2997,7 @@ input, select, textarea { min-width: 0; max-width: 100%; }
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    min-height: 40px;
+    min-height: 44px;
     padding: 6px 14px;
     border-radius: 10px;
     border: 1px solid rgba(206, 180, 100, .55);
@@ -3021,11 +3021,13 @@ input, select, textarea { min-width: 0; max-width: 100%; }
      (result count + sorting sheet), so the row itself is redundant here. */
   .shop__toolbar { display: none; }
   .pagination { display: none; }             /* replaced by «نمایش کالاهای بیشتر» */
-  .shop__load-more { display: inline-flex; width: 100%; justify-content: center; margin-top: var(--space-4); }
+  .shop__load-more { display: inline-flex; width: 100%; min-height: 44px; justify-content: center; margin-top: var(--space-4); }
   .shop__main { min-width: 0; }
 }
 
-.shop__load-more { display: none; }
+@media (min-width: 768px) {
+  .shop__load-more { display: none; }
+}
 
 /* Bottom sheets (filters + sorting) */
 .sheet {
@@ -3539,4 +3541,58 @@ input[type="search"]::-webkit-search-decoration { -webkit-appearance: none; appe
     border-radius: 8px;
     object-fit: cover;
   }
+}
+
+/* --- Live mobile audit refinements (phone hit areas + readable labels) --- */
+@media (max-width: 767px) {
+  .countdown__label { font-size: 12px; }
+
+  /* Keep the cart glyph at 26px; only its clear button box grows to 44px. */
+  .cart-link {
+    display: inline-grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 9px;
+    flex: none;
+  }
+
+  /* Transparent hit-area overlays leave the visible controls unchanged.
+     The heart stays in the image corner and add-to-cart stays in the footer,
+     so their enlarged 44px targets remain in separate card zones. */
+  .product-card__heart::before,
+  .product-card__add-icon::before,
+  .section__head a::before,
+  .deals-mobile__all::before,
+  .site-footer__social a::before {
+    content: "";
+    position: absolute;
+    background: transparent;
+  }
+  .product-card__heart::before { inset: -6px; border-radius: 50%; }
+  .product-card__add-icon { position: relative; }
+  .product-card__add-icon::before { inset: -4px; border-radius: 50%; }
+
+  .section__head a,
+  .deals-mobile__all,
+  .site-footer__social a { position: relative; }
+  .section__head a,
+  .deals-mobile__all { min-width: 44px; }
+  .section__head a::before { inset: -9px -4px; }
+  .deals-mobile__all::before { inset: -6px -4px; }
+  .site-footer__social a::before { inset: -4px; border-radius: 50%; }
+
+  /* The icon remains 22px; the five star buttons now have distinct 44px
+     targets rather than overlapping pseudo-element hitboxes. */
+  .rating-input .star {
+    display: inline-grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+  }
+
+  .sheet__close { width: 44px; height: 44px; min-width: 44px; min-height: 44px; }
 }
