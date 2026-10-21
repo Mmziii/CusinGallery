@@ -118,6 +118,15 @@ function Header() {
   // True while the inner's height transition is running. A mid-flight
   // offsetHeight is between the folded and expanded heights, i.e. neither.
   const animatingRef = useRef(false);
+  // The transition pass's settle() (it removes the FLIP pin). The fold's
+  // fallback timer reads it through this ref so a pin whose transition
+  // never starts -- or never ends -- is still always released.
+  const settleRef = useRef(null);
+  // The fold's own fallback timer (see flipRow): armed on EVERY pin.
+  const pinTimerRef = useRef(null);
+  // The revealed pill search's icon. Escape on an empty field returns the
+  // focus here, so the shopper's next Tab starts where they left off.
+  const searchToggleRef = useRef(null);
   // The EXPANDED phone header's last measured border-box height (px). The
   // measure pass keeps it fresh; the fold's FLIP reads it as the expand
   // target before clearing back to `height: auto` at rest.
@@ -234,6 +243,28 @@ function Header() {
     const next = !searchRevealedRef.current;
     searchRevealedRef.current = next;
     setSearchRevealed(next);
+  };
+
+  // Escape, two stages (live finding): with text in the field it clears it;
+  // with an EMPTY field it closes the search row the collapsed pill grew and
+  // hands the focus back to the search icon. Previously the empty case did
+  // nothing, so the pill stayed in its two-row `--searching` state.
+  const handleSearchKeyDown = (event) => {
+    if (event.key !== "Escape") return;
+    if (searchTerm) {
+      event.preventDefault();
+      // Bump the version so an in-flight suggestion response is discarded.
+      searchRequestVersion.current += 1;
+      setSearchTerm("");
+      setSuggestions([]);
+      return;
+    }
+    if (!searchRevealedRef.current) return;
+    event.preventDefault();
+    searchRevealedRef.current = false;
+    setSearchRevealed(false);
+    setSuggestions([]);
+    searchToggleRef.current?.focus();
   };
 
   // Audit 19 / PR 20: publish the header's REAL height as
@@ -402,6 +433,16 @@ function Header() {
       }, LOCK_MS);
     };
 
+    // The collapsed class's own row height (border-box: `height` and
+    // `min-height` are both the token, so the value IS the box height).
+    // Returns 0 when the token cannot be resolved (e.g. jsdom), which just
+    // skips the equality shortcut in flipRow.
+    const rowHeightOf = (element) => {
+      const raw = window.getComputedStyle?.(element)?.getPropertyValue("--header-height-row");
+      const value = Number.parseFloat(raw);
+      return Number.isFinite(value) && value > 0 ? value : 0;
+    };
+
     // PR 20 FLIP for the fold. The expanded inner is `height: auto` --
     // never a pinned pixel value that can end up smaller than its
     // content -- and `auto` cannot transition. So: read the CURRENT
@@ -413,11 +454,25 @@ function Header() {
     // clears the pin on transitionend (watchdog-covered), so at rest the
     // expanded inner is `auto` again and can never clip its rows. In
     // non-layout environments (jsdom: 0 height) the flip is skipped and
-    // only the class changes.
+    // only the class changes. PR 21 adds two guarantees: equal heights pin
+    // nothing, and every pin taken is also released by a fallback timer.
     const flipRow = (collapsing, applyState) => {
       const inner = innerRef.current;
       const from = inner ? measureBorderBoxHeight(inner) : 0;
       if (!inner || from <= 0) {
+        applyState();
+        return;
+      }
+      // (a) Nothing to animate: the box is ALREADY at the target height.
+      // Live repro (375px): folded pill + search icon revealed = 128px; one
+      // notch up expands the header, which is ALSO 128px. Pinning 128px over
+      // 128px runs no transition, so `transitionstart` never fires and
+      // `transitionend` never comes: the inline `height`/`overflow` stuck
+      // forever and CLIPPED the suggestions the shopper was typing for.
+      // With equal heights there is no animation to protect, so just apply
+      // the state and leave the box at `height: auto`.
+      const target = collapsing ? rowHeightOf(inner) : naturalHeightRef.current;
+      if (target > 0 && Math.abs(target - from) <= 1) {
         applyState();
         return;
       }
@@ -432,6 +487,16 @@ function Header() {
       } else {
         inner.style.removeProperty("height");
       }
+      // (b) ALWAYS arm a fallback release. transitionstart/transitionend
+      // are not guaranteed (a cancelled transition fires neither, a hidden
+      // tab fires neither, and a pin that changes nothing animates at all),
+      // so the pin is also released on a timer that outlives the 300ms
+      // height transition. settle() is idempotent.
+      if (pinTimerRef.current !== null) window.clearTimeout(pinTimerRef.current);
+      pinTimerRef.current = window.setTimeout(() => {
+        pinTimerRef.current = null;
+        settleRef.current?.();
+      }, 450);
     };
 
     const collapseRow = () => {
@@ -521,6 +586,10 @@ function Header() {
     return () => {
       window.removeEventListener("scroll", onScroll);
       if (unlockTimer !== null) window.clearTimeout(unlockTimer);
+      if (pinTimerRef.current !== null) {
+        window.clearTimeout(pinTimerRef.current);
+        pinTimerRef.current = null;
+      }
       if (frame === null) return;
       if (window.cancelAnimationFrame) window.cancelAnimationFrame(frame);
       else window.clearTimeout(frame);
@@ -548,6 +617,9 @@ function Header() {
       }
       scheduleMeasureRef.current?.();
     };
+    // The fold's fallback timer (Header's scroll pass) releases the pin
+    // through this ref, independently of the transition events below.
+    settleRef.current = settle;
     const onTransitionStart = (event) => {
       if (event.propertyName !== "height") return;
       animatingRef.current = true;
@@ -565,6 +637,7 @@ function Header() {
     inner.addEventListener("transitionend", onTransitionEnd);
     inner.addEventListener("transitioncancel", onTransitionEnd);
     return () => {
+      settleRef.current = null;
       if (watchdog !== null) window.clearTimeout(watchdog);
       inner.removeEventListener("transitionstart", onTransitionStart);
       inner.removeEventListener("transitionend", onTransitionEnd);
@@ -738,6 +811,7 @@ function Header() {
               ref={searchInputRef}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              onKeyDown={handleSearchKeyDown}
               placeholder="جستجوی محصول…"
               aria-label="جستجوی محصول"
             />
@@ -790,6 +864,7 @@ function Header() {
           <button
             type="button"
             className="site-header__search-toggle"
+            ref={searchToggleRef}
             aria-label="نمایش جستجو"
             aria-expanded={searchRevealed}
             aria-controls="site-header-search"
