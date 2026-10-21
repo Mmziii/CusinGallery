@@ -140,6 +140,18 @@ describe("ProductCard compact mode (phones)", () => {
     expect(heart.closest("a")).toBeNull();
   });
 
+  it("keeps the enlarged wishlist and add targets in separate card zones", () => {
+    const { container } = renderCard(makeProduct());
+    const heart = container.querySelector(".product-card__heart");
+    const add = container.querySelector(".product-card__add-icon");
+
+    expect(heart.closest(".product-card__media-wrap")).toBeTruthy();
+    expect(add.closest(".product-card__footer")).toBeTruthy();
+    expect(heart.closest(".product-card__media-wrap")).not.toBe(add.closest(".product-card__footer"));
+    expect(CSS).toMatch(/\.product-card__heart::before \{ inset: -6px;/);
+    expect(CSS).toMatch(/\.product-card__add-icon::before \{ inset: -4px;/);
+  });
+
   it("toasts «به سبد اضافه شد» with a «مشاهده سبد» action after adding", async () => {
     useCartStore.setState({ addItem: async () => ({ success: true }) });
     renderCard(makeProduct());
@@ -198,7 +210,7 @@ describe("compact card CSS contract", () => {
     );
     expect(CSS).toMatch(/\.product-card__img--alt \{ display: none; \}/);
     expect(CSS).toMatch(/\.product-card__name \{[^}]*font-size: 13px;/);
-    expect(CSS).toMatch(/\.product-card__brand \{ font-size: 11px;/);
+    expect(CSS).toMatch(/\.product-card__brand \{ font-size: 12px;/);
     expect(CSS).toMatch(/\.product-card__add-icon \{[^}]*width: 36px; height: 36px;/);
     expect(CSS).toMatch(/\.product-card__heart \{[^}]*width: 32px; height: 32px;/);
   });

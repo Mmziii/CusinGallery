@@ -52,6 +52,9 @@ describe("brand storefront pages", () => {
     const { container } = renderBrand("?brand=another-brand&in_stock=true");
     await screen.findByRole("heading", { name: "محصولات برند یونیک" });
     await screen.findByText("قابلمه ۱");
+    const productsHeading = screen.getByRole("heading", { level: 2, name: "محصولات" });
+    const productGrid = container.querySelector(".shop .product-grid");
+    expect(productsHeading.compareDocumentPosition(productGrid) & 4).toBeTruthy();
     expect(requests.every((params) => params.brand === brand.slug)).toBe(true);
     expect(requests[0].in_stock).toBe("true");
     expect(container.querySelector(".shop .product-grid")).toBeTruthy();

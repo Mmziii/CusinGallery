@@ -608,6 +608,8 @@ function ShopPage({ brand: fixedBrand = null }) {
           );
         })()}
 
+        <h2 className="sr-only">محصولات</h2>
+
         {/* Part S5 item 7: filtering is a transition, not a page reload. The
             spinner only covers the very first load; from then on the previous
             results stay on screen -- dimmed and aria-busy -- until the new

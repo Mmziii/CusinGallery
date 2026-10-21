@@ -114,6 +114,19 @@ describe("phone shop toolbar", () => {
     expect(screen.getByRole("button", { name: /^مرتب‌سازی$/ })).toBeTruthy();
   });
 
+  it("adds a visually hidden products heading before the product grid", async () => {
+    setViewport(true);
+    const { container } = renderShop();
+    await screen.findByText("کالای صفحه ۱ شماره ۱");
+
+    const pageTitle = container.querySelector(".shop__heading h1");
+    const productsHeading = screen.getByRole("heading", { level: 2, name: "محصولات" });
+    const grid = container.querySelector(".shop__results .product-grid");
+    expect(productsHeading.className).toContain("sr-only");
+    expect(pageTitle.compareDocumentPosition(productsHeading) & 4).toBeTruthy();
+    expect(productsHeading.compareDocumentPosition(grid) & 4).toBeTruthy();
+  });
+
   it("opens the filters as a bottom sheet with «اعمال» and the active-filter count", async () => {
     setViewport(true);
     renderShop("?brand=unique&in_stock=true");
